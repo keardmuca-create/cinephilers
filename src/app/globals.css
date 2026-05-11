@@ -1,0 +1,54 @@
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 295 13% 12%;
+    --foreground: 0 0% 98%;
+    --card: 295 13% 15%;
+    --card-foreground: 0 0% 98%;
+    --popover: 295 13% 12%;
+    --popover-foreground: 0 0% 98%;
+    --primary: 268 59% 35%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 268 45% 28%;
+    --secondary-foreground: 0 0% 100%;
+    --muted: 295 13% 20%;
+    --muted-foreground: 295 5% 65%;
+    --accent: 240 79% 54%;
+    --accent-foreground: 0 0% 100%;
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 295 13% 25%;
+    --input: 295 13% 25%;
+    --ring: 240 79% 54%;
+    --radius: 0.75rem;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground font-body;
+  }
+}
+
+.cinematic-gradient {
+  background: linear-gradient(to bottom, transparent, rgba(33, 26, 34, 0.9) 70%, #211a22);
+}
+
+.movie-card-hover {
+  @apply transition-transform duration-300 hover:scale-105 hover:z-10 cursor-pointer;
+}
+
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
