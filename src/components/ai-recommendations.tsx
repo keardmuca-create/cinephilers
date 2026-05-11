@@ -3,7 +3,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { personalizeMovieRecommendations } from '@/ai/flows/personalized-movie-recommendations-flow';
-import { Movie } from '@/lib/mock-data';
+import { Movie } from '@/lib/types';
 import { MovieCard } from './movie-card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Sparkles } from 'lucide-react';
@@ -25,9 +25,6 @@ export const AIRecommendations = () => {
         });
 
         const mapped = result.recommendations.map((rec, index) => {
-          const existingMatch = MOCK_MOVIES.find(m => m.title.toLowerCase().includes(rec.title.toLowerCase()));
-          if (existingMatch) return existingMatch;
-
           return {
             id: `ai-${index}`,
             title: rec.title,
