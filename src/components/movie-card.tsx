@@ -68,12 +68,12 @@ export const MovieCard: React.FC<MovieCardProps> = ({ movie, className, horizont
 
         <div className="space-y-1 px-1">
           <div className="flex items-start justify-between gap-1">
-            <h3 className="text-sm font-semibold font-headline line-clamp-1 group-hover:text-primary transition-colors">
+            <h3 className="text-sm font-semibold font-headline line-clamp-2 group-hover:text-primary transition-colors leading-snug">
               {movie.title}
             </h3>
             <div className="flex items-center gap-0.5 shrink-0 text-accent">
               <Star className="h-3 w-3 fill-current" />
-              <span className="text-xs font-bold">{movie.rating}</span>
+              <span className="text-xs font-bold">{movie.rating.toFixed(1)}</span>
             </div>
           </div>
           <p className="text-xs text-muted-foreground line-clamp-1">
