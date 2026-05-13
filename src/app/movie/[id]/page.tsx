@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Image from 'next/image';
 import { Movie, Actor, TvEpisode, TvSeason } from '@/lib/types';
+import { EpisodeModal } from '@/components/episode-modal';
 import { Button } from '@/components/ui/button';
 import {
   Play, Check, Plus, Star, ChevronLeft, Share2, ListPlus, Quote,
@@ -210,16 +211,19 @@ function ReleaseInfo({ movie }: { movie: Movie }) {
 
 // ─── Seasons & episodes ────────────────────────────────────────────────────────
 
-function EpisodeRow({ ep }: { ep: TvEpisode }) {
+function EpisodeRow({ ep, onClick }: { ep: TvEpisode; onClick: () => void }) {
   const still = ep.still_path
     ? `https://image.tmdb.org/t/p/w300${ep.still_path}`
     : `https://picsum.photos/seed/${ep.id}/300/170`;
 
   return (
-    <div className="flex gap-4 p-4 rounded-2xl bg-white/5 border border-white/5 hover:bg-white/10 transition-colors">
+    <button
+      className="w-full flex gap-4 p-4 rounded-2xl bg-white/5 border border-white/5 hover:bg-white/10 transition-colors text-left group"
+      onClick={onClick}
+    >
       <div className="relative aspect-video w-28 shrink-0 rounded-xl overflow-hidden">
         <Image src={still} alt={ep.name} fill className="object-cover" />
-        <div className="absolute inset-0 flex items-center justify-center bg-black/30 opacity-0 hover:opacity-100 transition-opacity">
+        <div className="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity">
           <Play className="h-6 w-6 fill-current" />
         </div>
       </div>
@@ -241,11 +245,19 @@ function EpisodeRow({ ep }: { ep: TvEpisode }) {
           {ep.runtime && <span className="text-[10px] text-muted-foreground font-bold">{ep.runtime} min</span>}
         </div>
       </div>
-    </div>
+    </button>
   );
 }
 
-function SeasonsSection({ seasons, showTmdbId }: { seasons: TvSeason[]; showTmdbId: string }) {
+function SeasonsSection({
+  seasons,
+  showTmdbId,
+  onEpisodeClick,
+}: {
+  seasons: TvSeason[];
+  showTmdbId: string;
+  onEpisodeClick: (ep: TvEpisode, seasonNumber: number) => void;
+}) {
   const [expanded, setExpanded] = useState<number | null>(null);
   const [cache, setCache] = useState<Record<number, TvEpisode[]>>({});
   const [loading, setLoading] = useState<number | null>(null);
@@ -308,7 +320,11 @@ function SeasonsSection({ seasons, showTmdbId }: { seasons: TvSeason[]; showTmdb
                     <p className="text-sm text-gray-400 italic pb-2">{season.overview}</p>
                   )}
                   {cache[season.season_number].map(ep => (
-                    <EpisodeRow key={ep.id} ep={ep} />
+                    <EpisodeRow
+                      key={ep.id}
+                      ep={ep}
+                      onClick={() => onEpisodeClick(ep, season.season_number)}
+                    />
                   ))}
                 </div>
               )}
@@ -332,6 +348,7 @@ export default function MovieDetailPage() {
   const [isInWatchlist, setIsInWatchlist] = useState(false);
   const [userRating, setUserRating] = useState(0);
   const [lightboxImg, setLightboxImg] = useState<string | null>(null);
+  const [episodeModal, setEpisodeModal] = useState<{ ep: TvEpisode; seasonNumber: number } | null>(null);
 
   useEffect(() => {
     if (!id) return;
@@ -574,7 +591,11 @@ export default function MovieDetailPage() {
 
         {/* Seasons & Episodes (TV only) */}
         {movie.type === 'show' && movie.seasons && movie.seasons.length > 0 && (
-          <SeasonsSection seasons={movie.seasons} showTmdbId={showTmdbId} />
+          <SeasonsSection
+            seasons={movie.seasons}
+            showTmdbId={showTmdbId}
+            onEpisodeClick={(ep, seasonNumber) => setEpisodeModal({ ep, seasonNumber })}
+          />
         )}
 
         {/* Reviews */}
@@ -662,6 +683,17 @@ export default function MovieDetailPage() {
             <Image src={lightboxImg} alt="" fill className="object-contain" />
           </div>
         </div>
+      )}
+
+      {/* Episode detail modal */}
+      {episodeModal && (
+        <EpisodeModal
+          showTmdbId={showTmdbId}
+          seasonNumber={episodeModal.seasonNumber}
+          episode={episodeModal.ep}
+          showTitle={movie.title}
+          onClose={() => setEpisodeModal(null)}
+        />
       )}
     </main>
   );

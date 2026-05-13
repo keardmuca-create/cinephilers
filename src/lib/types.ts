@@ -36,6 +36,24 @@ export interface TvEpisode {
   runtime: number | null;
 }
 
+export interface EpisodeDetail {
+  id: number;
+  name: string;
+  episode_number: number;
+  season_number: number;
+  air_date: string;
+  overview: string;
+  still_path: string | null;
+  vote_average: number;
+  vote_count: number;
+  runtime: number | null;
+  cast: Actor[];
+  guestStars: Actor[];
+  crew: { name: string; job: string }[];
+  stills: string[];
+  trailers: Trailer[];
+}
+
 export interface TvSeason {
   id: number;
   name: string;

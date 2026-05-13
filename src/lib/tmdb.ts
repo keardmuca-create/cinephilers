@@ -1,4 +1,4 @@
-import type { Movie, Actor, Review, Trailer, TvSeason, TvEpisode } from './types';
+import type { Movie, Actor, Review, Trailer, TvSeason, TvEpisode, EpisodeDetail } from './types';
 
 const BASE_URL = 'https://api.themoviedb.org/3';
 const IMAGE_BASE = 'https://image.tmdb.org/t/p';
@@ -384,6 +384,18 @@ export async function getShowDetail(tmdbId: number): Promise<Movie> {
   };
 }
 
+interface TmdbEpisodeFull extends TmdbEpisode {
+  season_number: number;
+  vote_count?: number;
+  credits?: {
+    cast: { id: number; name: string; character: string; profile_path: string | null }[];
+    crew: { id: number; name: string; job: string; department: string }[];
+    guest_stars: { id: number; name: string; character: string; profile_path: string | null }[];
+  };
+  images?: { stills: { file_path: string }[] };
+  videos?: { results: TmdbVideoResult[] };
+}
+
 export async function getTvSeasonEpisodes(showId: number, seasonNumber: number): Promise<TvEpisode[]> {
   const data = await tmdbFetch<{ episodes: TmdbEpisode[] }>(
     `/tv/${showId}/season/${seasonNumber}`,
@@ -398,4 +410,45 @@ export async function getTvSeasonEpisodes(showId: number, seasonNumber: number):
     vote_average: ep.vote_average,
     runtime: ep.runtime,
   }));
+}
+
+export async function getEpisodeDetail(
+  showId: number,
+  seasonNumber: number,
+  episodeNumber: number,
+): Promise<EpisodeDetail> {
+  const detail = await tmdbFetch<TmdbEpisodeFull>(
+    `/tv/${showId}/season/${seasonNumber}/episode/${episodeNumber}`,
+    { append_to_response: 'credits,images,videos' },
+  );
+
+  const keyCrew = ['Director', 'Writer', 'Screenplay', 'Story', 'Teleplay'];
+
+  return {
+    id: detail.id,
+    name: detail.name,
+    episode_number: detail.episode_number,
+    season_number: detail.season_number,
+    air_date: detail.air_date ?? '',
+    overview: detail.overview ?? '',
+    still_path: detail.still_path,
+    vote_average: detail.vote_average,
+    vote_count: detail.vote_count ?? 0,
+    runtime: detail.runtime ?? null,
+    cast: buildCast({ cast: detail.credits?.cast ?? [], crew: [] }),
+    guestStars: (detail.credits?.guest_stars ?? []).slice(0, 12).map(a => ({
+      id: String(a.id),
+      name: a.name,
+      role: a.character,
+      profileImage: profileUrl(a.profile_path, String(a.id)),
+      bio: '',
+      knownFor: [],
+    })),
+    crew: (detail.credits?.crew ?? [])
+      .filter(c => keyCrew.includes(c.job))
+      .slice(0, 8)
+      .map(c => ({ name: c.name, job: c.job })),
+    stills: (detail.images?.stills ?? []).slice(0, 12).map(s => `${IMAGE_BASE}/w780${s.file_path}`),
+    trailers: parseTrailers(detail.videos?.results ?? []),
+  };
 }
