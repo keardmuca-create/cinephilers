@@ -1,13 +1,14 @@
 
-import { NextResponse } from 'next/server';
-import { getPopularMovies, getPopularShows, getTrending } from '@/lib/tmdb';
+import { NextRequest, NextResponse } from 'next/server';
+import { getPopularMoviesPaged, getPopularShowsPaged, getTrendingPaged } from '@/lib/tmdb';
 
-export async function GET() {
+export async function GET(req: NextRequest) {
+  const count = Math.min(Math.max(parseInt(new URL(req.url).searchParams.get('count') ?? '25', 10), 1), 100);
   try {
     const [movies, shows, trending] = await Promise.all([
-      getPopularMovies(),
-      getPopularShows(),
-      getTrending(),
+      getPopularMoviesPaged(count),
+      getPopularShowsPaged(count),
+      getTrendingPaged(count),
     ]);
     return NextResponse.json({ movies, shows, trending });
   } catch (err) {

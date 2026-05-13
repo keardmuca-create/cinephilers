@@ -78,6 +78,8 @@ export interface Movie {
   crew?: { name: string; job: string }[];
   originalLanguage?: string;
   productionCompanies?: string[];
+  totalEpisodes?: number;
+  showType?: string;
 }
 
 export type SocialAction = 'watched' | 'rated' | 'reviewed' | 'watchlist' | 'rewatched';

@@ -338,7 +338,20 @@ export default function MovieDetailPage() {
     fetch(`/api/movies/${id}`)
       .then(r => r.json())
       .then((data: Movie & { error?: string }) => {
-        setMovie(data.error ? null : data);
+        if (!data.error) {
+          setMovie(data);
+          // Track recently viewed in localStorage
+          try {
+            const stored = localStorage.getItem('recently-viewed');
+            const viewed: { id: string; title: string; poster: string; year: string; type: string }[] =
+              stored ? JSON.parse(stored) : [];
+            const entry = { id: data.id, title: data.title, poster: data.poster, year: data.year, type: data.type };
+            const filtered = viewed.filter(v => v.id !== data.id);
+            localStorage.setItem('recently-viewed', JSON.stringify([entry, ...filtered].slice(0, 30)));
+          } catch { /* ignore */ }
+        } else {
+          setMovie(null);
+        }
       })
       .catch(() => setMovie(null))
       .finally(() => setLoading(false));

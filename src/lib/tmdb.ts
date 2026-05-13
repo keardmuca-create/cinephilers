@@ -90,6 +90,8 @@ interface TmdbShowFull extends TmdbMovie {
   episode_run_time?: number[];
   status?: string;
   original_language?: string;
+  number_of_episodes?: number;
+  type?: string;
   networks?: { name: string }[];
   production_companies?: { name: string }[];
   seasons?: {
@@ -219,6 +221,31 @@ export function tmdbToMovie(raw: TmdbMovie, credits?: TmdbCredits): Movie {
   };
 }
 
+// ─── Multi-page helper ────────────────────────────────────────────────────────
+
+async function fetchManyPages(
+  path: string,
+  count: number,
+  extraParams: Record<string, string> = {},
+): Promise<TmdbMovie[]> {
+  const pagesNeeded = Math.ceil(count / 20);
+  const pageData = await Promise.all(
+    Array.from({ length: pagesNeeded }, (_, i) =>
+      tmdbFetch<{ results: TmdbMovie[] }>(path, { ...extraParams, page: String(i + 1) }),
+    ),
+  );
+  // Deduplicate by TMDB id — pages can overlap
+  const seen = new Set<number>();
+  const deduped: TmdbMovie[] = [];
+  for (const item of pageData.flatMap(d => d.results)) {
+    if (!seen.has(item.id)) {
+      seen.add(item.id);
+      deduped.push(item);
+    }
+  }
+  return deduped.slice(0, count);
+}
+
 // ─── List endpoints ───────────────────────────────────────────────────────────
 
 export async function getPopularMovies(page = 1): Promise<Movie[]> {
@@ -234,6 +261,42 @@ export async function getPopularShows(page = 1): Promise<Movie[]> {
 export async function getTrending(): Promise<Movie[]> {
   const data = await tmdbFetch<{ results: TmdbMovie[] }>('/trending/all/week');
   return data.results.map(m => tmdbToMovie(m));
+}
+
+export async function getPopularMoviesPaged(count = 25): Promise<Movie[]> {
+  const results = await fetchManyPages('/movie/popular', count);
+  return results.map(m => tmdbToMovie(m));
+}
+
+export async function getPopularShowsPaged(count = 25): Promise<Movie[]> {
+  const results = await fetchManyPages('/tv/popular', count);
+  return results.map(m => tmdbToMovie({ ...m, media_type: 'tv' }));
+}
+
+export async function getTrendingPaged(count = 25): Promise<Movie[]> {
+  const results = await fetchManyPages('/trending/all/week', count);
+  return results.map(m => tmdbToMovie(m));
+}
+
+export async function getPopularShowsEnriched(count = 100): Promise<Movie[]> {
+  const shows = await getPopularShowsPaged(count);
+  const enriched = await Promise.all(
+    shows.map(async (show) => {
+      const tmdbId = parseInt(show.id.replace('tmdb-tv-', ''), 10);
+      if (isNaN(tmdbId)) return show;
+      try {
+        const detail = await tmdbFetch<TmdbShowFull>(`/tv/${tmdbId}`);
+        return {
+          ...show,
+          totalEpisodes: detail.number_of_episodes,
+          showType: detail.type,
+        } as Movie;
+      } catch {
+        return show;
+      }
+    }),
+  );
+  return enriched;
 }
 
 export async function searchTmdb(query: string): Promise<Movie[]> {
@@ -316,6 +379,8 @@ export async function getShowDetail(tmdbId: number): Promise<Movie> {
     releaseDate: detail.first_air_date,
     originalLanguage: detail.original_language,
     productionCompanies: detail.production_companies?.map(c => c.name).slice(0, 4),
+    totalEpisodes: detail.number_of_episodes,
+    showType: detail.type,
   };
 }
 
