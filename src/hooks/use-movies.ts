@@ -1,6 +1,6 @@
 
 import { useEffect, useState } from 'react';
-import { Movie } from '@/lib/mock-data';
+import { Movie } from '@/lib/types';
 
 interface PopularData {
   movies: Movie[];

@@ -1,5 +1,4 @@
-
-import { Movie, Actor, Review } from './mock-data';
+import type { Movie, Actor, Review, Trailer, TvSeason, TvEpisode } from './types';
 
 const BASE_URL = 'https://api.themoviedb.org/3';
 const IMAGE_BASE = 'https://image.tmdb.org/t/p';
@@ -18,7 +17,13 @@ function backdropUrl(path: string | null, size = 'w1280'): string {
   return `${IMAGE_BASE}/${size}${path}`;
 }
 
-// Raw TMDB shapes (minimal — only fields we use)
+function profileUrl(path: string | null, seed: string): string {
+  if (!path) return `https://picsum.photos/seed/${seed}/200/200`;
+  return `${IMAGE_BASE}/w185${path}`;
+}
+
+// ─── Raw TMDB shapes ────────────────────────────────────────────────────────
+
 interface TmdbMovie {
   id: number;
   title?: string;
@@ -37,10 +42,73 @@ interface TmdbMovie {
 
 interface TmdbCredits {
   cast: { id: number; name: string; character: string; profile_path: string | null }[];
-  crew: { id: number; name: string; job: string }[];
+  crew: { id: number; name: string; job: string; department: string }[];
 }
 
-// Genre id → name map (covers most common genres)
+interface TmdbVideoResult {
+  key: string;
+  name: string;
+  site: string;
+  type: string;
+  official: boolean;
+}
+
+interface TmdbReview {
+  id: string;
+  author: string;
+  author_details: { username: string; rating: number | null; avatar_path: string | null };
+  content: string;
+  created_at: string;
+}
+
+interface TmdbEpisode {
+  id: number;
+  name: string;
+  episode_number: number;
+  air_date: string;
+  overview: string;
+  still_path: string | null;
+  vote_average: number;
+  runtime: number | null;
+}
+
+interface TmdbMovieFull extends TmdbMovie {
+  runtime?: number;
+  tagline?: string;
+  status?: string;
+  budget?: number;
+  revenue?: number;
+  original_language?: string;
+  production_companies?: { name: string }[];
+  credits?: TmdbCredits;
+  videos?: { results: TmdbVideoResult[] };
+  images?: { backdrops: { file_path: string }[] };
+  reviews?: { results: TmdbReview[] };
+}
+
+interface TmdbShowFull extends TmdbMovie {
+  episode_run_time?: number[];
+  status?: string;
+  original_language?: string;
+  networks?: { name: string }[];
+  production_companies?: { name: string }[];
+  seasons?: {
+    id: number;
+    name: string;
+    season_number: number;
+    episode_count: number;
+    air_date: string;
+    overview: string;
+    poster_path: string | null;
+  }[];
+  credits?: TmdbCredits;
+  videos?: { results: TmdbVideoResult[] };
+  images?: { backdrops: { file_path: string }[] };
+  reviews?: { results: TmdbReview[] };
+}
+
+// ─── Helpers ─────────────────────────────────────────────────────────────────
+
 const GENRE_MAP: Record<number, string> = {
   28: 'Action', 12: 'Adventure', 16: 'Animation', 35: 'Comedy',
   80: 'Crime', 99: 'Documentary', 18: 'Drama', 10751: 'Family',
@@ -52,35 +120,87 @@ const GENRE_MAP: Record<number, string> = {
   10767: 'Talk', 10768: 'War & Politics',
 };
 
-function genreLabel(movie: TmdbMovie): string {
-  if (movie.genres && movie.genres.length > 0) {
-    return movie.genres.slice(0, 2).map(g => g.name).join(' ');
+function genreLabel(raw: TmdbMovie): string {
+  if (raw.genres && raw.genres.length > 0) {
+    return raw.genres.slice(0, 2).map(g => g.name).join(' · ');
   }
-  if (movie.genre_ids && movie.genre_ids.length > 0) {
-    return (movie.genre_ids.slice(0, 2).map(id => GENRE_MAP[id]).filter(Boolean)).join(' ') || 'Unknown';
+  if (raw.genre_ids && raw.genre_ids.length > 0) {
+    return raw.genre_ids.slice(0, 2).map(id => GENRE_MAP[id]).filter(Boolean).join(' · ') || 'Unknown';
   }
   return 'Unknown';
 }
 
+function isShowItem(raw: TmdbMovie): boolean {
+  return raw.media_type === 'tv' || (!raw.title && !!raw.name);
+}
+
+function buildCast(credits?: TmdbCredits): Actor[] {
+  return (credits?.cast ?? []).slice(0, 12).map(a => ({
+    id: String(a.id),
+    name: a.name,
+    role: a.character,
+    profileImage: profileUrl(a.profile_path, String(a.id)),
+    bio: '',
+    knownFor: [],
+  }));
+}
+
+function parseReviews(results: TmdbReview[]): Review[] {
+  return results.slice(0, 6).map(r => {
+    let avatarUrl = `https://picsum.photos/seed/${r.id}/100/100`;
+    if (r.author_details.avatar_path) {
+      const ap = r.author_details.avatar_path;
+      avatarUrl = ap.startsWith('/https') ? ap.slice(1) : `${IMAGE_BASE}/w185${ap}`;
+    }
+    return {
+      id: r.id,
+      userId: r.author_details.username || r.author,
+      userName: r.author_details.username || r.author || 'Anonymous',
+      userAvatar: avatarUrl,
+      rating: r.author_details.rating ?? 7,
+      content: r.content,
+      date: new Date(r.created_at).toLocaleDateString('en-US', {
+        year: 'numeric', month: 'long', day: 'numeric',
+      }),
+      likes: 0,
+    };
+  });
+}
+
+function parseTrailers(results: TmdbVideoResult[]): Trailer[] {
+  return results
+    .filter(v => v.site === 'YouTube' && (v.type === 'Trailer' || v.type === 'Teaser'))
+    .slice(0, 6)
+    .map(v => ({ key: v.key, name: v.name, site: v.site, type: v.type }));
+}
+
+function parseImages(backdrops: { file_path: string }[]): string[] {
+  return backdrops.slice(0, 12).map(b => `${IMAGE_BASE}/w780${b.file_path}`);
+}
+
+async function tmdbFetch<T>(path: string, params: Record<string, string> = {}): Promise<T> {
+  const key = apiKey();
+  if (!key) throw new Error('TMDB_API_KEY is not set');
+  const url = new URL(`${BASE_URL}${path}`);
+  url.searchParams.set('api_key', key);
+  url.searchParams.set('language', 'en-US');
+  for (const [k, v] of Object.entries(params)) url.searchParams.set(k, v);
+  const res = await fetch(url.toString(), { next: { revalidate: 3600 } });
+  if (!res.ok) throw new Error(`TMDB ${res.status}: ${path}`);
+  return res.json() as Promise<T>;
+}
+
+// ─── List-view converter (no extended fields) ────────────────────────────────
+
 export function tmdbToMovie(raw: TmdbMovie, credits?: TmdbCredits): Movie {
-  const isShow = raw.media_type === 'tv' || (!raw.title && !!raw.name);
+  const isShow = isShowItem(raw);
   const title = raw.title ?? raw.name ?? 'Untitled';
   const releaseDate = raw.release_date ?? raw.first_air_date ?? '';
   const year = releaseDate ? releaseDate.slice(0, 4) : '—';
   const director = credits?.crew.find(c => c.job === 'Director')?.name ?? '';
 
-  const cast: Actor[] = (credits?.cast ?? []).slice(0, 8).map(a => ({
-    id: String(a.id),
-    name: a.name,
-    role: a.character,
-    bio: '',
-    knownFor: [],
-  }));
-
-  const reviews: Review[] = [];
-
   return {
-    id: `tmdb-${raw.id}`,
+    id: isShow ? `tmdb-tv-${raw.id}` : `tmdb-${raw.id}`,
     title,
     year,
     genre: genreLabel(raw),
@@ -91,27 +211,15 @@ export function tmdbToMovie(raw: TmdbMovie, credits?: TmdbCredits): Movie {
     poster: posterUrl(raw.poster_path),
     backdrop: backdropUrl(raw.backdrop_path),
     director,
-    cast,
-    reviews,
+    cast: buildCast(credits),
+    reviews: [],
     quotes: [],
     trivia: [],
     type: isShow ? 'show' : 'movie',
   };
 }
 
-async function tmdbFetch<T>(path: string, params: Record<string, string> = {}): Promise<T> {
-  const key = apiKey();
-  if (!key) throw new Error('TMDB_API_KEY is not set');
-
-  const url = new URL(`${BASE_URL}${path}`);
-  url.searchParams.set('api_key', key);
-  url.searchParams.set('language', 'en-US');
-  for (const [k, v] of Object.entries(params)) url.searchParams.set(k, v);
-
-  const res = await fetch(url.toString(), { next: { revalidate: 3600 } });
-  if (!res.ok) throw new Error(`TMDB ${res.status}: ${path}`);
-  return res.json() as Promise<T>;
-}
+// ─── List endpoints ───────────────────────────────────────────────────────────
 
 export async function getPopularMovies(page = 1): Promise<Movie[]> {
   const data = await tmdbFetch<{ results: TmdbMovie[] }>('/movie/popular', { page: String(page) });
@@ -135,18 +243,94 @@ export async function searchTmdb(query: string): Promise<Movie[]> {
     .map(m => tmdbToMovie(m));
 }
 
-export async function getMovieById(tmdbId: number): Promise<Movie> {
-  const [detail, credits] = await Promise.all([
-    tmdbFetch<TmdbMovie>(`/movie/${tmdbId}`, { append_to_response: 'credits' }),
-    tmdbFetch<TmdbCredits>(`/movie/${tmdbId}/credits`),
-  ]);
-  return tmdbToMovie(detail, credits);
+// ─── Detail endpoints (full extended data) ────────────────────────────────────
+
+export async function getMovieDetail(tmdbId: number): Promise<Movie> {
+  const detail = await tmdbFetch<TmdbMovieFull>(
+    `/movie/${tmdbId}`,
+    { append_to_response: 'credits,videos,images,reviews' },
+  );
+
+  const base = tmdbToMovie(detail, detail.credits);
+
+  const keyCrew = ['Director', 'Screenplay', 'Writer', 'Story', 'Director of Photography', 'Original Music Composer'];
+  const crew = (detail.credits?.crew ?? [])
+    .filter(c => keyCrew.includes(c.job))
+    .map(c => ({ name: c.name, job: c.job }));
+
+  return {
+    ...base,
+    cast: buildCast(detail.credits),
+    trailers: parseTrailers(detail.videos?.results ?? []),
+    images: parseImages(detail.images?.backdrops ?? []),
+    reviews: parseReviews(detail.reviews?.results ?? []),
+    crew,
+    runtime: detail.runtime ?? undefined,
+    tagline: detail.tagline || undefined,
+    status: detail.status,
+    releaseDate: detail.release_date,
+    budget: detail.budget && detail.budget > 0 ? detail.budget : undefined,
+    revenue: detail.revenue && detail.revenue > 0 ? detail.revenue : undefined,
+    originalLanguage: detail.original_language,
+    productionCompanies: detail.production_companies?.map(c => c.name).slice(0, 4),
+  };
 }
 
-export async function getShowById(tmdbId: number): Promise<Movie> {
-  const [detail, credits] = await Promise.all([
-    tmdbFetch<TmdbMovie & { media_type?: 'tv' }>(`/tv/${tmdbId}`),
-    tmdbFetch<TmdbCredits>(`/tv/${tmdbId}/credits`),
-  ]);
-  return tmdbToMovie({ ...detail, media_type: 'tv' }, credits);
+export async function getShowDetail(tmdbId: number): Promise<Movie> {
+  const detail = await tmdbFetch<TmdbShowFull>(
+    `/tv/${tmdbId}`,
+    { append_to_response: 'credits,videos,images,reviews' },
+  );
+
+  const base = tmdbToMovie({ ...detail, media_type: 'tv' }, detail.credits);
+
+  const keyCrew = ['Executive Producer', 'Producer', 'Creator'];
+  const crew = (detail.credits?.crew ?? [])
+    .filter(c => keyCrew.includes(c.job))
+    .slice(0, 6)
+    .map(c => ({ name: c.name, job: c.job }));
+
+  const seasons: TvSeason[] = (detail.seasons ?? [])
+    .filter(s => s.season_number > 0)
+    .map(s => ({
+      id: s.id,
+      name: s.name,
+      season_number: s.season_number,
+      episode_count: s.episode_count,
+      air_date: s.air_date ?? '',
+      overview: s.overview ?? '',
+      poster_path: s.poster_path,
+    }));
+
+  return {
+    ...base,
+    cast: buildCast(detail.credits),
+    trailers: parseTrailers(detail.videos?.results ?? []),
+    images: parseImages(detail.images?.backdrops ?? []),
+    reviews: parseReviews(detail.reviews?.results ?? []),
+    crew,
+    seasons,
+    networks: detail.networks?.map(n => n.name),
+    episodeRuntime: detail.episode_run_time?.[0],
+    status: detail.status,
+    releaseDate: detail.first_air_date,
+    originalLanguage: detail.original_language,
+    productionCompanies: detail.production_companies?.map(c => c.name).slice(0, 4),
+  };
+}
+
+export async function getTvSeasonEpisodes(showId: number, seasonNumber: number): Promise<TvEpisode[]> {
+  const data = await tmdbFetch<{ episodes: TmdbEpisode[] }>(
+    `/tv/${showId}/season/${seasonNumber}`,
+  );
+  return (data.episodes ?? []).map(ep => ({
+    id: ep.id,
+    name: ep.name,
+    episode_number: ep.episode_number,
+    air_date: ep.air_date ?? '',
+    overview: ep.overview ?? '',
+    still_path: ep.still_path,
+    vote_average: ep.vote_average,
+    runtime: ep.runtime,
+  }));
 }

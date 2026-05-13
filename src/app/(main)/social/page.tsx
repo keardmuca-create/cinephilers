@@ -4,7 +4,7 @@
 import React, { useState, useMemo } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
-import { SocialPost, SocialAction } from '@/lib/mock-data';
+import { SocialPost, SocialAction } from '@/lib/types';
 import { Heart, MessageSquare, Repeat2, MoreHorizontal, Star, UserPlus, Share2, AlertTriangle, Search, X } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';

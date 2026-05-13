@@ -5,7 +5,7 @@ import React from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { Play, Star, ChevronRight, Info } from 'lucide-react';
-import { Movie } from '@/lib/mock-data';
+import { Movie } from '@/lib/types';
 import { MovieCard } from '@/components/movie-card';
 import { AIRecommendations } from '@/components/ai-recommendations';
 import { Button } from '@/components/ui/button';

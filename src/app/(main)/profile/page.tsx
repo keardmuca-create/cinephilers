@@ -2,7 +2,7 @@
 "use client"
 
 import React, { useState } from 'react';
-import { Movie, BadgeInfo } from '@/lib/mock-data';
+import { Movie, BadgeInfo } from '@/lib/types';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { MovieCard } from '@/components/movie-card';

@@ -2,6 +2,7 @@ export interface Actor {
   id: string;
   name: string;
   role: string;
+  profileImage?: string;
   bio: string;
   knownFor: string[];
 }
@@ -15,6 +16,34 @@ export interface Review {
   content: string;
   date: string;
   likes: number;
+}
+
+export interface Trailer {
+  key: string;
+  name: string;
+  site: string;
+  type: string;
+}
+
+export interface TvEpisode {
+  id: number;
+  name: string;
+  episode_number: number;
+  air_date: string;
+  overview: string;
+  still_path: string | null;
+  vote_average: number;
+  runtime: number | null;
+}
+
+export interface TvSeason {
+  id: number;
+  name: string;
+  season_number: number;
+  episode_count: number;
+  air_date: string;
+  overview: string;
+  poster_path: string | null;
 }
 
 export interface Movie {
@@ -34,6 +63,21 @@ export interface Movie {
   quotes: string[];
   trivia: string[];
   type: 'movie' | 'show';
+  // Extended fields — only present on the detail page
+  trailers?: Trailer[];
+  images?: string[];
+  runtime?: number;
+  tagline?: string;
+  status?: string;
+  releaseDate?: string;
+  budget?: number;
+  revenue?: number;
+  seasons?: TvSeason[];
+  networks?: string[];
+  episodeRuntime?: number;
+  crew?: { name: string; job: string }[];
+  originalLanguage?: string;
+  productionCompanies?: string[];
 }
 
 export type SocialAction = 'watched' | 'rated' | 'reviewed' | 'watchlist' | 'rewatched';

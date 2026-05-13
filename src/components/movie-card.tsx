@@ -5,7 +5,7 @@ import React, { useState } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { Star, BookmarkPlus, Check } from 'lucide-react';
-import { Movie } from '@/lib/mock-data';
+import { Movie } from '@/lib/types';
 import { cn } from '@/lib/utils';
 import { toast } from '@/hooks/use-toast';
 

@@ -1,18 +1,24 @@
-
 "use client"
 
 import React, { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Image from 'next/image';
-import { Movie, Actor } from '@/lib/mock-data';
+import { Movie, Actor, TvEpisode, TvSeason } from '@/lib/types';
 import { Button } from '@/components/ui/button';
-import { Play, Check, Plus, Star, ChevronLeft, Share2, ListPlus, Award, Quote, Info, Film, Calendar, Clock } from 'lucide-react';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import {
+  Play, Check, Plus, Star, ChevronLeft, Share2, ListPlus, Quote,
+  Info, Film, Calendar, Clock, Globe, Building2, Tv, ChevronDown, ChevronUp,
+  DollarSign, Images, Clapperboard,
+} from 'lucide-react';
+import { Avatar, AvatarImage } from '@/components/ui/avatar';
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Separator } from '@/components/ui/separator';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Badge } from '@/components/ui/badge';
 import { toast } from '@/hooks/use-toast';
+
+// ─── Skeleton ─────────────────────────────────────────────────────────────────
 
 function DetailSkeleton() {
   return (
@@ -32,51 +38,289 @@ function DetailSkeleton() {
   );
 }
 
-function PersonCard({ actor }: { actor: Actor }) {
-  const avatarSrc = actor.id.startsWith('tmdb-')
-    ? `https://picsum.photos/seed/${actor.id}/200/200`
-    : `https://picsum.photos/seed/${actor.id}/200/200`;
+// ─── Person card ──────────────────────────────────────────────────────────────
 
+function PersonCard({ actor }: { actor: Actor }) {
   return (
     <Dialog>
       <DialogTrigger asChild>
-        <div className="shrink-0 w-32 group cursor-pointer">
+        <div className="shrink-0 w-28 group cursor-pointer">
           <div className="relative aspect-square rounded-2xl overflow-hidden mb-2 group-hover:ring-2 ring-primary ring-offset-2 ring-offset-background transition-all">
-            <Image src={avatarSrc} alt={actor.name} fill className="object-cover" />
+            <Image
+              src={actor.profileImage ?? `https://picsum.photos/seed/${actor.id}/200/200`}
+              alt={actor.name}
+              fill
+              className="object-cover"
+            />
           </div>
-          <h4 className="text-sm font-bold font-headline line-clamp-1">{actor.name}</h4>
-          <p className="text-xs text-muted-foreground line-clamp-1">{actor.role}</p>
+          <h4 className="text-xs font-bold font-headline line-clamp-1">{actor.name}</h4>
+          <p className="text-[10px] text-muted-foreground line-clamp-1">{actor.role}</p>
         </div>
       </DialogTrigger>
       <DialogContent className="max-w-md rounded-3xl">
         <DialogHeader>
-          <DialogTitle className="font-headline">Person Details</DialogTitle>
+          <DialogTitle className="font-headline">{actor.name}</DialogTitle>
         </DialogHeader>
         <div className="flex gap-6 py-4">
-          <Avatar className="h-24 w-24"><AvatarImage src={avatarSrc} /></Avatar>
-          <div className="space-y-2">
-            <h3 className="text-xl font-bold font-headline">{actor.name}</h3>
+          <Avatar className="h-24 w-24 rounded-2xl shrink-0">
+            <AvatarImage
+              src={actor.profileImage ?? `https://picsum.photos/seed/${actor.id}/200/200`}
+              className="object-cover"
+            />
+          </Avatar>
+          <div className="space-y-1">
             <p className="text-sm text-primary font-bold">{actor.role}</p>
-            {actor.bio && <p className="text-xs text-muted-foreground">{actor.bio}</p>}
           </div>
         </div>
-        {actor.knownFor.length > 0 && (
-          <>
-            <Separator className="bg-white/5" />
-            <div className="space-y-3">
-              <h4 className="text-sm font-bold font-headline">Known For</h4>
-              <div className="flex flex-wrap gap-2">
-                {actor.knownFor.map(m => (
-                  <span key={m} className="bg-white/5 text-xs px-3 py-1 rounded-full">{m}</span>
-                ))}
-              </div>
-            </div>
-          </>
-        )}
       </DialogContent>
     </Dialog>
   );
 }
+
+// ─── Trailer section ──────────────────────────────────────────────────────────
+
+function TrailersSection({ trailers }: { trailers: NonNullable<Movie['trailers']> }) {
+  const [active, setActive] = useState(0);
+  if (trailers.length === 0) return null;
+
+  return (
+    <section className="space-y-6">
+      <h3 className="text-2xl font-headline font-bold flex items-center gap-3">
+        <Clapperboard className="h-6 w-6 text-primary" /> Trailers & Clips
+      </h3>
+      <div className="rounded-3xl overflow-hidden border border-white/10 shadow-2xl aspect-video w-full">
+        <iframe
+          key={trailers[active].key}
+          src={`https://www.youtube.com/embed/${trailers[active].key}?rel=0`}
+          className="w-full h-full"
+          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+          allowFullScreen
+          title={trailers[active].name}
+        />
+      </div>
+      {trailers.length > 1 && (
+        <div className="flex gap-3 overflow-x-auto no-scrollbar pb-1">
+          {trailers.map((t, i) => (
+            <button
+              key={t.key}
+              onClick={() => setActive(i)}
+              className={`shrink-0 text-xs font-bold px-4 py-2 rounded-full border transition-all ${
+                i === active
+                  ? 'bg-primary border-primary text-primary-foreground'
+                  : 'border-white/10 bg-white/5 hover:bg-white/10 text-muted-foreground'
+              }`}
+            >
+              {t.type === 'Teaser' ? '🎬' : '▶'} {t.name}
+            </button>
+          ))}
+        </div>
+      )}
+    </section>
+  );
+}
+
+// ─── Images gallery ───────────────────────────────────────────────────────────
+
+function ImagesGallery({ images }: { images: string[] }) {
+  if (images.length === 0) return null;
+  return (
+    <section className="space-y-6">
+      <div className="flex items-center justify-between">
+        <h3 className="text-2xl font-headline font-bold flex items-center gap-3">
+          <Images className="h-6 w-6 text-primary" /> Photos
+        </h3>
+        <Dialog>
+          <DialogTrigger asChild>
+            <button className="text-xs text-primary border border-primary/30 rounded-full px-3 py-1 hover:bg-primary/10 transition-colors font-semibold">
+              See All {images.length}
+            </button>
+          </DialogTrigger>
+          <DialogContent className="max-w-4xl rounded-[2rem] h-[85vh] flex flex-col p-0 border-white/10">
+            <DialogHeader className="p-6 pb-2 shrink-0">
+              <DialogTitle className="font-headline text-2xl">All Photos</DialogTitle>
+            </DialogHeader>
+            <ScrollArea className="flex-1 px-6 pb-6">
+              <div className="grid grid-cols-2 gap-3">
+                {images.map((url, i) => (
+                  <div key={i} className="relative aspect-video rounded-xl overflow-hidden">
+                    <Image src={url} alt="" fill className="object-cover" />
+                  </div>
+                ))}
+              </div>
+            </ScrollArea>
+          </DialogContent>
+        </Dialog>
+      </div>
+      <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+        {images.slice(0, 6).map((url, i) => (
+          <div key={i} className="relative aspect-video rounded-2xl overflow-hidden border border-white/5">
+            <Image src={url} alt="" fill className="object-cover hover:scale-105 transition-transform duration-500" />
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+// ─── Release info ─────────────────────────────────────────────────────────────
+
+function InfoRow({ icon: Icon, label, value }: { icon: React.ComponentType<{ className?: string }>; label: string; value: string }) {
+  return (
+    <div className="flex items-start gap-3">
+      <Icon className="h-4 w-4 text-primary shrink-0 mt-0.5" />
+      <div>
+        <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">{label}</p>
+        <p className="text-sm font-bold">{value}</p>
+      </div>
+    </div>
+  );
+}
+
+function ReleaseInfo({ movie }: { movie: Movie }) {
+  const fmt = (n: number) =>
+    n >= 1_000_000
+      ? `$${(n / 1_000_000).toFixed(1)}M`
+      : `$${n.toLocaleString()}`;
+
+  const rows: { icon: React.ComponentType<{ className?: string }>; label: string; value: string }[] = [];
+
+  if (movie.releaseDate) rows.push({ icon: Calendar, label: 'Release Date', value: new Date(movie.releaseDate).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }) });
+  if (movie.runtime) rows.push({ icon: Clock, label: 'Runtime', value: `${Math.floor(movie.runtime / 60)}h ${movie.runtime % 60}m` });
+  if (movie.episodeRuntime) rows.push({ icon: Clock, label: 'Episode Length', value: `${movie.episodeRuntime} min` });
+  if (movie.status) rows.push({ icon: Info, label: 'Status', value: movie.status });
+  if (movie.originalLanguage) rows.push({ icon: Globe, label: 'Language', value: movie.originalLanguage.toUpperCase() });
+  if (movie.networks && movie.networks.length > 0) rows.push({ icon: Tv, label: 'Network', value: movie.networks.join(', ') });
+  if (movie.budget) rows.push({ icon: DollarSign, label: 'Budget', value: fmt(movie.budget) });
+  if (movie.revenue) rows.push({ icon: DollarSign, label: 'Box Office', value: fmt(movie.revenue) });
+  if (movie.productionCompanies && movie.productionCompanies.length > 0) rows.push({ icon: Building2, label: 'Production', value: movie.productionCompanies.join(', ') });
+
+  if (rows.length === 0) return null;
+
+  return (
+    <section className="space-y-6">
+      <h3 className="text-2xl font-headline font-bold flex items-center gap-3">
+        <Info className="h-6 w-6 text-primary" /> Release Info
+      </h3>
+      <div className="bg-white/5 rounded-3xl p-8 border border-white/5 grid grid-cols-1 sm:grid-cols-2 gap-6">
+        {rows.map(r => <InfoRow key={r.label} {...r} />)}
+      </div>
+    </section>
+  );
+}
+
+// ─── Seasons & episodes ────────────────────────────────────────────────────────
+
+function EpisodeRow({ ep }: { ep: TvEpisode }) {
+  const still = ep.still_path
+    ? `https://image.tmdb.org/t/p/w300${ep.still_path}`
+    : `https://picsum.photos/seed/${ep.id}/300/170`;
+
+  return (
+    <div className="flex gap-4 p-4 rounded-2xl bg-white/5 border border-white/5 hover:bg-white/10 transition-colors">
+      <div className="relative aspect-video w-28 shrink-0 rounded-xl overflow-hidden">
+        <Image src={still} alt={ep.name} fill className="object-cover" />
+        <div className="absolute inset-0 flex items-center justify-center bg-black/30 opacity-0 hover:opacity-100 transition-opacity">
+          <Play className="h-6 w-6 fill-current" />
+        </div>
+      </div>
+      <div className="flex-1 min-w-0 space-y-1">
+        <div className="flex items-center gap-2">
+          <span className="text-[10px] font-bold text-primary uppercase tracking-widest shrink-0">E{ep.episode_number}</span>
+          <h5 className="text-sm font-bold font-headline line-clamp-1">{ep.name}</h5>
+        </div>
+        {ep.air_date && (
+          <p className="text-[10px] text-muted-foreground font-bold">{new Date(ep.air_date).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })}</p>
+        )}
+        {ep.overview && <p className="text-xs text-gray-400 line-clamp-2">{ep.overview}</p>}
+        <div className="flex items-center gap-3 pt-1">
+          {ep.vote_average > 0 && (
+            <span className="flex items-center gap-1 text-[10px] font-bold text-accent">
+              <Star className="h-3 w-3 fill-current" /> {ep.vote_average.toFixed(1)}
+            </span>
+          )}
+          {ep.runtime && <span className="text-[10px] text-muted-foreground font-bold">{ep.runtime} min</span>}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function SeasonsSection({ seasons, showTmdbId }: { seasons: TvSeason[]; showTmdbId: string }) {
+  const [expanded, setExpanded] = useState<number | null>(null);
+  const [cache, setCache] = useState<Record<number, TvEpisode[]>>({});
+  const [loading, setLoading] = useState<number | null>(null);
+
+  const toggle = async (season: TvSeason) => {
+    const n = season.season_number;
+    if (expanded === n) { setExpanded(null); return; }
+    if (cache[n]) { setExpanded(n); return; }
+    setLoading(n);
+    try {
+      const res = await fetch(`/api/tv/${showTmdbId}/season/${n}`);
+      const data = await res.json() as { episodes?: TvEpisode[] };
+      setCache(prev => ({ ...prev, [n]: data.episodes ?? [] }));
+      setExpanded(n);
+    } finally {
+      setLoading(null);
+    }
+  };
+
+  return (
+    <section className="space-y-6">
+      <h3 className="text-2xl font-headline font-bold flex items-center gap-3">
+        <Tv className="h-6 w-6 text-primary" /> Seasons & Episodes
+      </h3>
+      <div className="space-y-3">
+        {seasons.map(season => {
+          const isOpen = expanded === season.season_number;
+          const isLoading = loading === season.season_number;
+          const posterSrc = season.poster_path
+            ? `https://image.tmdb.org/t/p/w154${season.poster_path}`
+            : `https://picsum.photos/seed/season-${season.id}/154/231`;
+
+          return (
+            <div key={season.id} className="rounded-3xl border border-white/5 overflow-hidden">
+              <button
+                className="w-full flex items-center gap-4 p-5 bg-white/5 hover:bg-white/10 transition-colors text-left"
+                onClick={() => toggle(season)}
+              >
+                <div className="relative w-10 aspect-[2/3] rounded-lg overflow-hidden shrink-0">
+                  <Image src={posterSrc} alt={season.name} fill className="object-cover" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="font-bold font-headline">{season.name}</p>
+                  <p className="text-xs text-muted-foreground font-bold">
+                    {season.episode_count} episodes
+                    {season.air_date ? ` · ${season.air_date.slice(0, 4)}` : ''}
+                  </p>
+                </div>
+                {isLoading ? (
+                  <div className="h-4 w-4 border-2 border-primary border-t-transparent rounded-full animate-spin shrink-0" />
+                ) : isOpen ? (
+                  <ChevronUp className="h-5 w-5 text-muted-foreground shrink-0" />
+                ) : (
+                  <ChevronDown className="h-5 w-5 text-muted-foreground shrink-0" />
+                )}
+              </button>
+              {isOpen && cache[season.season_number] && (
+                <div className="p-4 space-y-3 bg-black/20">
+                  {season.overview && (
+                    <p className="text-sm text-gray-400 italic pb-2">{season.overview}</p>
+                  )}
+                  {cache[season.season_number].map(ep => (
+                    <EpisodeRow key={ep.id} ep={ep} />
+                  ))}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
+// ─── Main page ────────────────────────────────────────────────────────────────
 
 export default function MovieDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -87,11 +331,10 @@ export default function MovieDetailPage() {
   const [isWatched, setIsWatched] = useState(false);
   const [isInWatchlist, setIsInWatchlist] = useState(false);
   const [userRating, setUserRating] = useState(0);
+  const [lightboxImg, setLightboxImg] = useState<string | null>(null);
 
   useEffect(() => {
     if (!id) return;
-
-    // All live IDs come from TMDB — fetch from our API route
     fetch(`/api/movies/${id}`)
       .then(r => r.json())
       .then((data: Movie & { error?: string }) => {
@@ -100,21 +343,6 @@ export default function MovieDetailPage() {
       .catch(() => setMovie(null))
       .finally(() => setLoading(false));
   }, [id]);
-
-  const handleToggleWatched = () => {
-    setIsWatched(prev => !prev);
-    toast({ title: isWatched ? 'Removed from watched' : 'Marked as watched' });
-  };
-
-  const handleToggleWatchlist = () => {
-    setIsInWatchlist(prev => !prev);
-    toast({ title: isInWatchlist ? 'Removed from watchlist' : 'Added to watchlist' });
-  };
-
-  const handleShare = () => {
-    navigator.clipboard.writeText(window.location.href);
-    toast({ title: 'Link copied!', description: 'Share it with your friends.' });
-  };
 
   if (loading) return <DetailSkeleton />;
 
@@ -133,48 +361,54 @@ export default function MovieDetailPage() {
     </main>
   );
 
+  const firstTrailer = movie.trailers?.[0];
+  const showTmdbId = movie.id.replace('tmdb-tv-', '').replace('tmdb-', '');
+
   return (
     <main className="min-h-screen pb-32 bg-background">
-      {/* Backdrop / Trailer area */}
+      {/* Backdrop */}
       <section className="relative w-full h-[50vh] bg-black">
-        <Image
-          src={movie.backdrop}
-          alt={movie.title}
-          fill
-          className="object-cover opacity-60"
-          priority
-        />
+        <Image src={movie.backdrop} alt={movie.title} fill className="object-cover opacity-60" priority />
         <div className="absolute inset-0 bg-gradient-to-t from-background via-transparent to-transparent" />
 
         <header className="absolute top-0 left-0 right-0 p-6 flex justify-between items-center z-20">
-          <Button
-            variant="outline"
-            size="icon"
-            className="rounded-full bg-black/40 backdrop-blur-md border-white/10"
-            onClick={() => router.back()}
-          >
+          <Button variant="outline" size="icon" className="rounded-full bg-black/40 backdrop-blur-md border-white/10" onClick={() => router.back()}>
             <ChevronLeft className="h-6 w-6" />
           </Button>
           <Button
-            variant="outline"
-            size="icon"
+            variant="outline" size="icon"
             className="rounded-full bg-black/40 backdrop-blur-md border-white/10"
-            onClick={handleShare}
+            onClick={() => { navigator.clipboard.writeText(window.location.href); toast({ title: 'Link copied!' }); }}
           >
             <Share2 className="h-5 w-5" />
           </Button>
         </header>
 
-        <div className="absolute inset-0 flex items-center justify-center">
-          <button className="group flex flex-col items-center gap-4 transition-transform active:scale-95">
-            <div className="h-20 w-20 rounded-full bg-primary/90 flex items-center justify-center shadow-2xl group-hover:bg-primary group-hover:scale-110 transition-all">
-              <Play className="h-10 w-10 fill-current ml-1" />
-            </div>
-            <span className="text-sm font-bold tracking-widest uppercase text-white/80 group-hover:text-white">
-              Watch Trailer
-            </span>
-          </button>
-        </div>
+        {/* Play trailer overlay */}
+        {firstTrailer && (
+          <Dialog>
+            <DialogTrigger asChild>
+              <div className="absolute inset-0 flex items-center justify-center cursor-pointer group">
+                <div className="flex flex-col items-center gap-4 transition-transform active:scale-95">
+                  <div className="h-20 w-20 rounded-full bg-primary/90 flex items-center justify-center shadow-2xl group-hover:bg-primary group-hover:scale-110 transition-all">
+                    <Play className="h-10 w-10 fill-current ml-1" />
+                  </div>
+                  <span className="text-sm font-bold tracking-widest uppercase text-white/80 group-hover:text-white">Watch Trailer</span>
+                </div>
+              </div>
+            </DialogTrigger>
+            <DialogContent className="max-w-3xl rounded-3xl p-2 border-white/10 bg-black">
+              <div className="aspect-video w-full">
+                <iframe
+                  src={`https://www.youtube.com/embed/${firstTrailer.key}?autoplay=1&rel=0`}
+                  className="w-full h-full rounded-2xl"
+                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                  allowFullScreen
+                />
+              </div>
+            </DialogContent>
+          </Dialog>
+        )}
       </section>
 
       <div className="px-6 space-y-12">
@@ -185,29 +419,20 @@ export default function MovieDetailPage() {
               <Image src={movie.poster} alt={movie.title} fill className="object-cover" />
             </div>
           </div>
-          <div className="flex-1 flex flex-col justify-end gap-4">
-            <h1 className="text-4xl md:text-6xl font-headline font-bold">{movie.title}</h1>
+          <div className="flex-1 flex flex-col justify-end gap-3">
+            <div className="flex flex-wrap gap-2">
+              <Badge variant="secondary" className="text-[10px] font-bold uppercase tracking-widest">{movie.type === 'show' ? 'TV Show' : 'Movie'}</Badge>
+              <Badge variant="outline" className="text-[10px] border-white/10">{movie.genre}</Badge>
+            </div>
+            <h1 className="text-4xl md:text-5xl font-headline font-bold leading-tight">{movie.title}</h1>
+            {movie.tagline && <p className="text-base text-primary italic font-medium">&ldquo;{movie.tagline}&rdquo;</p>}
             <div className="flex flex-wrap items-center gap-4 text-sm font-bold text-muted-foreground">
-              <span className="flex items-center gap-1.5">
-                <Calendar className="h-4 w-4 text-primary" /> {movie.year}
-              </span>
-              <span className="flex items-center gap-1.5">
-                <Film className="h-4 w-4 text-primary" /> {movie.genre}
-              </span>
-              {movie.director && (
-                <span className="flex items-center gap-1.5">
-                  <Clock className="h-4 w-4 text-primary" /> Dir. {movie.director}
-                </span>
-              )}
+              <span className="flex items-center gap-1.5"><Calendar className="h-4 w-4 text-primary" />{movie.year}</span>
+              {movie.runtime && <span className="flex items-center gap-1.5"><Clock className="h-4 w-4 text-primary" />{Math.floor(movie.runtime / 60)}h {movie.runtime % 60}m</span>}
+              {movie.episodeRuntime && <span className="flex items-center gap-1.5"><Clock className="h-4 w-4 text-primary" />{movie.episodeRuntime} min/ep</span>}
+              {movie.director && <span className="flex items-center gap-1.5"><Film className="h-4 w-4 text-primary" />Dir. {movie.director}</span>}
             </div>
-            <div className="space-y-2">
-              <h3 className="text-lg font-headline font-bold flex items-center gap-2">
-                <Info className="h-5 w-5 text-primary" /> Overview
-              </h3>
-              <p className="text-gray-300 leading-relaxed font-medium text-base">
-                {movie.description}
-              </p>
-            </div>
+            <p className="text-gray-300 leading-relaxed font-medium text-base">{movie.description}</p>
           </div>
         </section>
 
@@ -216,7 +441,7 @@ export default function MovieDetailPage() {
           <Button
             variant={isInWatchlist ? 'default' : 'outline'}
             className={`h-14 px-8 rounded-2xl font-bold flex-1 md:flex-none text-base transition-all ${isInWatchlist ? 'bg-primary border-primary' : 'border-white/10 bg-white/5'}`}
-            onClick={handleToggleWatchlist}
+            onClick={() => { setIsInWatchlist(p => !p); toast({ title: isInWatchlist ? 'Removed from watchlist' : 'Added to watchlist' }); }}
           >
             {isInWatchlist ? <Check className="h-5 w-5 mr-2" /> : <Plus className="h-5 w-5 mr-2" />}
             {isInWatchlist ? 'In Watchlist' : 'Add to Watchlist'}
@@ -224,7 +449,7 @@ export default function MovieDetailPage() {
           <Button
             variant={isWatched ? 'default' : 'outline'}
             className={`h-14 px-8 rounded-2xl font-bold flex-1 md:flex-none text-base transition-all ${isWatched ? 'bg-accent border-accent' : 'border-white/10 bg-white/5'}`}
-            onClick={handleToggleWatched}
+            onClick={() => { setIsWatched(p => !p); toast({ title: isWatched ? 'Removed from watched' : 'Marked as watched' }); }}
           >
             {isWatched ? <Check className="h-5 w-5 mr-2" /> : <Play className="h-5 w-5 mr-2" />}
             {isWatched ? 'Watched' : 'Mark Watched'}
@@ -236,15 +461,10 @@ export default function MovieDetailPage() {
               </Button>
             </DialogTrigger>
             <DialogContent className="rounded-3xl max-w-sm">
-              <DialogHeader>
-                <DialogTitle className="font-headline">Add to Custom List</DialogTitle>
-              </DialogHeader>
+              <DialogHeader><DialogTitle className="font-headline">Add to Custom List</DialogTitle></DialogHeader>
               <div className="space-y-2 py-4">
-                <Button variant="ghost" className="w-full justify-start h-14 rounded-2xl" onClick={() => toast({ title: 'Added to Sci-Fi Classics' })}>
-                  <Film className="h-5 w-5 mr-3 text-primary" /> Sci-Fi Classics
-                </Button>
-                <Button variant="ghost" className="w-full justify-start h-14 rounded-2xl" onClick={() => toast({ title: 'Added to Best of 2024' })}>
-                  <Star className="h-5 w-5 mr-3 text-accent" /> Best of 2024
+                <Button variant="ghost" className="w-full justify-start h-14 rounded-2xl" onClick={() => toast({ title: 'Added to list' })}>
+                  <Film className="h-5 w-5 mr-3 text-primary" /> My Favourites
                 </Button>
                 <Separator className="bg-white/5 my-2" />
                 <Button className="w-full h-12 rounded-2xl" variant="outline">
@@ -258,7 +478,7 @@ export default function MovieDetailPage() {
         {/* Ratings */}
         <section className="grid grid-cols-1 md:grid-cols-2 gap-8 bg-white/5 p-8 rounded-[2.5rem] border border-white/5">
           <div className="space-y-4">
-            <h3 className="text-sm font-bold uppercase tracking-widest text-muted-foreground">Global Rating</h3>
+            <h3 className="text-sm font-bold uppercase tracking-widest text-muted-foreground">TMDB Rating</h3>
             <div className="flex items-center gap-4">
               <div className="text-5xl font-black font-headline text-accent">{movie.rating.toFixed(1)}</div>
               <div className="space-y-1">
@@ -276,44 +496,72 @@ export default function MovieDetailPage() {
             <div className="flex flex-col gap-2">
               <div className="flex items-center gap-1">
                 {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(i => (
-                  <button
-                    key={i}
-                    onClick={() => {
-                      setUserRating(i);
-                      toast({ title: `You rated it ${i}/10!` });
-                    }}
-                    className="transition-all hover:scale-125 active:scale-90 p-1"
-                  >
-                    <Star className={`h-6 w-6 transition-colors ${userRating >= i ? 'fill-accent text-accent' : 'text-white/10 hover:text-white/40'}`} />
+                  <button key={i} onClick={() => { setUserRating(i); toast({ title: `You rated it ${i}/10!` }); }} className="transition-all hover:scale-125 active:scale-90 p-0.5">
+                    <Star className={`h-5 w-5 transition-colors ${userRating >= i ? 'fill-accent text-accent' : 'text-white/10 hover:text-white/40'}`} />
                   </button>
                 ))}
               </div>
-              <p className="text-xs font-bold text-accent">
-                {userRating > 0 ? `Your score: ${userRating}/10` : 'Select a star to rate'}
-              </p>
+              <p className="text-xs font-bold text-accent">{userRating > 0 ? `Your score: ${userRating}/10` : 'Select a star to rate'}</p>
             </div>
           </div>
         </section>
 
-        {/* Cast */}
-        {movie.cast.length > 0 && (
+        {/* Trailers */}
+        {movie.trailers && movie.trailers.length > 0 && (
+          <TrailersSection trailers={movie.trailers} />
+        )}
+
+        {/* Cast & Crew */}
+        {(movie.cast.length > 0 || (movie.crew && movie.crew.length > 0)) && (
           <section className="space-y-6">
             <h3 className="text-2xl font-headline font-bold">Cast & Crew</h3>
-            <div className="bg-white/5 rounded-3xl p-8 border border-white/5 space-y-6">
-              {movie.director && (
-                <div className="flex flex-col gap-1">
-                  <span className="text-[10px] font-bold uppercase tracking-widest text-primary">Director</span>
-                  <span className="text-xl font-bold font-headline">{movie.director}</span>
+            <div className="bg-white/5 rounded-3xl p-6 border border-white/5 space-y-6">
+              {/* Key crew */}
+              {movie.crew && movie.crew.length > 0 && (
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 pb-4">
+                  {movie.director && (
+                    <div>
+                      <p className="text-[10px] font-bold uppercase tracking-widest text-primary mb-1">Director</p>
+                      <p className="text-sm font-bold font-headline">{movie.director}</p>
+                    </div>
+                  )}
+                  {movie.crew.filter(c => c.job !== 'Director').slice(0, 5).map(c => (
+                    <div key={`${c.name}-${c.job}`}>
+                      <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-1">{c.job}</p>
+                      <p className="text-sm font-bold font-headline">{c.name}</p>
+                    </div>
+                  ))}
                 </div>
               )}
-              <ScrollArea className="w-full">
-                <div className="flex gap-6 pb-4">
-                  {movie.cast.map(actor => <PersonCard key={actor.id} actor={actor} />)}
+              {movie.director && (!movie.crew || movie.crew.length === 0) && (
+                <div>
+                  <p className="text-[10px] font-bold uppercase tracking-widest text-primary mb-1">Director</p>
+                  <p className="text-xl font-bold font-headline">{movie.director}</p>
                 </div>
-                <ScrollBar orientation="horizontal" />
-              </ScrollArea>
+              )}
+              <Separator className="bg-white/5" />
+              {/* Cast */}
+              {movie.cast.length > 0 && (
+                <ScrollArea className="w-full">
+                  <div className="flex gap-5 pb-4">
+                    {movie.cast.map(actor => <PersonCard key={actor.id} actor={actor} />)}
+                  </div>
+                  <ScrollBar orientation="horizontal" />
+                </ScrollArea>
+              )}
             </div>
           </section>
+        )}
+
+        {/* Images */}
+        {movie.images && <ImagesGallery images={movie.images} />}
+
+        {/* Release Info */}
+        <ReleaseInfo movie={movie} />
+
+        {/* Seasons & Episodes (TV only) */}
+        {movie.type === 'show' && movie.seasons && movie.seasons.length > 0 && (
+          <SeasonsSection seasons={movie.seasons} showTmdbId={showTmdbId} />
         )}
 
         {/* Reviews */}
@@ -345,9 +593,8 @@ export default function MovieDetailPage() {
                               <Star className="h-3 w-3 fill-current" /> {r.rating}
                             </div>
                           </div>
-                          <p className="text-sm text-gray-300 leading-relaxed italic">&ldquo;{r.content}&rdquo;</p>
-                          <div className="text-[10px] text-muted-foreground font-bold uppercase tracking-wider">{r.likes} people found this helpful</div>
-                          <Separator className="bg-white/5 mt-4" />
+                          <p className="text-sm text-gray-300 leading-relaxed italic line-clamp-6">&ldquo;{r.content}&rdquo;</p>
+                          <Separator className="bg-white/5" />
                         </div>
                       ))}
                     </div>
@@ -357,10 +604,10 @@ export default function MovieDetailPage() {
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               {movie.reviews.slice(0, 2).map(r => (
-                <div key={r.id} className="bg-white/5 p-8 rounded-3xl border border-white/5 space-y-4 hover:bg-white/10 transition-colors">
+                <div key={r.id} className="bg-white/5 p-6 rounded-3xl border border-white/5 space-y-4 hover:bg-white/10 transition-colors">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-3">
-                      <Avatar className="h-10 w-10"><AvatarImage src={r.userAvatar} /></Avatar>
+                      <Avatar className="h-9 w-9"><AvatarImage src={r.userAvatar} /></Avatar>
                       <div>
                         <span className="text-sm font-bold font-headline block">{r.userName}</span>
                         <span className="text-[10px] text-muted-foreground font-bold">{r.date}</span>
@@ -370,48 +617,39 @@ export default function MovieDetailPage() {
                       <Star className="h-3 w-3 fill-current" /> {r.rating}
                     </div>
                   </div>
-                  <p className="text-sm text-gray-300 line-clamp-3 italic leading-relaxed">&ldquo;{r.content}&rdquo;</p>
+                  <p className="text-sm text-gray-300 line-clamp-4 italic leading-relaxed">&ldquo;{r.content}&rdquo;</p>
                 </div>
               ))}
             </div>
           </section>
         )}
 
-        {/* Quotes & Trivia */}
-        {(movie.quotes.length > 0 || movie.trivia.length > 0) && (
-          <section className="grid grid-cols-1 md:grid-cols-2 gap-10">
-            {movie.quotes.length > 0 && (
-              <div className="space-y-6">
-                <h3 className="text-2xl font-headline font-bold flex items-center gap-3">
-                  <Quote className="h-6 w-6 text-primary" /> Iconic Quotes
-                </h3>
-                <div className="space-y-4">
-                  {movie.quotes.map((q, i) => (
-                    <div key={i} className="p-6 bg-white/5 rounded-3xl border-l-4 border-primary italic text-base text-gray-300 shadow-lg">
-                      {q}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-            {movie.trivia.length > 0 && (
-              <div className="space-y-6">
-                <h3 className="text-2xl font-headline font-bold flex items-center gap-3">
-                  <Award className="h-6 w-6 text-accent" /> Did You Know?
-                </h3>
-                <div className="space-y-4">
-                  {movie.trivia.map((t, i) => (
-                    <div key={i} className="p-6 bg-white/5 rounded-3xl text-base text-gray-300 flex items-start gap-4 shadow-lg border border-white/5">
-                      <div className="h-3 w-3 rounded-full bg-accent shrink-0 mt-1.5 ring-4 ring-accent/20" />
-                      {t}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
+        {/* Quotes (kept for any future data) */}
+        {movie.quotes.length > 0 && (
+          <section className="space-y-6">
+            <h3 className="text-2xl font-headline font-bold flex items-center gap-3">
+              <Quote className="h-6 w-6 text-primary" /> Iconic Quotes
+            </h3>
+            <div className="space-y-4">
+              {movie.quotes.map((q, i) => (
+                <div key={i} className="p-6 bg-white/5 rounded-3xl border-l-4 border-primary italic text-base text-gray-300 shadow-lg">{q}</div>
+              ))}
+            </div>
           </section>
         )}
       </div>
+
+      {/* Lightbox */}
+      {lightboxImg && (
+        <div
+          className="fixed inset-0 z-50 bg-black/90 flex items-center justify-center p-4"
+          onClick={() => setLightboxImg(null)}
+        >
+          <div className="relative max-w-5xl w-full aspect-video rounded-2xl overflow-hidden">
+            <Image src={lightboxImg} alt="" fill className="object-contain" />
+          </div>
+        </div>
+      )}
     </main>
   );
 }

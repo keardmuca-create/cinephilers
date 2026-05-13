@@ -2,7 +2,7 @@
 "use client"
 
 import React, { useState, useMemo } from 'react';
-import { Movie } from '@/lib/mock-data';
+import { Movie } from '@/lib/types';
 import { MovieCard } from '@/components/movie-card';
 import { ChevronRight, Search, X, Film, Loader2 } from 'lucide-react';
 import { Input } from '@/components/ui/input';
