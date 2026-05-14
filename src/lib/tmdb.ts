@@ -484,6 +484,11 @@ export async function getUpcomingMovies(count = 25): Promise<Movie[]> {
   return results.map(m => tmdbToMovie(m));
 }
 
+export async function getUpcomingShows(count = 25): Promise<Movie[]> {
+  const results = await fetchManyPages('/tv/on_the_air', count);
+  return results.map(m => tmdbToMovie({ ...m, media_type: 'tv' }));
+}
+
 export async function getMovieGenres(): Promise<TmdbGenre[]> {
   const data = await tmdbFetch<{ genres: TmdbGenre[] }>('/genre/movie/list');
   return data.genres ?? [];

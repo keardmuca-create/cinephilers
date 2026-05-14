@@ -6,6 +6,7 @@ import {
   getTopRatedMovies,
   getTopRatedShows,
   getUpcomingMovies,
+  getUpcomingShows,
   getMoviesByGenre,
   getShowsByGenre,
 } from '@/lib/tmdb';
@@ -55,6 +56,9 @@ export async function GET(
         break;
       case 'coming-soon':
         items = await getUpcomingMovies(100);
+        break;
+      case 'coming-soon-shows':
+        items = await getUpcomingShows(100);
         break;
       default:
         return NextResponse.json({ error: 'Unknown section' }, { status: 404 });

@@ -35,18 +35,18 @@ type BrowseGenre = typeof BROWSE_GENRES[number];
 // ─── Genre color palette (one per genre, in order) ───────────────────────────
 
 const GENRE_COLORS = [
-  'bg-red-500/20 text-red-300 border-red-500/20 hover:bg-red-500/30',       // Action
-  'bg-yellow-500/20 text-yellow-300 border-yellow-500/20 hover:bg-yellow-500/30', // Comedy
-  'bg-zinc-700/50 text-zinc-200 border-zinc-600/50 hover:bg-zinc-700/70',   // Horror
-  'bg-orange-500/20 text-orange-300 border-orange-500/20 hover:bg-orange-500/30', // Adventure
-  'bg-indigo-500/20 text-indigo-300 border-indigo-500/20 hover:bg-indigo-500/30', // Mystery
-  'bg-slate-600/40 text-slate-200 border-slate-500/40 hover:bg-slate-600/60', // Crime
-  'bg-teal-500/20 text-teal-300 border-teal-500/20 hover:bg-teal-500/30',   // Documentary
-  'bg-blue-500/20 text-blue-300 border-blue-500/20 hover:bg-blue-500/30',   // Drama
-  'bg-violet-500/20 text-violet-300 border-violet-500/20 hover:bg-violet-500/30', // Fantasy
-  'bg-pink-500/20 text-pink-300 border-pink-500/20 hover:bg-pink-500/30',   // Romance
-  'bg-cyan-500/20 text-cyan-300 border-cyan-500/20 hover:bg-cyan-500/30',   // Sci-Fi
-  'bg-rose-700/30 text-rose-200 border-rose-600/30 hover:bg-rose-700/50',   // Thriller
+  'bg-red-500/20 text-red-300 border-red-500/20 hover:bg-red-500/30',
+  'bg-yellow-500/20 text-yellow-300 border-yellow-500/20 hover:bg-yellow-500/30',
+  'bg-zinc-700/50 text-zinc-200 border-zinc-600/50 hover:bg-zinc-700/70',
+  'bg-orange-500/20 text-orange-300 border-orange-500/20 hover:bg-orange-500/30',
+  'bg-indigo-500/20 text-indigo-300 border-indigo-500/20 hover:bg-indigo-500/30',
+  'bg-slate-600/40 text-slate-200 border-slate-500/40 hover:bg-slate-600/60',
+  'bg-teal-500/20 text-teal-300 border-teal-500/20 hover:bg-teal-500/30',
+  'bg-blue-500/20 text-blue-300 border-blue-500/20 hover:bg-blue-500/30',
+  'bg-violet-500/20 text-violet-300 border-violet-500/20 hover:bg-violet-500/30',
+  'bg-pink-500/20 text-pink-300 border-pink-500/20 hover:bg-pink-500/30',
+  'bg-cyan-500/20 text-cyan-300 border-cyan-500/20 hover:bg-cyan-500/30',
+  'bg-rose-700/30 text-rose-200 border-rose-600/30 hover:bg-rose-700/50',
 ];
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -55,6 +55,44 @@ interface BrowseData {
   topMovies: Movie[];
   topShows: Movie[];
   upcoming: Movie[];
+  upcomingShows: Movie[];
+}
+
+// ─── Toggle bar ───────────────────────────────────────────────────────────────
+
+function TypeToggle({
+  value,
+  onChange,
+}: {
+  value: 'movies' | 'shows';
+  onChange: (v: 'movies' | 'shows') => void;
+}) {
+  return (
+    <div className="flex items-center bg-white/5 rounded-full p-1 border border-white/10">
+      <button
+        onClick={() => onChange('movies')}
+        className={[
+          'flex items-center gap-1.5 px-4 py-1.5 rounded-full text-xs font-bold transition-all',
+          value === 'movies'
+            ? 'bg-primary text-white shadow'
+            : 'text-muted-foreground hover:text-foreground',
+        ].join(' ')}
+      >
+        <Film className="h-3 w-3" /> Movies
+      </button>
+      <button
+        onClick={() => onChange('shows')}
+        className={[
+          'flex items-center gap-1.5 px-4 py-1.5 rounded-full text-xs font-bold transition-all',
+          value === 'shows'
+            ? 'bg-primary text-white shadow'
+            : 'text-muted-foreground hover:text-foreground',
+        ].join(' ')}
+      >
+        <Tv className="h-3 w-3" /> Shows
+      </button>
+    </div>
+  );
 }
 
 // ─── Shared section header ────────────────────────────────────────────────────
@@ -118,7 +156,7 @@ function EmptyState({ message }: { message: string }) {
   );
 }
 
-// ─── Coming Soon card (poster + release date badge) ──────────────────────────
+// ─── Coming Soon card (poster + release date badge, no genre) ─────────────────
 
 function UpcomingCard({ movie }: { movie: Movie }) {
   return (
@@ -143,14 +181,18 @@ function UpcomingCard({ movie }: { movie: Movie }) {
           </div>
         )}
       </div>
-      <h3 className="text-xs font-bold font-headline line-clamp-2 leading-snug px-0.5 group-hover:text-primary transition-colors">
-        {movie.title}
-      </h3>
-      {movie.genre && (
-        <p className="text-[10px] text-muted-foreground mt-0.5 px-0.5">
-          {movie.genre.split(' · ')[0]}
-        </p>
-      )}
+      <div className="space-y-1 px-1">
+        <div className="flex items-start justify-between gap-1">
+          <h3 className="text-sm font-semibold font-headline line-clamp-2 group-hover:text-primary transition-colors leading-snug">
+            {movie.title}
+          </h3>
+          <div className="flex items-center gap-0.5 shrink-0 text-accent">
+            <Star className="h-3 w-3 fill-current" />
+            <span className="text-xs font-bold">{movie.rating.toFixed(1)}</span>
+          </div>
+        </div>
+        <p className="text-xs text-muted-foreground">{movie.year}</p>
+      </div>
     </Link>
   );
 }
@@ -166,8 +208,12 @@ function GenreResults({
   results: Movie[];
   loading: boolean;
 }) {
-  const movieCount = results.filter(m => m.type === 'movie').length;
-  const showCount = results.filter(m => m.type === 'show').length;
+  const hasShows = genre.tvId !== 0;
+  const [tab, setTab] = useState<'movies' | 'shows'>('movies');
+
+  const movies = results.filter(m => m.type === 'movie');
+  const shows = results.filter(m => m.type === 'show');
+  const displayed = tab === 'movies' ? movies : shows;
 
   const seeAllHref = `/see-all/genre-${genre.movieId}-${genre.tvId}?title=${encodeURIComponent(genre.name)}`;
 
@@ -175,35 +221,28 @@ function GenreResults({
     <div className="space-y-3 pt-1">
       {/* Header row */}
       <div className="flex items-center justify-between px-6">
-        <div className="flex items-center gap-2">
-          {movieCount > 0 && (
-            <span className="flex items-center gap-1 text-[10px] font-bold text-muted-foreground border border-white/10 rounded-full px-2 py-0.5">
-              <Film className="h-2.5 w-2.5" /> {movieCount} movies
-            </span>
-          )}
-          {showCount > 0 && (
-            <span className="flex items-center gap-1 text-[10px] font-bold text-muted-foreground border border-white/10 rounded-full px-2 py-0.5">
-              <Tv className="h-2.5 w-2.5" /> {showCount} shows
-            </span>
-          )}
-        </div>
+        {hasShows ? (
+          <TypeToggle value={tab} onChange={setTab} />
+        ) : (
+          <span className="text-[10px] text-muted-foreground font-medium">Movies only</span>
+        )}
         <Link
           href={seeAllHref}
           className="text-xs text-primary border border-primary/30 rounded-full px-3 py-1 hover:bg-primary/10 transition-colors font-semibold flex items-center gap-1"
         >
-          See All 100 <ChevronRight className="h-3 w-3" />
+          See All <ChevronRight className="h-3 w-3" />
         </Link>
       </div>
 
       {/* Results */}
       {loading ? (
         <CardRowSkeleton />
-      ) : results.length > 0 ? (
+      ) : displayed.length > 0 ? (
         <div className="flex overflow-x-auto gap-4 px-6 pb-4 no-scrollbar">
-          {results.map(m => <MovieCard key={m.id} movie={m} />)}
+          {displayed.map(m => <MovieCard key={m.id} movie={m} />)}
         </div>
       ) : (
-        <EmptyState message={`No results found for ${genre.name}.`} />
+        <EmptyState message={`No ${tab} found for ${genre.name}.`} />
       )}
     </div>
   );
@@ -215,6 +254,9 @@ export default function BrowsePage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [browseData, setBrowseData] = useState<BrowseData | null>(null);
   const [browseLoading, setBrowseLoading] = useState(true);
+
+  // Coming Soon toggle
+  const [comingTab, setComingTab] = useState<'movies' | 'shows'>('movies');
 
   // Genre state
   const [selectedGenre, setSelectedGenre] = useState<BrowseGenre | null>(null);
@@ -262,6 +304,14 @@ export default function BrowsePage() {
       genreResultsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }, 80);
   };
+
+  const comingSoonItems = comingTab === 'movies'
+    ? (browseData?.upcoming ?? [])
+    : (browseData?.upcomingShows ?? []);
+
+  const comingSoonSeeAll = comingTab === 'movies'
+    ? '/see-all/coming-soon'
+    : '/see-all/coming-soon-shows';
 
   return (
     <main className="pt-10 pb-24">
@@ -363,19 +413,35 @@ export default function BrowsePage() {
 
           {/* Coming Soon */}
           <section className="space-y-4">
-            <SectionHeader
-              title="Coming Soon"
-              icon={<Calendar className="h-5 w-5 text-primary" />}
-              seeAllHref="/see-all/coming-soon"
-            />
+            <div className="flex items-center justify-between px-6">
+              <div className="flex items-center gap-3">
+                <div className="w-1 h-5 bg-primary rounded-full" />
+                <h2 className="text-xl font-headline font-bold flex items-center gap-2">
+                  <Calendar className="h-5 w-5 text-primary" />
+                  Coming Soon
+                </h2>
+              </div>
+              <Link
+                href={comingSoonSeeAll}
+                className="text-xs text-primary border border-primary/30 rounded-full px-3 py-1 hover:bg-primary/10 transition-colors font-semibold flex items-center gap-1 shrink-0"
+              >
+                See All <ChevronRight className="h-3 w-3" />
+              </Link>
+            </div>
+
+            {/* Movies/Shows toggle */}
+            <div className="px-6">
+              <TypeToggle value={comingTab} onChange={setComingTab} />
+            </div>
+
             {browseLoading || !browseData ? (
               <CardRowSkeleton />
-            ) : browseData.upcoming.length > 0 ? (
+            ) : comingSoonItems.length > 0 ? (
               <div className="flex overflow-x-auto gap-4 px-6 pb-4 no-scrollbar">
-                {browseData.upcoming.map(m => <UpcomingCard key={m.id} movie={m} />)}
+                {comingSoonItems.map(m => <UpcomingCard key={m.id} movie={m} />)}
               </div>
             ) : (
-              <EmptyState message="No upcoming titles." />
+              <EmptyState message={`No upcoming ${comingTab}.`} />
             )}
           </section>
 
@@ -433,11 +499,6 @@ export default function BrowsePage() {
                   <div className="px-6 pb-1">
                     <h3 className="text-base font-headline font-bold">
                       {selectedGenre.name}
-                      {selectedGenre.tvId === 0 && (
-                        <span className="ml-2 text-[10px] text-muted-foreground font-normal normal-case tracking-normal">
-                          (movies only)
-                        </span>
-                      )}
                     </h3>
                   </div>
                   <GenreResults

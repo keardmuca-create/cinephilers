@@ -131,19 +131,31 @@ export default function HomePage() {
       {top10.length > 0 && (
         <section className="space-y-4">
           <SectionHeader title="Top 10 on Cinephilers" />
-          <div className="flex overflow-x-auto gap-8 px-6 pb-6 no-scrollbar items-end">
+          <div className="flex overflow-x-auto gap-4 px-6 pb-6 no-scrollbar items-end">
             {top10.map((movie, index) => (
-              <Link href={`/movie/${movie.id}`} key={movie.id} className="relative group shrink-0">
-                <div className="flex items-end">
+              <Link href={`/movie/${movie.id}`} key={movie.id} className="relative group shrink-0 w-44">
+                <div className="flex items-end mb-3">
                   <span
-                    className="text-[140px] leading-none font-headline font-black text-transparent -mb-4 -mr-6 z-0"
+                    className="text-[100px] leading-none font-headline font-black text-transparent -mb-4 -mr-4 z-0"
                     style={{ WebkitTextStroke: '2px rgba(255,255,255,0.15)' }}
                   >
                     {index + 1}
                   </span>
-                  <div className="relative aspect-[2/3] w-32 rounded-lg overflow-hidden shadow-xl movie-card-hover z-10 border border-white/10">
-                    <Image src={movie.poster} alt={movie.title} fill className="object-cover" />
+                  <div className="relative aspect-[2/3] w-full rounded-xl overflow-hidden shadow-xl movie-card-hover z-10 border border-white/10">
+                    <Image src={movie.poster} alt={movie.title} fill className="object-cover transition-transform group-hover:scale-110" />
                   </div>
+                </div>
+                <div className="space-y-1 px-1">
+                  <div className="flex items-start justify-between gap-1">
+                    <h3 className="text-sm font-semibold font-headline line-clamp-2 group-hover:text-primary transition-colors leading-snug">
+                      {movie.title}
+                    </h3>
+                    <div className="flex items-center gap-0.5 shrink-0 text-accent">
+                      <Star className="h-3 w-3 fill-current" />
+                      <span className="text-xs font-bold">{movie.rating.toFixed(1)}</span>
+                    </div>
+                  </div>
+                  <p className="text-xs text-muted-foreground">{movie.year}</p>
                 </div>
               </Link>
             ))}

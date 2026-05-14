@@ -5,7 +5,7 @@ import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import Image from 'next/image';
 import Link from 'next/link';
 import { Movie } from '@/lib/types';
-import { Star, ChevronLeft, Tv, Film } from 'lucide-react';
+import { Star, ChevronLeft, Tv } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 
@@ -15,7 +15,8 @@ const SECTION_TITLES: Record<string, string> = {
   'popular-shows': 'Popular TV Shows',
   'top-rated-movies': 'Top 100 Movies',
   'top-rated-shows': 'Top 100 TV Shows',
-  'coming-soon': 'Coming Soon',
+  'coming-soon': 'Coming Soon — Movies',
+  'coming-soon-shows': 'Coming Soon — Shows',
 };
 
 function getSectionTitle(section: string, titleParam: string | null): string {
@@ -71,7 +72,7 @@ function MovieListItem({ movie, index }: { movie: Movie; index: number }) {
             <Star className="h-3 w-3 fill-current" />
             {movie.rating.toFixed(1)}
           </span>
-          {isShow ? (
+          {isShow && (
             <>
               <span className="flex items-center gap-1 text-primary">
                 <Tv className="h-3 w-3" />
@@ -81,14 +82,9 @@ function MovieListItem({ movie, index }: { movie: Movie; index: number }) {
                 <span>{movie.totalEpisodes} episodes</span>
               )}
             </>
-          ) : (
-            <span className="flex items-center gap-1 text-primary">
-              <Film className="h-3 w-3" />
-              Movie
-            </span>
           )}
         </div>
-        {movie.genre && (
+        {isShow && movie.genre && (
           <p className="text-[10px] text-muted-foreground/60 font-medium line-clamp-1">
             {movie.genre}
           </p>

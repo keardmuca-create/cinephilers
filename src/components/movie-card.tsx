@@ -1,10 +1,10 @@
 
 "use client"
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
-import { Star, BookmarkPlus, Check } from 'lucide-react';
+import { Star, BookmarkPlus, Check, Eye } from 'lucide-react';
 import { Movie } from '@/lib/types';
 import { cn } from '@/lib/utils';
 import { toast } from '@/hooks/use-toast';
@@ -17,6 +17,14 @@ interface MovieCardProps {
 
 export const MovieCard: React.FC<MovieCardProps> = ({ movie, className, horizontal = false }) => {
   const [saved, setSaved] = useState(false);
+  const [watched, setWatched] = useState(false);
+
+  useEffect(() => {
+    try {
+      const w = localStorage.getItem(`watched-${movie.id}`);
+      if (w === 'true') setWatched(true);
+    } catch { /* ignore */ }
+  }, [movie.id]);
 
   const handleSave = (e: React.MouseEvent) => {
     e.preventDefault();
@@ -24,8 +32,6 @@ export const MovieCard: React.FC<MovieCardProps> = ({ movie, className, horizont
     setSaved(prev => !prev);
     toast({ title: saved ? 'Removed from watchlist' : 'Added to watchlist' });
   };
-
-  const primaryGenre = movie.genre.split(' ')[0];
 
   return (
     <Link href={`/movie/${movie.id}`} className={cn("block shrink-0", className)}>
@@ -57,13 +63,6 @@ export const MovieCard: React.FC<MovieCardProps> = ({ movie, className, horizont
               : <BookmarkPlus className="h-4 w-4" />
             }
           </button>
-
-          {/* Genre badge */}
-          <div className="absolute bottom-2 left-2">
-            <span className="text-[9px] font-bold uppercase tracking-wider bg-black/60 backdrop-blur-sm text-white/80 px-2 py-0.5 rounded-full border border-white/10">
-              {primaryGenre}
-            </span>
-          </div>
         </div>
 
         <div className="space-y-1 px-1">
@@ -71,9 +70,14 @@ export const MovieCard: React.FC<MovieCardProps> = ({ movie, className, horizont
             <h3 className="text-sm font-semibold font-headline line-clamp-2 group-hover:text-primary transition-colors leading-snug">
               {movie.title}
             </h3>
-            <div className="flex items-center gap-0.5 shrink-0 text-accent">
-              <Star className="h-3 w-3 fill-current" />
-              <span className="text-xs font-bold">{movie.rating.toFixed(1)}</span>
+            <div className="flex flex-col items-end gap-1 shrink-0">
+              <div className="flex items-center gap-0.5 text-accent">
+                <Star className="h-3 w-3 fill-current" />
+                <span className="text-xs font-bold">{movie.rating.toFixed(1)}</span>
+              </div>
+              {watched && (
+                <Eye className="h-3 w-3 text-primary" />
+              )}
             </div>
           </div>
           <p className="text-xs text-muted-foreground line-clamp-1">

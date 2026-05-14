@@ -352,6 +352,9 @@ export default function MovieDetailPage() {
 
   useEffect(() => {
     if (!id) return;
+    try {
+      setIsWatched(localStorage.getItem(`watched-${id}`) === 'true');
+    } catch { /* ignore */ }
     fetch(`/api/movies/${id}`)
       .then(r => r.json())
       .then((data: Movie & { error?: string }) => {
@@ -479,10 +482,15 @@ export default function MovieDetailPage() {
           <Button
             variant={isWatched ? 'default' : 'outline'}
             className={`h-14 px-8 rounded-2xl font-bold flex-1 md:flex-none text-base transition-all ${isWatched ? 'bg-accent border-accent' : 'border-white/10 bg-white/5'}`}
-            onClick={() => { setIsWatched(p => !p); toast({ title: isWatched ? 'Removed from watched' : 'Marked as watched' }); }}
+            onClick={() => {
+              const next = !isWatched;
+              setIsWatched(next);
+              try { localStorage.setItem(`watched-${id}`, String(next)); } catch { /* ignore */ }
+              toast({ title: next ? 'Marked as watched' : 'Removed from watched' });
+            }}
           >
             {isWatched ? <Check className="h-5 w-5 mr-2" /> : <Play className="h-5 w-5 mr-2" />}
-            {isWatched ? 'Watched' : 'Mark Watched'}
+            {isWatched ? 'Watched' : 'Mark as Watched'}
           </Button>
           <Dialog>
             <DialogTrigger asChild>
