@@ -16,18 +16,18 @@ import Image from 'next/image';
 // tvId = 0 means no equivalent TV genre on TMDB
 
 const BROWSE_GENRES = [
-  { name: 'Action',      movieId: 28,    tvId: 10759, emoji: '💥' },
-  { name: 'Comedy',      movieId: 35,    tvId: 35,    emoji: '😂' },
-  { name: 'Horror',      movieId: 27,    tvId: 0,     emoji: '👻' },
-  { name: 'Adventure',   movieId: 12,    tvId: 10759, emoji: '🗺️' },
-  { name: 'Mystery',     movieId: 9648,  tvId: 9648,  emoji: '🔍' },
-  { name: 'Crime',       movieId: 80,    tvId: 80,    emoji: '🔫' },
-  { name: 'Documentary', movieId: 99,    tvId: 99,    emoji: '🎥' },
-  { name: 'Drama',       movieId: 18,    tvId: 18,    emoji: '🎭' },
-  { name: 'Fantasy',     movieId: 14,    tvId: 10765, emoji: '🧙' },
-  { name: 'Romance',     movieId: 10749, tvId: 0,     emoji: '💕' },
-  { name: 'Sci-Fi',      movieId: 878,   tvId: 10765, emoji: '🚀' },
-  { name: 'Thriller',    movieId: 53,    tvId: 0,     emoji: '🔪' },
+  { name: 'Action',      movieId: 28,    tvId: 10759 },
+  { name: 'Comedy',      movieId: 35,    tvId: 35    },
+  { name: 'Horror',      movieId: 27,    tvId: 0     },
+  { name: 'Adventure',   movieId: 12,    tvId: 10759 },
+  { name: 'Mystery',     movieId: 9648,  tvId: 9648  },
+  { name: 'Crime',       movieId: 80,    tvId: 80    },
+  { name: 'Documentary', movieId: 99,    tvId: 99    },
+  { name: 'Drama',       movieId: 18,    tvId: 18    },
+  { name: 'Fantasy',     movieId: 14,    tvId: 10765 },
+  { name: 'Romance',     movieId: 10749, tvId: 0     },
+  { name: 'Sci-Fi',      movieId: 878,   tvId: 10765 },
+  { name: 'Thriller',    movieId: 53,    tvId: 0     },
 ] as const;
 
 type BrowseGenre = typeof BROWSE_GENRES[number];
@@ -408,8 +408,8 @@ export default function BrowsePage() {
                     key={genre.name}
                     onClick={() => handleGenreSelect(genre)}
                     className={[
-                      'relative flex flex-col items-center justify-center gap-1.5',
-                      'py-4 rounded-2xl border font-headline font-bold text-[11px] uppercase tracking-wide',
+                      'relative flex items-center justify-center',
+                      'py-5 rounded-2xl border font-headline font-bold text-xs uppercase tracking-wide',
                       'transition-all duration-200 hover:scale-[1.04] active:scale-95',
                       GENRE_COLORS[i],
                       isSelected
@@ -417,7 +417,6 @@ export default function BrowsePage() {
                         : '',
                     ].join(' ')}
                   >
-                    <span className="text-xl leading-none">{genre.emoji}</span>
                     {genre.name}
                     {isSelected && (
                       <span className="absolute top-1.5 right-1.5 h-1.5 w-1.5 rounded-full bg-primary" />
@@ -433,7 +432,7 @@ export default function BrowsePage() {
                 <div className="space-y-1 pt-2">
                   <div className="px-6 pb-1">
                     <h3 className="text-base font-headline font-bold">
-                      {selectedGenre.emoji} {selectedGenre.name}
+                      {selectedGenre.name}
                       {selectedGenre.tvId === 0 && (
                         <span className="ml-2 text-[10px] text-muted-foreground font-normal normal-case tracking-normal">
                           (movies only)
