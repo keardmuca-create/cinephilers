@@ -9,6 +9,7 @@ import {
   getMoviesByGenre,
   getShowsByGenre,
 } from '@/lib/tmdb';
+import type { Movie } from '@/lib/types';
 
 export async function GET(
   _req: NextRequest,
@@ -17,16 +18,22 @@ export async function GET(
   const { section } = await params;
 
   try {
-    let items;
+    let items: Movie[];
 
-    // Genre sections: genre-movie-{id} or genre-tv-{id}
-    const genreMatch = section.match(/^genre-(movie|tv)-(\d+)$/);
+    // Combined genre: genre-{movieId}-{tvId}  (tvId=0 means movies only)
+    const genreMatch = section.match(/^genre-(\d+)-(\d+)$/);
     if (genreMatch) {
-      const type = genreMatch[1] as 'movie' | 'tv';
-      const genreId = parseInt(genreMatch[2], 10);
-      items = type === 'tv'
-        ? await getShowsByGenre(genreId, 100)
-        : await getMoviesByGenre(genreId, 100);
+      const movieId = parseInt(genreMatch[1], 10);
+      const tvId = parseInt(genreMatch[2], 10);
+      if (tvId > 0) {
+        const [movies, shows] = await Promise.all([
+          getMoviesByGenre(movieId, 50),
+          getShowsByGenre(tvId, 50),
+        ]);
+        items = [...movies, ...shows].sort((a, b) => b.rating - a.rating).slice(0, 100);
+      } else {
+        items = await getMoviesByGenre(movieId, 100);
+      }
       return NextResponse.json({ items });
     }
 

@@ -12,42 +12,50 @@ import { Input } from '@/components/ui/input';
 import { useSearch } from '@/hooks/use-movies';
 import Image from 'next/image';
 
-// ─── Types ────────────────────────────────────────────────────────────────────
+// ─── Hardcoded 12 genres with correct TMDB movie + TV genre IDs ───────────────
+// tvId = 0 means no equivalent TV genre on TMDB
 
-interface Genre {
-  id: number;
-  name: string;
-}
+const BROWSE_GENRES = [
+  { name: 'Action',      movieId: 28,    tvId: 10759, emoji: '💥' },
+  { name: 'Comedy',      movieId: 35,    tvId: 35,    emoji: '😂' },
+  { name: 'Horror',      movieId: 27,    tvId: 0,     emoji: '👻' },
+  { name: 'Adventure',   movieId: 12,    tvId: 10759, emoji: '🗺️' },
+  { name: 'Mystery',     movieId: 9648,  tvId: 9648,  emoji: '🔍' },
+  { name: 'Crime',       movieId: 80,    tvId: 80,    emoji: '🔫' },
+  { name: 'Documentary', movieId: 99,    tvId: 99,    emoji: '🎥' },
+  { name: 'Drama',       movieId: 18,    tvId: 18,    emoji: '🎭' },
+  { name: 'Fantasy',     movieId: 14,    tvId: 10765, emoji: '🧙' },
+  { name: 'Romance',     movieId: 10749, tvId: 0,     emoji: '💕' },
+  { name: 'Sci-Fi',      movieId: 878,   tvId: 10765, emoji: '🚀' },
+  { name: 'Thriller',    movieId: 53,    tvId: 0,     emoji: '🔪' },
+] as const;
+
+type BrowseGenre = typeof BROWSE_GENRES[number];
+
+// ─── Genre color palette (one per genre, in order) ───────────────────────────
+
+const GENRE_COLORS = [
+  'bg-red-500/20 text-red-300 border-red-500/20 hover:bg-red-500/30',       // Action
+  'bg-yellow-500/20 text-yellow-300 border-yellow-500/20 hover:bg-yellow-500/30', // Comedy
+  'bg-zinc-700/50 text-zinc-200 border-zinc-600/50 hover:bg-zinc-700/70',   // Horror
+  'bg-orange-500/20 text-orange-300 border-orange-500/20 hover:bg-orange-500/30', // Adventure
+  'bg-indigo-500/20 text-indigo-300 border-indigo-500/20 hover:bg-indigo-500/30', // Mystery
+  'bg-slate-600/40 text-slate-200 border-slate-500/40 hover:bg-slate-600/60', // Crime
+  'bg-teal-500/20 text-teal-300 border-teal-500/20 hover:bg-teal-500/30',   // Documentary
+  'bg-blue-500/20 text-blue-300 border-blue-500/20 hover:bg-blue-500/30',   // Drama
+  'bg-violet-500/20 text-violet-300 border-violet-500/20 hover:bg-violet-500/30', // Fantasy
+  'bg-pink-500/20 text-pink-300 border-pink-500/20 hover:bg-pink-500/30',   // Romance
+  'bg-cyan-500/20 text-cyan-300 border-cyan-500/20 hover:bg-cyan-500/30',   // Sci-Fi
+  'bg-rose-700/30 text-rose-200 border-rose-600/30 hover:bg-rose-700/50',   // Thriller
+];
+
+// ─── Types ────────────────────────────────────────────────────────────────────
 
 interface BrowseData {
   topMovies: Movie[];
   topShows: Movie[];
   upcoming: Movie[];
-  genres: Genre[];
 }
-
-// ─── Genre color palette (cycles deterministically by index) ─────────────────
-
-const GENRE_COLORS = [
-  'bg-red-500/20 text-red-300 border-red-500/20 hover:bg-red-500/30',
-  'bg-orange-500/20 text-orange-300 border-orange-500/20 hover:bg-orange-500/30',
-  'bg-amber-500/20 text-amber-300 border-amber-500/20 hover:bg-amber-500/30',
-  'bg-yellow-500/20 text-yellow-300 border-yellow-500/20 hover:bg-yellow-500/30',
-  'bg-lime-500/20 text-lime-300 border-lime-500/20 hover:bg-lime-500/30',
-  'bg-green-500/20 text-green-300 border-green-500/20 hover:bg-green-500/30',
-  'bg-emerald-500/20 text-emerald-300 border-emerald-500/20 hover:bg-emerald-500/30',
-  'bg-teal-500/20 text-teal-300 border-teal-500/20 hover:bg-teal-500/30',
-  'bg-cyan-500/20 text-cyan-300 border-cyan-500/20 hover:bg-cyan-500/30',
-  'bg-sky-500/20 text-sky-300 border-sky-500/20 hover:bg-sky-500/30',
-  'bg-blue-500/20 text-blue-300 border-blue-500/20 hover:bg-blue-500/30',
-  'bg-indigo-500/20 text-indigo-300 border-indigo-500/20 hover:bg-indigo-500/30',
-  'bg-violet-500/20 text-violet-300 border-violet-500/20 hover:bg-violet-500/30',
-  'bg-purple-500/20 text-purple-300 border-purple-500/20 hover:bg-purple-500/30',
-  'bg-fuchsia-500/20 text-fuchsia-300 border-fuchsia-500/20 hover:bg-fuchsia-500/30',
-  'bg-pink-500/20 text-pink-300 border-pink-500/20 hover:bg-pink-500/30',
-  'bg-rose-500/20 text-rose-300 border-rose-500/20 hover:bg-rose-500/30',
-  'bg-zinc-600/30 text-zinc-300 border-zinc-500/30 hover:bg-zinc-600/50',
-];
 
 // ─── Shared section header ────────────────────────────────────────────────────
 
@@ -81,7 +89,7 @@ function SectionHeader({
   );
 }
 
-// ─── Horizontal card row skeleton ─────────────────────────────────────────────
+// ─── Skeletons ────────────────────────────────────────────────────────────────
 
 function CardRowSkeleton() {
   return (
@@ -97,32 +105,20 @@ function CardRowSkeleton() {
   );
 }
 
-// ─── Genre tile skeleton ──────────────────────────────────────────────────────
-
-function GenreGridSkeleton() {
-  return (
-    <div className="grid grid-cols-3 gap-2.5 px-6">
-      {Array(12).fill(0).map((_, i) => (
-        <div key={i} className="h-16 rounded-2xl bg-white/5 animate-pulse" />
-      ))}
-    </div>
-  );
-}
-
 // ─── Empty state ──────────────────────────────────────────────────────────────
 
 function EmptyState({ message }: { message: string }) {
   return (
-    <div className="flex flex-col items-center justify-center py-20 gap-4 text-center px-8">
-      <div className="h-16 w-16 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center">
-        <Film className="h-8 w-8 text-muted-foreground" />
+    <div className="flex flex-col items-center justify-center py-16 gap-4 text-center px-8">
+      <div className="h-14 w-14 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center">
+        <Film className="h-7 w-7 text-muted-foreground" />
       </div>
-      <p className="text-muted-foreground font-medium">{message}</p>
+      <p className="text-muted-foreground text-sm font-medium">{message}</p>
     </div>
   );
 }
 
-// ─── Coming Soon card (shows release date badge) ─────────────────────────────
+// ─── Coming Soon card (poster + release date badge) ──────────────────────────
 
 function UpcomingCard({ movie }: { movie: Movie }) {
   return (
@@ -159,6 +155,60 @@ function UpcomingCard({ movie }: { movie: Movie }) {
   );
 }
 
+// ─── Genre results sub-section ───────────────────────────────────────────────
+
+function GenreResults({
+  genre,
+  results,
+  loading,
+}: {
+  genre: BrowseGenre;
+  results: Movie[];
+  loading: boolean;
+}) {
+  const movieCount = results.filter(m => m.type === 'movie').length;
+  const showCount = results.filter(m => m.type === 'show').length;
+
+  const seeAllHref = `/see-all/genre-${genre.movieId}-${genre.tvId}?title=${encodeURIComponent(genre.name)}`;
+
+  return (
+    <div className="space-y-3 pt-1">
+      {/* Header row */}
+      <div className="flex items-center justify-between px-6">
+        <div className="flex items-center gap-2">
+          {movieCount > 0 && (
+            <span className="flex items-center gap-1 text-[10px] font-bold text-muted-foreground border border-white/10 rounded-full px-2 py-0.5">
+              <Film className="h-2.5 w-2.5" /> {movieCount} movies
+            </span>
+          )}
+          {showCount > 0 && (
+            <span className="flex items-center gap-1 text-[10px] font-bold text-muted-foreground border border-white/10 rounded-full px-2 py-0.5">
+              <Tv className="h-2.5 w-2.5" /> {showCount} shows
+            </span>
+          )}
+        </div>
+        <Link
+          href={seeAllHref}
+          className="text-xs text-primary border border-primary/30 rounded-full px-3 py-1 hover:bg-primary/10 transition-colors font-semibold flex items-center gap-1"
+        >
+          See All 100 <ChevronRight className="h-3 w-3" />
+        </Link>
+      </div>
+
+      {/* Results */}
+      {loading ? (
+        <CardRowSkeleton />
+      ) : results.length > 0 ? (
+        <div className="flex overflow-x-auto gap-4 px-6 pb-4 no-scrollbar">
+          {results.map(m => <MovieCard key={m.id} movie={m} />)}
+        </div>
+      ) : (
+        <EmptyState message={`No results found for ${genre.name}.`} />
+      )}
+    </div>
+  );
+}
+
 // ─── Main page ────────────────────────────────────────────────────────────────
 
 export default function BrowsePage() {
@@ -167,8 +217,7 @@ export default function BrowsePage() {
   const [browseLoading, setBrowseLoading] = useState(true);
 
   // Genre state
-  const [selectedGenre, setSelectedGenre] = useState<Genre | null>(null);
-  const [genreType, setGenreType] = useState<'movie' | 'tv'>('movie');
+  const [selectedGenre, setSelectedGenre] = useState<BrowseGenre | null>(null);
   const [genreResults, setGenreResults] = useState<Movie[]>([]);
   const [genreLoading, setGenreLoading] = useState(false);
   const genreResultsRef = useRef<HTMLDivElement>(null);
@@ -176,49 +225,42 @@ export default function BrowsePage() {
   const { results: searchResults, loading: searchLoading } = useSearch(searchTerm, []);
   const isSearching = searchTerm.trim().length > 0;
 
-  // ── Fetch all browse data once ──
+  // Fetch all browse data on mount
   useEffect(() => {
-    setBrowseLoading(true);
     fetch('/api/discover/browse')
       .then(r => r.json())
       .then((data: BrowseData & { error?: string }) => {
         if (!data.error) setBrowseData(data);
       })
-      .catch(() => {/* keep null */})
+      .catch(() => {})
       .finally(() => setBrowseLoading(false));
   }, []);
 
-  // ── Fetch genre results (lazy, on demand) ──
-  const fetchGenreResults = useCallback((genreId: number, type: 'movie' | 'tv') => {
+  // Lazy-fetch genre results (movies + shows combined)
+  const fetchGenre = useCallback((genre: BrowseGenre) => {
     setGenreLoading(true);
     setGenreResults([]);
-    fetch(`/api/discover/genre?id=${genreId}&type=${type}&count=25`)
+    const url = `/api/discover/genre?movieId=${genre.movieId}&tvId=${genre.tvId}&count=25`;
+    fetch(url)
       .then(r => r.json())
-      .then((data: { items?: Movie[]; error?: string }) => {
+      .then((data: { items?: Movie[] }) => {
         if (data.items) setGenreResults(data.items);
       })
-      .catch(() => {/* keep empty */})
+      .catch(() => {})
       .finally(() => setGenreLoading(false));
   }, []);
 
-  const handleGenreSelect = (genre: Genre) => {
-    if (selectedGenre?.id === genre.id) {
+  const handleGenreSelect = (genre: BrowseGenre) => {
+    if (selectedGenre?.name === genre.name) {
       setSelectedGenre(null);
       setGenreResults([]);
       return;
     }
     setSelectedGenre(genre);
-    setGenreType('movie');
-    fetchGenreResults(genre.id, 'movie');
+    fetchGenre(genre);
     setTimeout(() => {
       genreResultsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }, 80);
-  };
-
-  const handleTypeChange = (type: 'movie' | 'tv') => {
-    if (type === genreType) return;
-    setGenreType(type);
-    if (selectedGenre) fetchGenreResults(selectedGenre.id, type);
   };
 
   return (
@@ -297,7 +339,7 @@ export default function BrowsePage() {
                 {browseData.topMovies.map(m => <MovieCard key={m.id} movie={m} />)}
               </div>
             ) : (
-              <EmptyState message="No movies available right now." />
+              <EmptyState message="No movies available." />
             )}
           </section>
 
@@ -315,7 +357,7 @@ export default function BrowsePage() {
                 {browseData.topShows.map(m => <MovieCard key={m.id} movie={m} />)}
               </div>
             ) : (
-              <EmptyState message="No shows available right now." />
+              <EmptyState message="No shows available." />
             )}
           </section>
 
@@ -333,7 +375,7 @@ export default function BrowsePage() {
                 {browseData.upcoming.map(m => <UpcomingCard key={m.id} movie={m} />)}
               </div>
             ) : (
-              <EmptyState message="No upcoming titles available." />
+              <EmptyState message="No upcoming titles." />
             )}
           </section>
 
@@ -357,89 +399,56 @@ export default function BrowsePage() {
               )}
             </div>
 
-            {/* Genre grid */}
-            {browseLoading || !browseData ? (
-              <GenreGridSkeleton />
-            ) : (
-              <div className="grid grid-cols-3 gap-2.5 px-6">
-                {browseData.genres.map((genre, i) => {
-                  const colorClass = GENRE_COLORS[i % GENRE_COLORS.length];
-                  const isSelected = selectedGenre?.id === genre.id;
-                  return (
-                    <button
-                      key={genre.id}
-                      onClick={() => handleGenreSelect(genre)}
-                      className={[
-                        'relative py-5 rounded-2xl border text-center font-headline font-bold text-xs',
-                        'transition-all duration-200 hover:scale-[1.03] active:scale-95',
-                        colorClass,
-                        isSelected ? 'ring-2 ring-primary ring-offset-2 ring-offset-background scale-[1.03]' : '',
-                      ].join(' ')}
-                    >
-                      {genre.name}
-                      {isSelected && (
-                        <span className="absolute top-1.5 right-1.5 h-1.5 w-1.5 rounded-full bg-primary" />
-                      )}
-                    </button>
-                  );
-                })}
-              </div>
-            )}
-
-            {/* Genre results panel */}
-            {selectedGenre && (
-              <div ref={genreResultsRef} className="space-y-4 pt-2">
-
-                {/* Type toggle + See All */}
-                <div className="flex items-center justify-between px-6">
-                  <div className="flex gap-1.5 bg-white/5 p-1 rounded-xl border border-white/10">
-                    <button
-                      onClick={() => handleTypeChange('movie')}
-                      className={[
-                        'flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all',
-                        genreType === 'movie'
-                          ? 'bg-primary text-primary-foreground shadow'
-                          : 'text-muted-foreground hover:text-foreground',
-                      ].join(' ')}
-                    >
-                      <Film className="h-3 w-3" /> Movies
-                    </button>
-                    <button
-                      onClick={() => handleTypeChange('tv')}
-                      className={[
-                        'flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all',
-                        genreType === 'tv'
-                          ? 'bg-primary text-primary-foreground shadow'
-                          : 'text-muted-foreground hover:text-foreground',
-                      ].join(' ')}
-                    >
-                      <Tv className="h-3 w-3" /> TV Shows
-                    </button>
-                  </div>
-                  <Link
-                    href={`/see-all/genre-${genreType}-${selectedGenre.id}?title=${encodeURIComponent(
-                      `${selectedGenre.name} ${genreType === 'tv' ? 'TV Shows' : 'Movies'}`
-                    )}`}
-                    className="text-xs text-primary border border-primary/30 rounded-full px-3 py-1 hover:bg-primary/10 transition-colors font-semibold flex items-center gap-1"
+            {/* 4-column genre grid */}
+            <div className="grid grid-cols-3 sm:grid-cols-4 gap-2.5 px-6">
+              {BROWSE_GENRES.map((genre, i) => {
+                const isSelected = selectedGenre?.name === genre.name;
+                return (
+                  <button
+                    key={genre.name}
+                    onClick={() => handleGenreSelect(genre)}
+                    className={[
+                      'relative flex flex-col items-center justify-center gap-1.5',
+                      'py-4 rounded-2xl border font-headline font-bold text-[11px] uppercase tracking-wide',
+                      'transition-all duration-200 hover:scale-[1.04] active:scale-95',
+                      GENRE_COLORS[i],
+                      isSelected
+                        ? 'ring-2 ring-primary ring-offset-2 ring-offset-background scale-[1.04]'
+                        : '',
+                    ].join(' ')}
                   >
-                    See All 100 <ChevronRight className="h-3 w-3" />
-                  </Link>
-                </div>
+                    <span className="text-xl leading-none">{genre.emoji}</span>
+                    {genre.name}
+                    {isSelected && (
+                      <span className="absolute top-1.5 right-1.5 h-1.5 w-1.5 rounded-full bg-primary" />
+                    )}
+                  </button>
+                );
+              })}
+            </div>
 
-                {/* Results */}
-                {genreLoading ? (
-                  <CardRowSkeleton />
-                ) : genreResults.length > 0 ? (
-                  <div className="flex overflow-x-auto gap-4 px-6 pb-4 no-scrollbar">
-                    {genreResults.map(m => <MovieCard key={m.id} movie={m} />)}
+            {/* Genre results — shown below the grid when a genre is selected */}
+            <div ref={genreResultsRef}>
+              {selectedGenre && (
+                <div className="space-y-1 pt-2">
+                  <div className="px-6 pb-1">
+                    <h3 className="text-base font-headline font-bold">
+                      {selectedGenre.emoji} {selectedGenre.name}
+                      {selectedGenre.tvId === 0 && (
+                        <span className="ml-2 text-[10px] text-muted-foreground font-normal normal-case tracking-normal">
+                          (movies only)
+                        </span>
+                      )}
+                    </h3>
                   </div>
-                ) : (
-                  <EmptyState
-                    message={`No ${genreType === 'tv' ? 'TV shows' : 'movies'} found in ${selectedGenre.name}.`}
+                  <GenreResults
+                    genre={selectedGenre}
+                    results={genreResults}
+                    loading={genreLoading}
                   />
-                )}
-              </div>
-            )}
+                </div>
+              )}
+            </div>
           </section>
 
         </div>
