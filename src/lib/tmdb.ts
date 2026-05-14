@@ -218,6 +218,7 @@ export function tmdbToMovie(raw: TmdbMovie, credits?: TmdbCredits): Movie {
     quotes: [],
     trivia: [],
     type: isShow ? 'show' : 'movie',
+    releaseDate: releaseDate || undefined,
   };
 }
 
@@ -451,4 +452,62 @@ export async function getEpisodeDetail(
     stills: (detail.images?.stills ?? []).slice(0, 12).map(s => `${IMAGE_BASE}/w780${s.file_path}`),
     trailers: parseTrailers(detail.videos?.results ?? []),
   };
+}
+
+// ─── Discover / browse endpoints ──────────────────────────────────────────────
+
+export interface TmdbGenre {
+  id: number;
+  name: string;
+}
+
+export async function getTopRatedMovies(count = 25): Promise<Movie[]> {
+  const results = await fetchManyPages('/discover/movie', count, {
+    sort_by: 'vote_average.desc',
+    'vote_count.gte': '1000',
+    include_adult: 'false',
+  });
+  return results.map(m => tmdbToMovie(m));
+}
+
+export async function getTopRatedShows(count = 25): Promise<Movie[]> {
+  const results = await fetchManyPages('/discover/tv', count, {
+    sort_by: 'vote_average.desc',
+    'vote_count.gte': '200',
+    include_adult: 'false',
+  });
+  return results.map(m => tmdbToMovie({ ...m, media_type: 'tv' }));
+}
+
+export async function getUpcomingMovies(count = 25): Promise<Movie[]> {
+  const results = await fetchManyPages('/movie/upcoming', count);
+  return results.map(m => tmdbToMovie(m));
+}
+
+export async function getMovieGenres(): Promise<TmdbGenre[]> {
+  const data = await tmdbFetch<{ genres: TmdbGenre[] }>('/genre/movie/list');
+  return data.genres ?? [];
+}
+
+export async function getTvGenres(): Promise<TmdbGenre[]> {
+  const data = await tmdbFetch<{ genres: TmdbGenre[] }>('/genre/tv/list');
+  return data.genres ?? [];
+}
+
+export async function getMoviesByGenre(genreId: number, count = 25): Promise<Movie[]> {
+  const results = await fetchManyPages('/discover/movie', count, {
+    with_genres: String(genreId),
+    sort_by: 'popularity.desc',
+    include_adult: 'false',
+  });
+  return results.map(m => tmdbToMovie(m));
+}
+
+export async function getShowsByGenre(genreId: number, count = 25): Promise<Movie[]> {
+  const results = await fetchManyPages('/discover/tv', count, {
+    with_genres: String(genreId),
+    sort_by: 'popularity.desc',
+    include_adult: 'false',
+  });
+  return results.map(m => tmdbToMovie({ ...m, media_type: 'tv' }));
 }

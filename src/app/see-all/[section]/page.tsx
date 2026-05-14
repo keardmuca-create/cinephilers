@@ -1,7 +1,7 @@
 "use client"
 
 import React, { useEffect, useState } from 'react';
-import { useParams, useRouter } from 'next/navigation';
+import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import Image from 'next/image';
 import Link from 'next/link';
 import { Movie } from '@/lib/types';
@@ -13,7 +13,17 @@ const SECTION_TITLES: Record<string, string> = {
   featured: 'Featured Today',
   'popular-movies': 'Popular Movies',
   'popular-shows': 'Popular TV Shows',
+  'top-rated-movies': 'Top 100 Movies',
+  'top-rated-shows': 'Top 100 TV Shows',
+  'coming-soon': 'Coming Soon',
 };
+
+function getSectionTitle(section: string, titleParam: string | null): string {
+  if (SECTION_TITLES[section]) return SECTION_TITLES[section];
+  if (titleParam) return titleParam;
+  if (section.startsWith('genre-')) return 'Genre Results';
+  return 'All Titles';
+}
 
 function ListItemSkeleton() {
   return (
@@ -90,12 +100,14 @@ function MovieListItem({ movie, index }: { movie: Movie; index: number }) {
 
 export default function SeeAllPage() {
   const { section } = useParams<{ section: string }>();
+  const searchParams = useSearchParams();
   const router = useRouter();
   const [items, setItems] = useState<Movie[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
 
-  const title = SECTION_TITLES[section] ?? 'All Titles';
+  const titleParam = searchParams.get('title');
+  const title = getSectionTitle(section, titleParam);
 
   useEffect(() => {
     if (!section) return;
