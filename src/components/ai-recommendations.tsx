@@ -1,75 +1,91 @@
 "use client"
 
 import React, { useEffect, useState } from 'react';
-import { personalizeMovieRecommendations } from '@/ai/flows/personalized-movie-recommendations-flow';
+import Link from 'next/link';
 import { Movie } from '@/lib/types';
 import { MovieCard } from './movie-card';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Sparkles } from 'lucide-react';
+import { Sparkles, Film, Tv, ChevronRight } from 'lucide-react';
+
+type Tab = 'movies' | 'shows';
 
 export const AIRecommendations = () => {
-  const [recommendations, setRecommendations] = useState<Movie[]>([]);
+  const [movies, setMovies] = useState<Movie[]>([]);
+  const [shows, setShows] = useState<Movie[]>([]);
   const [loading, setLoading] = useState(true);
+  const [tab, setTab] = useState<Tab>('movies');
 
   useEffect(() => {
-    const fetchRecs = async () => {
-      try {
-        const result = await personalizeMovieRecommendations({
-          userId: 'u1',
-          watchedHistory: [
-            { title: 'Inception', genre: 'Sci-Fi Thriller', rating: 5 },
-            { title: 'The Dark Knight', genre: 'Action Crime', rating: 5 },
-          ],
-          preferredGenres: ['Sci-Fi', 'Thriller', 'Mystery'],
-        });
-
-        // Resolve each AI-suggested title to a real TMDB entry in parallel
-        const settled = await Promise.allSettled(
-          result.recommendations.map(rec =>
-            fetch(`/api/movies/search?q=${encodeURIComponent(rec.title)}`)
-              .then(r => r.json() as Promise<{ results?: Movie[] }>)
-              .then(json => json.results?.[0] ?? null),
-          ),
-        );
-
-        const movies: Movie[] = settled
-          .filter((s): s is PromiseFulfilledResult<Movie> => s.status === 'fulfilled' && s.value !== null)
-          .map(s => s.value);
-
-        setRecommendations(movies);
-      } catch {
-        setRecommendations([]);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchRecs();
+    fetch('/api/discover/browse')
+      .then(r => r.json())
+      .then((data: { topMovies?: Movie[]; topShows?: Movie[] }) => {
+        setMovies(data.topMovies ?? []);
+        setShows(data.topShows ?? []);
+      })
+      .catch(() => {})
+      .finally(() => setLoading(false));
   }, []);
 
-  if (!loading && recommendations.length === 0) return null;
+  if (!loading && movies.length === 0 && shows.length === 0) return null;
+
+  const displayed = tab === 'movies' ? movies : shows;
+  const seeAllHref = tab === 'movies' ? '/see-all/top-rated-movies' : '/see-all/top-rated-shows';
 
   return (
     <section className="space-y-4">
-      <div className="flex items-center gap-2 px-6">
-        <Sparkles className="h-4 w-4 text-accent" />
-        <h2 className="text-xl font-headline font-bold">Top Picks For You</h2>
+      {/* Header */}
+      <div className="flex items-center justify-between px-6">
+        <div className="flex items-center gap-3">
+          <div className="w-1 h-5 bg-primary rounded-full" />
+          <h2 className="text-xl font-headline font-bold flex items-center gap-2">
+            <Sparkles className="h-5 w-5 text-accent" />
+            Top Picks For You
+          </h2>
+        </div>
+        <Link
+          href={seeAllHref}
+          className="text-xs text-primary border border-primary/30 rounded-full px-3 py-1 hover:bg-primary/10 transition-colors font-semibold flex items-center gap-1 shrink-0"
+        >
+          See All <ChevronRight className="h-3 w-3" />
+        </Link>
       </div>
 
+      {/* Movies / Shows toggle */}
+      <div className="px-6">
+        <div className="flex items-center bg-white/5 rounded-full p-1 border border-white/10 w-full">
+          <button
+            onClick={() => setTab('movies')}
+            className={[
+              'flex flex-1 items-center justify-center gap-1.5 py-2 rounded-full text-xs font-bold transition-all',
+              tab === 'movies' ? 'bg-primary text-white shadow' : 'text-muted-foreground hover:text-foreground',
+            ].join(' ')}
+          >
+            <Film className="h-3 w-3" /> Movies
+          </button>
+          <button
+            onClick={() => setTab('shows')}
+            className={[
+              'flex flex-1 items-center justify-center gap-1.5 py-2 rounded-full text-xs font-bold transition-all',
+              tab === 'shows' ? 'bg-primary text-white shadow' : 'text-muted-foreground hover:text-foreground',
+            ].join(' ')}
+          >
+            <Tv className="h-3 w-3" /> Shows
+          </button>
+        </div>
+      </div>
+
+      {/* Card row */}
       <div className="flex overflow-x-auto gap-4 px-6 pb-4 no-scrollbar">
-        {loading ? (
-          Array(5).fill(0).map((_, i) => (
-            <div key={i} className="space-y-3 shrink-0">
-              <Skeleton className="h-[240px] w-44 rounded-xl" />
-              <Skeleton className="h-4 w-32" />
-              <Skeleton className="h-3 w-20" />
-            </div>
-          ))
-        ) : (
-          recommendations.map(movie => (
-            <MovieCard key={movie.id} movie={movie} />
-          ))
-        )}
+        {loading
+          ? Array(5).fill(0).map((_, i) => (
+              <div key={i} className="space-y-3 shrink-0">
+                <Skeleton className="h-[240px] w-44 rounded-xl" />
+                <Skeleton className="h-4 w-32" />
+                <Skeleton className="h-3 w-20" />
+              </div>
+            ))
+          : displayed.map(movie => <MovieCard key={movie.id} movie={movie} />)
+        }
       </div>
     </section>
   );

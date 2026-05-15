@@ -71,12 +71,12 @@ export const MovieCard: React.FC<MovieCardProps> = ({ movie, className, horizont
               {movie.title}
             </h3>
             <div className="flex flex-col items-end gap-1 shrink-0">
-              <div className="flex items-center gap-0.5 text-accent">
-                <Star className="h-3 w-3 fill-current" />
-                <span className="text-xs font-bold">{movie.rating.toFixed(1)}</span>
+              <div className="flex items-center gap-0.5">
+                <Star className="h-3 w-3 fill-yellow-400 text-yellow-400" />
+                <span className="text-xs font-bold text-white">{movie.rating.toFixed(1)}</span>
               </div>
               {watched && (
-                <Eye className="h-3 w-3 text-primary" />
+                <Eye className="h-4 w-4 text-blue-400" />
               )}
             </div>
           </div>

@@ -131,28 +131,27 @@ export default function HomePage() {
       {top10.length > 0 && (
         <section className="space-y-4">
           <SectionHeader title="Top 10 on Cinephilers" />
-          <div className="flex overflow-x-auto gap-4 px-6 pb-6 no-scrollbar items-end">
+          <div className="flex overflow-x-auto gap-4 px-6 pb-6 no-scrollbar">
             {top10.map((movie, index) => (
-              <Link href={`/movie/${movie.id}`} key={movie.id} className="relative group shrink-0 w-44">
-                <div className="flex items-end mb-3">
+              <Link href={`/movie/${movie.id}`} key={movie.id} className="group shrink-0 w-44">
+                <div className="relative aspect-[2/3] w-44 rounded-xl overflow-hidden shadow-xl movie-card-hover border border-white/10 mb-3">
+                  <Image src={movie.poster} alt={movie.title} fill className="object-cover transition-transform group-hover:scale-110" />
+                  {/* Rank number overlaid inside the poster, bottom-left */}
                   <span
-                    className="text-[100px] leading-none font-headline font-black text-transparent -mb-4 -mr-4 z-0"
-                    style={{ WebkitTextStroke: '2px rgba(255,255,255,0.15)' }}
+                    className="absolute bottom-0 left-1 text-[72px] leading-none font-headline font-black text-transparent pointer-events-none select-none"
+                    style={{ WebkitTextStroke: '2px rgba(255,255,255,0.35)' }}
                   >
                     {index + 1}
                   </span>
-                  <div className="relative aspect-[2/3] w-full rounded-xl overflow-hidden shadow-xl movie-card-hover z-10 border border-white/10">
-                    <Image src={movie.poster} alt={movie.title} fill className="object-cover transition-transform group-hover:scale-110" />
-                  </div>
                 </div>
                 <div className="space-y-1 px-1">
                   <div className="flex items-start justify-between gap-1">
                     <h3 className="text-sm font-semibold font-headline line-clamp-2 group-hover:text-primary transition-colors leading-snug">
                       {movie.title}
                     </h3>
-                    <div className="flex items-center gap-0.5 shrink-0 text-accent">
-                      <Star className="h-3 w-3 fill-current" />
-                      <span className="text-xs font-bold">{movie.rating.toFixed(1)}</span>
+                    <div className="flex items-center gap-0.5 shrink-0">
+                      <Star className="h-3 w-3 fill-yellow-400 text-yellow-400" />
+                      <span className="text-xs font-bold text-white">{movie.rating.toFixed(1)}</span>
                     </div>
                   </div>
                   <p className="text-xs text-muted-foreground">{movie.year}</p>

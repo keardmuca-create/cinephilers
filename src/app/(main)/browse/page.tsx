@@ -63,16 +63,19 @@ interface BrowseData {
 function TypeToggle({
   value,
   onChange,
+  fullWidth = false,
 }: {
   value: 'movies' | 'shows';
   onChange: (v: 'movies' | 'shows') => void;
+  fullWidth?: boolean;
 }) {
   return (
-    <div className="flex items-center bg-white/5 rounded-full p-1 border border-white/10">
+    <div className={['flex items-center bg-white/5 rounded-full p-1 border border-white/10', fullWidth ? 'w-full' : ''].join(' ')}>
       <button
         onClick={() => onChange('movies')}
         className={[
-          'flex items-center gap-1.5 px-4 py-1.5 rounded-full text-xs font-bold transition-all',
+          'flex items-center justify-center gap-1.5 rounded-full text-xs font-bold transition-all',
+          fullWidth ? 'flex-1 py-2' : 'px-4 py-1.5',
           value === 'movies'
             ? 'bg-primary text-white shadow'
             : 'text-muted-foreground hover:text-foreground',
@@ -83,7 +86,8 @@ function TypeToggle({
       <button
         onClick={() => onChange('shows')}
         className={[
-          'flex items-center gap-1.5 px-4 py-1.5 rounded-full text-xs font-bold transition-all',
+          'flex items-center justify-center gap-1.5 rounded-full text-xs font-bold transition-all',
+          fullWidth ? 'flex-1 py-2' : 'px-4 py-1.5',
           value === 'shows'
             ? 'bg-primary text-white shadow'
             : 'text-muted-foreground hover:text-foreground',
@@ -429,9 +433,9 @@ export default function BrowsePage() {
               </Link>
             </div>
 
-            {/* Movies/Shows toggle */}
+            {/* Movies/Shows toggle — full-width 50/50 */}
             <div className="px-6">
-              <TypeToggle value={comingTab} onChange={setComingTab} />
+              <TypeToggle value={comingTab} onChange={setComingTab} fullWidth />
             </div>
 
             {browseLoading || !browseData ? (
