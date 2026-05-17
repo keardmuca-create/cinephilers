@@ -4,7 +4,7 @@ import React, { useEffect, useState, useCallback } from 'react';
 import Image from 'next/image';
 import {
   X, Star, Clock, Calendar, Play, Users, Clapperboard, Images as ImagesIcon,
-  ChevronLeft, ChevronRight,
+  ChevronLeft, ChevronRight, Check,
 } from 'lucide-react';
 import { EpisodeDetail, TvEpisode } from '@/lib/types';
 import { Button } from '@/components/ui/button';
@@ -162,10 +162,12 @@ interface EpisodeModalProps {
   seasonNumber: number;
   episode: TvEpisode;
   showTitle: string;
+  isWatched?: boolean;
+  onToggleWatched?: () => void;
   onClose: () => void;
 }
 
-export function EpisodeModal({ showTmdbId, seasonNumber, episode, showTitle, onClose }: EpisodeModalProps) {
+export function EpisodeModal({ showTmdbId, seasonNumber, episode, showTitle, isWatched = false, onToggleWatched, onClose }: EpisodeModalProps) {
   const [detail, setDetail] = useState<EpisodeDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [userRating, setUserRating] = useState(0);
@@ -238,13 +240,28 @@ export function EpisodeModal({ showTmdbId, seasonNumber, episode, showTitle, onC
       <div className="fixed inset-x-0 bottom-0 z-[110] md:inset-0 md:flex md:items-center md:justify-center md:p-6">
         <div className="relative bg-background border border-white/10 rounded-t-[2rem] md:rounded-[2rem] w-full md:max-w-2xl max-h-[92vh] md:max-h-[90vh] overflow-y-auto shadow-2xl">
 
-          {/* Close button */}
-          <button
-            className="absolute top-4 right-4 z-20 p-2 rounded-full bg-black/60 backdrop-blur-sm border border-white/10 hover:bg-white/10 transition-colors"
-            onClick={onClose}
-          >
-            <X className="h-4 w-4" />
-          </button>
+          {/* Action buttons — close + watched toggle */}
+          <div className="absolute top-4 right-4 z-20 flex items-center gap-2">
+            {onToggleWatched && (
+              <button
+                onClick={onToggleWatched}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-bold border backdrop-blur-sm transition-all ${
+                  isWatched
+                    ? 'bg-primary/90 border-primary text-white hover:bg-primary/70'
+                    : 'bg-black/60 border-white/10 text-white hover:bg-white/10'
+                }`}
+              >
+                <Check className={`h-3 w-3 ${isWatched ? '' : 'opacity-50'}`} />
+                {isWatched ? 'Watched' : 'Mark Watched'}
+              </button>
+            )}
+            <button
+              className="p-2 rounded-full bg-black/60 backdrop-blur-sm border border-white/10 hover:bg-white/10 transition-colors"
+              onClick={onClose}
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </div>
 
           {/* Still / Trailer hero */}
           <div className="relative aspect-video w-full overflow-hidden rounded-t-[2rem] md:rounded-t-[2rem] bg-black">

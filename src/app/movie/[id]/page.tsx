@@ -1,6 +1,6 @@
 "use client"
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Image from 'next/image';
 import { Movie, Actor, TvEpisode, TvSeason } from '@/lib/types';
@@ -212,26 +212,36 @@ function ReleaseInfo({ movie }: { movie: Movie }) {
 
 // ─── Seasons & episodes ────────────────────────────────────────────────────────
 
-function EpisodeRow({ ep, onClick }: { ep: TvEpisode; onClick: () => void }) {
+function EpisodeRow({
+  ep,
+  isWatched,
+  onToggleWatched,
+  onClick,
+}: {
+  ep: TvEpisode;
+  isWatched: boolean;
+  onToggleWatched: (e: React.MouseEvent) => void;
+  onClick: () => void;
+}) {
   const still = ep.still_path
     ? `https://image.tmdb.org/t/p/w300${ep.still_path}`
     : `https://picsum.photos/seed/${ep.id}/300/170`;
 
   return (
-    <button
-      className="w-full flex gap-4 p-4 rounded-2xl bg-white/5 border border-white/5 hover:bg-white/10 transition-colors text-left group"
-      onClick={onClick}
-    >
-      <div className="relative aspect-video w-28 shrink-0 rounded-xl overflow-hidden">
+    <div className={`flex gap-4 p-4 rounded-2xl border transition-colors ${isWatched ? 'bg-white/[0.03] border-white/[0.04]' : 'bg-white/5 border-white/5 hover:bg-white/8'}`}>
+      {/* Still — opens modal */}
+      <button className="relative aspect-video w-28 shrink-0 rounded-xl overflow-hidden group" onClick={onClick}>
         <Image src={still} alt={ep.name} fill className="object-cover" />
         <div className="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity">
           <Play className="h-6 w-6 fill-current" />
         </div>
-      </div>
-      <div className="flex-1 min-w-0 space-y-1">
+      </button>
+
+      {/* Info — opens modal */}
+      <button className="flex-1 min-w-0 space-y-1 text-left" onClick={onClick}>
         <div className="flex items-center gap-2">
           <span className="text-[10px] font-bold text-primary uppercase tracking-widest shrink-0">E{ep.episode_number}</span>
-          <h5 className="text-sm font-bold font-headline line-clamp-1">{ep.name}</h5>
+          <h5 className={`text-sm font-bold font-headline line-clamp-1 ${isWatched ? 'text-muted-foreground' : ''}`}>{ep.name}</h5>
         </div>
         {ep.air_date && (
           <p className="text-[10px] text-muted-foreground font-bold">{new Date(ep.air_date).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })}</p>
@@ -245,37 +255,69 @@ function EpisodeRow({ ep, onClick }: { ep: TvEpisode; onClick: () => void }) {
           )}
           {ep.runtime && <span className="text-[10px] text-muted-foreground font-bold">{ep.runtime} min</span>}
         </div>
-      </div>
-    </button>
+      </button>
+
+      {/* Watched checkbox */}
+      <button
+        onClick={onToggleWatched}
+        title={isWatched ? 'Remove from watched' : 'Mark as watched'}
+        className={`shrink-0 self-center h-7 w-7 rounded-full border-2 flex items-center justify-center transition-all ${
+          isWatched
+            ? 'bg-primary border-primary text-white hover:bg-primary/80'
+            : 'border-white/20 bg-transparent hover:border-white/60 hover:bg-white/5'
+        }`}
+      >
+        {isWatched && <Check className="h-3.5 w-3.5" />}
+      </button>
+    </div>
   );
 }
 
 function SeasonsSection({
   seasons,
   showTmdbId,
+  watchedEpisodes,
+  onToggleEpisodeWatched,
+  onMarkSeasonWatched,
+  onUnmarkSeasonWatched,
   onEpisodeClick,
 }: {
   seasons: TvSeason[];
   showTmdbId: string;
+  watchedEpisodes: Set<string>;
+  onToggleEpisodeWatched: (seasonNumber: number, ep: TvEpisode) => void;
+  onMarkSeasonWatched: (season: TvSeason, cachedEpisodes?: TvEpisode[]) => Promise<void>;
+  onUnmarkSeasonWatched: (season: TvSeason) => void;
   onEpisodeClick: (ep: TvEpisode, seasonNumber: number) => void;
 }) {
   const [expanded, setExpanded] = useState<number | null>(null);
   const [cache, setCache] = useState<Record<number, TvEpisode[]>>({});
-  const [loading, setLoading] = useState<number | null>(null);
+  const [expandLoading, setExpandLoading] = useState<number | null>(null);
+  const [markLoading, setMarkLoading] = useState<number | null>(null);
 
-  const toggle = async (season: TvSeason) => {
-    const n = season.season_number;
+  const toggle = async (n: number) => {
     if (expanded === n) { setExpanded(null); return; }
     if (cache[n]) { setExpanded(n); return; }
-    setLoading(n);
+    setExpandLoading(n);
     try {
       const res = await fetch(`/api/tv/${showTmdbId}/season/${n}`);
       const data = await res.json() as { episodes?: TvEpisode[] };
       setCache(prev => ({ ...prev, [n]: data.episodes ?? [] }));
       setExpanded(n);
-    } finally {
-      setLoading(null);
-    }
+    } finally { setExpandLoading(null); }
+  };
+
+  const handleMarkSeason = async (e: React.MouseEvent, season: TvSeason) => {
+    e.stopPropagation();
+    setMarkLoading(season.season_number);
+    await onMarkSeasonWatched(season, cache[season.season_number]);
+    setMarkLoading(null);
+  };
+
+  const getProgress = (sn: number, total: number) => {
+    let watched = 0;
+    for (const k of watchedEpisodes) { if (k.startsWith(`S${sn}E`)) watched++; }
+    return { watched, total };
   };
 
   return (
@@ -285,46 +327,82 @@ function SeasonsSection({
       </h3>
       <div className="space-y-3">
         {seasons.map(season => {
-          const isOpen = expanded === season.season_number;
-          const isLoading = loading === season.season_number;
+          const sn = season.season_number;
+          const isOpen = expanded === sn;
           const posterSrc = season.poster_path
             ? `https://image.tmdb.org/t/p/w154${season.poster_path}`
             : `https://picsum.photos/seed/season-${season.id}/154/231`;
+          const { watched, total } = getProgress(sn, season.episode_count);
+          const allWatched = total > 0 && watched >= total;
 
           return (
             <div key={season.id} className="rounded-3xl border border-white/5 overflow-hidden">
-              <button
-                className="w-full flex items-center gap-4 p-5 bg-white/5 hover:bg-white/10 transition-colors text-left"
-                onClick={() => toggle(season)}
-              >
-                <div className="relative w-10 aspect-[2/3] rounded-lg overflow-hidden shrink-0">
-                  <Image src={posterSrc} alt={season.name} fill className="object-cover" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="font-bold font-headline">{season.name}</p>
-                  <p className="text-xs text-muted-foreground font-bold">
-                    {season.episode_count} episodes
-                    {season.air_date ? ` · ${season.air_date.slice(0, 4)}` : ''}
-                  </p>
-                </div>
-                {isLoading ? (
-                  <div className="h-4 w-4 border-2 border-primary border-t-transparent rounded-full animate-spin shrink-0" />
-                ) : isOpen ? (
-                  <ChevronUp className="h-5 w-5 text-muted-foreground shrink-0" />
+              {/* Season header */}
+              <div className="flex items-center gap-3 p-4 bg-white/5">
+                {/* Expand area */}
+                <button
+                  className="flex items-center gap-3 flex-1 min-w-0 text-left hover:opacity-80 transition-opacity"
+                  onClick={() => toggle(sn)}
+                >
+                  <div className="relative w-10 aspect-[2/3] rounded-lg overflow-hidden shrink-0">
+                    <Image src={posterSrc} alt={season.name} fill className="object-cover" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="font-bold font-headline text-sm">{season.name}</p>
+                    <div className="flex items-center gap-2 flex-wrap mt-0.5">
+                      <p className="text-xs text-muted-foreground font-bold">
+                        {total} ep{season.air_date ? ` · ${season.air_date.slice(0, 4)}` : ''}
+                      </p>
+                      {watched > 0 && (
+                        <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${allWatched ? 'bg-primary/20 text-primary' : 'bg-white/10 text-muted-foreground'}`}>
+                          {allWatched ? '✓ All watched' : `${watched} / ${total}`}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                </button>
+
+                {/* Mark / Unmark season */}
+                {allWatched ? (
+                  <button
+                    onClick={(e) => { e.stopPropagation(); onUnmarkSeasonWatched(season); }}
+                    className="text-[10px] font-bold text-primary/60 hover:text-primary px-2 py-1 rounded-lg hover:bg-primary/10 transition-colors shrink-0"
+                  >
+                    Unmark
+                  </button>
                 ) : (
-                  <ChevronDown className="h-5 w-5 text-muted-foreground shrink-0" />
+                  <button
+                    onClick={(e) => handleMarkSeason(e, season)}
+                    disabled={markLoading === sn}
+                    className="text-[10px] font-bold text-muted-foreground hover:text-white px-2 py-1 rounded-lg hover:bg-white/10 transition-colors shrink-0 disabled:opacity-40"
+                  >
+                    {markLoading === sn
+                      ? <div className="h-3 w-3 border border-current border-t-transparent rounded-full animate-spin" />
+                      : 'Mark All'
+                    }
+                  </button>
                 )}
-              </button>
-              {isOpen && cache[season.season_number] && (
-                <div className="p-4 space-y-3 bg-black/20">
-                  {season.overview && (
-                    <p className="text-sm text-gray-400 italic pb-2">{season.overview}</p>
-                  )}
-                  {cache[season.season_number].map(ep => (
+
+                {/* Chevron */}
+                <button onClick={() => toggle(sn)} className="text-muted-foreground hover:text-white transition-colors shrink-0">
+                  {expandLoading === sn
+                    ? <div className="h-4 w-4 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+                    : isOpen ? <ChevronUp className="h-5 w-5" /> : <ChevronDown className="h-5 w-5" />
+                  }
+                </button>
+              </div>
+
+              {/* Episodes */}
+              {isOpen && cache[sn] && (
+                <div className="p-4 space-y-2 bg-black/20">
+                  {season.overview && <p className="text-sm text-gray-400 italic pb-2">{season.overview}</p>}
+                  {cache[sn].map(ep => (
                     <EpisodeRow
                       key={ep.id}
                       ep={ep}
-                      onClick={() => onEpisodeClick(ep, season.season_number)}
+                      isWatched={watchedEpisodes.has(`S${sn}E${ep.episode_number}`)}
+                      onToggleWatched={(e) => { e.stopPropagation(); onToggleEpisodeWatched(sn, ep); }}
+                      onClick={() => onEpisodeClick(ep, sn)}
                     />
                   ))}
                 </div>
@@ -350,6 +428,7 @@ export default function MovieDetailPage() {
   const [userRating, setUserRating] = useState(0);
   const [lightboxImg, setLightboxImg] = useState<string | null>(null);
   const [episodeModal, setEpisodeModal] = useState<{ ep: TvEpisode; seasonNumber: number } | null>(null);
+  const [watchedEpisodes, setWatchedEpisodes] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     if (!id) return;
@@ -358,6 +437,16 @@ export default function MovieDetailPage() {
       setIsWatched(localStorage.getItem(`watched-${id}`) === 'true');
       const saved = localStorage.getItem(`movie-rating-${id}`);
       if (saved) setUserRating(parseInt(saved, 10));
+      // Load watched episodes for TV shows
+      const prefix = `watched-ep-${id}-`;
+      const watched = new Set<string>();
+      for (let i = 0; i < localStorage.length; i++) {
+        const k = localStorage.key(i);
+        if (k?.startsWith(prefix) && localStorage.getItem(k) === 'true') {
+          watched.add(k.slice(prefix.length));
+        }
+      }
+      setWatchedEpisodes(watched);
     } catch { /* ignore */ }
     fetch(`/api/movies/${id}`)
       .then(r => r.json())
@@ -379,6 +468,80 @@ export default function MovieDetailPage() {
       })
       .catch(() => setMovie(null))
       .finally(() => setLoading(false));
+  }, [id]);
+
+  // ─── Episode watch helpers ─────────────────────────────────────────────────
+
+  const epKey = (sn: number, epNum: number) => `S${sn}E${epNum}`;
+
+  const toggleEpisodeWatched = useCallback((sn: number, ep: TvEpisode) => {
+    const key   = epKey(sn, ep.episode_number);
+    const lsKey = `watched-ep-${id}-${key}`;
+    const logId = `${id}-${key}`;
+    const nowWatched = !watchedEpisodes.has(key);
+
+    setWatchedEpisodes(prev => {
+      const next = new Set(prev);
+      nowWatched ? next.add(key) : next.delete(key);
+      return next;
+    });
+
+    if (nowWatched) {
+      try { localStorage.setItem(lsKey, 'true'); } catch { /* ignore */ }
+      appendWatchLog({ id: logId, type: 'episode', genre: movie?.genre ?? '', language: movie?.originalLanguage ?? '' });
+      toast({ title: `${ep.name} marked as watched` });
+    } else {
+      try { localStorage.removeItem(lsKey); } catch { /* ignore */ }
+      removeFromWatchLog(logId, 'episode');
+      toast({ title: `${ep.name} removed from watched` });
+    }
+  }, [id, watchedEpisodes, movie]);
+
+  const markSeasonWatched = useCallback(async (season: TvSeason, cached?: TvEpisode[]) => {
+    let episodes = cached;
+    if (!episodes) {
+      try {
+        const res  = await fetch(`/api/tv/${id.replace('tmdb-tv-', '')}/season/${season.season_number}`);
+        const data = await res.json() as { episodes?: TvEpisode[] };
+        episodes   = data.episodes ?? [];
+      } catch { return; }
+    }
+    setWatchedEpisodes(prev => {
+      const next = new Set(prev);
+      episodes!.forEach(ep => {
+        const key   = epKey(season.season_number, ep.episode_number);
+        const lsKey = `watched-ep-${id}-${key}`;
+        if (!next.has(key)) {
+          next.add(key);
+          try { localStorage.setItem(lsKey, 'true'); } catch { /* ignore */ }
+          appendWatchLog({ id: `${id}-${key}`, type: 'episode', genre: movie?.genre ?? '', language: movie?.originalLanguage ?? '' });
+        }
+      });
+      return next;
+    });
+    toast({ title: `Season ${season.season_number} marked as watched` });
+  }, [id, movie]);
+
+  const unmarkSeasonWatched = useCallback((season: TvSeason) => {
+    const snPrefix = `S${season.season_number}E`;
+    const lsPrefix = `watched-ep-${id}-${snPrefix}`;
+    try {
+      const toRemove: string[] = [];
+      for (let i = 0; i < localStorage.length; i++) {
+        const k = localStorage.key(i);
+        if (k?.startsWith(lsPrefix)) toRemove.push(k);
+      }
+      toRemove.forEach(k => {
+        localStorage.removeItem(k);
+        removeFromWatchLog(`${id}-${k.slice(`watched-ep-${id}-`.length)}`, 'episode');
+      });
+    } catch { /* ignore */ }
+    setWatchedEpisodes(prev => {
+      const next = new Set(prev);
+      for (const k of [...next]) { if (k.startsWith(snPrefix)) next.delete(k); }
+      return next;
+    });
+    toast({ title: `Season ${season.season_number} unmarked` });
   }, [id]);
 
   if (loading) return <DetailSkeleton />;
@@ -630,6 +793,10 @@ export default function MovieDetailPage() {
           <SeasonsSection
             seasons={movie.seasons}
             showTmdbId={showTmdbId}
+            watchedEpisodes={watchedEpisodes}
+            onToggleEpisodeWatched={toggleEpisodeWatched}
+            onMarkSeasonWatched={markSeasonWatched}
+            onUnmarkSeasonWatched={unmarkSeasonWatched}
             onEpisodeClick={(ep, seasonNumber) => setEpisodeModal({ ep, seasonNumber })}
           />
         )}
@@ -728,6 +895,8 @@ export default function MovieDetailPage() {
           seasonNumber={episodeModal.seasonNumber}
           episode={episodeModal.ep}
           showTitle={movie.title}
+          isWatched={watchedEpisodes.has(epKey(episodeModal.seasonNumber, episodeModal.ep.episode_number))}
+          onToggleWatched={() => toggleEpisodeWatched(episodeModal.seasonNumber, episodeModal.ep)}
           onClose={() => setEpisodeModal(null)}
         />
       )}

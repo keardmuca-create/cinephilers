@@ -378,11 +378,17 @@ export function readUserStats(): UserStats {
     }
   } catch { /* ignore */ }
 
-  const watchLog       = safeParseJSON<WatchEntry[]>(safeGetItem('watch-log'), []);
-  const movieEntries   = watchLog.filter(e => e.type === 'movie');
-  const episodeEntries = watchLog.filter(e => e.type === 'episode');
+  // Episodes watched: count watched-ep-* keys (more reliable than watch-log)
+  let episodesWatched = 0;
+  try {
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key?.startsWith('watched-ep-') && localStorage.getItem(key) === 'true') episodesWatched++;
+    }
+  } catch { /* ignore */ }
 
-  const episodesWatched  = episodeEntries.length;
+  const watchLog     = safeParseJSON<WatchEntry[]>(safeGetItem('watch-log'), []);
+  const movieEntries = watchLog.filter(e => e.type === 'movie');
   const reviewsWritten   = parseInt(safeGetItem('review-count')    ?? '0', 10) || 0;
   const friendsFollowing = parseInt(safeGetItem('following-count') ?? '0', 10) || 0;
   const signupDate       = safeGetItem('signup-date');
