@@ -1,31 +1,31 @@
 
-// Badge system — all definitions and localStorage-based stat computation
+// Badge system — definitions, tier computation, localStorage helpers
 
 export type BadgeTier = 'locked' | 'grey' | 'bronze' | 'silver' | 'gold';
 
 export const TIER_COLORS: Record<BadgeTier, string> = {
   locked: '#374151',
-  grey: '#9ca3af',
+  grey:   '#9ca3af',
   bronze: '#cd7f32',
   silver: '#c0c0c0',
-  gold: '#ffd700',
+  gold:   '#ffd700',
 };
 
 export const TIER_LABELS: Record<BadgeTier, string> = {
   locked: 'Locked',
-  grey: 'Grey',
+  grey:   'Grey',
   bronze: 'Bronze',
   silver: 'Silver',
-  gold: 'Gold',
+  gold:   'Gold',
 };
 
 export interface WatchEntry {
   id: string;
   type: 'movie' | 'episode';
   loggedAt: string; // ISO timestamp
-  hour: number;     // 0-23 local hour when logged
+  hour: number;     // 0-23 local hour
   genre: string;    // e.g. "Horror, Thriller"
-  language: string; // original_language code e.g. "en", "fr", "ko"
+  language: string; // original_language code
 }
 
 interface TierThresholds {
@@ -36,19 +36,19 @@ interface TierThresholds {
 }
 
 interface SeasonalWindow {
-  startMonth: number; // 1-12
+  startMonth: number;
   startDay: number;
   endMonth: number;
   endDay: number;
-  crossesNewYear?: boolean; // for Dec 31 – Jan 7
-  genreKeyword?: string;    // filter genre string contains this word
+  crossesNewYear?: boolean;
+  genreKeyword?: string;
   label: string;
 }
 
 interface BadgeDefinition {
   id: string;
   name: string;
-  emoji: string;
+  description: string;
   category: 'alltime' | 'seasonal' | 'special';
   tiers?: TierThresholds;
   statKey?: keyof UserStats;
@@ -77,35 +77,41 @@ export interface UserStats {
 export interface ComputedBadge {
   id: string;
   name: string;
-  emoji: string;
+  description: string;
   tier: BadgeTier;
   current: number;
-  nextThreshold: number | null; // null at gold
-  progressPct: number;          // 0-100 within current tier range
+  nextThreshold: number | null;
+  progressPct: number;
   isSpecial: boolean;
   memberSince?: string;
   isSeasonal: boolean;
   seasonLabel?: string;
   seasonEndDate?: Date;
   isSeasonActive?: boolean;
-  seasonEarnedYears?: number[]; // years badge was fully earned (gold)
+  seasonEarnedYears?: number[];
 }
 
-// ─── Badge definitions ────────────────────────────────────────────────────────
+export interface ComingSoonBadge {
+  id: string;
+  name: string;
+  description: string;
+  activatesAt: Date;
+  activatesLabel: string;
+}
+
+// ─── Badge definitions ─────────────────────────────────────────────────────────
 
 const BADGE_DEFS: BadgeDefinition[] = [
-  // Special
   {
     id: 'founder',
     name: 'Founder',
-    emoji: '🌟',
+    description: 'Awarded to everyone who joins the community.',
     category: 'special',
   },
-  // All-time
   {
     id: 'movie-watcher',
     name: 'Movie Watcher',
-    emoji: '🎬',
+    description: 'Log the movies you watch to climb the ranks.',
     category: 'alltime',
     statKey: 'moviesWatched',
     tiers: { grey: 1, bronze: 100, silver: 500, gold: 1000 },
@@ -113,7 +119,7 @@ const BADGE_DEFS: BadgeDefinition[] = [
   {
     id: 'movie-rater',
     name: 'Movie Rater',
-    emoji: '⭐',
+    description: 'Rate the movies you watch to show your taste.',
     category: 'alltime',
     statKey: 'moviesRated',
     tiers: { grey: 1, bronze: 100, silver: 500, gold: 1000 },
@@ -121,7 +127,7 @@ const BADGE_DEFS: BadgeDefinition[] = [
   {
     id: 'show-watcher',
     name: 'Show Watcher',
-    emoji: '📺',
+    description: 'Log the show episodes you watch to climb the ranks.',
     category: 'alltime',
     statKey: 'episodesWatched',
     tiers: { grey: 1, bronze: 100, silver: 500, gold: 1000 },
@@ -129,7 +135,7 @@ const BADGE_DEFS: BadgeDefinition[] = [
   {
     id: 'show-rater',
     name: 'Show Rater',
-    emoji: '📺',
+    description: 'Rate the show episodes you watch to show your taste.',
     category: 'alltime',
     statKey: 'episodesRated',
     tiers: { grey: 1, bronze: 100, silver: 500, gold: 1000 },
@@ -137,7 +143,7 @@ const BADGE_DEFS: BadgeDefinition[] = [
   {
     id: 'reviewer',
     name: 'Reviewer',
-    emoji: '✍️',
+    description: 'Write reviews to share your thoughts with the community.',
     category: 'alltime',
     statKey: 'reviewsWritten',
     tiers: { grey: 1, bronze: 10, silver: 100, gold: 250 },
@@ -145,7 +151,7 @@ const BADGE_DEFS: BadgeDefinition[] = [
   {
     id: 'daily-marathon',
     name: 'Daily Marathon',
-    emoji: '⚡',
+    description: 'Log multiple movies in a single day to earn this badge.',
     category: 'alltime',
     statKey: 'maxMoviesInDay',
     tiers: { grey: 1, bronze: 3, silver: 5, gold: 7 },
@@ -153,7 +159,7 @@ const BADGE_DEFS: BadgeDefinition[] = [
   {
     id: 'weekly-watcher',
     name: 'Weekly Watcher',
-    emoji: '📅',
+    description: 'Log movies consistently every week to earn this badge.',
     category: 'alltime',
     statKey: 'maxMoviesInWeek',
     tiers: { grey: 1, bronze: 5, silver: 10, gold: 15 },
@@ -161,7 +167,7 @@ const BADGE_DEFS: BadgeDefinition[] = [
   {
     id: 'night-owl',
     name: 'Night Owl',
-    emoji: '🌙',
+    description: 'Log movies in the late hours of the night to earn this badge.',
     category: 'alltime',
     statKey: 'lateNightMovies',
     tiers: { grey: 1, bronze: 10, silver: 25, gold: 50 },
@@ -169,7 +175,7 @@ const BADGE_DEFS: BadgeDefinition[] = [
   {
     id: 'social',
     name: 'Social',
-    emoji: '👥',
+    description: 'Follow other members of the community to earn this badge.',
     category: 'alltime',
     statKey: 'friendsFollowing',
     tiers: { grey: 1, bronze: 10, silver: 50, gold: 100 },
@@ -177,16 +183,15 @@ const BADGE_DEFS: BadgeDefinition[] = [
   {
     id: 'world-cinema',
     name: 'World Cinema',
-    emoji: '🌍',
+    description: 'Watch films from different countries around the world.',
     category: 'alltime',
     statKey: 'distinctLanguages',
     tiers: { grey: 5, bronze: 10, silver: 20, gold: 50 },
   },
-  // Seasonal
   {
     id: 'halloween',
     name: 'Halloween Season',
-    emoji: '🎃',
+    description: 'Watch horror films throughout October. Returns every year.',
     category: 'seasonal',
     statKey: 'halloweenCount',
     tiers: { grey: 3, bronze: 8, silver: 15, gold: 20 },
@@ -200,7 +205,7 @@ const BADGE_DEFS: BadgeDefinition[] = [
   {
     id: 'holiday',
     name: 'Holiday Season',
-    emoji: '🎄',
+    description: 'Watch holiday films throughout December. Returns every year.',
     category: 'seasonal',
     statKey: 'holidayCount',
     tiers: { grey: 3, bronze: 8, silver: 15, gold: 20 },
@@ -214,7 +219,7 @@ const BADGE_DEFS: BadgeDefinition[] = [
   {
     id: 'valentines',
     name: "Valentine's Week",
-    emoji: '❤️',
+    description: "Watch romance films during Valentine's week. Returns every year.",
     category: 'seasonal',
     statKey: 'valentinesCount',
     tiers: { grey: 2, bronze: 5, silver: 8, gold: 10 },
@@ -228,7 +233,7 @@ const BADGE_DEFS: BadgeDefinition[] = [
   {
     id: 'new-year',
     name: 'New Year Season',
-    emoji: '🎆',
+    description: 'Watch films during the first week of the new year. Returns every year.',
     category: 'seasonal',
     statKey: 'newYearCount',
     tiers: { grey: 1, bronze: 3, silver: 5, gold: 7 },
@@ -242,7 +247,7 @@ const BADGE_DEFS: BadgeDefinition[] = [
   {
     id: 'summer',
     name: 'Summer Blockbuster',
-    emoji: '☀️',
+    description: 'Watch films throughout the summer to earn this badge. Returns every year.',
     category: 'seasonal',
     statKey: 'summerCount',
     tiers: { grey: 20, bronze: 50, silver: 75, gold: 100 },
@@ -254,61 +259,44 @@ const BADGE_DEFS: BadgeDefinition[] = [
   },
 ];
 
-// ─── Tier computation helpers ─────────────────────────────────────────────────
+// ─── Tier helpers ──────────────────────────────────────────────────────────────
 
 function computeTier(
   count: number,
   t: TierThresholds,
 ): { tier: BadgeTier; progressPct: number; nextThreshold: number | null } {
-  if (count >= t.gold) {
-    return { tier: 'gold', progressPct: 100, nextThreshold: null };
-  }
-  if (count >= t.silver) {
-    const pct = ((count - t.silver) / (t.gold - t.silver)) * 100;
-    return { tier: 'silver', progressPct: Math.min(pct, 100), nextThreshold: t.gold };
-  }
-  if (count >= t.bronze) {
-    const pct = ((count - t.bronze) / (t.silver - t.bronze)) * 100;
-    return { tier: 'bronze', progressPct: Math.min(pct, 100), nextThreshold: t.silver };
-  }
-  if (count >= t.grey) {
-    const pct = ((count - t.grey) / (t.bronze - t.grey)) * 100;
-    return { tier: 'grey', progressPct: Math.min(pct, 100), nextThreshold: t.bronze };
-  }
-  // locked — show 0 / grey threshold
+  if (count >= t.gold)   return { tier: 'gold',   progressPct: 100, nextThreshold: null };
+  if (count >= t.silver) return { tier: 'silver', progressPct: ((count - t.silver) / (t.gold   - t.silver)) * 100, nextThreshold: t.gold };
+  if (count >= t.bronze) return { tier: 'bronze', progressPct: ((count - t.bronze) / (t.silver - t.bronze)) * 100, nextThreshold: t.silver };
+  if (count >= t.grey)   return { tier: 'grey',   progressPct: ((count - t.grey)   / (t.bronze - t.grey))   * 100, nextThreshold: t.bronze };
   return { tier: 'locked', progressPct: 0, nextThreshold: t.grey };
 }
 
-// ─── Seasonal window helpers ──────────────────────────────────────────────────
+// ─── Seasonal window helpers ───────────────────────────────────────────────────
 
 function seasonDates(s: SeasonalWindow, year: number): { start: Date; end: Date } {
   if (s.crossesNewYear) {
-    // Dec 31 of `year-1` … Jan 7 of `year`
     return {
       start: new Date(year - 1, s.startMonth - 1, s.startDay, 0, 0, 0),
-      end: new Date(year, s.endMonth - 1, s.endDay, 0, 0, 0),
+      end:   new Date(year,     s.endMonth   - 1, s.endDay,   0, 0, 0),
     };
   }
   return {
     start: new Date(year, s.startMonth - 1, s.startDay, 0, 0, 0),
-    end: new Date(year, s.endMonth - 1, s.endDay, 0, 0, 0),
+    end:   new Date(year, s.endMonth   - 1, s.endDay,   0, 0, 0),
   };
 }
 
 function currentSeasonWindow(s: SeasonalWindow): { start: Date; end: Date; year: number } | null {
   const now = new Date();
   const y = now.getFullYear();
-  // Check current year and next year window
   for (const yr of [y, y + 1, y - 1]) {
     const { start, end } = seasonDates(s, yr);
-    if (now >= start && now < end) {
-      return { start, end, year: yr };
-    }
+    if (now >= start && now < end) return { start, end, year: yr };
   }
   return null;
 }
 
-// Returns the next upcoming season window start date
 function nextSeasonStart(s: SeasonalWindow): Date {
   const now = new Date();
   const y = now.getFullYear();
@@ -319,7 +307,7 @@ function nextSeasonStart(s: SeasonalWindow): Date {
   return seasonDates(s, y + 1).start;
 }
 
-// ─── localStorage readers ─────────────────────────────────────────────────────
+// ─── localStorage helpers ──────────────────────────────────────────────────────
 
 function safeGetItem(key: string): string | null {
   try { return localStorage.getItem(key); } catch { return null; }
@@ -330,8 +318,9 @@ function safeParseJSON<T>(raw: string | null, fallback: T): T {
   try { return JSON.parse(raw) as T; } catch { return fallback; }
 }
 
+// ─── Stats reader ──────────────────────────────────────────────────────────────
+
 export function readUserStats(): UserStats {
-  // Total movies watched: count watched-* = "true"
   let moviesWatched = 0;
   try {
     for (let i = 0; i < localStorage.length; i++) {
@@ -342,7 +331,6 @@ export function readUserStats(): UserStats {
     }
   } catch { /* ignore */ }
 
-  // Movies rated
   let moviesRated = 0;
   try {
     for (let i = 0; i < localStorage.length; i++) {
@@ -351,7 +339,6 @@ export function readUserStats(): UserStats {
     }
   } catch { /* ignore */ }
 
-  // Episodes rated
   let episodesRated = 0;
   try {
     for (let i = 0; i < localStorage.length; i++) {
@@ -360,81 +347,45 @@ export function readUserStats(): UserStats {
     }
   } catch { /* ignore */ }
 
-  // Watch log for time-based and detailed stats
-  const watchLog = safeParseJSON<WatchEntry[]>(safeGetItem('watch-log'), []);
-  const movieEntries = watchLog.filter(e => e.type === 'movie');
+  const watchLog      = safeParseJSON<WatchEntry[]>(safeGetItem('watch-log'), []);
+  const movieEntries  = watchLog.filter(e => e.type === 'movie');
   const episodeEntries = watchLog.filter(e => e.type === 'episode');
 
-  const episodesWatched = episodeEntries.length;
-  const reviewsWritten = parseInt(safeGetItem('review-count') ?? '0', 10) || 0;
+  const episodesWatched  = episodeEntries.length;
+  const reviewsWritten   = parseInt(safeGetItem('review-count')    ?? '0', 10) || 0;
   const friendsFollowing = parseInt(safeGetItem('following-count') ?? '0', 10) || 0;
-  const signupDate = safeGetItem('signup-date');
+  const signupDate       = safeGetItem('signup-date');
 
-  // Max movies in a single calendar day
   const dayMap = new Map<string, number>();
   for (const e of movieEntries) {
-    const day = e.loggedAt.slice(0, 10); // "YYYY-MM-DD"
+    const day = e.loggedAt.slice(0, 10);
     dayMap.set(day, (dayMap.get(day) ?? 0) + 1);
   }
   const maxMoviesInDay = dayMap.size > 0 ? Math.max(...dayMap.values()) : 0;
 
-  // Max movies in a single Mon–Sun week
   const weekMap = new Map<string, number>();
   for (const e of movieEntries) {
     const d = new Date(e.loggedAt);
-    const day = d.getDay(); // 0=Sun
     const mon = new Date(d);
-    mon.setDate(d.getDate() - ((day + 6) % 7)); // Monday
-    const weekKey = mon.toISOString().slice(0, 10);
-    weekMap.set(weekKey, (weekMap.get(weekKey) ?? 0) + 1);
+    mon.setDate(d.getDate() - ((d.getDay() + 6) % 7));
+    weekMap.set(mon.toISOString().slice(0, 10), (weekMap.get(mon.toISOString().slice(0, 10)) ?? 0) + 1);
   }
   const maxMoviesInWeek = weekMap.size > 0 ? Math.max(...weekMap.values()) : 0;
 
-  // Late night logs: hour 0-3
-  const lateNightMovies = movieEntries.filter(e => e.hour >= 0 && e.hour < 4).length;
+  const lateNightMovies  = movieEntries.filter(e => e.hour >= 0 && e.hour < 4).length;
+  const distinctLanguages = new Set(movieEntries.map(e => e.language).filter(Boolean)).size;
 
-  // Distinct languages (proxy for World Cinema)
-  const languages = new Set(movieEntries.map(e => e.language).filter(Boolean));
-  const distinctLanguages = languages.size;
-
-  // Seasonal counts — computed from watch-log entries within each window (current year)
   const now = new Date();
-  const y = now.getFullYear();
+  const y   = now.getFullYear();
 
   function countInWindow(s: SeasonalWindow, genreKeyword?: string): number {
     const win = currentSeasonWindow(s);
-    if (!win) {
-      // Season not currently active; still count progress from this year
-      const { start, end } = seasonDates(s, y);
-      return movieEntries.filter(e => {
-        const t = new Date(e.loggedAt);
-        return t >= start && t < end && (!genreKeyword || e.genre?.includes(genreKeyword));
-      }).length;
-    }
+    const { start, end } = win ?? seasonDates(s, y);
     return movieEntries.filter(e => {
       const t = new Date(e.loggedAt);
-      return t >= win.start && t < win.end && (!genreKeyword || e.genre?.includes(genreKeyword));
+      return t >= start && t < end && (!genreKeyword || e.genre?.includes(genreKeyword));
     }).length;
   }
-
-  const halloweenCount = countInWindow(
-    { startMonth: 10, startDay: 1, endMonth: 11, endDay: 1, genreKeyword: 'Horror', label: '' },
-    'Horror',
-  );
-  const holidayCount = countInWindow(
-    { startMonth: 12, startDay: 1, endMonth: 12, endDay: 26, genreKeyword: 'Family', label: '' },
-    'Family',
-  );
-  const valentinesCount = countInWindow(
-    { startMonth: 2, startDay: 7, endMonth: 2, endDay: 15, genreKeyword: 'Romance', label: '' },
-    'Romance',
-  );
-  const newYearCount = countInWindow(
-    { startMonth: 12, startDay: 31, endMonth: 1, endDay: 8, crossesNewYear: true, label: '' },
-  );
-  const summerCount = countInWindow(
-    { startMonth: 6, startDay: 1, endMonth: 9, endDay: 1, label: '' },
-  );
 
   return {
     moviesWatched,
@@ -448,26 +399,23 @@ export function readUserStats(): UserStats {
     friendsFollowing,
     distinctLanguages,
     signupDate,
-    halloweenCount,
-    holidayCount,
-    valentinesCount,
-    newYearCount,
-    summerCount,
+    halloweenCount:  countInWindow({ startMonth: 10, startDay: 1,  endMonth: 11, endDay: 1,  label: '' }, 'Horror'),
+    holidayCount:    countInWindow({ startMonth: 12, startDay: 1,  endMonth: 12, endDay: 26, label: '' }, 'Family'),
+    valentinesCount: countInWindow({ startMonth: 2,  startDay: 7,  endMonth: 2,  endDay: 15, label: '' }, 'Romance'),
+    newYearCount:    countInWindow({ startMonth: 12, startDay: 31, endMonth: 1,  endDay: 8,  crossesNewYear: true, label: '' }),
+    summerCount:     countInWindow({ startMonth: 6,  startDay: 1,  endMonth: 9,  endDay: 1,  label: '' }),
   };
 }
 
 // ─── Write helpers ─────────────────────────────────────────────────────────────
 
-export function appendWatchLog(entry: { id: string; type: 'movie' | 'episode'; genre: string; language: string; loggedAt?: string }): void {
+export function appendWatchLog(entry: {
+  id: string; type: 'movie' | 'episode'; genre: string; language: string; loggedAt?: string;
+}): void {
   try {
     const now = new Date();
     const log = safeParseJSON<WatchEntry[]>(safeGetItem('watch-log'), []);
-    const newEntry: WatchEntry = {
-      ...entry,
-      loggedAt: entry.loggedAt ?? now.toISOString(),
-      hour: now.getHours(),
-    };
-    // Deduplicate: remove existing entry with same id+type and add new one
+    const newEntry: WatchEntry = { ...entry, loggedAt: entry.loggedAt ?? now.toISOString(), hour: now.getHours() };
     const filtered = log.filter(e => !(e.id === entry.id && e.type === entry.type));
     localStorage.setItem('watch-log', JSON.stringify([...filtered, newEntry]));
   } catch { /* ignore */ }
@@ -492,25 +440,23 @@ export function ensureSignupDate(): void {
   } catch { /* ignore */ }
 }
 
-// ─── Compute all badges ───────────────────────────────────────────────────────
+// ─── Compute badges ────────────────────────────────────────────────────────────
 
 export function computeAllBadges(stats: UserStats): ComputedBadge[] {
   return BADGE_DEFS.map(def => {
-    // Founder badge: always gold, always shown
     if (def.category === 'special') {
-      const memberSince = stats.signupDate
-        ? new Date(stats.signupDate).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
-        : undefined;
       return {
         id: def.id,
         name: def.name,
-        emoji: def.emoji,
+        description: def.description,
         tier: 'gold' as BadgeTier,
         current: 0,
         nextThreshold: null,
         progressPct: 100,
         isSpecial: true,
-        memberSince,
+        memberSince: stats.signupDate
+          ? new Date(stats.signupDate).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
+          : undefined,
         isSeasonal: false,
       };
     }
@@ -523,25 +469,16 @@ export function computeAllBadges(stats: UserStats): ComputedBadge[] {
       const win = currentSeasonWindow(s);
       const isSeasonActive = win !== null;
 
-      // Determine earned years (years where they hit gold)
-      const earnedYears: number[] = safeParseJSON<number[]>(
-        safeGetItem(`badge-earned-years-${def.id}`),
-        [],
-      );
-
-      // Persist gold earned for current year
-      if (tier === 'gold' && win) {
-        const yr = win.year;
-        if (!earnedYears.includes(yr)) {
-          earnedYears.push(yr);
-          try { localStorage.setItem(`badge-earned-years-${def.id}`, JSON.stringify(earnedYears)); } catch { /* ignore */ }
-        }
+      const earnedYears: number[] = safeParseJSON<number[]>(safeGetItem(`badge-earned-years-${def.id}`), []);
+      if (tier === 'gold' && win && !earnedYears.includes(win.year)) {
+        earnedYears.push(win.year);
+        try { localStorage.setItem(`badge-earned-years-${def.id}`, JSON.stringify(earnedYears)); } catch { /* ignore */ }
       }
 
       return {
         id: def.id,
         name: def.name,
-        emoji: def.emoji,
+        description: def.description,
         tier: isSeasonActive ? tier : 'locked',
         current: count,
         nextThreshold,
@@ -558,7 +495,7 @@ export function computeAllBadges(stats: UserStats): ComputedBadge[] {
     return {
       id: def.id,
       name: def.name,
-      emoji: def.emoji,
+      description: def.description,
       tier,
       current: count,
       nextThreshold,
@@ -567,4 +504,20 @@ export function computeAllBadges(stats: UserStats): ComputedBadge[] {
       isSeasonal: false,
     };
   });
+}
+
+// Returns inactive seasonal badges for the "Coming Soon" section
+export function getComingSoonBadges(): ComingSoonBadge[] {
+  return BADGE_DEFS
+    .filter(d => d.category === 'seasonal' && d.seasonal && !currentSeasonWindow(d.seasonal))
+    .map(d => {
+      const next = nextSeasonStart(d.seasonal!);
+      return {
+        id: d.id,
+        name: d.name,
+        description: d.description,
+        activatesAt: next,
+        activatesLabel: next.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+      };
+    });
 }

@@ -3,9 +3,33 @@
 
 import React, { useEffect, useState } from 'react';
 import { Lock } from 'lucide-react';
-import { ComputedBadge, TIER_COLORS, TIER_LABELS, BadgeTier } from '@/lib/badges';
+import { ComputedBadge, ComingSoonBadge, TIER_COLORS, TIER_LABELS, BadgeTier } from '@/lib/badges';
 
-// ─── Countdown timer ──────────────────────────────────────────────────────────
+// ─── Medal SVG icon ────────────────────────────────────────────────────────────
+
+export function MedalIcon({ color, size = 28 }: { color: string; size?: number }) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+      aria-hidden="true"
+    >
+      {/* Left ribbon strap */}
+      <rect x="9" y="1.5" width="2.2" height="7" rx="1.1" fill={color} fillOpacity="0.75" />
+      {/* Right ribbon strap */}
+      <rect x="12.8" y="1.5" width="2.2" height="7" rx="1.1" fill={color} fillOpacity="0.75" />
+      {/* Outer circle */}
+      <circle cx="12" cy="16" r="6.5" fill={color} fillOpacity="0.12" stroke={color} strokeWidth="1.5" />
+      {/* Inner filled circle */}
+      <circle cx="12" cy="16" r="3.5" fill={color} fillOpacity="0.3" />
+    </svg>
+  );
+}
+
+// ─── Countdown hook ────────────────────────────────────────────────────────────
 
 function useCountdown(target: Date | undefined): string {
   const [label, setLabel] = useState('');
@@ -30,189 +54,171 @@ function useCountdown(target: Date | undefined): string {
   return label;
 }
 
-// ─── Shimmer keyframes injected once ─────────────────────────────────────────
+// ─── Progress bar ──────────────────────────────────────────────────────────────
 
-let shimmerInjected = false;
-function injectShimmer() {
-  if (shimmerInjected || typeof document === 'undefined') return;
-  shimmerInjected = true;
-  const style = document.createElement('style');
-  style.textContent = `
-    @keyframes badge-shimmer {
-      0%   { background-position: -200% center; }
-      100% { background-position: 200% center; }
-    }
-    @keyframes badge-glow-pulse {
-      0%, 100% { box-shadow: 0 0 8px 2px var(--badge-glow-color, #ffd700); }
-      50%       { box-shadow: 0 0 20px 6px var(--badge-glow-color, #ffd700); }
-    }
-    .badge-gold-shimmer {
-      background: linear-gradient(
-        105deg,
-        #ffd700 0%,
-        #fffde4 40%,
-        #ffd700 60%,
-        #b8860b 100%
-      );
-      background-size: 200% auto;
-      animation: badge-shimmer 2.5s linear infinite;
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
-      background-clip: text;
-    }
-    .badge-card-glow {
-      animation: badge-glow-pulse 2s ease-in-out infinite;
-    }
-    .badge-progress-glow {
-      box-shadow: 0 0 6px 1px var(--progress-glow, transparent);
-    }
-  `;
-  document.head.appendChild(style);
-}
-
-// ─── Progress bar ─────────────────────────────────────────────────────────────
-
-function ProgressBar({ pct, color, tier }: { pct: number; color: string; tier: BadgeTier }) {
+function ProgressBar({ pct, color }: { pct: number; color: string }) {
   return (
-    <div
-      className="w-full h-1.5 rounded-full overflow-hidden"
-      style={{ backgroundColor: `${color}22` }}
-    >
+    <div className="w-full h-1.5 rounded-full overflow-hidden" style={{ backgroundColor: `${color}22` }}>
       <div
-        className="h-full rounded-full transition-all duration-700 badge-progress-glow"
-        style={{
-          width: `${Math.min(pct, 100)}%`,
-          backgroundColor: color,
-          // @ts-expect-error CSS custom property
-          '--progress-glow': tier !== 'locked' ? `${color}88` : 'transparent',
-        }}
+        className="h-full rounded-full transition-all duration-700"
+        style={{ width: `${Math.min(pct, 100)}%`, backgroundColor: color }}
       />
     </div>
   );
 }
 
-// ─── Main badge card ──────────────────────────────────────────────────────────
+// ─── Badge card ────────────────────────────────────────────────────────────────
 
 interface BadgeCardProps {
   badge: ComputedBadge;
 }
 
 export function BadgeCard({ badge }: BadgeCardProps) {
-  useEffect(() => { injectShimmer(); }, []);
-
-  const color = TIER_COLORS[badge.tier];
-  const tierLabel = TIER_LABELS[badge.tier];
-  const isGold = badge.tier === 'gold';
+  const color    = TIER_COLORS[badge.tier];
+  const isGold   = badge.tier === 'gold';
   const isLocked = badge.tier === 'locked';
-
-  const countdown = useCountdown(
-    badge.isSeasonal ? badge.seasonEndDate : undefined,
-  );
-
-  const borderColor = isLocked ? '#374151' : color;
+  const countdown = useCountdown(badge.isSeasonal && badge.isSeasonActive ? badge.seasonEndDate : undefined);
 
   return (
     <div
-      className={`
-        relative flex flex-col gap-3 rounded-2xl p-4 bg-white/5 border transition-all duration-300
-        hover:scale-[1.02] hover:bg-white/8
-        ${isGold ? 'badge-card-glow' : ''}
-      `}
-      style={{
-        borderColor: `${borderColor}55`,
-        // @ts-expect-error CSS custom property
-        '--badge-glow-color': color,
-      }}
+      className="relative flex flex-col gap-3 rounded-2xl p-4 bg-white/5 border border-white/[0.08] transition-colors duration-200 hover:bg-white/[0.07]"
+      style={{ borderColor: `${color}33` }}
     >
-      {/* Icon + tier name row */}
-      <div className="flex items-start justify-between">
-        <div className="flex flex-col items-start gap-1">
-          {/* Emoji icon tinted by tier */}
-          <div
-            className="text-3xl leading-none select-none"
-            style={{ filter: isLocked ? 'grayscale(1) brightness(0.4)' : undefined }}
-          >
-            {isLocked ? <Lock className="h-7 w-7" style={{ color }} /> : badge.emoji}
-          </div>
+      {/* Icon row */}
+      <div className="flex items-start justify-between gap-2">
+        <div className="relative">
+          <MedalIcon color={color} size={30} />
+          {isLocked && (
+            <div className="absolute -bottom-1 -right-1 bg-background rounded-full p-0.5">
+              <Lock className="h-2.5 w-2.5" style={{ color }} />
+            </div>
+          )}
         </div>
 
         {/* Tier pill */}
         <span
-          className="text-[10px] font-bold uppercase tracking-widest px-2 py-0.5 rounded-full"
-          style={{
-            color,
-            backgroundColor: `${color}22`,
-            border: `1px solid ${color}44`,
-          }}
+          className="text-[9px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded-full shrink-0"
+          style={{ color, backgroundColor: `${color}18`, border: `1px solid ${color}33` }}
         >
-          {tierLabel}
+          {TIER_LABELS[badge.tier]}
         </span>
       </div>
 
-      {/* Name */}
-      <div>
-        <p
-          className={`text-sm font-bold leading-tight ${isGold ? 'badge-gold-shimmer' : ''}`}
-          style={!isGold ? { color: isLocked ? '#6b7280' : '#f3f4f6' } : undefined}
-        >
+      {/* Name + description */}
+      <div className="space-y-1">
+        <p className="text-sm font-bold leading-tight" style={{ color: isLocked ? '#6b7280' : '#f3f4f6' }}>
           {badge.name}
         </p>
-
-        {/* Special: Founder member since */}
-        {badge.isSpecial && badge.memberSince && (
-          <p className="text-xs text-muted-foreground mt-0.5">Member since {badge.memberSince}</p>
-        )}
-
-        {/* Seasonal label */}
-        {badge.isSeasonal && badge.seasonLabel && (
-          <p className="text-[10px] text-muted-foreground mt-0.5 font-medium">{badge.seasonLabel}</p>
-        )}
+        <p className="text-[11px] leading-snug text-muted-foreground line-clamp-2">
+          {badge.description}
+        </p>
       </div>
 
-      {/* Seasonal: active countdown or locked hint */}
-      {badge.isSeasonal && (
-        <div className="text-[10px] font-bold" style={{ color: badge.isSeasonActive ? color : '#6b7280' }}>
-          {badge.isSeasonActive
-            ? `⏱ ${countdown} left`
-            : `Starts ${badge.seasonEndDate?.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`}
-        </div>
+      {/* Special — Founder member since */}
+      {badge.isSpecial && badge.memberSince && (
+        <p className="text-[11px] font-medium" style={{ color }}>
+          Member since {badge.memberSince}
+        </p>
       )}
 
-      {/* Earned years for seasonal */}
+      {/* Seasonal active countdown */}
+      {badge.isSeasonal && badge.isSeasonActive && countdown && (
+        <p className="text-[10px] font-bold" style={{ color }}>
+          {countdown} remaining
+        </p>
+      )}
+
+      {/* Earned years chips */}
       {badge.isSeasonal && (badge.seasonEarnedYears?.length ?? 0) > 0 && (
         <div className="flex flex-wrap gap-1">
           {badge.seasonEarnedYears!.map(yr => (
             <span
               key={yr}
               className="text-[9px] font-bold px-1.5 py-0.5 rounded-full"
-              style={{ color: TIER_COLORS.gold, backgroundColor: `${TIER_COLORS.gold}22`, border: `1px solid ${TIER_COLORS.gold}44` }}
+              style={{ color: TIER_COLORS.gold, backgroundColor: `${TIER_COLORS.gold}18`, border: `1px solid ${TIER_COLORS.gold}33` }}
             >
-              {badge.seasonLabel?.split(' ')[0]} {yr}
+              {badge.name.split(' ')[0]} {yr}
             </span>
           ))}
         </div>
       )}
 
-      {/* Progress bar + count — not shown for special or gold non-seasonal */}
+      {/* Progress / count */}
       {!badge.isSpecial && (
-        <>
-          {isGold ? (
-            // Gold: show total count only
-            <p className="text-xs font-bold" style={{ color }}>
-              {badge.current.toLocaleString()}{' '}
-              <span className="font-normal text-muted-foreground">total</span>
-            </p>
-          ) : (
-            <div className="space-y-1.5">
-              <ProgressBar pct={badge.progressPct} color={color} tier={badge.tier} />
-              <div className="flex justify-between text-[10px] font-bold">
-                <span style={{ color: isLocked ? '#6b7280' : color }}>{badge.current.toLocaleString()}</span>
-                <span className="text-muted-foreground">{badge.nextThreshold?.toLocaleString() ?? '—'}</span>
-              </div>
+        isGold ? (
+          <p className="text-xs" style={{ color }}>
+            <span className="font-bold">{badge.current.toLocaleString()}</span>
+            <span className="text-muted-foreground font-normal"> total</span>
+          </p>
+        ) : (
+          <div className="space-y-1.5">
+            <ProgressBar pct={badge.progressPct} color={color} />
+            <div className="flex justify-between text-[10px] font-bold tabular-nums">
+              <span style={{ color: isLocked ? '#4b5563' : color }}>{badge.current.toLocaleString()}</span>
+              <span className="text-muted-foreground">{badge.nextThreshold?.toLocaleString() ?? '—'}</span>
             </div>
-          )}
-        </>
+          </div>
+        )
       )}
+    </div>
+  );
+}
+
+// ─── Coming soon card ──────────────────────────────────────────────────────────
+
+interface ComingSoonCardProps {
+  badge: ComingSoonBadge;
+}
+
+export function ComingSoonCard({ badge }: ComingSoonCardProps) {
+  const color = TIER_COLORS.locked;
+
+  return (
+    <div className="flex flex-col gap-3 rounded-2xl p-4 bg-white/[0.03] border border-white/[0.06]">
+      <div className="flex items-start justify-between gap-2">
+        <MedalIcon color={color} size={30} />
+        <span
+          className="text-[9px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded-full shrink-0 text-muted-foreground"
+          style={{ backgroundColor: `${color}18`, border: `1px solid ${color}33` }}
+        >
+          Coming Soon
+        </span>
+      </div>
+
+      <div className="space-y-1">
+        <p className="text-sm font-bold leading-tight text-muted-foreground">{badge.name}</p>
+        <p className="text-[11px] leading-snug text-muted-foreground/70 line-clamp-2">{badge.description}</p>
+      </div>
+
+      <p className="text-[10px] font-bold text-muted-foreground/60">
+        Active {badge.activatesLabel}
+      </p>
+    </div>
+  );
+}
+
+// ─── Tier guide ────────────────────────────────────────────────────────────────
+
+const TIER_GUIDE: { tier: BadgeTier; label: string; desc: string }[] = [
+  { tier: 'grey',   label: 'Grey',   desc: 'Just getting started' },
+  { tier: 'bronze', label: 'Bronze', desc: 'Making progress' },
+  { tier: 'silver', label: 'Silver', desc: 'Dedicated watcher' },
+  { tier: 'gold',   label: 'Gold',   desc: 'Elite status' },
+];
+
+export function TierGuide() {
+  return (
+    <div className="rounded-2xl bg-white/[0.04] border border-white/[0.08] p-4">
+      <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground mb-4">Tier Guide</p>
+      <div className="grid grid-cols-4 gap-3">
+        {TIER_GUIDE.map(({ tier, label, desc }) => (
+          <div key={tier} className="flex flex-col items-center gap-2 text-center">
+            <MedalIcon color={TIER_COLORS[tier]} size={24} />
+            <span className="text-xs font-bold" style={{ color: TIER_COLORS[tier] }}>{label}</span>
+            <span className="text-[10px] leading-tight text-muted-foreground">{desc}</span>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }

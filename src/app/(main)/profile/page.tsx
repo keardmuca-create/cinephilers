@@ -3,8 +3,8 @@
 
 import React, { useState, useEffect } from 'react';
 import { Movie } from '@/lib/types';
-import { readUserStats, computeAllBadges, ensureSignupDate, ComputedBadge } from '@/lib/badges';
-import { BadgeCard } from '@/components/badge-card';
+import { readUserStats, computeAllBadges, getComingSoonBadges, ensureSignupDate, ComputedBadge, ComingSoonBadge } from '@/lib/badges';
+import { BadgeCard, ComingSoonCard, TierGuide } from '@/components/badge-card';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { MovieCard } from '@/components/movie-card';
@@ -71,6 +71,8 @@ const EmptyRow = ({ message }: { message: string }) => (
 export default function ProfilePage() {
   const [showSettings, setShowSettings] = useState(false);
   const [badges, setBadges] = useState<ComputedBadge[]>([]);
+  const [comingSoon, setComingSoon] = useState<ComingSoonBadge[]>([]);
+  const [showAllBadges, setShowAllBadges] = useState(false);
 
   const watched: Movie[] = [];
   const watchlist: Movie[] = [];
@@ -79,7 +81,10 @@ export default function ProfilePage() {
   useEffect(() => {
     ensureSignupDate();
     setBadges(computeAllBadges(readUserStats()));
+    setComingSoon(getComingSoonBadges());
   }, []);
+
+  const visibleBadges = showAllBadges ? badges : badges.slice(0, 3);
 
   return (
     <main className="p-6 pt-12 pb-32 max-w-2xl mx-auto space-y-16">
@@ -224,13 +229,40 @@ export default function ProfilePage() {
       </section>
 
       {/* Badges */}
-      <section>
+      <section className="space-y-4">
         <SectionHeader title="Badges & Achievements" icon={Award} />
+
+        {/* Tier guide */}
+        <TierGuide />
+
+        {/* Badge grid */}
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-          {badges.map(badge => (
+          {visibleBadges.map(badge => (
             <BadgeCard key={badge.id} badge={badge} />
           ))}
         </div>
+
+        {/* See all / show less */}
+        {badges.length > 3 && (
+          <button
+            onClick={() => setShowAllBadges(prev => !prev)}
+            className="w-full py-2.5 rounded-xl text-sm font-semibold text-muted-foreground hover:text-white border border-white/[0.08] bg-white/[0.03] hover:bg-white/[0.06] transition-colors"
+          >
+            {showAllBadges ? 'Show Less' : `See All ${badges.length} Badges`}
+          </button>
+        )}
+
+        {/* Coming Soon */}
+        {comingSoon.length > 0 && (
+          <div className="space-y-3 pt-2">
+            <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Coming Soon</p>
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+              {comingSoon.map(b => (
+                <ComingSoonCard key={b.id} badge={b} />
+              ))}
+            </div>
+          </div>
+        )}
       </section>
     </main>
   );
