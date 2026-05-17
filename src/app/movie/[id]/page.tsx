@@ -553,7 +553,21 @@ export default function MovieDetailPage() {
                   </button>
                 ))}
               </div>
-              <p className="text-xs font-bold text-white">{userRating > 0 ? `Your score: ${userRating}/10` : 'Select a star to rate'}</p>
+              <div className="flex items-center gap-3">
+                <p className="text-xs font-bold text-white">{userRating > 0 ? `Your score: ${userRating}/10` : 'Select a star to rate'}</p>
+                {userRating > 0 && (
+                  <button
+                    onClick={() => {
+                      setUserRating(0);
+                      try { localStorage.removeItem(`movie-rating-${id}`); } catch { /* ignore */ }
+                      toast({ title: 'Rating removed' });
+                    }}
+                    className="text-[11px] text-muted-foreground hover:text-white transition-colors underline underline-offset-2"
+                  >
+                    Remove
+                  </button>
+                )}
+              </div>
             </div>
           </div>
         </section>
