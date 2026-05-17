@@ -4,7 +4,7 @@
 import React from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Home, Search as SearchIcon, Users, User } from 'lucide-react';
+import { Home, Search as SearchIcon, History as HistoryIcon, User } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 export const BottomNav = () => {
@@ -13,7 +13,7 @@ export const BottomNav = () => {
   const navItems = [
     { label: 'Home', icon: Home, href: '/home' },
     { label: 'Search', icon: SearchIcon, href: '/browse' },
-    { label: 'Social', icon: Users, href: '/social' },
+    { label: 'History', icon: HistoryIcon, href: '/history' },
     { label: 'Profile', icon: User, href: '/profile' },
   ];
 
