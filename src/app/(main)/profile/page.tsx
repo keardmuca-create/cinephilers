@@ -70,19 +70,56 @@ const EmptyRow = ({ message }: { message: string }) => (
   </div>
 );
 
+interface RecentItem { id: string; title: string; poster: string; loggedAt: string; }
+
+function formatWatchDate(iso: string): string {
+  const d = new Date(iso);
+  if (isNaN(d.getTime()) || d.getFullYear() === 1970) return '';
+  const now = new Date();
+  const diff = Math.floor((now.getTime() - d.getTime()) / 86400000);
+  if (diff === 0) return 'Today';
+  if (diff === 1) return 'Yesterday';
+  if (diff < 7) return `${diff} days ago`;
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+}
+
 export default function ProfilePage() {
   const [showSettings, setShowSettings] = useState(false);
   const [badges, setBadges] = useState<ComputedBadge[]>([]);
   const [comingSoon, setComingSoon] = useState<ComingSoonBadge[]>([]);
   const [showAllBadges, setShowAllBadges] = useState(false);
+  const [recentWatched, setRecentWatched] = useState<RecentItem[]>([]);
 
-  const watched: Movie[] = [];
   const watchlist: Movie[] = [];
 
   useEffect(() => {
     ensureSignupDate();
     setBadges(computeAllBadges(readUserStats()));
     setComingSoon(getComingSoonBadges());
+
+    // Build recent watch preview from watch-log + meta cache
+    try {
+      const log: { id: string; loggedAt: string }[] = JSON.parse(
+        localStorage.getItem('watch-log') ?? '[]'
+      );
+      // Deduplicate by id — keep most recent entry per id
+      const seen = new Map<string, string>();
+      for (const e of [...log].sort((a, b) => new Date(b.loggedAt).getTime() - new Date(a.loggedAt).getTime())) {
+        if (!seen.has(e.id)) seen.set(e.id, e.loggedAt);
+      }
+      const top3 = [...seen.entries()].slice(0, 3);
+      const items: RecentItem[] = top3.map(([id, loggedAt]) => {
+        const raw = localStorage.getItem(`meta-${id}`);
+        const meta = raw ? JSON.parse(raw) : null;
+        return {
+          id,
+          loggedAt,
+          title: meta?.title ?? id,
+          poster: meta?.poster ?? `https://picsum.photos/seed/${id}/400/600`,
+        };
+      });
+      setRecentWatched(items);
+    } catch { /* ignore */ }
   }, []);
 
   const visibleBadges = showAllBadges ? badges : badges.slice(0, 3);
@@ -151,23 +188,42 @@ export default function ProfilePage() {
 
       {/* Watch History */}
       <section>
-        <SectionHeader
-          title="Watch History"
-          icon={History}
-          seeAllContent={
+        <SectionHeader title="Watch History" icon={History} />
+        {recentWatched.length > 0 ? (
+          <div className="space-y-3">
+            {recentWatched.map(item => (
+              <Link
+                key={item.id}
+                href={`/movie/${item.id}`}
+                className="flex items-center gap-3 p-3 rounded-2xl bg-white/[0.03] border border-white/[0.06] hover:bg-white/[0.05] transition-colors"
+              >
+                <div className="flex-shrink-0 w-10 h-14 rounded-xl overflow-hidden bg-white/5">
+                  <img src={item.poster} alt={item.title} className="w-full h-full object-cover" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-semibold truncate">{item.title}</p>
+                  {formatWatchDate(item.loggedAt) && (
+                    <p className="text-xs text-muted-foreground mt-0.5">{formatWatchDate(item.loggedAt)}</p>
+                  )}
+                </div>
+                <ChevronRight className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+              </Link>
+            ))}
             <Link href="/history">
-              <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-primary transition-colors">
-                See All <ChevronRight className="h-4 w-4 ml-1" />
+              <Button variant="ghost" className="w-full rounded-xl text-sm text-muted-foreground hover:text-white mt-1">
+                See All Watch History <ChevronRight className="h-4 w-4 ml-1" />
               </Button>
             </Link>
-          }
-        />
-        {watched.length > 0 ? (
-          <div className="flex overflow-x-auto gap-4 pb-4 no-scrollbar">
-            {watched.map(m => <MovieCard key={m.id} movie={m} horizontal />)}
           </div>
         ) : (
-          <EmptyRow message="Movies you watch will appear here" />
+          <div className="space-y-3">
+            <EmptyRow message="Movies and shows you watch will appear here" />
+            <Link href="/history">
+              <Button variant="ghost" className="w-full rounded-xl text-sm text-muted-foreground hover:text-white">
+                Go to Watch History <ChevronRight className="h-4 w-4 ml-1" />
+              </Button>
+            </Link>
+          </div>
         )}
       </section>
 

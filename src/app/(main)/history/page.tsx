@@ -36,8 +36,15 @@ function readWatchedMovieIds(): string[] {
   const ids: string[] = [];
   for (let i = 0; i < localStorage.length; i++) {
     const k = localStorage.key(i)!;
-    if (k.startsWith('watched-') && !k.startsWith('watched-ep-') && localStorage.getItem(k) === 'true')
-      ids.push(k.slice('watched-'.length));
+    if (
+      k.startsWith('watched-') &&
+      !k.startsWith('watched-ep-') &&
+      localStorage.getItem(k) === 'true'
+    ) {
+      const id = k.slice('watched-'.length);
+      // Exclude show IDs — they're handled separately via watched-ep-* keys
+      if (!id.startsWith('tmdb-tv-')) ids.push(id);
+    }
   }
   return ids;
 }
