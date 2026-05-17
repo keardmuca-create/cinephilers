@@ -8,11 +8,11 @@ import type { TvEpisode, TvSeason } from '@/lib/types';
 
 // ─── Domain types ────────────────────────────────────────────────────────────
 
-type ShowStatus  = 'completed' | 'in-progress' | 'dropped';
+type ShowStatus  = 'completed' | 'in-progress' | 'stopped';
 type SortOption  = 'date' | 'title-asc' | 'title-desc' | 'rating';
 type MainTab     = 'all' | 'movies' | 'shows';
 type MovieSub    = 'all' | 'movie' | 'tv-movie';
-type ShowSub     = 'all' | 'completed' | 'in-progress' | 'dropped';
+type ShowSub     = 'all' | 'completed' | 'in-progress' | 'stopped';
 
 interface HistoryItem extends ItemMeta {
   rating?:         number;
@@ -63,7 +63,10 @@ function readWatchedEpCount(showId: string): number {
 }
 
 function readShowStatus(showId: string): ShowStatus {
-  return (localStorage.getItem(`show-status-${showId}`) ?? 'in-progress') as ShowStatus;
+  const v = localStorage.getItem(`show-status-${showId}`);
+  // migrate legacy 'dropped' value
+  if (v === 'dropped') { localStorage.setItem(`show-status-${showId}`, 'stopped'); return 'stopped'; }
+  return (v ?? 'in-progress') as ShowStatus;
 }
 function writeShowStatus(showId: string, s: ShowStatus) {
   localStorage.setItem(`show-status-${showId}`, s);
@@ -90,14 +93,16 @@ function computeAutoStatus(
   totalEps: number | undefined,
   tmdbStatus: string | undefined,
 ): ShowStatus {
-  const stored = localStorage.getItem(`show-status-${showId}`) as ShowStatus | null;
-  if (stored === 'dropped') return 'dropped';
+  const stored = readShowStatus(showId);
+  if (stored === 'stopped') return 'stopped';
+  if (watchedCount === 0) return stored === 'stopped' ? 'stopped' : 'in-progress';
   if (totalEps && watchedCount >= totalEps) {
+    // All available episodes watched
     return (tmdbStatus === 'Ended' || tmdbStatus === 'Canceled') ? 'completed' : 'in-progress';
   }
   // Revert 'completed' if new episodes added and not all watched
   if (stored === 'completed') return 'in-progress';
-  return stored ?? 'in-progress';
+  return stored;
 }
 
 async function fetchAndCacheMeta(id: string): Promise<ItemMeta | null> {
@@ -110,9 +115,10 @@ async function fetchAndCacheMeta(id: string): Promise<ItemMeta | null> {
   } catch { return null; }
 }
 
-function buildItem(id: string, meta: ItemMeta): HistoryItem {
+function buildItem(id: string, meta: ItemMeta): HistoryItem | null {
   if (meta.type === 'show') {
     const watchedEpCount = readWatchedEpCount(id);
+    if (watchedEpCount === 0) return null; // don't show shows with no watched episodes
     const status = computeAutoStatus(id, watchedEpCount, meta.totalEps, meta.tmdbStatus);
     return { ...meta, rating: readUserRating(id), loggedAt: readLoggedAt(id), status, watchedEpCount };
   }
@@ -124,10 +130,10 @@ function buildItem(id: string, meta: ItemMeta): HistoryItem {
 const STATUS_STYLE: Record<ShowStatus, string> = {
   completed:    'bg-green-500/20 text-green-400 border-green-500/30',
   'in-progress':'bg-blue-500/20 text-blue-400 border-blue-500/30',
-  dropped:      'bg-red-500/20 text-red-400 border-red-500/30',
+  stopped:      'bg-red-500/20 text-red-400 border-red-500/30',
 };
 const STATUS_LABEL: Record<ShowStatus, string> = {
-  completed: 'Completed', 'in-progress': 'In Progress', dropped: 'Dropped',
+  completed: 'Completed', 'in-progress': 'In Progress', stopped: 'Stopped',
 };
 
 // ─── StatusPill ───────────────────────────────────────────────────────────────
@@ -153,7 +159,7 @@ function StatusPill({ status, onSelect }: { status: ShowStatus; onSelect: (s: Sh
       </button>
       {open && (
         <div className="absolute top-full left-0 mt-1 z-50 bg-[#1c1c1e] border border-white/10 rounded-xl overflow-hidden shadow-2xl min-w-[130px]">
-          {(['completed', 'in-progress', 'dropped'] as ShowStatus[]).map(s => (
+          {(['completed', 'in-progress', 'stopped'] as ShowStatus[]).map(s => (
             <button
               key={s}
               onClick={() => { onSelect(s); setOpen(false); }}
@@ -496,7 +502,7 @@ export default function HistoryPage() {
       const uncached: string[]     = [];
       for (const id of allIds) {
         const m = readMetaCache(id);
-        if (m) initial.push(buildItem(id, m));
+        if (m) { const item = buildItem(id, m); if (item) initial.push(item); }
         else uncached.push(id);
       }
       if (!cancelled) setItems(initial);
@@ -612,7 +618,7 @@ export default function HistoryPage() {
       )}
       {tab === 'shows' && (
         <div className="flex gap-2 flex-wrap">
-          {([['all', 'All'], ['completed', 'Completed'], ['in-progress', 'In Progress'], ['dropped', 'Dropped']] as [ShowSub, string][]).map(([v, l]) => (
+          {([['all', 'All'], ['completed', 'Completed'], ['in-progress', 'In Progress'], ['stopped', 'Stopped']] as [ShowSub, string][]).map(([v, l]) => (
             <button
               key={v}
               onClick={() => setShowSub(v)}
