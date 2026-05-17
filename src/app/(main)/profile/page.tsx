@@ -8,7 +8,8 @@ import { BadgeCard, ComingSoonCard, TierGuide } from '@/components/badge-card';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { MovieCard } from '@/components/movie-card';
-import { Settings, Star, Film, List, MessageSquare, ChevronRight, Award, History, Heart, Bookmark, User } from 'lucide-react';
+import { Settings, Star, Film, List, MessageSquare, ChevronRight, Award, History, Bookmark, User } from 'lucide-react';
+import { FavoritesSection } from '@/components/favorites-section';
 import { BarChart, Bar, XAxis, ResponsiveContainer, Cell, YAxis, Tooltip as ChartTooltip } from 'recharts';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -76,7 +77,6 @@ export default function ProfilePage() {
 
   const watched: Movie[] = [];
   const watchlist: Movie[] = [];
-  const favorites: Movie[] = [];
 
   useEffect(() => {
     ensureSignupDate();
@@ -145,18 +145,7 @@ export default function ProfilePage() {
 
       {/* Favorites */}
       <section>
-        <SectionHeader title="Favorite Movies" icon={Heart} />
-        {favorites.length > 0 ? (
-          <div className="grid grid-cols-3 gap-4">
-            {favorites.map(m => (
-              <div key={m.id} className="relative aspect-[2/3] rounded-2xl overflow-hidden border border-white/10 shadow-lg group cursor-pointer">
-                <img src={m.poster} alt={m.title} className="object-cover w-full h-full group-hover:scale-110 transition-transform" />
-              </div>
-            ))}
-          </div>
-        ) : (
-          <EmptyRow message="No favorites yet — rate movies to add them here" />
-        )}
+        <FavoritesSection />
       </section>
 
       {/* Watch History */}
