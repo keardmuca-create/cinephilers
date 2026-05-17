@@ -532,11 +532,11 @@ export default function MovieDetailPage() {
           <div className="space-y-4">
             <h3 className="text-sm font-bold uppercase tracking-widest text-muted-foreground">TMDB Rating</h3>
             <div className="flex items-center gap-4">
-              <div className="text-5xl font-black font-headline text-accent">{movie.rating.toFixed(1)}</div>
+              <div className="text-5xl font-black font-headline text-white">{movie.rating.toFixed(1)}</div>
               <div className="space-y-1">
                 <div className="flex gap-0.5">
                   {Array(5).fill(0).map((_, i) => (
-                    <Star key={i} className={`h-4 w-4 fill-current ${i < Math.floor(movie.rating / 2) ? 'text-accent' : 'text-white/10'}`} />
+                    <Star key={i} className={`h-4 w-4 fill-current ${i < Math.floor(movie.rating / 2) ? 'fill-yellow-400 text-yellow-400' : 'text-white/10'}`} />
                   ))}
                 </div>
                 <div className="text-xs text-muted-foreground font-bold">{movie.votes.toLocaleString()} ratings</div>
@@ -549,11 +549,11 @@ export default function MovieDetailPage() {
               <div className="flex items-center gap-1">
                 {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(i => (
                   <button key={i} onClick={() => { setUserRating(i); saveMovieRating(id, i); toast({ title: `You rated it ${i}/10!` }); }} className="transition-all hover:scale-125 active:scale-90 p-0.5">
-                    <Star className={`h-5 w-5 transition-colors ${userRating >= i ? 'fill-accent text-accent' : 'text-white/10 hover:text-white/40'}`} />
+                    <Star className={`h-5 w-5 transition-colors ${userRating >= i ? 'fill-yellow-400 text-yellow-400' : 'text-white/10 hover:text-white/40'}`} />
                   </button>
                 ))}
               </div>
-              <p className="text-xs font-bold text-accent">{userRating > 0 ? `Your score: ${userRating}/10` : 'Select a star to rate'}</p>
+              <p className="text-xs font-bold text-white">{userRating > 0 ? `Your score: ${userRating}/10` : 'Select a star to rate'}</p>
             </div>
           </div>
         </section>
