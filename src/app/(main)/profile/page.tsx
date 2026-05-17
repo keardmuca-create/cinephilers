@@ -1,8 +1,10 @@
 
 "use client"
 
-import React, { useState } from 'react';
-import { Movie, BadgeInfo } from '@/lib/types';
+import React, { useState, useEffect } from 'react';
+import { Movie } from '@/lib/types';
+import { readUserStats, computeAllBadges, ensureSignupDate, ComputedBadge } from '@/lib/badges';
+import { BadgeCard } from '@/components/badge-card';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { MovieCard } from '@/components/movie-card';
@@ -68,11 +70,16 @@ const EmptyRow = ({ message }: { message: string }) => (
 
 export default function ProfilePage() {
   const [showSettings, setShowSettings] = useState(false);
+  const [badges, setBadges] = useState<ComputedBadge[]>([]);
 
   const watched: Movie[] = [];
   const watchlist: Movie[] = [];
   const favorites: Movie[] = [];
-  const badges: BadgeInfo[] = [];
+
+  useEffect(() => {
+    ensureSignupDate();
+    setBadges(computeAllBadges(readUserStats()));
+  }, []);
 
   return (
     <main className="p-6 pt-12 pb-32 max-w-2xl mx-auto space-y-16">
@@ -219,22 +226,11 @@ export default function ProfilePage() {
       {/* Badges */}
       <section>
         <SectionHeader title="Badges & Achievements" icon={Award} />
-        {badges.length > 0 ? (
-          <div className="flex gap-4 overflow-x-auto pb-4 no-scrollbar">
-            {badges.map(badge => (
-              <div key={badge.id} className="shrink-0 flex flex-col items-center gap-3 group cursor-pointer">
-                <div className={`h-20 w-20 rounded-[1.5rem] bg-gradient-to-br ${badge.color} p-0.5 shadow-lg group-hover:scale-110 transition-transform`}>
-                  <div className="w-full h-full rounded-[1.4rem] bg-background/80 backdrop-blur-sm flex items-center justify-center">
-                    <Award className="h-10 w-10 text-white" />
-                  </div>
-                </div>
-                <span className="text-xs font-bold text-center w-20 truncate">{badge.name}</span>
-              </div>
-            ))}
-          </div>
-        ) : (
-          <EmptyRow message="Earn badges by watching and reviewing movies" />
-        )}
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+          {badges.map(badge => (
+            <BadgeCard key={badge.id} badge={badge} />
+          ))}
+        </div>
       </section>
     </main>
   );

@@ -18,6 +18,7 @@ import { Separator } from '@/components/ui/separator';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Badge } from '@/components/ui/badge';
 import { toast } from '@/hooks/use-toast';
+import { appendWatchLog, removeFromWatchLog, saveMovieRating, ensureSignupDate } from '@/lib/badges';
 
 // ─── Skeleton ─────────────────────────────────────────────────────────────────
 
@@ -352,8 +353,11 @@ export default function MovieDetailPage() {
 
   useEffect(() => {
     if (!id) return;
+    ensureSignupDate();
     try {
       setIsWatched(localStorage.getItem(`watched-${id}`) === 'true');
+      const saved = localStorage.getItem(`movie-rating-${id}`);
+      if (saved) setUserRating(parseInt(saved, 10));
     } catch { /* ignore */ }
     fetch(`/api/movies/${id}`)
       .then(r => r.json())
@@ -486,6 +490,16 @@ export default function MovieDetailPage() {
               const next = !isWatched;
               setIsWatched(next);
               try { localStorage.setItem(`watched-${id}`, String(next)); } catch { /* ignore */ }
+              if (next && movie) {
+                appendWatchLog({
+                  id,
+                  type: movie.type === 'show' ? 'movie' : 'movie',
+                  genre: movie.genre ?? '',
+                  language: movie.originalLanguage ?? '',
+                });
+              } else {
+                removeFromWatchLog(id, 'movie');
+              }
               toast({ title: next ? 'Marked as watched' : 'Removed from watched' });
             }}
           >
@@ -534,7 +548,7 @@ export default function MovieDetailPage() {
             <div className="flex flex-col gap-2">
               <div className="flex items-center gap-1">
                 {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(i => (
-                  <button key={i} onClick={() => { setUserRating(i); toast({ title: `You rated it ${i}/10!` }); }} className="transition-all hover:scale-125 active:scale-90 p-0.5">
+                  <button key={i} onClick={() => { setUserRating(i); saveMovieRating(id, i); toast({ title: `You rated it ${i}/10!` }); }} className="transition-all hover:scale-125 active:scale-90 p-0.5">
                     <Star className={`h-5 w-5 transition-colors ${userRating >= i ? 'fill-accent text-accent' : 'text-white/10 hover:text-white/40'}`} />
                   </button>
                 ))}
