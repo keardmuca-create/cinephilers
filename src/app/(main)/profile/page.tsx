@@ -8,6 +8,7 @@ import { BadgeCard, ComingSoonCard, TierGuide } from '@/components/badge-card';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { MovieCard } from '@/components/movie-card';
+import Link from 'next/link';
 import { Settings, Star, Film, List, MessageSquare, ChevronRight, Award, History, Bookmark, User } from 'lucide-react';
 import { FavoritesSection } from '@/components/favorites-section';
 import { BarChart, Bar, XAxis, ResponsiveContainer, Cell, YAxis, Tooltip as ChartTooltip } from 'recharts';
@@ -153,7 +154,13 @@ export default function ProfilePage() {
         <SectionHeader
           title="Watch History"
           icon={History}
-          seeAllContent={watched.length > 0 ? <MovieListDialog title="Watch History" movies={watched} /> : undefined}
+          seeAllContent={
+            <Link href="/history">
+              <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-primary transition-colors">
+                See All <ChevronRight className="h-4 w-4 ml-1" />
+              </Button>
+            </Link>
+          }
         />
         {watched.length > 0 ? (
           <div className="flex overflow-x-auto gap-4 pb-4 no-scrollbar">
