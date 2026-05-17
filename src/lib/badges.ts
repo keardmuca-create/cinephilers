@@ -19,20 +19,30 @@ export const TIER_LABELS: Record<BadgeTier, string> = {
   gold:   'Gold',
 };
 
-export interface WatchEntry {
-  id: string;
-  type: 'movie' | 'episode';
-  loggedAt: string; // ISO timestamp
-  hour: number;     // 0-23 local hour
-  genre: string;    // e.g. "Horror, Thriller"
-  language: string; // original_language code
-}
+export const TIER_ORDER: Record<BadgeTier, number> = {
+  locked: 0, grey: 1, bronze: 2, silver: 3, gold: 4,
+};
 
-interface TierThresholds {
+export type EarnedTier = 'grey' | 'bronze' | 'silver' | 'gold';
+export const EARNED_TIERS: EarnedTier[] = ['grey', 'bronze', 'silver', 'gold'];
+
+export interface TierThresholds {
   grey: number;
   bronze: number;
   silver: number;
   gold: number;
+}
+
+// ISO dates for when each tier was first reached
+export type TierHistory = Partial<Record<EarnedTier, string>>;
+
+export interface WatchEntry {
+  id: string;
+  type: 'movie' | 'episode';
+  loggedAt: string;
+  hour: number;
+  genre: string;
+  language: string;
 }
 
 interface SeasonalWindow {
@@ -49,6 +59,8 @@ interface BadgeDefinition {
   id: string;
   name: string;
   description: string;
+  unit: string;  // e.g. "movies watched", "reviews written"
+  verb: string;  // e.g. "Watch", "Rate", "Write", "Follow"
   category: 'alltime' | 'seasonal' | 'special';
   tiers?: TierThresholds;
   statKey?: keyof UserStats;
@@ -78,15 +90,20 @@ export interface ComputedBadge {
   id: string;
   name: string;
   description: string;
+  unit: string;
+  verb: string;
   tier: BadgeTier;
   current: number;
   nextThreshold: number | null;
   progressPct: number;
+  thresholds?: TierThresholds;
+  tierHistory?: TierHistory;
   isSpecial: boolean;
   memberSince?: string;
   isSeasonal: boolean;
   seasonLabel?: string;
   seasonEndDate?: Date;
+  seasonWindowText?: string; // e.g. "Oct 1 – Nov 1"
   isSeasonActive?: boolean;
   seasonEarnedYears?: number[];
 }
@@ -106,12 +123,16 @@ const BADGE_DEFS: BadgeDefinition[] = [
     id: 'founder',
     name: 'Founder',
     description: 'Awarded to everyone who joins the community.',
+    unit: '',
+    verb: '',
     category: 'special',
   },
   {
     id: 'movie-watcher',
     name: 'Movie Watcher',
     description: 'Log the movies you watch to climb the ranks.',
+    unit: 'movies watched',
+    verb: 'Watch',
     category: 'alltime',
     statKey: 'moviesWatched',
     tiers: { grey: 1, bronze: 100, silver: 500, gold: 1000 },
@@ -120,6 +141,8 @@ const BADGE_DEFS: BadgeDefinition[] = [
     id: 'movie-rater',
     name: 'Movie Rater',
     description: 'Rate the movies you watch to show your taste.',
+    unit: 'movies rated',
+    verb: 'Rate',
     category: 'alltime',
     statKey: 'moviesRated',
     tiers: { grey: 1, bronze: 100, silver: 500, gold: 1000 },
@@ -128,6 +151,8 @@ const BADGE_DEFS: BadgeDefinition[] = [
     id: 'show-watcher',
     name: 'Show Watcher',
     description: 'Log the show episodes you watch to climb the ranks.',
+    unit: 'episodes watched',
+    verb: 'Watch',
     category: 'alltime',
     statKey: 'episodesWatched',
     tiers: { grey: 1, bronze: 100, silver: 500, gold: 1000 },
@@ -136,6 +161,8 @@ const BADGE_DEFS: BadgeDefinition[] = [
     id: 'show-rater',
     name: 'Show Rater',
     description: 'Rate the show episodes you watch to show your taste.',
+    unit: 'episodes rated',
+    verb: 'Rate',
     category: 'alltime',
     statKey: 'episodesRated',
     tiers: { grey: 1, bronze: 100, silver: 500, gold: 1000 },
@@ -144,6 +171,8 @@ const BADGE_DEFS: BadgeDefinition[] = [
     id: 'reviewer',
     name: 'Reviewer',
     description: 'Write reviews to share your thoughts with the community.',
+    unit: 'reviews written',
+    verb: 'Write',
     category: 'alltime',
     statKey: 'reviewsWritten',
     tiers: { grey: 1, bronze: 10, silver: 100, gold: 250 },
@@ -152,6 +181,8 @@ const BADGE_DEFS: BadgeDefinition[] = [
     id: 'daily-marathon',
     name: 'Daily Marathon',
     description: 'Log multiple movies in a single day to earn this badge.',
+    unit: 'movies in one day',
+    verb: 'Watch',
     category: 'alltime',
     statKey: 'maxMoviesInDay',
     tiers: { grey: 1, bronze: 3, silver: 5, gold: 7 },
@@ -160,6 +191,8 @@ const BADGE_DEFS: BadgeDefinition[] = [
     id: 'weekly-watcher',
     name: 'Weekly Watcher',
     description: 'Log movies consistently every week to earn this badge.',
+    unit: 'movies in one week',
+    verb: 'Watch',
     category: 'alltime',
     statKey: 'maxMoviesInWeek',
     tiers: { grey: 1, bronze: 5, silver: 10, gold: 15 },
@@ -167,7 +200,9 @@ const BADGE_DEFS: BadgeDefinition[] = [
   {
     id: 'night-owl',
     name: 'Night Owl',
-    description: 'Log movies in the late hours of the night to earn this badge.',
+    description: 'Log movies in the late hours of the night (12am–4am).',
+    unit: 'late night logs',
+    verb: 'Log',
     category: 'alltime',
     statKey: 'lateNightMovies',
     tiers: { grey: 1, bronze: 10, silver: 25, gold: 50 },
@@ -176,6 +211,8 @@ const BADGE_DEFS: BadgeDefinition[] = [
     id: 'social',
     name: 'Social',
     description: 'Follow other members of the community to earn this badge.',
+    unit: 'friends followed',
+    verb: 'Follow',
     category: 'alltime',
     statKey: 'friendsFollowing',
     tiers: { grey: 1, bronze: 10, silver: 50, gold: 100 },
@@ -184,6 +221,8 @@ const BADGE_DEFS: BadgeDefinition[] = [
     id: 'world-cinema',
     name: 'World Cinema',
     description: 'Watch films from different countries around the world.',
+    unit: 'languages',
+    verb: 'Watch films in',
     category: 'alltime',
     statKey: 'distinctLanguages',
     tiers: { grey: 5, bronze: 10, silver: 20, gold: 50 },
@@ -192,70 +231,56 @@ const BADGE_DEFS: BadgeDefinition[] = [
     id: 'halloween',
     name: 'Halloween Season',
     description: 'Watch horror films throughout October. Returns every year.',
+    unit: 'horror films',
+    verb: 'Watch',
     category: 'seasonal',
     statKey: 'halloweenCount',
     tiers: { grey: 3, bronze: 8, silver: 15, gold: 20 },
-    seasonal: {
-      startMonth: 10, startDay: 1,
-      endMonth: 11, endDay: 1,
-      genreKeyword: 'Horror',
-      label: 'Halloween Season',
-    },
+    seasonal: { startMonth: 10, startDay: 1, endMonth: 11, endDay: 1, genreKeyword: 'Horror', label: 'Halloween Season' },
   },
   {
     id: 'holiday',
     name: 'Holiday Season',
     description: 'Watch holiday films throughout December. Returns every year.',
+    unit: 'holiday films',
+    verb: 'Watch',
     category: 'seasonal',
     statKey: 'holidayCount',
     tiers: { grey: 3, bronze: 8, silver: 15, gold: 20 },
-    seasonal: {
-      startMonth: 12, startDay: 1,
-      endMonth: 12, endDay: 26,
-      genreKeyword: 'Family',
-      label: 'Holiday Season',
-    },
+    seasonal: { startMonth: 12, startDay: 1, endMonth: 12, endDay: 26, genreKeyword: 'Family', label: 'Holiday Season' },
   },
   {
     id: 'valentines',
     name: "Valentine's Week",
     description: "Watch romance films during Valentine's week. Returns every year.",
+    unit: 'romance films',
+    verb: 'Watch',
     category: 'seasonal',
     statKey: 'valentinesCount',
     tiers: { grey: 2, bronze: 5, silver: 8, gold: 10 },
-    seasonal: {
-      startMonth: 2, startDay: 7,
-      endMonth: 2, endDay: 15,
-      genreKeyword: 'Romance',
-      label: "Valentine's Week",
-    },
+    seasonal: { startMonth: 2, startDay: 7, endMonth: 2, endDay: 15, genreKeyword: 'Romance', label: "Valentine's Week" },
   },
   {
     id: 'new-year',
     name: 'New Year Season',
     description: 'Watch films during the first week of the new year. Returns every year.',
+    unit: 'films',
+    verb: 'Watch',
     category: 'seasonal',
     statKey: 'newYearCount',
     tiers: { grey: 1, bronze: 3, silver: 5, gold: 7 },
-    seasonal: {
-      startMonth: 12, startDay: 31,
-      endMonth: 1, endDay: 8,
-      crossesNewYear: true,
-      label: 'New Year Season',
-    },
+    seasonal: { startMonth: 12, startDay: 31, endMonth: 1, endDay: 8, crossesNewYear: true, label: 'New Year Season' },
   },
   {
     id: 'summer',
     name: 'Summer Blockbuster',
     description: 'Watch films throughout the summer to earn this badge. Returns every year.',
+    unit: 'films',
+    verb: 'Watch',
     category: 'seasonal',
     statKey: 'summerCount',
     tiers: { grey: 20, bronze: 50, silver: 75, gold: 100 },
-    seasonal: {
-      startMonth: 6, startDay: 1,
-      endMonth: 9, endDay: 1,
-      label: 'Summer Blockbuster',
-    },
+    seasonal: { startMonth: 6, startDay: 1, endMonth: 9, endDay: 1, label: 'Summer Blockbuster' },
   },
 ];
 
@@ -307,6 +332,12 @@ function nextSeasonStart(s: SeasonalWindow): Date {
   return seasonDates(s, y + 1).start;
 }
 
+function formatSeasonWindow(s: SeasonalWindow, year: number): string {
+  const { start, end } = seasonDates(s, year);
+  const fmt = (d: Date) => d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  return `${fmt(start)} – ${fmt(end)}`;
+}
+
 // ─── localStorage helpers ──────────────────────────────────────────────────────
 
 function safeGetItem(key: string): string | null {
@@ -347,8 +378,8 @@ export function readUserStats(): UserStats {
     }
   } catch { /* ignore */ }
 
-  const watchLog      = safeParseJSON<WatchEntry[]>(safeGetItem('watch-log'), []);
-  const movieEntries  = watchLog.filter(e => e.type === 'movie');
+  const watchLog       = safeParseJSON<WatchEntry[]>(safeGetItem('watch-log'), []);
+  const movieEntries   = watchLog.filter(e => e.type === 'movie');
   const episodeEntries = watchLog.filter(e => e.type === 'episode');
 
   const episodesWatched  = episodeEntries.length;
@@ -368,11 +399,12 @@ export function readUserStats(): UserStats {
     const d = new Date(e.loggedAt);
     const mon = new Date(d);
     mon.setDate(d.getDate() - ((d.getDay() + 6) % 7));
-    weekMap.set(mon.toISOString().slice(0, 10), (weekMap.get(mon.toISOString().slice(0, 10)) ?? 0) + 1);
+    const wk = mon.toISOString().slice(0, 10);
+    weekMap.set(wk, (weekMap.get(wk) ?? 0) + 1);
   }
   const maxMoviesInWeek = weekMap.size > 0 ? Math.max(...weekMap.values()) : 0;
 
-  const lateNightMovies  = movieEntries.filter(e => e.hour >= 0 && e.hour < 4).length;
+  const lateNightMovies   = movieEntries.filter(e => e.hour >= 0 && e.hour < 4).length;
   const distinctLanguages = new Set(movieEntries.map(e => e.language).filter(Boolean)).size;
 
   const now = new Date();
@@ -440,6 +472,31 @@ export function ensureSignupDate(): void {
   } catch { /* ignore */ }
 }
 
+// ─── Tier history tracking ─────────────────────────────────────────────────────
+
+function updateTierHistory(badgeId: string, currentTier: BadgeTier): TierHistory {
+  const histKey  = `badge-tier-history-${badgeId}`;
+  const lastKey  = `badge-last-tier-${badgeId}`;
+  const history  = safeParseJSON<TierHistory>(safeGetItem(histKey), {});
+  const lastTier = (safeGetItem(lastKey) ?? 'locked') as BadgeTier;
+
+  if (TIER_ORDER[currentTier] > TIER_ORDER[lastTier] || currentTier !== 'locked') {
+    const now = new Date().toISOString();
+    // Record unlock date for every earned tier up to current
+    for (const t of EARNED_TIERS) {
+      if (TIER_ORDER[t] <= TIER_ORDER[currentTier] && !history[t]) {
+        history[t] = now;
+      }
+    }
+    try {
+      localStorage.setItem(histKey,  JSON.stringify(history));
+      localStorage.setItem(lastKey,  currentTier);
+    } catch { /* ignore */ }
+  }
+
+  return history;
+}
+
 // ─── Compute badges ────────────────────────────────────────────────────────────
 
 export function computeAllBadges(stats: UserStats): ComputedBadge[] {
@@ -449,6 +506,8 @@ export function computeAllBadges(stats: UserStats): ComputedBadge[] {
         id: def.id,
         name: def.name,
         description: def.description,
+        unit: def.unit,
+        verb: def.verb,
         tier: 'gold' as BadgeTier,
         current: 0,
         nextThreshold: null,
@@ -468,6 +527,7 @@ export function computeAllBadges(stats: UserStats): ComputedBadge[] {
       const s = def.seasonal;
       const win = currentSeasonWindow(s);
       const isSeasonActive = win !== null;
+      const effectiveTier  = isSeasonActive ? tier : 'locked';
 
       const earnedYears: number[] = safeParseJSON<number[]>(safeGetItem(`badge-earned-years-${def.id}`), []);
       if (tier === 'gold' && win && !earnedYears.includes(win.year)) {
@@ -475,38 +535,52 @@ export function computeAllBadges(stats: UserStats): ComputedBadge[] {
         try { localStorage.setItem(`badge-earned-years-${def.id}`, JSON.stringify(earnedYears)); } catch { /* ignore */ }
       }
 
+      const windowYear = win?.year ?? new Date().getFullYear();
+      const seasonWindowText = formatSeasonWindow(s, isSeasonActive ? windowYear : windowYear + 1);
+
       return {
         id: def.id,
         name: def.name,
         description: def.description,
-        tier: isSeasonActive ? tier : 'locked',
+        unit: def.unit,
+        verb: def.verb,
+        tier: effectiveTier,
         current: count,
         nextThreshold,
         progressPct,
+        thresholds: def.tiers,
         isSpecial: false,
         isSeasonal: true,
         seasonLabel: s.label,
         seasonEndDate: win ? win.end : nextSeasonStart(s),
+        seasonWindowText,
         isSeasonActive,
         seasonEarnedYears: earnedYears,
       };
     }
 
+    // All-time badge — track tier history
+    const tierHistory = updateTierHistory(def.id, tier);
+
     return {
       id: def.id,
       name: def.name,
       description: def.description,
+      unit: def.unit,
+      verb: def.verb,
       tier,
       current: count,
       nextThreshold,
       progressPct,
+      thresholds: def.tiers,
+      tierHistory,
       isSpecial: false,
       isSeasonal: false,
     };
   });
 }
 
-// Returns inactive seasonal badges for the "Coming Soon" section
+// Returns inactive seasonal badges for the Coming Soon section
 export function getComingSoonBadges(): ComingSoonBadge[] {
   return BADGE_DEFS
     .filter(d => d.category === 'seasonal' && d.seasonal && !currentSeasonWindow(d.seasonal))
