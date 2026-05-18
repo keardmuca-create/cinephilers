@@ -18,12 +18,24 @@ interface MovieCardProps {
 export const MovieCard: React.FC<MovieCardProps> = ({ movie, className, horizontal = false }) => {
   const [saved, setSaved] = useState(false);
   const [watched, setWatched] = useState(false);
+  const [userRating, setUserRating] = useState<number | undefined>(undefined);
 
   useEffect(() => {
     try {
       const w = localStorage.getItem(`watched-${movie.id}`);
       if (w === 'true') setWatched(true);
+      const r = localStorage.getItem(`movie-rating-${movie.id}`);
+      if (r) setUserRating(parseInt(r, 10));
     } catch { /* ignore */ }
+  }, [movie.id]);
+
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const { id, rating } = (e as CustomEvent<{ id: string; rating: number | null }>).detail;
+      if (id === movie.id) setUserRating(rating ?? undefined);
+    };
+    window.addEventListener('cinephilers-rating-changed', handler);
+    return () => window.removeEventListener('cinephilers-rating-changed', handler);
   }, [movie.id]);
 
   const handleSave = (e: React.MouseEvent) => {
@@ -73,7 +85,11 @@ export const MovieCard: React.FC<MovieCardProps> = ({ movie, className, horizont
             <div className="flex flex-col items-end gap-1 shrink-0">
               <div className="flex items-center gap-0.5">
                 <Star className="h-3 w-3 fill-yellow-400 text-yellow-400" />
-                <span className="text-xs font-bold text-white">{movie.rating.toFixed(1)}</span>
+                {userRating !== undefined ? (
+                  <span className="text-xs font-bold text-yellow-400">{userRating}/10</span>
+                ) : (
+                  <span className="text-xs font-bold text-white">{movie.rating.toFixed(1)}</span>
+                )}
               </div>
               {watched && (
                 <Eye className="h-4 w-4 text-blue-400" />

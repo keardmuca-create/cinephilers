@@ -711,7 +711,7 @@ export default function MovieDetailPage() {
             <div className="flex flex-col gap-2">
               <div className="flex items-center gap-1">
                 {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(i => (
-                  <button key={i} onClick={() => { setUserRating(i); saveMovieRating(id, i); toast({ title: `You rated it ${i}/10!` }); }} className="transition-all hover:scale-125 active:scale-90 p-0.5">
+                  <button key={i} onClick={() => { setUserRating(i); saveMovieRating(id, i); toast({ title: `You rated it ${i}/10!` }); window.dispatchEvent(new CustomEvent('cinephilers-rating-changed', { detail: { id, rating: i } })); }} className="transition-all hover:scale-125 active:scale-90 p-0.5">
                     <Star className={`h-5 w-5 transition-colors ${userRating >= i ? 'fill-yellow-400 text-yellow-400' : 'text-white/10 hover:text-white/40'}`} />
                   </button>
                 ))}
@@ -724,6 +724,7 @@ export default function MovieDetailPage() {
                       setUserRating(0);
                       try { localStorage.removeItem(`movie-rating-${id}`); } catch { /* ignore */ }
                       toast({ title: 'Rating removed' });
+                      window.dispatchEvent(new CustomEvent('cinephilers-rating-changed', { detail: { id, rating: null } }));
                     }}
                     className="text-[11px] text-muted-foreground hover:text-white transition-colors underline underline-offset-2"
                   >

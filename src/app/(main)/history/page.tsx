@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import Link from 'next/link';
-import { ChevronDown, ChevronRight, Check, History } from 'lucide-react';
+import { ChevronDown, ChevronRight, Check, History, X } from 'lucide-react';
 import type { ItemMeta } from '@/app/api/meta/[id]/route';
 import type { TvEpisode, TvSeason } from '@/lib/types';
 
@@ -333,6 +333,16 @@ function ShowCard({
     }
     return s;
   });
+  const [statusPromptVisible, setStatusPromptVisible] = useState(false);
+  const promptTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => () => { if (promptTimerRef.current) clearTimeout(promptTimerRef.current); }, []);
+
+  const showPrompt = useCallback(() => {
+    setStatusPromptVisible(true);
+    if (promptTimerRef.current) clearTimeout(promptTimerRef.current);
+    promptTimerRef.current = setTimeout(() => setStatusPromptVisible(false), 7000);
+  }, []);
 
   const handleExpand = async () => {
     if (!expanded && seasons === null) {
@@ -351,54 +361,55 @@ function ShowCard({
     setExpanded(p => !p);
   };
 
-  const afterEpChange = useCallback((next: Set<string>) => {
+  const afterEpChange = useCallback((next: Set<string>): ShowStatus => {
     const newStatus = computeAutoStatus(item.id, next.size, item.totalEps, item.tmdbStatus);
     if (newStatus !== status) {
       setStatus(newStatus);
       writeShowStatus(item.id, newStatus);
       onStatusChange(item.id, newStatus);
     }
+    return newStatus;
   }, [item.id, item.totalEps, item.tmdbStatus, status, onStatusChange]);
 
   const toggleEp = useCallback((key: string) => {
     const lk = `watched-ep-${item.id}-${key}`;
-    setWatchedEps(prev => {
-      const next = new Set(prev);
-      if (next.has(key)) { next.delete(key); localStorage.removeItem(lk); }
-      else               { next.add(key);    localStorage.setItem(lk, 'true'); }
-      afterEpChange(next);
-      return next;
-    });
-  }, [item.id, afterEpChange]);
+    const isAdding = !watchedEps.has(key);
+    const next = new Set(watchedEps);
+    if (isAdding) { next.add(key); localStorage.setItem(lk, 'true'); }
+    else          { next.delete(key); localStorage.removeItem(lk); }
+    setWatchedEps(next);
+    const newStatus = afterEpChange(next);
+    if (isAdding && newStatus !== 'completed') showPrompt();
+  }, [item.id, watchedEps, afterEpChange, showPrompt]);
 
   const markAll = useCallback((season: TvSeason, eps: TvEpisode[]) => {
     const sn = season.season_number;
-    setWatchedEps(prev => {
-      const next = new Set(prev);
-      for (const ep of eps) {
-        const key = `S${sn}E${ep.episode_number}`;
-        if (!next.has(key)) { next.add(key); localStorage.setItem(`watched-ep-${item.id}-${key}`, 'true'); }
-      }
-      afterEpChange(next);
-      return next;
-    });
-  }, [item.id, afterEpChange]);
+    const next = new Set(watchedEps);
+    for (const ep of eps) {
+      const key = `S${sn}E${ep.episode_number}`;
+      if (!next.has(key)) { next.add(key); localStorage.setItem(`watched-ep-${item.id}-${key}`, 'true'); }
+    }
+    setWatchedEps(next);
+    const newStatus = afterEpChange(next);
+    if (newStatus !== 'completed') showPrompt();
+  }, [item.id, watchedEps, afterEpChange, showPrompt]);
 
   const unmarkAll = useCallback((season: TvSeason) => {
     const sn = season.season_number;
-    setWatchedEps(prev => {
-      const next = new Set(prev);
-      for (const key of [...next]) {
-        if (key.startsWith(`S${sn}E`)) { next.delete(key); localStorage.removeItem(`watched-ep-${item.id}-${key}`); }
-      }
-      return next;
-    });
-  }, [item.id]);
+    const next = new Set(watchedEps);
+    for (const key of [...next]) {
+      if (key.startsWith(`S${sn}E`)) { next.delete(key); localStorage.removeItem(`watched-ep-${item.id}-${key}`); }
+    }
+    setWatchedEps(next);
+    afterEpChange(next);
+  }, [item.id, watchedEps, afterEpChange]);
 
   const handleStatusSelect = (s: ShowStatus) => {
     setStatus(s);
     writeShowStatus(item.id, s);
     onStatusChange(item.id, s);
+    setStatusPromptVisible(false);
+    if (promptTimerRef.current) clearTimeout(promptTimerRef.current);
   };
 
   const isMini = item.showType?.toLowerCase().includes('mini');
@@ -427,7 +438,39 @@ function ShowCard({
           <div className="flex items-center gap-2 mt-1.5 flex-wrap">
             <StatusPill status={status} onSelect={handleStatusSelect} />
             <span className="text-[11px] text-muted-foreground">{totalText}</span>
+            {item.rating !== undefined && (
+              <div className="flex items-center gap-0.5">
+                <span className="text-[11px] text-yellow-400 font-bold">★</span>
+                <span className="text-[11px] font-semibold">{item.rating}/10</span>
+              </div>
+            )}
           </div>
+          {/* Status prompt after partial episode/season mark */}
+          {statusPromptVisible && (
+            <div
+              className="flex items-center gap-1.5 mt-1.5"
+              onClick={e => e.stopPropagation()}
+            >
+              <span className="text-[10px] text-muted-foreground/60">Set status:</span>
+              {(['in-progress', 'stopped'] as ShowStatus[]).map(s => (
+                <button
+                  key={s}
+                  onClick={() => handleStatusSelect(s)}
+                  className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border transition-colors ${
+                    status === s ? STATUS_STYLE[s] : 'border-white/10 text-muted-foreground hover:text-white'
+                  }`}
+                >
+                  {STATUS_LABEL[s]}
+                </button>
+              ))}
+              <button
+                onClick={() => { setStatusPromptVisible(false); if (promptTimerRef.current) clearTimeout(promptTimerRef.current); }}
+                className="text-muted-foreground/30 hover:text-muted-foreground transition-colors"
+              >
+                <X className="h-3 w-3" />
+              </button>
+            </div>
+          )}
         </div>
 
         <ChevronDown className={`h-4 w-4 text-muted-foreground flex-shrink-0 transition-transform ${expanded ? 'rotate-180' : ''}`} />
@@ -475,11 +518,13 @@ function MovieCard({ item }: { item: HistoryItem }) {
             <span className="text-[10px] text-muted-foreground/50 border border-white/[0.08] px-1.5 py-px rounded">TV Movie</span>
           )}
         </div>
-        {item.rating !== undefined && (
+        {item.rating !== undefined ? (
           <div className="flex items-center gap-1 mt-1">
             <span className="text-xs text-yellow-400 font-bold">★</span>
             <span className="text-xs font-semibold">{item.rating}/10</span>
           </div>
+        ) : (
+          <span className="text-[11px] text-muted-foreground/30 mt-1 block">Rate it</span>
         )}
       </div>
       <ChevronRight className="h-4 w-4 text-muted-foreground flex-shrink-0" />
@@ -533,6 +578,15 @@ export default function HistoryPage() {
 
   const handleStatusChange = useCallback((id: string, status: ShowStatus) => {
     setItems(prev => prev.map(item => item.id === id ? { ...item, status } : item));
+  }, []);
+
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const { id, rating } = (e as CustomEvent<{ id: string; rating: number | null }>).detail;
+      setItems(prev => prev.map(item => item.id === id ? { ...item, rating: rating ?? undefined } : item));
+    };
+    window.addEventListener('cinephilers-rating-changed', handler);
+    return () => window.removeEventListener('cinephilers-rating-changed', handler);
   }, []);
 
   // Sort
