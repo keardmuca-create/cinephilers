@@ -102,22 +102,25 @@ export default function ProfilePage() {
       const log: { id: string; loggedAt: string }[] = JSON.parse(
         localStorage.getItem('watch-log') ?? '[]'
       );
-      // Deduplicate by id — keep most recent entry per id
+      // For episode entries (id like 'tmdb-tv-85552-S1E2'), extract the show ID
+      const baseId = (id: string) => id.replace(/-S\d+E\d+$/, '');
+
+      // Deduplicate by base ID — keep most recent entry per title
       const seen = new Map<string, string>();
       for (const e of [...log].sort((a, b) => new Date(b.loggedAt).getTime() - new Date(a.loggedAt).getTime())) {
-        if (!seen.has(e.id)) seen.set(e.id, e.loggedAt);
+        const bid = baseId(e.id);
+        if (!seen.has(bid)) seen.set(bid, e.loggedAt);
       }
-      const top3 = [...seen.entries()].slice(0, 3);
-      const items: RecentItem[] = top3.map(([id, loggedAt]) => {
+
+      // Only keep entries that have cached metadata (title + poster known)
+      const items: RecentItem[] = [];
+      for (const [id, loggedAt] of seen.entries()) {
         const raw = localStorage.getItem(`meta-${id}`);
-        const meta = raw ? JSON.parse(raw) : null;
-        return {
-          id,
-          loggedAt,
-          title: meta?.title ?? id,
-          poster: meta?.poster ?? `https://picsum.photos/seed/${id}/400/600`,
-        };
-      });
+        if (!raw) continue; // skip entries without metadata
+        const meta = JSON.parse(raw);
+        items.push({ id, loggedAt, title: meta.title, poster: meta.poster });
+        if (items.length === 3) break;
+      }
       setRecentWatched(items);
     } catch { /* ignore */ }
   }, []);
