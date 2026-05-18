@@ -70,18 +70,8 @@ const EmptyRow = ({ message }: { message: string }) => (
   </div>
 );
 
-interface RecentItem { id: string; title: string; poster: string; loggedAt: string; }
+interface RecentItem { id: string; title: string; poster: string; loggedAt: string; rating?: number; }
 
-function formatWatchDate(iso: string): string {
-  const d = new Date(iso);
-  if (isNaN(d.getTime()) || d.getFullYear() === 1970) return '';
-  const now = new Date();
-  const diff = Math.floor((now.getTime() - d.getTime()) / 86400000);
-  if (diff === 0) return 'Today';
-  if (diff === 1) return 'Yesterday';
-  if (diff < 7) return `${diff} days ago`;
-  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-}
 
 export default function ProfilePage() {
   const [showSettings, setShowSettings] = useState(false);
@@ -97,31 +87,42 @@ export default function ProfilePage() {
     setBadges(computeAllBadges(readUserStats()));
     setComingSoon(getComingSoonBadges());
 
-    // Build recent watch preview from watch-log + meta cache
+    // Build recent watch preview from actual watched-* keys (source of truth)
     try {
-      const log: { id: string; loggedAt: string }[] = JSON.parse(
-        localStorage.getItem('watch-log') ?? '[]'
-      );
-      // For episode entries (id like 'tmdb-tv-85552-S1E2'), extract the show ID
-      const baseId = (id: string) => id.replace(/-S\d+E\d+$/, '');
-
-      // Deduplicate by base ID — keep most recent entry per title
-      const seen = new Map<string, string>();
-      for (const e of [...log].sort((a, b) => new Date(b.loggedAt).getTime() - new Date(a.loggedAt).getTime())) {
-        const bid = baseId(e.id);
-        if (!seen.has(bid)) seen.set(bid, e.loggedAt);
+      // Collect watched movie IDs
+      const movieIds: string[] = [];
+      const showIds = new Set<string>();
+      for (let i = 0; i < localStorage.length; i++) {
+        const k = localStorage.key(i)!;
+        if (k.startsWith('watched-') && !k.startsWith('watched-ep-') && localStorage.getItem(k) === 'true') {
+          const id = k.slice('watched-'.length);
+          if (!id.startsWith('tmdb-tv-')) movieIds.push(id);
+        }
+        if (k.startsWith('watched-ep-')) {
+          const m = k.slice('watched-ep-'.length).match(/^(.+)-S\d+E\d+$/);
+          if (m) showIds.add(m[1]);
+        }
       }
 
-      // Only keep entries that have cached metadata (title + poster known)
+      // Merge and keep only IDs with cached metadata
+      const allIds = [...movieIds, ...Array.from(showIds)];
       const items: RecentItem[] = [];
-      for (const [id, loggedAt] of seen.entries()) {
+      for (const id of allIds) {
         const raw = localStorage.getItem(`meta-${id}`);
-        if (!raw) continue; // skip entries without metadata
+        if (!raw) continue;
         const meta = JSON.parse(raw);
-        items.push({ id, loggedAt, title: meta.title, poster: meta.poster });
-        if (items.length === 3) break;
+        // For shows, skip if 0 episodes watched
+        if (id.startsWith('tmdb-tv-')) {
+          let epCount = 0;
+          const pfx = `watched-ep-${id}-`;
+          for (let i = 0; i < localStorage.length; i++)
+            if (localStorage.key(i)!.startsWith(pfx)) epCount++;
+          if (epCount === 0) continue;
+        }
+        const rating = localStorage.getItem(`movie-rating-${id}`);
+        items.push({ id, title: meta.title, poster: meta.poster, loggedAt: '', rating: rating ? Number(rating) : undefined });
       }
-      setRecentWatched(items);
+      setRecentWatched(items.slice(0, 6));
     } catch { /* ignore */ }
   }, []);
 
@@ -191,42 +192,35 @@ export default function ProfilePage() {
 
       {/* Watch History */}
       <section>
-        <SectionHeader title="Watch History" icon={History} />
+        <SectionHeader
+          title="Watch History"
+          icon={History}
+          seeAllContent={
+            <Link href="/history">
+              <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-primary transition-colors">
+                See All <ChevronRight className="h-4 w-4 ml-1" />
+              </Button>
+            </Link>
+          }
+        />
         {recentWatched.length > 0 ? (
-          <div className="space-y-3">
+          <div className="grid grid-cols-3 gap-4">
             {recentWatched.map(item => (
-              <Link
-                key={item.id}
-                href={`/movie/${item.id}`}
-                className="flex items-center gap-3 p-3 rounded-2xl bg-white/[0.03] border border-white/[0.06] hover:bg-white/[0.05] transition-colors"
-              >
-                <div className="flex-shrink-0 w-10 h-14 rounded-xl overflow-hidden bg-white/5">
-                  <img src={item.poster} alt={item.title} className="w-full h-full object-cover" />
+              <Link key={item.id} href={`/movie/${item.id}`} className="group space-y-2">
+                <div className="relative aspect-[2/3] rounded-2xl overflow-hidden border border-white/10 shadow-lg">
+                  <img src={item.poster} alt={item.title} className="object-cover w-full h-full group-hover:scale-105 transition-transform" />
                 </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-semibold truncate">{item.title}</p>
-                  {formatWatchDate(item.loggedAt) && (
-                    <p className="text-xs text-muted-foreground mt-0.5">{formatWatchDate(item.loggedAt)}</p>
+                <div>
+                  <p className="text-xs font-semibold truncate leading-tight">{item.title}</p>
+                  {item.rating !== undefined && (
+                    <p className="text-[11px] text-yellow-400 font-bold mt-0.5">★ {item.rating}/10</p>
                   )}
                 </div>
-                <ChevronRight className="h-4 w-4 text-muted-foreground flex-shrink-0" />
               </Link>
             ))}
-            <Link href="/history">
-              <Button variant="ghost" className="w-full rounded-xl text-sm text-muted-foreground hover:text-white mt-1">
-                See All Watch History <ChevronRight className="h-4 w-4 ml-1" />
-              </Button>
-            </Link>
           </div>
         ) : (
-          <div className="space-y-3">
-            <EmptyRow message="Movies and shows you watch will appear here" />
-            <Link href="/history">
-              <Button variant="ghost" className="w-full rounded-xl text-sm text-muted-foreground hover:text-white">
-                Go to Watch History <ChevronRight className="h-4 w-4 ml-1" />
-              </Button>
-            </Link>
-          </div>
+          <EmptyRow message="Movies and shows you watch will appear here" />
         )}
       </section>
 
