@@ -102,7 +102,7 @@ function computeAutoStatus(
 ): ShowStatus {
   const stored = readShowStatus(showId);
   if (stored === 'stopped') return 'stopped';
-  if (watchedCount === 0) return stored === 'stopped' ? 'stopped' : 'in-progress';
+  if (watchedCount === 0) return 'in-progress';
   if (totalEps && watchedCount >= totalEps) {
     // All available episodes watched
     return (tmdbStatus === 'Ended' || tmdbStatus === 'Canceled') ? 'completed' : 'in-progress';
