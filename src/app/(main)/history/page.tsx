@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import Link from 'next/link';
-import { ChevronDown, ChevronRight, Check, History, X } from 'lucide-react';
+import { ChevronDown, ChevronRight, Check, History } from 'lucide-react';
 import type { ItemMeta } from '@/app/api/meta/[id]/route';
 import type { TvEpisode, TvSeason } from '@/lib/types';
 
@@ -185,20 +185,55 @@ function StatusPill({ status, onSelect }: { status: ShowStatus; onSelect: (s: Sh
 // ─── EpisodeRow ───────────────────────────────────────────────────────────────
 
 function EpisodeRow({
-  ep, showId, sn, isWatched, onToggle,
+  ep, showId, sn, isWatched, onToggle, showStatus, onStatusSelect,
 }: {
   ep: TvEpisode; showId: string; sn: number; isWatched: boolean; onToggle: () => void;
+  showStatus: ShowStatus; onStatusSelect: (s: ShowStatus) => void;
 }) {
+  const [statusOpen, setStatusOpen] = useState(false);
+  const statusRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!statusOpen) return;
+    const h = (e: MouseEvent) => { if (!statusRef.current?.contains(e.target as Node)) setStatusOpen(false); };
+    document.addEventListener('mousedown', h);
+    return () => document.removeEventListener('mousedown', h);
+  }, [statusOpen]);
+
   return (
-    <div className={`flex items-center gap-3 px-4 py-2.5 ${isWatched ? 'opacity-50' : ''}`}>
+    <div className={`flex items-center gap-2 px-4 py-2.5 ${isWatched ? 'opacity-60' : ''}`}>
       <span className="text-[11px] text-muted-foreground w-5 flex-shrink-0 text-right font-mono">{ep.episode_number}</span>
       <Link
         href={`/movie/${showId}`}
-        className="flex-1 text-[13px] truncate hover:text-primary transition-colors"
+        className="flex-1 text-[13px] truncate hover:text-primary transition-colors min-w-0"
         onClick={e => e.stopPropagation()}
       >
         {ep.name}
       </Link>
+      {isWatched && (
+        <div ref={statusRef} className="relative flex-shrink-0" onClick={e => e.stopPropagation()}>
+          <button
+            onClick={() => setStatusOpen(p => !p)}
+            className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full border flex items-center gap-0.5 whitespace-nowrap ${STATUS_STYLE[showStatus]}`}
+          >
+            {STATUS_LABEL[showStatus]} <ChevronDown className="h-2 w-2 flex-shrink-0" />
+          </button>
+          {statusOpen && (
+            <div className="absolute right-0 top-full mt-1 z-50 bg-[#1c1c1e] border border-white/10 rounded-xl overflow-hidden shadow-2xl min-w-[120px]">
+              {(['in-progress', 'stopped'] as ShowStatus[]).map(s => (
+                <button
+                  key={s}
+                  onClick={() => { onStatusSelect(s); setStatusOpen(false); }}
+                  className="w-full text-left px-3 py-2 text-[11px] font-semibold hover:bg-white/10 transition-colors flex items-center gap-2"
+                >
+                  <span className={`w-2 h-2 rounded-full flex-shrink-0 ${showStatus === s ? 'bg-primary' : 'bg-white/20'}`} />
+                  {STATUS_LABEL[s]}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
       <button
         onClick={e => { e.stopPropagation(); onToggle(); }}
         className={`flex-shrink-0 h-5 w-5 rounded-full border-2 flex items-center justify-center transition-colors ${
@@ -214,7 +249,7 @@ function EpisodeRow({
 // ─── SeasonRow ────────────────────────────────────────────────────────────────
 
 function SeasonRow({
-  season, showId, watchedEps, onToggleEp, onMarkAll, onUnmarkAll,
+  season, showId, watchedEps, onToggleEp, onMarkAll, onUnmarkAll, showStatus, onStatusSelect,
 }: {
   season: TvSeason;
   showId: string;
@@ -222,6 +257,8 @@ function SeasonRow({
   onToggleEp: (key: string) => void;
   onMarkAll: (season: TvSeason, eps: TvEpisode[]) => void;
   onUnmarkAll: (season: TvSeason) => void;
+  showStatus: ShowStatus;
+  onStatusSelect: (s: ShowStatus) => void;
 }) {
   const [open, setOpen] = useState(false);
   const [eps, setEps] = useState<TvEpisode[] | null>(null);
@@ -302,6 +339,8 @@ function SeasonRow({
               sn={sn}
               isWatched={watchedEps.has(`S${sn}E${ep.episode_number}`)}
               onToggle={() => onToggleEp(`S${sn}E${ep.episode_number}`)}
+              showStatus={showStatus}
+              onStatusSelect={onStatusSelect}
             />
           ))}
         </div>
@@ -333,16 +372,6 @@ function ShowCard({
     }
     return s;
   });
-  const [statusPromptVisible, setStatusPromptVisible] = useState(false);
-  const promptTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  useEffect(() => () => { if (promptTimerRef.current) clearTimeout(promptTimerRef.current); }, []);
-
-  const showPrompt = useCallback(() => {
-    setStatusPromptVisible(true);
-    if (promptTimerRef.current) clearTimeout(promptTimerRef.current);
-    promptTimerRef.current = setTimeout(() => setStatusPromptVisible(false), 7000);
-  }, []);
 
   const handleExpand = async () => {
     if (!expanded && seasons === null) {
@@ -378,9 +407,8 @@ function ShowCard({
     if (isAdding) { next.add(key); localStorage.setItem(lk, 'true'); }
     else          { next.delete(key); localStorage.removeItem(lk); }
     setWatchedEps(next);
-    const newStatus = afterEpChange(next);
-    if (isAdding && newStatus !== 'completed') showPrompt();
-  }, [item.id, watchedEps, afterEpChange, showPrompt]);
+    afterEpChange(next);
+  }, [item.id, watchedEps, afterEpChange]);
 
   const markAll = useCallback((season: TvSeason, eps: TvEpisode[]) => {
     const sn = season.season_number;
@@ -390,9 +418,8 @@ function ShowCard({
       if (!next.has(key)) { next.add(key); localStorage.setItem(`watched-ep-${item.id}-${key}`, 'true'); }
     }
     setWatchedEps(next);
-    const newStatus = afterEpChange(next);
-    if (newStatus !== 'completed') showPrompt();
-  }, [item.id, watchedEps, afterEpChange, showPrompt]);
+    afterEpChange(next);
+  }, [item.id, watchedEps, afterEpChange]);
 
   const unmarkAll = useCallback((season: TvSeason) => {
     const sn = season.season_number;
@@ -408,8 +435,6 @@ function ShowCard({
     setStatus(s);
     writeShowStatus(item.id, s);
     onStatusChange(item.id, s);
-    setStatusPromptVisible(false);
-    if (promptTimerRef.current) clearTimeout(promptTimerRef.current);
   };
 
   const isMini = item.showType?.toLowerCase().includes('mini');
@@ -445,32 +470,6 @@ function ShowCard({
               </div>
             )}
           </div>
-          {/* Status prompt after partial episode/season mark */}
-          {statusPromptVisible && (
-            <div
-              className="flex items-center gap-1.5 mt-1.5"
-              onClick={e => e.stopPropagation()}
-            >
-              <span className="text-[10px] text-muted-foreground/60">Set status:</span>
-              {(['in-progress', 'stopped'] as ShowStatus[]).map(s => (
-                <button
-                  key={s}
-                  onClick={() => handleStatusSelect(s)}
-                  className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border transition-colors ${
-                    status === s ? STATUS_STYLE[s] : 'border-white/10 text-muted-foreground hover:text-white'
-                  }`}
-                >
-                  {STATUS_LABEL[s]}
-                </button>
-              ))}
-              <button
-                onClick={() => { setStatusPromptVisible(false); if (promptTimerRef.current) clearTimeout(promptTimerRef.current); }}
-                className="text-muted-foreground/30 hover:text-muted-foreground transition-colors"
-              >
-                <X className="h-3 w-3" />
-              </button>
-            </div>
-          )}
         </div>
 
         <ChevronDown className={`h-4 w-4 text-muted-foreground flex-shrink-0 transition-transform ${expanded ? 'rotate-180' : ''}`} />
@@ -490,6 +489,8 @@ function ShowCard({
               onToggleEp={toggleEp}
               onMarkAll={markAll}
               onUnmarkAll={unmarkAll}
+              showStatus={status}
+              onStatusSelect={handleStatusSelect}
             />
           ))}
         </div>
@@ -503,31 +504,38 @@ function ShowCard({
 function MovieCard({ item }: { item: HistoryItem }) {
   const isTvMovie = item.genre?.includes('TV Movie');
   return (
-    <Link
-      href={`/movie/${item.id}`}
-      className="flex items-center gap-3 p-3 bg-white/[0.03] border border-white/[0.06] rounded-2xl hover:bg-white/[0.05] transition-colors"
-    >
-      <div className="flex-shrink-0 w-12 h-[72px] rounded-xl overflow-hidden bg-white/5">
-        <img src={item.poster} alt={item.title} className="w-full h-full object-cover" />
-      </div>
-      <div className="flex-1 min-w-0">
-        <p className="font-semibold text-sm truncate">{item.title}</p>
-        <div className="flex items-center gap-2 mt-0.5">
-          <span className="text-xs text-muted-foreground">{item.year}</span>
-          {isTvMovie && (
-            <span className="text-[10px] text-muted-foreground/50 border border-white/[0.08] px-1.5 py-px rounded">TV Movie</span>
-          )}
-        </div>
-        {item.rating !== undefined ? (
-          <div className="flex items-center gap-1 mt-1">
-            <span className="text-xs text-yellow-400 font-bold">★</span>
-            <span className="text-xs font-semibold">{item.rating}/10</span>
+    <Link href={`/movie/${item.id}`} className="group block">
+      <div className="relative aspect-[2/3] overflow-hidden rounded-xl bg-muted shadow-lg movie-card-hover mb-2.5">
+        <img
+          src={item.poster}
+          alt={item.title}
+          className="w-full h-full object-cover transition-transform group-hover:scale-110"
+        />
+        {isTvMovie && (
+          <div className="absolute bottom-2 left-2">
+            <span className="text-[9px] font-bold uppercase tracking-wider bg-black/60 backdrop-blur-sm text-white/80 px-2 py-0.5 rounded-full border border-white/10">
+              TV Movie
+            </span>
           </div>
-        ) : (
-          <span className="text-[11px] text-muted-foreground/30 mt-1 block">Rate it</span>
         )}
       </div>
-      <ChevronRight className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+      <div className="space-y-0.5 px-0.5">
+        <div className="flex items-start justify-between gap-1">
+          <h3 className="text-sm font-semibold font-headline line-clamp-2 group-hover:text-primary transition-colors leading-snug flex-1 min-w-0">
+            {item.title}
+          </h3>
+          {item.rating !== undefined && (
+            <div className="flex items-center gap-0.5 flex-shrink-0">
+              <span className="text-xs text-blue-400 font-bold">★</span>
+              <span className="text-xs text-blue-400 font-semibold">{item.rating}</span>
+            </div>
+          )}
+        </div>
+        <p className="text-xs text-muted-foreground">{item.year}</p>
+        {item.rating === undefined && (
+          <span className="text-[11px] text-muted-foreground/30">Rate it</span>
+        )}
+      </div>
     </Link>
   );
 }
@@ -695,9 +703,13 @@ export default function HistoryPage() {
 
       {/* List */}
       {fetching && items.length === 0 ? (
-        <div className="space-y-2">
+        <div className="grid grid-cols-2 gap-3">
           {[...Array(6)].map((_, i) => (
-            <div key={i} className="h-[90px] bg-white/5 rounded-2xl animate-pulse" />
+            <div key={i} className="space-y-2">
+              <div className="aspect-[2/3] bg-white/5 rounded-xl animate-pulse" />
+              <div className="h-3 bg-white/5 rounded animate-pulse w-3/4" />
+              <div className="h-2.5 bg-white/5 rounded animate-pulse w-1/2" />
+            </div>
           ))}
         </div>
       ) : filtered.length === 0 ? (
@@ -706,11 +718,15 @@ export default function HistoryPage() {
           <p className="text-muted-foreground text-sm">Nothing here yet</p>
         </div>
       ) : (
-        <div className="space-y-2">
+        <div className="grid grid-cols-2 gap-3">
           {filtered.map(item =>
-            item.type === 'show'
-              ? <ShowCard key={item.id} item={item} onStatusChange={handleStatusChange} />
-              : <MovieCard key={item.id} item={item} />
+            item.type === 'show' ? (
+              <div key={item.id} className="col-span-2">
+                <ShowCard item={item} onStatusChange={handleStatusChange} />
+              </div>
+            ) : (
+              <MovieCard key={item.id} item={item} />
+            )
           )}
         </div>
       )}

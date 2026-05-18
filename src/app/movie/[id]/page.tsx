@@ -458,7 +458,7 @@ export default function MovieDetailPage() {
             const stored = localStorage.getItem('recently-viewed');
             const viewed: { id: string; title: string; poster: string; year: string; type: string }[] =
               stored ? JSON.parse(stored) : [];
-            const entry = { id: data.id, title: data.title, poster: data.poster, year: data.year, type: data.type };
+            const entry = { id: data.id, title: data.title, poster: data.poster, year: data.year, type: data.type, rating: data.rating };
             const filtered = viewed.filter(v => v.id !== data.id);
             localStorage.setItem('recently-viewed', JSON.stringify([entry, ...filtered].slice(0, 30)));
           } catch { /* ignore */ }
@@ -652,7 +652,12 @@ export default function MovieDetailPage() {
             onClick={() => {
               const next = !isWatched;
               setIsWatched(next);
-              try { localStorage.setItem(`watched-${id}`, String(next)); } catch { /* ignore */ }
+              try {
+                localStorage.setItem(`watched-${id}`, String(next));
+                if (next && movie?.type === 'show') {
+                  localStorage.setItem(`show-status-${id}`, 'completed');
+                }
+              } catch { /* ignore */ }
               if (next && movie) {
                 appendWatchLog({
                   id,
