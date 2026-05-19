@@ -108,6 +108,12 @@ function HistoryCard({ id, meta, userRating }: {
           className="w-full h-full object-cover transition-transform group-hover:scale-105"
           loading="lazy"
         />
+        {meta.tmdbRating !== undefined && (
+          <div className="absolute bottom-1 left-1 flex items-center gap-0.5 bg-black/70 backdrop-blur-sm rounded px-1 py-0.5">
+            <span className="text-[9px] text-yellow-400 font-bold">★</span>
+            <span className="text-[9px] font-bold text-white leading-none">{meta.tmdbRating.toFixed(1)}</span>
+          </div>
+        )}
       </div>
 
       {/* Info */}
