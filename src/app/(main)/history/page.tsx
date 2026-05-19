@@ -87,10 +87,10 @@ function HistoryCard({ id, meta, userRating }: {
 }) {
   if (!meta) {
     return (
-      <div className="space-y-2">
+      <div className="space-y-2.5">
         <div className="aspect-[2/3] bg-white/5 rounded-xl animate-pulse" />
-        <div className="h-3 bg-white/5 rounded animate-pulse w-3/4" />
-        <div className="h-2.5 bg-white/5 rounded animate-pulse w-1/2" />
+        <div className="h-3.5 bg-white/5 rounded animate-pulse w-3/4" />
+        <div className="h-3 bg-white/5 rounded animate-pulse w-1/2" />
       </div>
     );
   }
@@ -105,32 +105,32 @@ function HistoryCard({ id, meta, userRating }: {
           loading="lazy"
         />
         <div className="absolute top-2 right-2">
-          <div className="h-5 w-5 rounded-full bg-black/50 backdrop-blur-sm flex items-center justify-center">
-            <Eye className="h-2.5 w-2.5 text-blue-400" />
+          <div className="h-7 w-7 rounded-full bg-black/60 backdrop-blur-sm flex items-center justify-center">
+            <Eye className="h-4 w-4 text-blue-400" />
           </div>
         </div>
       </div>
-      <div className="space-y-0.5 px-0.5">
+      <div className="space-y-1 px-0.5 mt-2.5">
         <div className="flex items-start justify-between gap-1">
-          <h3 className="text-xs font-semibold font-headline line-clamp-2 group-hover:text-primary transition-colors leading-snug flex-1 min-w-0">
+          <h3 className="text-sm font-semibold font-headline line-clamp-2 group-hover:text-primary transition-colors leading-snug flex-1 min-w-0">
             {meta.title}
           </h3>
-          <div className="flex flex-col items-end gap-px shrink-0 pt-px">
+          <div className="flex flex-col items-end gap-0.5 shrink-0">
             {meta.tmdbRating !== undefined && (
-              <div className="flex items-center gap-px">
-                <span className="text-[9px] text-yellow-400 font-bold leading-none">★</span>
-                <span className="text-[9px] font-bold text-white leading-none">{meta.tmdbRating.toFixed(1)}</span>
+              <div className="flex items-center gap-0.5">
+                <span className="text-xs text-yellow-400 font-bold">★</span>
+                <span className="text-xs font-bold text-white">{meta.tmdbRating.toFixed(1)}</span>
               </div>
             )}
             {userRating !== undefined && (
-              <div className="flex items-center gap-px">
-                <span className="text-[9px] text-blue-400 font-bold leading-none">★</span>
-                <span className="text-[9px] font-bold text-blue-400 leading-none">{userRating}</span>
+              <div className="flex items-center gap-0.5">
+                <span className="text-xs text-blue-400 font-bold">★</span>
+                <span className="text-xs font-bold text-blue-400">{userRating}</span>
               </div>
             )}
           </div>
         </div>
-        <p className="text-[10px] text-muted-foreground">{meta.year}</p>
+        <p className="text-xs text-muted-foreground">{meta.year}</p>
       </div>
     </Link>
   );
@@ -310,7 +310,7 @@ export default function HistoryPage() {
         </div>
       ) : (
         <>
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-2 gap-4">
             {visibleIds.map(id => (
               <HistoryCard
                 key={id}

@@ -9,7 +9,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { MovieCard } from '@/components/movie-card';
 import Link from 'next/link';
-import { Settings, Star, Film, List, MessageSquare, ChevronRight, Award, History, Bookmark, User } from 'lucide-react';
+import { Settings, Star, Film, List, MessageSquare, ChevronRight, Award, History, Bookmark, User, Eye } from 'lucide-react';
 import { FavoritesSection } from '@/components/favorites-section';
 import { BarChart, Bar, XAxis, ResponsiveContainer, Cell, YAxis, Tooltip as ChartTooltip } from 'recharts';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
@@ -70,7 +70,7 @@ const EmptyRow = ({ message }: { message: string }) => (
   </div>
 );
 
-interface RecentItem { id: string; title: string; poster: string; loggedAt: string; rating?: number; tmdbRating?: number; }
+interface RecentItem { id: string; title: string; poster: string; year: string; loggedAt: string; rating?: number; tmdbRating?: number; }
 
 
 export default function ProfilePage() {
@@ -124,6 +124,7 @@ export default function ProfilePage() {
           id,
           title: meta.title,
           poster: meta.poster,
+          year: meta.year ?? '',
           loggedAt: '',
           rating: rating ? Number(rating) : undefined,
           tmdbRating: typeof meta.tmdbRating === 'number' ? meta.tmdbRating : undefined,
@@ -199,39 +200,54 @@ export default function ProfilePage() {
 
       {/* Watch History */}
       <section>
-        <SectionHeader title="Watch History" icon={History} />
+        <SectionHeader
+          title="Watch History"
+          icon={History}
+          seeAllContent={
+            <Link href="/history">
+              <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-primary transition-colors">
+                See All <ChevronRight className="h-4 w-4 ml-1" />
+              </Button>
+            </Link>
+          }
+        />
         {recentWatched.length > 0 ? (
-          <>
-            <div className="grid grid-cols-3 gap-3">
-              {recentWatched.map(item => (
-                <Link key={item.id} href={`/movie/${item.id}`} className="group block">
-                  <div className="relative aspect-[2/3] rounded-xl overflow-hidden border border-white/10 shadow-lg mb-1.5 movie-card-hover">
-                    <img src={item.poster} alt={item.title} className="object-cover w-full h-full transition-transform group-hover:scale-105" />
-                  </div>
-                  <div className="space-y-px px-0.5">
-                    <div className="flex items-start justify-between gap-0.5">
-                      <p className="text-[10px] font-semibold line-clamp-2 leading-snug flex-1 min-w-0 group-hover:text-primary transition-colors">{item.title}</p>
-                      <div className="flex flex-col items-end gap-px shrink-0 pt-px">
-                        {item.tmdbRating !== undefined && (
-                          <span className="text-[9px] text-yellow-400 font-bold leading-none">★ {item.tmdbRating.toFixed(1)}</span>
-                        )}
-                        {item.rating !== undefined && (
-                          <span className="text-[9px] text-blue-400 font-bold leading-none">★ {item.rating}</span>
-                        )}
-                      </div>
+          <div className="flex overflow-x-auto gap-4 pb-4 no-scrollbar -mx-6 px-6">
+            {recentWatched.map(item => (
+              <Link key={item.id} href={`/movie/${item.id}`} className="group shrink-0 w-44">
+                <div className="relative aspect-[2/3] overflow-hidden rounded-xl bg-muted shadow-lg movie-card-hover mb-3">
+                  <img src={item.poster} alt={item.title} className="w-full h-full object-cover transition-transform group-hover:scale-110" />
+                  <div className="absolute top-2 right-2">
+                    <div className="h-7 w-7 rounded-full bg-black/60 backdrop-blur-sm flex items-center justify-center">
+                      <Eye className="h-4 w-4 text-blue-400" />
                     </div>
                   </div>
-                </Link>
-              ))}
-            </div>
-            <div className="mt-4 text-center">
-              <Link href="/history">
-                <Button variant="outline" size="sm" className="rounded-full border-white/10 bg-white/5 hover:bg-white/10 font-semibold">
-                  See All <ChevronRight className="h-4 w-4 ml-1" />
-                </Button>
+                </div>
+                <div className="space-y-1 px-1">
+                  <div className="flex items-start justify-between gap-1">
+                    <h3 className="text-sm font-semibold font-headline line-clamp-2 group-hover:text-primary transition-colors leading-snug">
+                      {item.title}
+                    </h3>
+                    <div className="flex flex-col items-end gap-0.5 shrink-0">
+                      {item.tmdbRating !== undefined && (
+                        <div className="flex items-center gap-0.5">
+                          <Star className="h-3 w-3 fill-yellow-400 text-yellow-400" />
+                          <span className="text-xs font-bold text-white">{item.tmdbRating.toFixed(1)}</span>
+                        </div>
+                      )}
+                      {item.rating !== undefined && (
+                        <div className="flex items-center gap-0.5">
+                          <Star className="h-3 w-3 fill-blue-400 text-blue-400" />
+                          <span className="text-xs font-bold text-blue-400">{item.rating}</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                  <p className="text-xs text-muted-foreground">{item.year}</p>
+                </div>
               </Link>
-            </div>
-          </>
+            ))}
+          </div>
         ) : (
           <EmptyRow message="Movies and shows you watch will appear here" />
         )}
