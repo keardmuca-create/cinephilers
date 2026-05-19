@@ -174,11 +174,14 @@ export default function HistoryPage() {
     for (const id of ids) dm.set(id, readLoggedAt(id, log));
     dateMapRef.current = dm;
 
-    // Read cached metadata (instant)
+    // Read cached metadata (instant). Only skip re-fetch if cache has tmdbRating.
     const mm = new Map<string, ItemMeta>();
     for (const id of ids) {
       const m = readMetaCache(id);
-      if (m) { mm.set(id, m); fetchingRef.current.add(id); }
+      if (m) {
+        mm.set(id, m);
+        if (m.tmdbRating !== undefined) fetchingRef.current.add(id);
+      }
     }
 
     // Read user ratings

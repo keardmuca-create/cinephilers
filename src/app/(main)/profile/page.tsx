@@ -217,32 +217,31 @@ export default function ProfilePage() {
               <Link key={item.id} href={`/movie/${item.id}`} className="group shrink-0 w-44">
                 <div className="relative aspect-[2/3] overflow-hidden rounded-xl bg-muted shadow-lg movie-card-hover mb-3">
                   <img src={item.poster} alt={item.title} className="w-full h-full object-cover transition-transform group-hover:scale-110" />
+                  {/* Eye icon top-right */}
                   <div className="absolute top-2 right-2">
                     <div className="h-7 w-7 rounded-full bg-black/60 backdrop-blur-sm flex items-center justify-center">
                       <Eye className="h-4 w-4 text-blue-400" />
                     </div>
                   </div>
+                  {/* TMDB rating bottom-left */}
+                  {item.tmdbRating !== undefined && (
+                    <div className="absolute bottom-2 left-2 flex items-center gap-1 bg-black/70 backdrop-blur-sm rounded-md px-1.5 py-0.5">
+                      <Star className="h-3 w-3 fill-yellow-400 text-yellow-400" />
+                      <span className="text-xs font-bold text-white">{item.tmdbRating.toFixed(1)}</span>
+                    </div>
+                  )}
+                  {/* User rating bottom-right */}
+                  {item.rating !== undefined && (
+                    <div className="absolute bottom-2 right-2 flex items-center gap-1 bg-black/70 backdrop-blur-sm rounded-md px-1.5 py-0.5">
+                      <Star className="h-3 w-3 fill-blue-400 text-blue-400" />
+                      <span className="text-xs font-bold text-blue-400">{item.rating}</span>
+                    </div>
+                  )}
                 </div>
                 <div className="space-y-1 px-1">
-                  <div className="flex items-start justify-between gap-1">
-                    <h3 className="text-sm font-semibold font-headline line-clamp-2 group-hover:text-primary transition-colors leading-snug">
-                      {item.title}
-                    </h3>
-                    <div className="flex flex-col items-end gap-0.5 shrink-0">
-                      {item.tmdbRating !== undefined && (
-                        <div className="flex items-center gap-0.5">
-                          <Star className="h-3 w-3 fill-yellow-400 text-yellow-400" />
-                          <span className="text-xs font-bold text-white">{item.tmdbRating.toFixed(1)}</span>
-                        </div>
-                      )}
-                      {item.rating !== undefined && (
-                        <div className="flex items-center gap-0.5">
-                          <Star className="h-3 w-3 fill-blue-400 text-blue-400" />
-                          <span className="text-xs font-bold text-blue-400">{item.rating}</span>
-                        </div>
-                      )}
-                    </div>
-                  </div>
+                  <h3 className="text-sm font-semibold font-headline line-clamp-2 group-hover:text-primary transition-colors leading-snug">
+                    {item.title}
+                  </h3>
                   <p className="text-xs text-muted-foreground">{item.year}</p>
                 </div>
               </Link>
