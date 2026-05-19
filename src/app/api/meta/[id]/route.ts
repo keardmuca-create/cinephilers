@@ -13,6 +13,7 @@ export interface ItemMeta {
   showType?: string;
   tmdbStatus?: string;
   totalEps?: number;
+  tmdbRating?: number;
 }
 
 export async function GET(
@@ -57,6 +58,7 @@ export async function GET(
       showType: isShow ? (d.type ?? undefined) : undefined,
       tmdbStatus: d.status ?? undefined,
       totalEps: isShow ? (d.number_of_episodes ?? undefined) : undefined,
+      tmdbRating: typeof d.vote_average === 'number' ? d.vote_average : undefined,
     };
 
     return NextResponse.json(meta);

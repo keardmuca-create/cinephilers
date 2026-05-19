@@ -70,7 +70,7 @@ const EmptyRow = ({ message }: { message: string }) => (
   </div>
 );
 
-interface RecentItem { id: string; title: string; poster: string; loggedAt: string; rating?: number; }
+interface RecentItem { id: string; title: string; poster: string; loggedAt: string; rating?: number; tmdbRating?: number; }
 
 
 export default function ProfilePage() {
@@ -120,9 +120,16 @@ export default function ProfilePage() {
           if (epCount === 0) continue;
         }
         const rating = localStorage.getItem(`movie-rating-${id}`);
-        items.push({ id, title: meta.title, poster: meta.poster, loggedAt: '', rating: rating ? Number(rating) : undefined });
+        items.push({
+          id,
+          title: meta.title,
+          poster: meta.poster,
+          loggedAt: '',
+          rating: rating ? Number(rating) : undefined,
+          tmdbRating: typeof meta.tmdbRating === 'number' ? meta.tmdbRating : undefined,
+        });
       }
-      setRecentWatched(items.slice(0, 6));
+      setRecentWatched(items.slice(0, 50));
     } catch { /* ignore */ }
   }, []);
 
@@ -192,33 +199,39 @@ export default function ProfilePage() {
 
       {/* Watch History */}
       <section>
-        <SectionHeader
-          title="Watch History"
-          icon={History}
-          seeAllContent={
-            <Link href="/history">
-              <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-primary transition-colors">
-                See All <ChevronRight className="h-4 w-4 ml-1" />
-              </Button>
-            </Link>
-          }
-        />
+        <SectionHeader title="Watch History" icon={History} />
         {recentWatched.length > 0 ? (
-          <div className="grid grid-cols-3 gap-4">
-            {recentWatched.map(item => (
-              <Link key={item.id} href={`/movie/${item.id}`} className="group space-y-2">
-                <div className="relative aspect-[2/3] rounded-2xl overflow-hidden border border-white/10 shadow-lg">
-                  <img src={item.poster} alt={item.title} className="object-cover w-full h-full group-hover:scale-105 transition-transform" />
-                </div>
-                <div>
-                  <p className="text-xs font-semibold truncate leading-tight">{item.title}</p>
-                  {item.rating !== undefined && (
-                    <p className="text-[11px] text-yellow-400 font-bold mt-0.5">★ {item.rating}/10</p>
-                  )}
-                </div>
+          <>
+            <div className="grid grid-cols-3 gap-3">
+              {recentWatched.map(item => (
+                <Link key={item.id} href={`/movie/${item.id}`} className="group block">
+                  <div className="relative aspect-[2/3] rounded-xl overflow-hidden border border-white/10 shadow-lg mb-1.5 movie-card-hover">
+                    <img src={item.poster} alt={item.title} className="object-cover w-full h-full transition-transform group-hover:scale-105" />
+                  </div>
+                  <div className="space-y-px px-0.5">
+                    <div className="flex items-start justify-between gap-0.5">
+                      <p className="text-[10px] font-semibold line-clamp-2 leading-snug flex-1 min-w-0 group-hover:text-primary transition-colors">{item.title}</p>
+                      <div className="flex flex-col items-end gap-px shrink-0 pt-px">
+                        {item.tmdbRating !== undefined && (
+                          <span className="text-[9px] text-yellow-400 font-bold leading-none">★ {item.tmdbRating.toFixed(1)}</span>
+                        )}
+                        {item.rating !== undefined && (
+                          <span className="text-[9px] text-blue-400 font-bold leading-none">★ {item.rating}</span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </Link>
+              ))}
+            </div>
+            <div className="mt-4 text-center">
+              <Link href="/history">
+                <Button variant="outline" size="sm" className="rounded-full border-white/10 bg-white/5 hover:bg-white/10 font-semibold">
+                  See All <ChevronRight className="h-4 w-4 ml-1" />
+                </Button>
               </Link>
-            ))}
-          </div>
+            </div>
+          </>
         ) : (
           <EmptyRow message="Movies and shows you watch will appear here" />
         )}
