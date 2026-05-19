@@ -275,31 +275,40 @@ export default function HistoryPage() {
         </p>
       </div>
 
-      {/* Filters */}
-      <div className="flex gap-3 flex-wrap">
-        <select
-          value={sort}
-          onChange={e => setSort(e.target.value as SortOption)}
-          className="bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary/50"
-        >
-          <option value="date">Date Added</option>
-          <option value="title-asc">Title A–Z</option>
-          <option value="title-desc">Title Z–A</option>
-        </select>
+      {/* Sort */}
+      <select
+        value={sort}
+        onChange={e => setSort(e.target.value as SortOption)}
+        className="bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary/50 w-fit"
+      >
+        <option value="date">Date Added</option>
+        <option value="title-asc">Title A–Z</option>
+        <option value="title-desc">Title Z–A</option>
+      </select>
 
-        <select
-          value={typeFilter}
-          onChange={e => setTypeFilter(e.target.value as TypeFilter)}
-          className="bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary/50"
-        >
-          <option value="any">Any Type</option>
-          <option value="movie">Movie</option>
-          <option value="tv-series">TV Series</option>
-          <option value="tv-mini-series">TV Mini Series</option>
-          <option value="tv-movie">TV Movie</option>
-          <option value="tv-episode">TV Episode</option>
-          <option value="short">Short</option>
-        </select>
+      {/* Type tabs */}
+      <div className="flex gap-2 overflow-x-auto no-scrollbar pb-1 -mx-6 px-6">
+        {(['any', 'movie', 'tv-series', 'tv-mini-series', 'tv-movie', 'tv-episode', 'short'] as TypeFilter[]).map(t => {
+          const label: Record<TypeFilter, string> = {
+            any: 'Any', movie: 'Movie', 'tv-series': 'TV Series',
+            'tv-mini-series': 'TV Mini Series', 'tv-movie': 'TV Movie',
+            'tv-episode': 'TV Episode', short: 'Short',
+          };
+          const active = typeFilter === t;
+          return (
+            <button
+              key={t}
+              onClick={() => setTypeFilter(t)}
+              className={`shrink-0 px-4 py-1.5 rounded-full text-sm font-semibold transition-colors ${
+                active
+                  ? 'bg-primary text-primary-foreground'
+                  : 'bg-white/5 text-muted-foreground hover:bg-white/10 hover:text-foreground border border-white/10'
+              }`}
+            >
+              {label[t]}
+            </button>
+          );
+        })}
       </div>
 
       {/* Grid */}
