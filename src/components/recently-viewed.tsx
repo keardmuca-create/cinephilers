@@ -3,7 +3,7 @@
 import React, { useEffect, useState } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
-import { Clock, Star } from 'lucide-react';
+import { Clock, Star, Eye } from 'lucide-react';
 
 interface RecentItem {
   id: string;
@@ -12,6 +12,7 @@ interface RecentItem {
   year: string;
   type: string;
   rating?: number;
+  watched?: boolean;
 }
 
 export function RecentlyViewed() {
@@ -23,7 +24,10 @@ export function RecentlyViewed() {
       const stored = localStorage.getItem('recently-viewed');
       if (stored) {
         const parsed: RecentItem[] = JSON.parse(stored);
-        const slice = parsed.slice(0, 25);
+        const slice = parsed.slice(0, 25).map(item => ({
+          ...item,
+          watched: localStorage.getItem(`watched-${item.id}`) === 'true',
+        }));
         setItems(slice);
         const ratings: Record<string, number> = {};
         for (const item of slice) {
@@ -109,6 +113,9 @@ export function RecentlyViewed() {
                           <Star className="h-3 w-3 fill-blue-400 text-blue-400" />
                           <span className="text-[10px] font-bold text-blue-400">{userRating}</span>
                         </div>
+                      )}
+                      {item.watched && (
+                        <Eye className="h-3.5 w-3.5 text-blue-400" />
                       )}
                     </div>
                   </div>

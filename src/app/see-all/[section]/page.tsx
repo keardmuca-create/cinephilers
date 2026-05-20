@@ -5,7 +5,7 @@ import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import Image from 'next/image';
 import Link from 'next/link';
 import { Movie } from '@/lib/types';
-import { Star, ChevronLeft, Tv } from 'lucide-react';
+import { Star, ChevronLeft, Eye } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 
@@ -39,56 +39,51 @@ function ListItemSkeleton() {
   );
 }
 
-function MovieListItem({ movie, index }: { movie: Movie; index: number }) {
-  const isShow = movie.type === 'show';
-  const typeLabel = isShow
-    ? (movie.showType === 'Miniseries' ? 'Mini Series' : 'TV Series')
-    : 'Movie';
+function MovieListItem({ movie }: { movie: Movie }) {
+  const [userRating, setUserRating] = React.useState<number | undefined>();
+  const [watched, setWatched] = React.useState(false);
+
+  React.useEffect(() => {
+    try {
+      if (localStorage.getItem(`watched-${movie.id}`) === 'true') setWatched(true);
+      const r = localStorage.getItem(`movie-rating-${movie.id}`);
+      if (r) setUserRating(Number(r));
+    } catch { /* ignore */ }
+  }, [movie.id]);
 
   return (
     <Link
       href={`/movie/${movie.id}`}
-      className="flex items-center gap-4 px-6 py-4 border-b border-white/5 hover:bg-white/5 transition-colors active:bg-white/10"
+      className="group flex items-center gap-4 px-6 py-3.5 border-b border-border hover:bg-muted/40 transition-colors"
     >
-      <span className="text-2xl font-black font-headline text-white/20 w-8 shrink-0 text-right">
-        {index + 1}
-      </span>
-      <div className="relative w-14 shrink-0 rounded-xl overflow-hidden shadow-lg" style={{ aspectRatio: '2/3' }}>
-        <Image
-          src={movie.poster}
-          alt={movie.title}
-          fill
-          className="object-cover"
-          sizes="56px"
-        />
+      <div className="relative w-16 shrink-0 rounded-lg overflow-hidden shadow-sm bg-muted" style={{ aspectRatio: '2/3' }}>
+        <Image src={movie.poster} alt={movie.title} fill className="object-cover transition-transform group-hover:scale-105" sizes="64px" />
       </div>
-      <div className="flex-1 min-w-0 space-y-1">
-        <h3 className="font-bold font-headline text-sm leading-snug line-clamp-2">
+      <div className="flex-1 min-w-0">
+        <h3 className="text-sm font-semibold font-headline line-clamp-2 group-hover:text-primary transition-colors leading-snug mb-0.5">
           {movie.title}
         </h3>
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs font-bold text-muted-foreground">
-          <span>{movie.year}</span>
-          <span className="flex items-center gap-0.5 text-accent">
-            <Star className="h-3 w-3 fill-current" />
-            {movie.rating.toFixed(1)}
-          </span>
-          {isShow && (
-            <>
-              <span className="flex items-center gap-1 text-primary">
-                <Tv className="h-3 w-3" />
-                {typeLabel}
-              </span>
-              {movie.totalEpisodes != null && (
-                <span>{movie.totalEpisodes} episodes</span>
-              )}
-            </>
+        <p className="text-xs text-muted-foreground mb-1.5">{movie.year}</p>
+        <div className="flex items-center gap-2.5 flex-wrap">
+          {movie.rating > 0 && (
+            <div className="flex items-center gap-0.5">
+              <span className="text-xs text-yellow-400 font-bold">★</span>
+              <span className="text-xs font-bold text-foreground">{movie.rating.toFixed(1)}</span>
+            </div>
+          )}
+          {userRating !== undefined && (
+            <div className="flex items-center gap-0.5">
+              <span className="text-xs text-blue-400 font-bold">★</span>
+              <span className="text-xs font-bold text-blue-400">{userRating}</span>
+            </div>
+          )}
+          {watched && (
+            <div className="flex items-center gap-1 text-blue-400">
+              <Eye className="h-3.5 w-3.5" />
+              <span className="text-xs font-semibold">Watched</span>
+            </div>
           )}
         </div>
-        {isShow && movie.genre && (
-          <p className="text-[10px] text-muted-foreground/60 font-medium line-clamp-1">
-            {movie.genre}
-          </p>
-        )}
       </div>
     </Link>
   );
@@ -151,8 +146,8 @@ export default function SeeAllPage() {
         </div>
       ) : (
         <div>
-          {items.map((movie, i) => (
-            <MovieListItem key={movie.id} movie={movie} index={i} />
+          {items.map(movie => (
+            <MovieListItem key={movie.id} movie={movie} />
           ))}
         </div>
       )}
