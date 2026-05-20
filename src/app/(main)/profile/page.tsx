@@ -151,6 +151,16 @@ export default function ProfilePage() {
 
     // Build recent watch preview from actual watched-* keys (source of truth)
     try {
+      // Build a fallback lookup from recently-viewed (has poster/title/year for all visited movies)
+      const rvMap = new Map<string, { title: string; poster: string; year: string; type: string; tmdbRating?: number }>();
+      try {
+        const stored = localStorage.getItem('recently-viewed');
+        if (stored) {
+          const rv = JSON.parse(stored) as { id: string; title: string; poster: string; year: string; type: string; rating?: number }[];
+          for (const item of rv) rvMap.set(item.id, { title: item.title, poster: item.poster, year: item.year, type: item.type, tmdbRating: item.rating });
+        }
+      } catch { /* ignore */ }
+
       // Collect watched movie IDs
       const movieIds: string[] = [];
       const showIds = new Set<string>();
@@ -166,13 +176,14 @@ export default function ProfilePage() {
         }
       }
 
-      // Merge and keep only IDs with cached metadata
+      // Merge — use meta-{id} when available, fall back to recently-viewed
       const allIds = [...movieIds, ...Array.from(showIds)];
       const items: RecentItem[] = [];
       for (const id of allIds) {
         const raw = localStorage.getItem(`meta-${id}`);
-        if (!raw) continue;
-        const meta = JSON.parse(raw);
+        const meta = raw ? JSON.parse(raw) : null;
+        const rv = rvMap.get(id);
+        if (!meta && !rv) continue;
         // For shows, skip if 0 episodes watched
         if (id.startsWith('tmdb-tv-')) {
           let epCount = 0;
@@ -184,12 +195,12 @@ export default function ProfilePage() {
         const rating = localStorage.getItem(`movie-rating-${id}`);
         items.push({
           id,
-          title: meta.title,
-          poster: meta.poster,
-          year: meta.year ?? '',
+          title: meta?.title ?? rv?.title ?? '',
+          poster: meta?.poster ?? rv?.poster ?? '',
+          year: meta?.year ?? rv?.year ?? '',
           loggedAt: '',
           rating: rating ? Number(rating) : undefined,
-          tmdbRating: typeof meta.tmdbRating === 'number' ? meta.tmdbRating : undefined,
+          tmdbRating: typeof meta?.tmdbRating === 'number' ? meta.tmdbRating : rv?.tmdbRating,
         });
       }
       setRecentWatched(items.slice(0, 50));
