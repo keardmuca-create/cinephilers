@@ -201,33 +201,29 @@ export default function SearchPage() {
             )}
           </div>
           <div className="space-y-4">
-            <div className="flex items-center justify-between px-6">
-              <div className="flex items-center gap-3">
-                <div className="w-1 h-5 bg-primary rounded-full" />
-                <h3 className="text-xl font-headline font-bold">Coming Soon</h3>
-              </div>
-              <div className="flex items-center bg-muted rounded-full p-0.5 border border-border">
-                <button
-                  onClick={() => setComingSoonTab('movie')}
-                  className={`px-3 py-1 rounded-full text-xs font-semibold transition-colors ${
-                    comingSoonTab === 'movie'
-                      ? 'bg-primary text-primary-foreground'
-                      : 'text-muted-foreground hover:text-foreground'
-                  }`}
-                >
-                  Movie
-                </button>
-                <button
-                  onClick={() => setComingSoonTab('show')}
-                  className={`px-3 py-1 rounded-full text-xs font-semibold transition-colors ${
-                    comingSoonTab === 'show'
-                      ? 'bg-primary text-primary-foreground'
-                      : 'text-muted-foreground hover:text-foreground'
-                  }`}
-                >
-                  Show
-                </button>
-              </div>
+            <SectionHeader title="Coming Soon" allItems={comingSoonList} />
+            {/* Full-width Movie / Show toggle */}
+            <div className="flex mx-6 rounded-2xl overflow-hidden border border-border">
+              <button
+                onClick={() => setComingSoonTab('movie')}
+                className={`flex-1 py-2.5 text-sm font-semibold transition-colors ${
+                  comingSoonTab === 'movie'
+                    ? 'bg-primary text-primary-foreground'
+                    : 'bg-muted text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                Movie
+              </button>
+              <button
+                onClick={() => setComingSoonTab('show')}
+                className={`flex-1 py-2.5 text-sm font-semibold transition-colors ${
+                  comingSoonTab === 'show'
+                    ? 'bg-primary text-primary-foreground'
+                    : 'bg-muted text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                Show
+              </button>
             </div>
             {comingSoonList.length > 0 ? (
               <div className="flex overflow-x-auto gap-4 px-6 pb-4 no-scrollbar">
