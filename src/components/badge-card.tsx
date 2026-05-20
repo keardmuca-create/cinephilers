@@ -351,7 +351,7 @@ export function BadgeCard({ badge }: BadgeCardProps) {
 
         {/* Name + description */}
         <div className="space-y-1">
-          <p className="text-sm font-bold leading-tight" style={{ color: isLocked ? '#6b7280' : '#f3f4f6' }}>
+          <p className={`text-sm font-bold leading-tight ${isLocked ? 'text-muted-foreground' : 'text-foreground'}`}>
             {badge.name}
           </p>
           <p className="text-[11px] leading-snug text-muted-foreground line-clamp-2">
@@ -428,7 +428,7 @@ export function ComingSoonCard({ badge }: ComingSoonCardProps) {
         </span>
       </div>
       <div className="space-y-1">
-        <p className="text-sm font-bold leading-tight text-muted-foreground">{badge.name}</p>
+        <p className="text-sm font-bold leading-tight text-foreground">{badge.name}</p>
         <p className="text-[11px] leading-snug text-muted-foreground/70 line-clamp-2">{badge.description}</p>
       </div>
       <p className="text-[10px] font-bold text-muted-foreground/60">Active {badge.activatesLabel}</p>

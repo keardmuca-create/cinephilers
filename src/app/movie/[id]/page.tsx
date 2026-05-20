@@ -632,7 +632,7 @@ export default function MovieDetailPage() {
               {movie.episodeRuntime && <span className="flex items-center gap-1.5"><Clock className="h-4 w-4 text-primary" />{movie.episodeRuntime} min/ep</span>}
               {movie.director && <span className="flex items-center gap-1.5"><Film className="h-4 w-4 text-primary" />Dir. {movie.director}</span>}
             </div>
-            <p className="text-gray-300 leading-relaxed font-medium text-base">{movie.description}</p>
+            <p className="text-foreground leading-relaxed font-medium text-base">{movie.description}</p>
           </div>
         </section>
 
