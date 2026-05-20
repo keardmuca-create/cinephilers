@@ -100,23 +100,6 @@ function TrailersSection({ trailers }: { trailers: NonNullable<Movie['trailers']
           title={trailers[active].name}
         />
       </div>
-      {trailers.length > 1 && (
-        <div className="flex gap-3 overflow-x-auto no-scrollbar pb-1">
-          {trailers.map((t, i) => (
-            <button
-              key={t.key}
-              onClick={() => setActive(i)}
-              className={`shrink-0 text-xs font-bold px-4 py-2 rounded-full border transition-all ${
-                i === active
-                  ? 'bg-primary border-primary text-primary-foreground'
-                  : 'border-white/10 bg-white/5 hover:bg-white/10 text-muted-foreground'
-              }`}
-            >
-              {t.type === 'Teaser' ? '🎬' : '▶'} {t.name}
-            </button>
-          ))}
-        </div>
-      )}
     </section>
   );
 }
