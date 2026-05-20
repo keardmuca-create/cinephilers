@@ -1,10 +1,14 @@
 
 "use client"
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import Link from 'next/link';
-import { Search, X, Loader2 } from 'lucide-react';
-import { useSearch } from '@/hooks/use-movies';
+import { Search, X, ChevronRight, Film, Loader2 } from 'lucide-react';
+import { Movie } from '@/lib/mock-data';
+import { MovieCard } from '@/components/movie-card';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { useSearch, usePopularMovies } from '@/hooks/use-movies';
 
 interface RecentItem {
   id: string;
@@ -14,12 +18,13 @@ interface RecentItem {
   type: string;
 }
 
-function ResultRow({ id, poster, title, year, sub }: {
+// ─── Shared row used in Recent + search results ───────────────────────────────
+
+function ResultRow({ id, poster, title, sub }: {
   id: string;
   poster: string;
   title: string;
-  year: string;
-  sub?: string;
+  sub: string;
 }) {
   return (
     <Link href={`/movie/${id}`} className="flex items-center gap-4 py-3 hover:bg-black/5 transition-colors -mx-6 px-6">
@@ -28,19 +33,63 @@ function ResultRow({ id, poster, title, year, sub }: {
       </div>
       <div className="flex-1 min-w-0">
         <p className="text-sm font-semibold text-foreground leading-snug">{title}</p>
-        <p className="text-xs text-muted-foreground mt-0.5">{sub ?? year}</p>
+        <p className="text-xs text-muted-foreground mt-0.5">{sub}</p>
       </div>
     </Link>
   );
 }
 
+// ─── Section header used for Top Movies / Top Shows / Coming Soon ─────────────
+
+const SectionHeader = ({ title, allItems }: { title: string; allItems: Movie[] }) => (
+  <div className="flex items-center justify-between px-6">
+    <div className="flex items-center gap-3">
+      <div className="w-1 h-5 bg-primary rounded-full" />
+      <h3 className="text-xl font-headline font-bold">{title}</h3>
+    </div>
+    <Dialog>
+      <DialogTrigger asChild>
+        <button className="text-xs text-primary border border-primary/30 rounded-full px-3 py-1 hover:bg-primary/10 transition-colors font-semibold flex items-center gap-1">
+          See All <ChevronRight className="h-3 w-3" />
+        </button>
+      </DialogTrigger>
+      <DialogContent className="max-w-3xl rounded-[2rem] h-[80vh] flex flex-col p-0 bg-background/95 backdrop-blur-xl border-border">
+        <DialogHeader className="p-8 pb-2">
+          <DialogTitle className="font-headline text-3xl font-bold">{title}</DialogTitle>
+        </DialogHeader>
+        <ScrollArea className="flex-1 px-8 pb-8">
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-6 pt-4">
+            {allItems.map(movie => <MovieCard key={movie.id} movie={movie} className="w-full" />)}
+          </div>
+        </ScrollArea>
+      </DialogContent>
+    </Dialog>
+  </div>
+);
+
+const EmptyState = ({ message }: { message: string }) => (
+  <div className="flex flex-col items-center justify-center py-20 gap-4 text-center px-8">
+    <div className="h-16 w-16 rounded-2xl bg-muted border border-border flex items-center justify-center">
+      <Film className="h-8 w-8 text-muted-foreground" />
+    </div>
+    <p className="text-muted-foreground font-medium">{message}</p>
+  </div>
+);
+
+// ─── Page ─────────────────────────────────────────────────────────────────────
+
 export default function SearchPage() {
-  const [searchTerm, setSearchTerm] = useState('');
-  const [activeTab, setActiveTab] = useState<'recent' | 'advanced'>('recent');
+  const [searchTerm, setSearchTerm]   = useState('');
+  const [focused, setFocused]         = useState(false);
   const [recentItems, setRecentItems] = useState<RecentItem[]>([]);
 
+  const fallback = { movies: [], shows: [], trending: [] };
+  const { data } = usePopularMovies(fallback);
   const { results: searchResults, loading: searchLoading } = useSearch(searchTerm, []);
+
+  const comingSoonList = useMemo(() => data.movies.slice().reverse(), [data.movies]);
   const isSearching = searchTerm.trim().length > 0;
+  const showOverlay  = focused || isSearching; // search bar active
 
   useEffect(() => {
     try {
@@ -49,11 +98,16 @@ export default function SearchPage() {
     } catch { /* ignore */ }
   }, []);
 
+  const cancel = () => {
+    setSearchTerm('');
+    setFocused(false);
+  };
+
   return (
     <main className="pt-10 pb-28 max-w-2xl mx-auto">
       {/* Search bar */}
-      <div className="px-6 mb-4">
-        <div className="relative flex items-center gap-3">
+      <div className="px-6 mb-6">
+        <div className="flex items-center gap-3">
           <div className="relative flex-1">
             <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
             <input
@@ -61,6 +115,7 @@ export default function SearchPage() {
               placeholder="Search movies, shows, people..."
               value={searchTerm}
               onChange={e => setSearchTerm(e.target.value)}
+              onFocus={() => setFocused(true)}
               className="w-full pl-11 pr-11 py-3.5 rounded-2xl border-2 border-foreground/80 bg-background text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-foreground transition-colors"
             />
             {searchTerm && (
@@ -72,72 +127,38 @@ export default function SearchPage() {
               </button>
             )}
           </div>
-          {searchTerm && (
-            <button
-              onClick={() => setSearchTerm('')}
-              className="text-sm font-medium text-foreground shrink-0"
-            >
+          {showOverlay && (
+            <button onClick={cancel} className="text-sm font-medium text-foreground shrink-0">
               Cancel
             </button>
           )}
         </div>
       </div>
 
-      {isSearching ? (
-        /* ── Search results ── */
+      {showOverlay ? (
+        /* ── Search bar active: Recent list or live results ── */
         <div className="px-6">
-          {searchLoading ? (
-            <div className="flex items-center gap-2 py-6 text-muted-foreground text-sm">
-              <Loader2 className="h-4 w-4 animate-spin" />
-              Searching…
-            </div>
-          ) : searchResults.length > 0 ? (
-            <div className="divide-y divide-border">
-              {searchResults.map(m => (
-                <ResultRow
-                  key={m.id}
-                  id={m.id}
-                  poster={m.poster}
-                  title={m.title}
-                  year={m.year}
-                />
-              ))}
-            </div>
+          {isSearching ? (
+            /* Live results */
+            searchLoading ? (
+              <div className="flex items-center gap-2 py-6 text-muted-foreground text-sm">
+                <Loader2 className="h-4 w-4 animate-spin" /> Searching…
+              </div>
+            ) : searchResults.length > 0 ? (
+              <div className="divide-y divide-border">
+                {searchResults.map(m => (
+                  <ResultRow key={m.id} id={m.id} poster={m.poster} title={m.title} sub={m.year} />
+                ))}
+              </div>
+            ) : (
+              <p className="text-sm text-muted-foreground py-8 text-center">
+                No results for &ldquo;{searchTerm}&rdquo;
+              </p>
+            )
           ) : (
-            <p className="text-sm text-muted-foreground py-8 text-center">
-              No results for &ldquo;{searchTerm}&rdquo;
-            </p>
-          )}
-        </div>
-      ) : (
-        /* ── Default: Recent / Advanced ── */
-        <div>
-          {/* Tabs */}
-          <div className="flex border-b border-border px-6 mb-2">
-            <button
-              onClick={() => setActiveTab('recent')}
-              className={`pb-2.5 text-sm font-semibold mr-6 border-b-2 transition-colors ${
-                activeTab === 'recent'
-                  ? 'border-primary text-foreground'
-                  : 'border-transparent text-muted-foreground'
-              }`}
-            >
-              Recent
-            </button>
-            <button
-              onClick={() => setActiveTab('advanced')}
-              className={`pb-2.5 text-sm font-semibold border-b-2 transition-colors ${
-                activeTab === 'advanced'
-                  ? 'border-primary text-foreground'
-                  : 'border-transparent text-muted-foreground'
-              }`}
-            >
-              Advanced Search
-            </button>
-          </div>
-
-          {activeTab === 'recent' ? (
-            <div className="px-6">
+            /* Recent */
+            <>
+              <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground mb-3">Recent</p>
               {recentItems.length > 0 ? (
                 <div className="divide-y divide-border">
                   {recentItems.map(item => (
@@ -146,22 +167,41 @@ export default function SearchPage() {
                       id={item.id}
                       poster={item.poster}
                       title={item.title}
-                      year={item.year}
                       sub={item.type === 'show' ? `${item.year} · TV Series` : item.year}
                     />
                   ))}
                 </div>
               ) : (
-                <p className="text-sm text-muted-foreground py-10 text-center">
-                  No recently viewed titles yet
-                </p>
+                <p className="text-sm text-muted-foreground py-10 text-center">No recently viewed titles yet</p>
               )}
-            </div>
-          ) : (
-            <div className="px-6 py-10 text-center">
-              <p className="text-sm text-muted-foreground">Advanced search coming soon</p>
-            </div>
+            </>
           )}
+        </div>
+      ) : (
+        /* ── Default: Top Movies, Top Shows, Coming Soon ── */
+        <div className="space-y-10">
+          <div className="space-y-4">
+            <SectionHeader title="Top Movies" allItems={data.movies} />
+            <div className="flex overflow-x-auto gap-4 px-6 pb-4 no-scrollbar">
+              {data.movies.slice(0, 10).map(movie => <MovieCard key={movie.id} movie={movie} />)}
+            </div>
+          </div>
+          <div className="space-y-4">
+            <SectionHeader title="Top Shows" allItems={data.shows} />
+            {data.shows.length > 0 ? (
+              <div className="flex overflow-x-auto gap-4 px-6 pb-4 no-scrollbar">
+                {data.shows.slice(0, 10).map(movie => <MovieCard key={movie.id} movie={movie} />)}
+              </div>
+            ) : (
+              <EmptyState message="No shows yet. Check back soon." />
+            )}
+          </div>
+          <div className="space-y-4">
+            <SectionHeader title="Coming Soon" allItems={comingSoonList} />
+            <div className="flex overflow-x-auto gap-4 px-6 pb-4 no-scrollbar">
+              {comingSoonList.slice(0, 10).map(movie => <MovieCard key={movie.id} movie={movie} />)}
+            </div>
+          </div>
         </div>
       )}
     </main>
