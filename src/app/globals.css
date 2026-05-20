@@ -5,25 +5,25 @@
 
 @layer base {
   :root {
-    --background: 295 13% 12%;
-    --foreground: 0 0% 98%;
-    --card: 295 13% 15%;
-    --card-foreground: 0 0% 98%;
-    --popover: 295 13% 12%;
-    --popover-foreground: 0 0% 98%;
-    --primary: 268 59% 35%;
+    --background: 0 0% 100%;
+    --foreground: 0 0% 8%;
+    --card: 0 0% 97%;
+    --card-foreground: 0 0% 8%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 0 0% 8%;
+    --primary: 268 59% 45%;
     --primary-foreground: 0 0% 100%;
-    --secondary: 268 45% 28%;
+    --secondary: 268 45% 38%;
     --secondary-foreground: 0 0% 100%;
-    --muted: 295 13% 20%;
-    --muted-foreground: 295 5% 65%;
+    --muted: 0 0% 93%;
+    --muted-foreground: 0 0% 42%;
     --accent: 240 79% 54%;
     --accent-foreground: 0 0% 100%;
     --destructive: 0 84.2% 60.2%;
     --destructive-foreground: 0 0% 98%;
-    --border: 295 13% 25%;
-    --input: 295 13% 25%;
-    --ring: 240 79% 54%;
+    --border: 0 0% 88%;
+    --input: 0 0% 88%;
+    --ring: 268 59% 45%;
     --radius: 0.75rem;
   }
 }
@@ -38,7 +38,7 @@
 }
 
 .cinematic-gradient {
-  background: linear-gradient(to bottom, transparent, rgba(33, 26, 34, 0.9) 70%, #211a22);
+  background: linear-gradient(to bottom, transparent, rgba(255, 255, 255, 0.92) 70%, #ffffff);
 }
 
 .movie-card-hover {
