@@ -235,9 +235,9 @@ export default function ProfilePage() {
         </div>
         <p className="text-sm text-muted-foreground mb-5">Everything you&apos;ve watched, rated, or checked into</p>
         {recentWatched.length > 0 ? (
-          <div className="grid grid-cols-3 gap-3">
-            {recentWatched.slice(0, 12).map(item => (
-              <Link key={item.id} href={`/movie/${item.id}`} className="group block">
+          <div className="flex overflow-x-auto gap-4 pb-4 no-scrollbar -mx-6 px-6">
+            {recentWatched.map(item => (
+              <Link key={item.id} href={`/movie/${item.id}`} className="group shrink-0 w-36">
                 <div className="relative aspect-[2/3] overflow-hidden rounded-xl bg-muted shadow-lg movie-card-hover mb-2">
                   <img src={item.poster} alt={item.title} className="w-full h-full object-cover transition-transform group-hover:scale-110" />
                 </div>
@@ -256,7 +256,7 @@ export default function ProfilePage() {
                   )}
                   <Eye className="h-3.5 w-3.5 text-blue-400" />
                 </div>
-                <p className="text-xs font-semibold font-headline line-clamp-1 group-hover:text-primary transition-colors">
+                <p className="text-xs font-semibold font-headline line-clamp-2 group-hover:text-primary transition-colors leading-snug">
                   {item.title} {item.year ? `(${item.year})` : ''}
                 </p>
               </Link>
