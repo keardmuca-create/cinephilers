@@ -696,15 +696,15 @@ export default function MovieDetailPage() {
         </section>
 
         {/* Ratings */}
-        <section className="grid grid-cols-1 md:grid-cols-2 gap-8 bg-white/5 p-8 rounded-[2.5rem] border border-white/5">
+        <section className="grid grid-cols-1 md:grid-cols-2 gap-8 bg-muted p-8 rounded-[2.5rem] border border-border">
           <div className="space-y-4">
             <h3 className="text-sm font-bold uppercase tracking-widest text-muted-foreground">TMDB Rating</h3>
             <div className="flex items-center gap-4">
-              <div className="text-5xl font-black font-headline text-white">{movie.rating.toFixed(1)}</div>
+              <div className="text-5xl font-black font-headline text-foreground">{movie.rating.toFixed(1)}</div>
               <div className="space-y-1">
                 <div className="flex gap-0.5">
                   {Array(5).fill(0).map((_, i) => (
-                    <Star key={i} className={`h-4 w-4 fill-current ${i < Math.floor(movie.rating / 2) ? 'fill-yellow-400 text-yellow-400' : 'text-white/10'}`} />
+                    <Star key={i} className={`h-4 w-4 fill-current ${i < Math.floor(movie.rating / 2) ? 'fill-yellow-400 text-yellow-400' : 'text-foreground/20'}`} />
                   ))}
                 </div>
                 <div className="text-xs text-muted-foreground font-bold">{movie.votes.toLocaleString()} ratings</div>
@@ -717,12 +717,12 @@ export default function MovieDetailPage() {
               <div className="flex items-center gap-1">
                 {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(i => (
                   <button key={i} onClick={() => { setUserRating(i); saveMovieRating(id, i); toast({ title: `You rated it ${i}/10!` }); window.dispatchEvent(new CustomEvent('cinephilers-rating-changed', { detail: { id, rating: i } })); }} className="transition-all hover:scale-125 active:scale-90 p-0.5">
-                    <Star className={`h-5 w-5 transition-colors ${userRating >= i ? 'fill-yellow-400 text-yellow-400' : 'text-white/10 hover:text-white/40'}`} />
+                    <Star className={`h-5 w-5 transition-colors ${userRating >= i ? 'fill-yellow-400 text-yellow-400' : 'text-foreground/25 hover:text-foreground/50'}`} />
                   </button>
                 ))}
               </div>
               <div className="flex items-center gap-3">
-                <p className="text-xs font-bold text-white">{userRating > 0 ? `Your score: ${userRating}/10` : 'Select a star to rate'}</p>
+                <p className="text-xs font-bold text-foreground">{userRating > 0 ? `Your score: ${userRating}/10` : 'Select a star to rate'}</p>
                 {userRating > 0 && (
                   <button
                     onClick={() => {
@@ -731,7 +731,7 @@ export default function MovieDetailPage() {
                       toast({ title: 'Rating removed' });
                       window.dispatchEvent(new CustomEvent('cinephilers-rating-changed', { detail: { id, rating: null } }));
                     }}
-                    className="text-[11px] text-muted-foreground hover:text-white transition-colors underline underline-offset-2"
+                    className="text-[11px] text-muted-foreground hover:text-foreground transition-colors underline underline-offset-2"
                   >
                     Remove
                   </button>

@@ -131,7 +131,7 @@ export function FavoritesSection() {
         {favorites.length < MAX_FAVORITES && (
           <button
             onClick={() => openSearch()}
-            className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-white border border-white/10 bg-white/5 hover:bg-white/10 px-3 py-1.5 rounded-full transition-colors"
+            className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground border border-border bg-muted hover:bg-muted/80 px-3 py-1.5 rounded-full transition-colors"
           >
             <Plus className="h-3.5 w-3.5" /> Add
           </button>
@@ -146,7 +146,7 @@ export function FavoritesSection() {
             onDragStart={() => onDragStart(i)}
             onDragOver={e => onDragOver(e, i)}
             onDragEnd={onDragEnd}
-            className="relative aspect-[2/3] rounded-xl overflow-hidden border border-white/10 group cursor-grab active:cursor-grabbing select-none"
+            className="relative aspect-[2/3] rounded-xl overflow-hidden border-2 border-foreground/20 group cursor-grab active:cursor-grabbing select-none"
           >
             <img
               src={fav.poster}
@@ -186,9 +186,9 @@ export function FavoritesSection() {
           <button
             key={`empty-${i}`}
             onClick={() => openSearch()}
-            className="relative aspect-[2/3] rounded-xl border-2 border-dashed border-white/[0.08] hover:border-white/25 flex items-center justify-center transition-colors group"
+            className="relative aspect-[2/3] rounded-xl border-2 border-dashed border-foreground/25 hover:border-foreground/60 flex items-center justify-center transition-colors group"
           >
-            <Plus className="h-4 w-4 text-white/15 group-hover:text-white/40 transition-colors" />
+            <Plus className="h-4 w-4 text-foreground/30 group-hover:text-foreground/70 transition-colors" />
           </button>
         ))}
       </div>
