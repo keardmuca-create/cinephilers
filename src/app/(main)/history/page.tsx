@@ -417,20 +417,12 @@ export default function HistoryPage() {
                 Cancel
               </button>
               <span className="text-sm font-bold">{allIds.length} Titles</span>
-              <div className="flex items-center gap-3">
-                <button
-                  onClick={clearRefine}
-                  className="text-sm text-muted-foreground hover:text-foreground transition-colors"
-                >
-                  Clear
-                </button>
-                <button
-                  onClick={applyRefine}
-                  className="text-sm font-bold text-primary hover:opacity-80 transition-opacity"
-                >
-                  Refine
-                </button>
-              </div>
+              <button
+                onClick={applyRefine}
+                className="text-sm font-bold text-primary hover:opacity-80 transition-opacity"
+              >
+                Refine
+              </button>
             </div>
 
             {/* Scrollable content */}
@@ -463,6 +455,7 @@ export default function HistoryPage() {
                 <div className="space-y-1">
                   {TYPE_ORDER.map(t => {
                     const count = typeCounts[t];
+                    if (t !== 'any' && count === 0) return null;
                     return (
                       <button
                         key={t}
