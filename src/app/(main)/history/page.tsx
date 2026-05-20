@@ -400,24 +400,24 @@ export default function HistoryPage() {
         </div>
       )}
 
-      {/* Refine bottom sheet */}
+      {/* Refine modal */}
       {refineOpen && (
-        <div className="fixed inset-0 z-50 flex flex-col justify-end">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-6">
           <div
             className="absolute inset-0 bg-black/60 backdrop-blur-sm"
             onClick={() => setRefineOpen(false)}
           />
-          <div className="relative bg-[#111] rounded-t-3xl max-h-[85vh] overflow-y-auto">
-            {/* Sheet header */}
-            <div className="flex items-center justify-between px-6 pt-5 pb-4 border-b border-white/[0.08]">
+          <div className="relative bg-[#111] rounded-3xl w-full max-w-sm max-h-[75vh] flex flex-col overflow-hidden shadow-2xl border border-white/[0.08]">
+            {/* Modal header */}
+            <div className="flex items-center justify-between px-6 pt-5 pb-4 border-b border-white/[0.08] shrink-0">
               <button
                 onClick={() => setRefineOpen(false)}
-                className="text-sm text-muted-foreground hover:text-foreground transition-colors w-16"
+                className="text-sm text-muted-foreground hover:text-foreground transition-colors"
               >
                 Cancel
               </button>
               <span className="text-sm font-bold">{allIds.length} Titles</span>
-              <div className="flex items-center gap-3 w-16 justify-end">
+              <div className="flex items-center gap-3">
                 <button
                   onClick={clearRefine}
                   className="text-sm text-muted-foreground hover:text-foreground transition-colors"
@@ -433,59 +433,59 @@ export default function HistoryPage() {
               </div>
             </div>
 
-            {/* Sort By */}
-            <div className="px-6 py-4 border-b border-white/[0.06]">
-              <div className="flex items-center justify-between mb-3">
-                <span className="text-sm font-bold">Sort By</span>
-                <span className="text-sm text-muted-foreground">{SORT_LABELS[pendingSort]}</span>
-              </div>
-              <div className="space-y-1">
-                {(['date', 'title-asc', 'title-desc'] as SortOption[]).map(s => (
-                  <button
-                    key={s}
-                    onClick={() => setPendingSort(s)}
-                    className="w-full flex items-center justify-between py-2.5 text-sm"
-                  >
-                    <span className={pendingSort === s ? 'font-semibold text-foreground' : 'text-muted-foreground'}>
-                      {SORT_LABELS[s]}
-                    </span>
-                    {pendingSort === s && <Check className="h-4 w-4 text-primary" />}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* Type */}
-            <div className="px-6 py-4">
-              <p className="text-sm font-bold mb-3">Type (Movie, TV, etc.)</p>
-              <div className="space-y-1">
-                {TYPE_ORDER.map(t => {
-                  const count = typeCounts[t];
-                  if (t !== 'any' && count === 0) return null;
-                  return (
+            {/* Scrollable content */}
+            <div className="overflow-y-auto flex-1">
+              {/* Sort By */}
+              <div className="px-6 py-4 border-b border-white/[0.06]">
+                <div className="flex items-center justify-between mb-3">
+                  <span className="text-sm font-bold">Sort By</span>
+                  <span className="text-sm text-muted-foreground">{SORT_LABELS[pendingSort]}</span>
+                </div>
+                <div className="space-y-1">
+                  {(['date', 'title-asc', 'title-desc'] as SortOption[]).map(s => (
                     <button
-                      key={t}
-                      onClick={() => setPendingType(t)}
-                      className="w-full flex items-center justify-between py-2.5 border-b border-white/[0.04] last:border-0"
+                      key={s}
+                      onClick={() => setPendingSort(s)}
+                      className="w-full flex items-center justify-between py-2.5 text-sm"
                     >
-                      <div className="flex items-center gap-3">
-                        {pendingType === t
-                          ? <Check className="h-4 w-4 text-primary" />
-                          : <span className="w-4" />
-                        }
-                        <span className={`text-sm ${pendingType === t ? 'font-semibold text-foreground' : 'text-muted-foreground'}`}>
-                          {TYPE_LABELS[t]}
-                        </span>
-                      </div>
-                      <span className="text-sm text-muted-foreground">{count}</span>
+                      <span className={pendingSort === s ? 'font-semibold text-foreground' : 'text-muted-foreground'}>
+                        {SORT_LABELS[s]}
+                      </span>
+                      {pendingSort === s && <Check className="h-4 w-4 text-primary" />}
                     </button>
-                  );
-                })}
+                  ))}
+                </div>
+              </div>
+
+              {/* Type */}
+              <div className="px-6 py-4">
+                <p className="text-sm font-bold mb-3">Type (Movie, TV, etc.)</p>
+                <div className="space-y-1">
+                  {TYPE_ORDER.map(t => {
+                    const count = typeCounts[t];
+                    if (t !== 'any' && count === 0) return null;
+                    return (
+                      <button
+                        key={t}
+                        onClick={() => setPendingType(t)}
+                        className="w-full flex items-center justify-between py-2.5 border-b border-white/[0.04] last:border-0"
+                      >
+                        <div className="flex items-center gap-3">
+                          {pendingType === t
+                            ? <Check className="h-4 w-4 text-primary" />
+                            : <span className="w-4" />
+                          }
+                          <span className={`text-sm ${pendingType === t ? 'font-semibold text-foreground' : 'text-muted-foreground'}`}>
+                            {TYPE_LABELS[t]}
+                          </span>
+                        </div>
+                        <span className="text-sm text-muted-foreground">{count}</span>
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
             </div>
-
-            {/* Safe area bottom padding */}
-            <div className="h-8" />
           </div>
         </div>
       )}
