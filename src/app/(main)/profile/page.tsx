@@ -79,6 +79,7 @@ export default function ProfilePage() {
   const [comingSoon, setComingSoon] = useState<ComingSoonBadge[]>([]);
   const [showAllBadges, setShowAllBadges] = useState(false);
   const [recentWatched, setRecentWatched] = useState<RecentItem[]>([]);
+  const [watchedCount, setWatchedCount] = useState(0);
 
   const watchlist: Movie[] = [];
 
@@ -86,6 +87,21 @@ export default function ProfilePage() {
     ensureSignupDate();
     setBadges(computeAllBadges(readUserStats()));
     setComingSoon(getComingSoonBadges());
+
+    // Count total watched titles
+    try {
+      const allWatchedIds = new Set<string>();
+      for (let i = 0; i < localStorage.length; i++) {
+        const k = localStorage.key(i)!;
+        if (k.startsWith('watched-') && !k.startsWith('watched-ep-') && localStorage.getItem(k) === 'true')
+          allWatchedIds.add(k.slice('watched-'.length));
+        if (k.startsWith('watched-ep-')) {
+          const m = k.slice('watched-ep-'.length).match(/^(.+)-S\d+E\d+$/);
+          if (m) allWatchedIds.add(m[1]);
+        }
+      }
+      setWatchedCount(allWatchedIds.size);
+    } catch { /* ignore */ }
 
     // Build recent watch preview from actual watched-* keys (source of truth)
     try {
@@ -200,50 +216,49 @@ export default function ProfilePage() {
 
       {/* Watch History */}
       <section>
-        <SectionHeader
-          title="Watch History"
-          icon={History}
-          seeAllContent={
-            <Link href="/history">
-              <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-primary transition-colors">
-                See All <ChevronRight className="h-4 w-4 ml-1" />
-              </Button>
-            </Link>
-          }
-        />
+        <div className="flex items-center justify-between mb-2">
+          <div className="flex items-center gap-2">
+            <div className="w-1 h-6 bg-primary rounded-full" />
+            <h3 className="text-2xl font-headline font-bold flex items-center gap-2">
+              <History className="h-6 w-6 text-primary" />
+              Watch history
+              {watchedCount > 0 && (
+                <span className="text-2xl font-bold text-foreground">{watchedCount}</span>
+              )}
+            </h3>
+          </div>
+          <Link href="/history">
+            <Button variant="ghost" size="sm" className="text-primary hover:opacity-80 transition-opacity font-semibold">
+              See All <ChevronRight className="h-4 w-4 ml-1" />
+            </Button>
+          </Link>
+        </div>
+        <p className="text-sm text-muted-foreground mb-5">Everything you&apos;ve watched, rated, or checked into</p>
         {recentWatched.length > 0 ? (
-          <div className="flex overflow-x-auto gap-4 pb-4 no-scrollbar -mx-6 px-6">
-            {recentWatched.map(item => (
-              <Link key={item.id} href={`/movie/${item.id}`} className="group shrink-0 w-44">
-                <div className="relative aspect-[2/3] overflow-hidden rounded-xl bg-muted shadow-lg movie-card-hover mb-3">
+          <div className="grid grid-cols-3 gap-3">
+            {recentWatched.slice(0, 12).map(item => (
+              <Link key={item.id} href={`/movie/${item.id}`} className="group block">
+                <div className="relative aspect-[2/3] overflow-hidden rounded-xl bg-muted shadow-lg movie-card-hover mb-2">
                   <img src={item.poster} alt={item.title} className="w-full h-full object-cover transition-transform group-hover:scale-110" />
-                  {/* Eye icon top-right */}
-                  <div className="absolute top-2 right-2">
-                    <div className="h-7 w-7 rounded-full bg-black/60 backdrop-blur-sm flex items-center justify-center">
-                      <Eye className="h-4 w-4 text-blue-400" />
-                    </div>
-                  </div>
-                  {/* TMDB rating bottom-left */}
+                </div>
+                <div className="flex items-center gap-1.5 mb-0.5 flex-wrap">
                   {item.tmdbRating !== undefined && (
-                    <div className="absolute bottom-2 left-2 flex items-center gap-1 bg-black/70 backdrop-blur-sm rounded-md px-1.5 py-0.5">
-                      <Star className="h-3 w-3 fill-yellow-400 text-yellow-400" />
+                    <div className="flex items-center gap-0.5">
+                      <span className="text-xs text-yellow-400 font-bold">★</span>
                       <span className="text-xs font-bold text-white">{item.tmdbRating.toFixed(1)}</span>
                     </div>
                   )}
-                  {/* User rating bottom-right */}
                   {item.rating !== undefined && (
-                    <div className="absolute bottom-2 right-2 flex items-center gap-1 bg-black/70 backdrop-blur-sm rounded-md px-1.5 py-0.5">
-                      <Star className="h-3 w-3 fill-blue-400 text-blue-400" />
+                    <div className="flex items-center gap-0.5">
+                      <span className="text-xs text-blue-400 font-bold">★</span>
                       <span className="text-xs font-bold text-blue-400">{item.rating}</span>
                     </div>
                   )}
+                  <Eye className="h-3.5 w-3.5 text-blue-400" />
                 </div>
-                <div className="space-y-1 px-1">
-                  <h3 className="text-sm font-semibold font-headline line-clamp-2 group-hover:text-primary transition-colors leading-snug">
-                    {item.title}
-                  </h3>
-                  <p className="text-xs text-muted-foreground">{item.year}</p>
-                </div>
+                <p className="text-xs font-semibold font-headline line-clamp-1 group-hover:text-primary transition-colors">
+                  {item.title} {item.year ? `(${item.year})` : ''}
+                </p>
               </Link>
             ))}
           </div>

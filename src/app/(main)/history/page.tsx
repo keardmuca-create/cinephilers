@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import Link from 'next/link';
-import { History, Eye } from 'lucide-react';
+import { History, Eye, Search, SlidersHorizontal, Check, X } from 'lucide-react';
 import type { ItemMeta } from '@/app/api/meta/[id]/route';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -10,18 +10,26 @@ import type { ItemMeta } from '@/app/api/meta/[id]/route';
 type SortOption = 'date' | 'title-asc' | 'title-desc';
 type TypeFilter = 'any' | 'movie' | 'tv-series' | 'tv-mini-series' | 'tv-movie' | 'tv-episode' | 'short';
 
-// ─── localStorage helpers ─────────────────────────────────────────────────────
+const TYPE_LABELS: Record<TypeFilter, string> = {
+  any: 'Any', movie: 'Movie', 'tv-series': 'TV Series',
+  'tv-mini-series': 'TV Mini Series', 'tv-movie': 'TV Movie',
+  'tv-episode': 'TV Episode', short: 'Short',
+};
+
+const SORT_LABELS: Record<SortOption, string> = {
+  date: 'Date Added', 'title-asc': 'Title A–Z', 'title-desc': 'Title Z–A',
+};
+
+const TYPE_ORDER: TypeFilter[] = ['any', 'movie', 'tv-series', 'tv-mini-series', 'tv-movie', 'tv-episode', 'short'];
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function readAllWatchedIds(): string[] {
   const ids = new Set<string>();
   try {
     for (let i = 0; i < localStorage.length; i++) {
       const k = localStorage.key(i)!;
-      if (
-        k.startsWith('watched-') &&
-        !k.startsWith('watched-ep-') &&
-        localStorage.getItem(k) === 'true'
-      ) {
+      if (k.startsWith('watched-') && !k.startsWith('watched-ep-') && localStorage.getItem(k) === 'true') {
         ids.add(k.slice('watched-'.length));
       }
       if (k.startsWith('watched-ep-')) {
@@ -78,16 +86,25 @@ function getItemType(meta: ItemMeta): TypeFilter {
   return 'movie';
 }
 
+function formatAddedDate(iso: string): string {
+  if (!iso || iso === new Date(0).toISOString()) return '';
+  try {
+    const d = new Date(iso);
+    return `Added on ${d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`;
+  } catch { return ''; }
+}
+
 // ─── Card ─────────────────────────────────────────────────────────────────────
 
-function HistoryCard({ id, meta, userRating }: {
+function HistoryCard({ id, meta, userRating, addedAt }: {
   id: string;
   meta: ItemMeta | undefined;
   userRating: number | undefined;
+  addedAt: string;
 }) {
   if (!meta) {
     return (
-      <div className="flex items-center gap-4 py-3">
+      <div className="flex items-center gap-4 py-3.5">
         <div className="w-16 aspect-[2/3] bg-white/5 rounded-lg animate-pulse shrink-0" />
         <div className="flex-1 space-y-2">
           <div className="h-4 bg-white/5 rounded animate-pulse w-2/3" />
@@ -98,8 +115,10 @@ function HistoryCard({ id, meta, userRating }: {
     );
   }
 
+  const dateStr = formatAddedDate(addedAt);
+
   return (
-    <Link href={`/movie/${id}`} className="group flex items-center gap-4 py-3">
+    <Link href={`/movie/${id}`} className="group flex items-center gap-4 py-3.5">
       {/* Thumbnail */}
       <div className="relative w-16 aspect-[2/3] overflow-hidden rounded-lg bg-muted shadow-md shrink-0">
         <img
@@ -108,29 +127,23 @@ function HistoryCard({ id, meta, userRating }: {
           className="w-full h-full object-cover transition-transform group-hover:scale-105"
           loading="lazy"
         />
-        {meta.tmdbRating !== undefined && (
-          <div className="absolute bottom-1 left-1 flex items-center gap-0.5 bg-black/70 backdrop-blur-sm rounded px-1 py-0.5">
-            <span className="text-[9px] text-yellow-400 font-bold">★</span>
-            <span className="text-[9px] font-bold text-white leading-none">{meta.tmdbRating.toFixed(1)}</span>
-          </div>
-        )}
       </div>
 
       {/* Info */}
-      <div className="flex-1 min-w-0 space-y-1">
-        <h3 className="text-sm font-semibold font-headline line-clamp-2 group-hover:text-primary transition-colors leading-snug">
+      <div className="flex-1 min-w-0">
+        <h3 className="text-sm font-semibold font-headline line-clamp-2 group-hover:text-primary transition-colors leading-snug mb-0.5">
           {meta.title}
         </h3>
-        <p className="text-xs text-muted-foreground">{meta.year}</p>
-        <div className="flex items-center gap-3 flex-wrap pt-0.5">
+        <p className="text-xs text-muted-foreground mb-1.5">{meta.year}</p>
+        <div className="flex items-center gap-2.5 flex-wrap">
           {meta.tmdbRating !== undefined && (
-            <div className="flex items-center gap-1">
+            <div className="flex items-center gap-0.5">
               <span className="text-xs text-yellow-400 font-bold">★</span>
               <span className="text-xs font-bold text-white">{meta.tmdbRating.toFixed(1)}</span>
             </div>
           )}
           {userRating !== undefined && (
-            <div className="flex items-center gap-1">
+            <div className="flex items-center gap-0.5">
               <span className="text-xs text-blue-400 font-bold">★</span>
               <span className="text-xs font-bold text-blue-400">{userRating}</span>
             </div>
@@ -140,6 +153,9 @@ function HistoryCard({ id, meta, userRating }: {
             <span className="text-xs font-semibold">Watched</span>
           </div>
         </div>
+        {dateStr && (
+          <p className="text-[10px] text-muted-foreground/60 mt-1">{dateStr}</p>
+        )}
       </div>
     </Link>
   );
@@ -150,31 +166,34 @@ function HistoryCard({ id, meta, userRating }: {
 const BATCH = 50;
 
 export default function HistoryPage() {
-  const [allIds, setAllIds]           = useState<string[]>([]);
-  const [metaMap, setMetaMap]         = useState<Map<string, ItemMeta>>(new Map());
-  const [userRatings, setUserRatings] = useState<Map<string, number>>(new Map());
+  const [allIds, setAllIds]             = useState<string[]>([]);
+  const [metaMap, setMetaMap]           = useState<Map<string, ItemMeta>>(new Map());
+  const [userRatings, setUserRatings]   = useState<Map<string, number>>(new Map());
   const [displayCount, setDisplayCount] = useState(BATCH);
-  const [fetching, setFetching]       = useState(false);
-  const [sort, setSort]               = useState<SortOption>('date');
-  const [typeFilter, setTypeFilter]   = useState<TypeFilter>('any');
+  const [fetching, setFetching]         = useState(false);
+  const [sort, setSort]                 = useState<SortOption>('date');
+  const [typeFilter, setTypeFilter]     = useState<TypeFilter>('any');
+  const [search, setSearch]             = useState('');
+  const [refineOpen, setRefineOpen]     = useState(false);
+  // pending values inside refine sheet (applied on "Refine")
+  const [pendingSort, setPendingSort]   = useState<SortOption>('date');
+  const [pendingType, setPendingType]   = useState<TypeFilter>('any');
 
-  const sentinelRef  = useRef<HTMLDivElement>(null);
-  const fetchingRef  = useRef(new Set<string>()); // tracks IDs queued/fetched to prevent duplicate requests
-  const dateMapRef   = useRef(new Map<string, string>());
+  const sentinelRef = useRef<HTMLDivElement>(null);
+  const fetchingRef = useRef(new Set<string>());
+  const dateMapRef  = useRef(new Map<string, string>());
 
   // ─── Initial load ──────────────────────────────────────────────────────────
 
   useEffect(() => {
     const ids = readAllWatchedIds();
 
-    // Read watch-log for date ordering
     let log: { id: string; loggedAt: string }[] = [];
     try { log = JSON.parse(localStorage.getItem('watch-log') ?? '[]'); } catch { /* ignore */ }
     const dm = new Map<string, string>();
     for (const id of ids) dm.set(id, readLoggedAt(id, log));
     dateMapRef.current = dm;
 
-    // Read cached metadata (instant). Only skip re-fetch if cache has tmdbRating.
     const mm = new Map<string, ItemMeta>();
     for (const id of ids) {
       const m = readMetaCache(id);
@@ -184,14 +203,12 @@ export default function HistoryPage() {
       }
     }
 
-    // Read user ratings
     const ratings = new Map<string, number>();
     for (const id of ids) {
       const r = readUserRating(id);
       if (r !== undefined) ratings.set(id, r);
     }
 
-    // Default sort: date descending
     const sorted = [...ids].sort(
       (a, b) => new Date(dm.get(b) ?? 0).getTime() - new Date(dm.get(a) ?? 0).getTime()
     );
@@ -201,7 +218,7 @@ export default function HistoryPage() {
     setAllIds(sorted);
   }, []);
 
-  // ─── Fetch metadata for visible + next batch ───────────────────────────────
+  // ─── Fetch metadata ────────────────────────────────────────────────────────
 
   useEffect(() => {
     if (allIds.length === 0) return;
@@ -233,7 +250,7 @@ export default function HistoryPage() {
     return () => obs.disconnect();
   }, []);
 
-  // ─── Rating event listener ─────────────────────────────────────────────────
+  // ─── Rating listener ───────────────────────────────────────────────────────
 
   useEffect(() => {
     const handler = (e: Event) => {
@@ -248,12 +265,25 @@ export default function HistoryPage() {
     return () => window.removeEventListener('cinephilers-rating-changed', handler);
   }, []);
 
+  // ─── Type counts ───────────────────────────────────────────────────────────
+
+  const typeCounts = useMemo(() => {
+    const counts: Record<TypeFilter, number> = {
+      any: allIds.length, movie: 0, 'tv-series': 0,
+      'tv-mini-series': 0, 'tv-movie': 0, 'tv-episode': 0, short: 0,
+    };
+    for (const [, meta] of metaMap) {
+      const t = getItemType(meta);
+      counts[t] = (counts[t] ?? 0) + 1;
+    }
+    return counts;
+  }, [allIds.length, metaMap]);
+
   // ─── Sort + filter ─────────────────────────────────────────────────────────
 
   const sortedFilteredIds = useMemo(() => {
     let ids = [...allIds];
 
-    // Type filter (hides items with no meta yet when filter is active)
     if (typeFilter !== 'any') {
       ids = ids.filter(id => {
         const meta = metaMap.get(id);
@@ -261,76 +291,95 @@ export default function HistoryPage() {
       });
     }
 
+    if (search.trim()) {
+      const q = search.trim().toLowerCase();
+      ids = ids.filter(id => (metaMap.get(id)?.title ?? '').toLowerCase().includes(q));
+    }
+
     if (sort === 'title-asc') {
       ids.sort((a, b) => (metaMap.get(a)?.title ?? '').localeCompare(metaMap.get(b)?.title ?? ''));
     } else if (sort === 'title-desc') {
       ids.sort((a, b) => (metaMap.get(b)?.title ?? '').localeCompare(metaMap.get(a)?.title ?? ''));
     }
-    // 'date' is already sorted by dateMapRef order in allIds
 
     return ids;
-  }, [allIds, sort, typeFilter, metaMap]);
+  }, [allIds, sort, typeFilter, search, metaMap]);
 
   const visibleIds = sortedFilteredIds.slice(0, displayCount);
   const hasMore    = displayCount < sortedFilteredIds.length;
 
+  const openRefine = () => {
+    setPendingSort(sort);
+    setPendingType(typeFilter);
+    setRefineOpen(true);
+  };
+
+  const applyRefine = () => {
+    setSort(pendingSort);
+    setTypeFilter(pendingType);
+    setRefineOpen(false);
+  };
+
+  const clearRefine = () => {
+    setPendingSort('date');
+    setPendingType('any');
+  };
+
   // ─── Render ────────────────────────────────────────────────────────────────
 
   return (
-    <main className="p-6 pt-12 pb-32 max-w-2xl mx-auto space-y-6">
+    <main className="pb-32">
       {/* Header */}
-      <div>
-        <h1 className="text-3xl font-headline font-bold">Watch History</h1>
-        <p className="text-muted-foreground text-sm mt-1">
+      <div className="px-6 pt-12 pb-4">
+        <h1 className="text-3xl font-headline font-bold mb-0.5">Watch History</h1>
+        <p className="text-muted-foreground text-sm">
           {allIds.length} Title{allIds.length !== 1 ? 's' : ''}
           {fetching && <span className="ml-2 opacity-50">loading…</span>}
         </p>
       </div>
 
-      {/* Sort */}
-      <select
-        value={sort}
-        onChange={e => setSort(e.target.value as SortOption)}
-        className="bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary/50 w-fit"
-      >
-        <option value="date">Date Added</option>
-        <option value="title-asc">Title A–Z</option>
-        <option value="title-desc">Title Z–A</option>
-      </select>
-
-      {/* Type tabs */}
-      <div className="flex gap-2 overflow-x-auto no-scrollbar pb-1 -mx-6 px-6">
-        {(['any', 'movie', 'tv-series', 'tv-mini-series', 'tv-movie', 'tv-episode', 'short'] as TypeFilter[]).map(t => {
-          const label: Record<TypeFilter, string> = {
-            any: 'Any', movie: 'Movie', 'tv-series': 'TV Series',
-            'tv-mini-series': 'TV Mini Series', 'tv-movie': 'TV Movie',
-            'tv-episode': 'TV Episode', short: 'Short',
-          };
-          const active = typeFilter === t;
-          return (
-            <button
-              key={t}
-              onClick={() => setTypeFilter(t)}
-              className={`shrink-0 px-4 py-1.5 rounded-full text-sm font-semibold transition-colors ${
-                active
-                  ? 'bg-primary text-primary-foreground'
-                  : 'bg-white/5 text-muted-foreground hover:bg-white/10 hover:text-foreground border border-white/10'
-              }`}
-            >
-              {label[t]}
+      {/* Search bar */}
+      <div className="px-6 pb-3">
+        <div className="relative">
+          <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <input
+            type="text"
+            placeholder="Search this page"
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            className="w-full bg-white/5 border border-white/10 rounded-2xl pl-10 pr-4 py-3 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary/50"
+          />
+          {search && (
+            <button onClick={() => setSearch('')} className="absolute right-3.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
+              <X className="h-4 w-4" />
             </button>
-          );
-        })}
+          )}
+        </div>
       </div>
 
-      {/* Grid */}
+      {/* Sorted by + Refine button */}
+      <div className="px-6 pb-4 flex items-center justify-between">
+        <p className="text-xs text-muted-foreground">
+          {sortedFilteredIds.length} title{sortedFilteredIds.length !== 1 ? 's' : ''} · Sorted by {SORT_LABELS[sort]}
+          {typeFilter !== 'any' && ` · ${TYPE_LABELS[typeFilter]}`}
+        </p>
+        <button
+          onClick={openRefine}
+          className="flex items-center gap-1.5 text-xs font-semibold text-primary hover:opacity-80 transition-opacity"
+        >
+          <SlidersHorizontal className="h-3.5 w-3.5" />
+          Refine
+        </button>
+      </div>
+
+      {/* List */}
       {allIds.length === 0 && !fetching ? (
-        <div className="flex flex-col items-center justify-center py-20 gap-3 text-center">
+        <div className="flex flex-col items-center justify-center py-20 gap-3 text-center px-6">
           <History className="h-12 w-12 text-muted-foreground/20" />
           <p className="text-muted-foreground text-sm">Nothing here yet</p>
         </div>
       ) : (
-        <>
+        <div className="px-6">
           <div className="divide-y divide-white/[0.06]">
             {visibleIds.map(id => (
               <HistoryCard
@@ -338,19 +387,107 @@ export default function HistoryPage() {
                 id={id}
                 meta={metaMap.get(id)}
                 userRating={userRatings.get(id)}
+                addedAt={dateMapRef.current.get(id) ?? ''}
               />
             ))}
           </div>
-
-          {/* Infinite scroll sentinel */}
           {hasMore && <div ref={sentinelRef} className="h-4" />}
-
           {!hasMore && allIds.length > 0 && (
-            <p className="text-center text-xs text-muted-foreground py-2">
+            <p className="text-center text-xs text-muted-foreground py-4">
               All {allIds.length} title{allIds.length !== 1 ? 's' : ''} loaded
             </p>
           )}
-        </>
+        </div>
+      )}
+
+      {/* Refine bottom sheet */}
+      {refineOpen && (
+        <div className="fixed inset-0 z-50 flex flex-col justify-end">
+          <div
+            className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+            onClick={() => setRefineOpen(false)}
+          />
+          <div className="relative bg-[#111] rounded-t-3xl max-h-[85vh] overflow-y-auto">
+            {/* Sheet header */}
+            <div className="flex items-center justify-between px-6 pt-5 pb-4 border-b border-white/[0.08]">
+              <button
+                onClick={() => setRefineOpen(false)}
+                className="text-sm text-muted-foreground hover:text-foreground transition-colors w-16"
+              >
+                Cancel
+              </button>
+              <span className="text-sm font-bold">{allIds.length} Titles</span>
+              <div className="flex items-center gap-3 w-16 justify-end">
+                <button
+                  onClick={clearRefine}
+                  className="text-sm text-muted-foreground hover:text-foreground transition-colors"
+                >
+                  Clear
+                </button>
+                <button
+                  onClick={applyRefine}
+                  className="text-sm font-bold text-primary hover:opacity-80 transition-opacity"
+                >
+                  Refine
+                </button>
+              </div>
+            </div>
+
+            {/* Sort By */}
+            <div className="px-6 py-4 border-b border-white/[0.06]">
+              <div className="flex items-center justify-between mb-3">
+                <span className="text-sm font-bold">Sort By</span>
+                <span className="text-sm text-muted-foreground">{SORT_LABELS[pendingSort]}</span>
+              </div>
+              <div className="space-y-1">
+                {(['date', 'title-asc', 'title-desc'] as SortOption[]).map(s => (
+                  <button
+                    key={s}
+                    onClick={() => setPendingSort(s)}
+                    className="w-full flex items-center justify-between py-2.5 text-sm"
+                  >
+                    <span className={pendingSort === s ? 'font-semibold text-foreground' : 'text-muted-foreground'}>
+                      {SORT_LABELS[s]}
+                    </span>
+                    {pendingSort === s && <Check className="h-4 w-4 text-primary" />}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Type */}
+            <div className="px-6 py-4">
+              <p className="text-sm font-bold mb-3">Type (Movie, TV, etc.)</p>
+              <div className="space-y-1">
+                {TYPE_ORDER.map(t => {
+                  const count = typeCounts[t];
+                  if (t !== 'any' && count === 0) return null;
+                  return (
+                    <button
+                      key={t}
+                      onClick={() => setPendingType(t)}
+                      className="w-full flex items-center justify-between py-2.5 border-b border-white/[0.04] last:border-0"
+                    >
+                      <div className="flex items-center gap-3">
+                        {pendingType === t
+                          ? <Check className="h-4 w-4 text-primary" />
+                          : <span className="w-4" />
+                        }
+                        <span className={`text-sm ${pendingType === t ? 'font-semibold text-foreground' : 'text-muted-foreground'}`}>
+                          {TYPE_LABELS[t]}
+                        </span>
+                      </div>
+                      <span className="text-sm text-muted-foreground">{count}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Safe area bottom padding */}
+            <div className="h-8" />
+          </div>
+        </div>
       )}
     </main>
   );
