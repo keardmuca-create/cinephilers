@@ -151,7 +151,7 @@ export default function HomePage() {
                     </h3>
                     <div className="flex items-center gap-0.5 shrink-0">
                       <Star className="h-3 w-3 fill-yellow-400 text-yellow-400" />
-                      <span className="text-xs font-bold text-white">{movie.rating.toFixed(1)}</span>
+                      <span className="text-xs font-bold text-foreground">{movie.rating.toFixed(1)}</span>
                     </div>
                   </div>
                   <p className="text-xs text-muted-foreground">{movie.year}</p>

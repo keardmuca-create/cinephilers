@@ -101,7 +101,7 @@ export function RecentlyViewed() {
                       {item.rating && (
                         <div className="flex items-center gap-0.5">
                           <Star className="h-3 w-3 fill-yellow-400 text-yellow-400" />
-                          <span className="text-xs font-bold text-white">{item.rating.toFixed(1)}</span>
+                          <span className="text-xs font-bold text-foreground">{item.rating.toFixed(1)}</span>
                         </div>
                       )}
                       {userRating !== undefined && (

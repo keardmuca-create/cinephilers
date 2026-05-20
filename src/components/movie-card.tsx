@@ -85,7 +85,7 @@ export const MovieCard: React.FC<MovieCardProps> = ({ movie, className, horizont
             <div className="flex flex-col items-end gap-0.5 shrink-0">
               <div className="flex items-center gap-0.5">
                 <Star className="h-3 w-3 fill-yellow-400 text-yellow-400" />
-                <span className="text-xs font-bold text-white">{movie.rating.toFixed(1)}</span>
+                <span className="text-xs font-bold text-foreground">{movie.rating.toFixed(1)}</span>
               </div>
               {userRating !== undefined && (
                 <div className="flex items-center gap-0.5">

@@ -245,7 +245,7 @@ export default function ProfilePage() {
                   {item.tmdbRating !== undefined && (
                     <div className="flex items-center gap-0.5">
                       <span className="text-xs text-yellow-400 font-bold">★</span>
-                      <span className="text-xs font-bold text-white">{item.tmdbRating.toFixed(1)}</span>
+                      <span className="text-xs font-bold text-foreground">{item.tmdbRating.toFixed(1)}</span>
                     </div>
                   )}
                   {item.rating !== undefined && (

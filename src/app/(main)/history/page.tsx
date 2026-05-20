@@ -139,7 +139,7 @@ function HistoryCard({ id, meta, userRating, addedAt }: {
           {meta.tmdbRating !== undefined && (
             <div className="flex items-center gap-0.5">
               <span className="text-xs text-yellow-400 font-bold">★</span>
-              <span className="text-xs font-bold text-white">{meta.tmdbRating.toFixed(1)}</span>
+              <span className="text-xs font-bold text-foreground">{meta.tmdbRating.toFixed(1)}</span>
             </div>
           )}
           {userRating !== undefined && (
