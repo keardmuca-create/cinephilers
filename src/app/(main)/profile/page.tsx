@@ -426,7 +426,18 @@ export default function ProfilePage() {
 
       {/* Badges */}
       <section className="space-y-4">
-        <SectionHeader title="Badges & Achievements" icon={Award} />
+        <SectionHeader
+          title="Badges & Achievements"
+          icon={Award}
+          seeAllContent={badges.length > 3 ? (
+            <button
+              onClick={() => setShowAllBadges(prev => !prev)}
+              className="text-xs text-primary border border-primary/30 rounded-full px-3 py-1 hover:bg-primary/10 transition-colors font-semibold flex items-center gap-1"
+            >
+              {showAllBadges ? 'Show Less' : `See All ${badges.length}`} <ChevronRight className="h-3 w-3" />
+            </button>
+          ) : undefined}
+        />
 
         {/* Tier guide */}
         <TierGuide />
@@ -437,16 +448,6 @@ export default function ProfilePage() {
             <BadgeCard key={badge.id} badge={badge} />
           ))}
         </div>
-
-        {/* See all / show less */}
-        {badges.length > 3 && (
-          <button
-            onClick={() => setShowAllBadges(prev => !prev)}
-            className="w-full py-2.5 rounded-xl text-sm font-semibold text-muted-foreground hover:text-white border border-white/[0.08] bg-white/[0.03] hover:bg-white/[0.06] transition-colors"
-          >
-            {showAllBadges ? 'Show Less' : `See All ${badges.length} Badges`}
-          </button>
-        )}
 
         {/* Coming Soon */}
         {comingSoon.length > 0 && (
