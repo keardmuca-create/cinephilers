@@ -463,7 +463,6 @@ export default function HistoryPage() {
                 <div className="space-y-1">
                   {TYPE_ORDER.map(t => {
                     const count = typeCounts[t];
-                    if (t !== 'any' && count === 0) return null;
                     return (
                       <button
                         key={t}
