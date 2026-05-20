@@ -149,62 +149,76 @@ export default function ProfilePage() {
       setWatchedCount(allWatchedIds.size);
     } catch { /* ignore */ }
 
-    // Build recent watch preview from actual watched-* keys (source of truth)
-    try {
-      // Build a fallback lookup from recently-viewed (has poster/title/year for all visited movies)
-      const rvMap = new Map<string, { title: string; poster: string; year: string; type: string; tmdbRating?: number }>();
+    // Build recent watch preview from all watched-* keys
+    const buildWatchHistory = async () => {
       try {
-        const stored = localStorage.getItem('recently-viewed');
-        if (stored) {
-          const rv = JSON.parse(stored) as { id: string; title: string; poster: string; year: string; type: string; rating?: number }[];
-          for (const item of rv) rvMap.set(item.id, { title: item.title, poster: item.poster, year: item.year, type: item.type, tmdbRating: item.rating });
+        // Fallback lookup from recently-viewed
+        const rvMap = new Map<string, { title: string; poster: string; year: string; type: string; tmdbRating?: number }>();
+        try {
+          const stored = localStorage.getItem('recently-viewed');
+          if (stored) {
+            const rv = JSON.parse(stored) as { id: string; title: string; poster: string; year: string; type: string; rating?: number }[];
+            for (const item of rv) rvMap.set(item.id, { title: item.title, poster: item.poster, year: item.year, type: item.type, tmdbRating: item.rating });
+          }
+        } catch { /* ignore */ }
+
+        // Collect all watched IDs
+        const allWatchedIds = new Set<string>();
+        for (let i = 0; i < localStorage.length; i++) {
+          const k = localStorage.key(i)!;
+          if (k.startsWith('watched-') && !k.startsWith('watched-ep-') && localStorage.getItem(k) === 'true')
+            allWatchedIds.add(k.slice('watched-'.length));
+          if (k.startsWith('watched-ep-')) {
+            const m = k.slice('watched-ep-'.length).match(/^(.+)-S\d+E\d+$/);
+            if (m) allWatchedIds.add(m[1]);
+          }
         }
+
+        const items: RecentItem[] = [];
+        const fetchPromises: Promise<void>[] = [];
+
+        for (const id of allWatchedIds) {
+          const raw = localStorage.getItem(`meta-${id}`);
+          const meta = raw ? JSON.parse(raw) : null;
+          const rv = rvMap.get(id);
+
+          if (!meta && !rv) {
+            // Fetch from API and cache
+            fetchPromises.push(
+              fetch(`/api/movies/${id}`)
+                .then(r => r.json())
+                .then((data: { title?: string; poster?: string; year?: string; type?: string; rating?: number; error?: string }) => {
+                  if (data.error || !data.title) return;
+                  const cached = { title: data.title, poster: data.poster ?? '', year: data.year ?? '', type: data.type ?? 'movie', tmdbRating: data.rating };
+                  try { localStorage.setItem(`meta-${id}`, JSON.stringify(cached)); } catch { /* ignore */ }
+                  const rating = localStorage.getItem(`movie-rating-${id}`);
+                  items.push({ id, title: cached.title, poster: cached.poster, year: cached.year, loggedAt: '', rating: rating ? Number(rating) : undefined, tmdbRating: cached.tmdbRating });
+                })
+                .catch(() => { /* ignore */ })
+            );
+            continue;
+          }
+
+          const rating = localStorage.getItem(`movie-rating-${id}`);
+          items.push({
+            id,
+            title: meta?.title ?? rv?.title ?? '',
+            poster: meta?.poster ?? rv?.poster ?? '',
+            year: meta?.year ?? rv?.year ?? '',
+            loggedAt: '',
+            rating: rating ? Number(rating) : undefined,
+            tmdbRating: typeof meta?.tmdbRating === 'number' ? meta.tmdbRating : rv?.tmdbRating,
+          });
+        }
+
+        // Wait for any API fetches, then update state
+        if (fetchPromises.length > 0) {
+          await Promise.allSettled(fetchPromises);
+        }
+        setRecentWatched(items.slice(0, 50));
       } catch { /* ignore */ }
-
-      // Collect watched movie IDs
-      const movieIds: string[] = [];
-      const showIds = new Set<string>();
-      for (let i = 0; i < localStorage.length; i++) {
-        const k = localStorage.key(i)!;
-        if (k.startsWith('watched-') && !k.startsWith('watched-ep-') && localStorage.getItem(k) === 'true') {
-          const id = k.slice('watched-'.length);
-          if (!id.startsWith('tmdb-tv-')) movieIds.push(id);
-        }
-        if (k.startsWith('watched-ep-')) {
-          const m = k.slice('watched-ep-'.length).match(/^(.+)-S\d+E\d+$/);
-          if (m) showIds.add(m[1]);
-        }
-      }
-
-      // Merge — use meta-{id} when available, fall back to recently-viewed
-      const allIds = [...movieIds, ...Array.from(showIds)];
-      const items: RecentItem[] = [];
-      for (const id of allIds) {
-        const raw = localStorage.getItem(`meta-${id}`);
-        const meta = raw ? JSON.parse(raw) : null;
-        const rv = rvMap.get(id);
-        if (!meta && !rv) continue;
-        // For shows, skip if 0 episodes watched
-        if (id.startsWith('tmdb-tv-')) {
-          let epCount = 0;
-          const pfx = `watched-ep-${id}-`;
-          for (let i = 0; i < localStorage.length; i++)
-            if (localStorage.key(i)!.startsWith(pfx)) epCount++;
-          if (epCount === 0) continue;
-        }
-        const rating = localStorage.getItem(`movie-rating-${id}`);
-        items.push({
-          id,
-          title: meta?.title ?? rv?.title ?? '',
-          poster: meta?.poster ?? rv?.poster ?? '',
-          year: meta?.year ?? rv?.year ?? '',
-          loggedAt: '',
-          rating: rating ? Number(rating) : undefined,
-          tmdbRating: typeof meta?.tmdbRating === 'number' ? meta.tmdbRating : rv?.tmdbRating,
-        });
-      }
-      setRecentWatched(items.slice(0, 50));
-    } catch { /* ignore */ }
+    };
+    buildWatchHistory();
 
     // Build watchlist from watchlist-* keys
     try {
