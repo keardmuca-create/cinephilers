@@ -434,7 +434,7 @@ export default function ProfilePage() {
               onClick={() => setShowAllBadges(prev => !prev)}
               className="text-xs text-primary border border-primary/30 rounded-full px-3 py-1 hover:bg-primary/10 transition-colors font-semibold flex items-center gap-1"
             >
-              {showAllBadges ? 'Show Less' : `See All ${badges.length}`} <ChevronRight className="h-3 w-3" />
+              {showAllBadges ? 'Show Less' : 'See All'} <ChevronRight className="h-3 w-3" />
             </button>
           ) : undefined}
         />
