@@ -555,12 +555,12 @@ export default function MovieDetailPage() {
         <div className="absolute inset-0 bg-gradient-to-t from-background via-transparent to-transparent" />
 
         <header className="absolute top-0 left-0 right-0 p-6 flex justify-between items-center z-20">
-          <Button variant="outline" size="icon" className="rounded-full bg-black/40 backdrop-blur-md border-white/10" onClick={() => router.back()}>
+          <Button variant="outline" size="icon" className="rounded-full bg-white text-black border-white/80 hover:bg-white/90" onClick={() => router.back()}>
             <ChevronLeft className="h-6 w-6" />
           </Button>
           <Button
             variant="outline" size="icon"
-            className="rounded-full bg-black/40 backdrop-blur-md border-white/10"
+            className="rounded-full bg-white text-black border-white/80 hover:bg-white/90"
             onClick={() => { navigator.clipboard.writeText(window.location.href); toast({ title: 'Link copied!' }); }}
           >
             <Share2 className="h-5 w-5" />
@@ -573,8 +573,8 @@ export default function MovieDetailPage() {
             <DialogTrigger asChild>
               <div className="absolute inset-0 flex items-center justify-center cursor-pointer group">
                 <div className="flex flex-col items-center gap-4 transition-transform active:scale-95">
-                  <div className="h-20 w-20 rounded-full bg-primary/90 flex items-center justify-center shadow-2xl group-hover:bg-primary group-hover:scale-110 transition-all">
-                    <Play className="h-10 w-10 fill-current ml-1" />
+                  <div className="h-20 w-20 rounded-full bg-white flex items-center justify-center shadow-2xl group-hover:bg-white/90 group-hover:scale-110 transition-all">
+                    <Play className="h-10 w-10 fill-black text-black ml-1" />
                   </div>
                   <span className="text-sm font-bold tracking-widest uppercase text-white/80 group-hover:text-white">Watch Trailer</span>
                 </div>
