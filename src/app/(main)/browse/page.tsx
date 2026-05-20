@@ -1,210 +1,166 @@
 
 "use client"
 
-import React, { useState, useMemo } from 'react';
-import { Movie } from '@/lib/mock-data';
-import { MovieCard } from '@/components/movie-card';
-import { ChevronRight, Search, X, Film, Loader2 } from 'lucide-react';
-import { Input } from '@/components/ui/input';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { ScrollArea } from '@/components/ui/scroll-area';
-import { useSearch, usePopularMovies } from '@/hooks/use-movies';
+import React, { useState, useEffect } from 'react';
+import Link from 'next/link';
+import { Search, X, Loader2 } from 'lucide-react';
+import { useSearch } from '@/hooks/use-movies';
 
-const GENRES = [
-  { name: 'Action', color: 'bg-red-500/20 text-red-400 border-red-500/20' },
-  { name: 'Comedy', color: 'bg-yellow-500/20 text-yellow-400 border-yellow-500/20' },
-  { name: 'Drama', color: 'bg-blue-500/20 text-blue-400 border-blue-500/20' },
-  { name: 'Sci-Fi', color: 'bg-purple-500/20 text-purple-400 border-purple-500/20' },
-  { name: 'Horror', color: 'bg-zinc-800 text-zinc-400 border-zinc-700' },
-  { name: 'Romance', color: 'bg-pink-500/20 text-pink-400 border-pink-500/20' },
-  { name: 'Mystery', color: 'bg-indigo-500/20 text-indigo-400 border-indigo-500/20' },
-  { name: 'Thriller', color: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/20' },
-  { name: 'Animation', color: 'bg-orange-500/20 text-orange-400 border-orange-500/20' },
-];
+interface RecentItem {
+  id: string;
+  title: string;
+  poster: string;
+  year: string;
+  type: string;
+}
 
-const SectionHeader = ({ title, allItems }: { title: string; allItems: Movie[] }) => (
-  <div className="flex items-center justify-between px-6">
-    <div className="flex items-center gap-3">
-      <div className="w-1 h-5 bg-primary rounded-full" />
-      <h3 className="text-xl font-headline font-bold">{title}</h3>
-    </div>
-    <Dialog>
-      <DialogTrigger asChild>
-        <button className="text-xs text-primary border border-primary/30 rounded-full px-3 py-1 hover:bg-primary/10 transition-colors font-semibold flex items-center gap-1">
-          See All <ChevronRight className="h-3 w-3" />
-        </button>
-      </DialogTrigger>
-      <DialogContent className="max-w-3xl rounded-[2rem] h-[80vh] flex flex-col p-0 bg-background/95 backdrop-blur-xl border-white/10">
-        <DialogHeader className="p-8 pb-2">
-          <DialogTitle className="font-headline text-3xl font-bold">{title}</DialogTitle>
-        </DialogHeader>
-        <ScrollArea className="flex-1 px-8 pb-8">
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-6 pt-4">
-            {allItems.map(movie => <MovieCard key={movie.id} movie={movie} className="w-full" />)}
-          </div>
-        </ScrollArea>
-      </DialogContent>
-    </Dialog>
-  </div>
-);
-
-const EmptyState = ({ message }: { message: string }) => (
-  <div className="flex flex-col items-center justify-center py-20 gap-4 text-center px-8">
-    <div className="h-16 w-16 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center">
-      <Film className="h-8 w-8 text-muted-foreground" />
-    </div>
-    <p className="text-muted-foreground font-medium">{message}</p>
-  </div>
-);
+function ResultRow({ id, poster, title, year, sub }: {
+  id: string;
+  poster: string;
+  title: string;
+  year: string;
+  sub?: string;
+}) {
+  return (
+    <Link href={`/movie/${id}`} className="flex items-center gap-4 py-3 hover:bg-black/5 transition-colors -mx-6 px-6">
+      <div className="w-14 aspect-[2/3] rounded-lg overflow-hidden bg-muted shrink-0 shadow-sm">
+        <img src={poster} alt={title} className="w-full h-full object-cover" loading="lazy" />
+      </div>
+      <div className="flex-1 min-w-0">
+        <p className="text-sm font-semibold text-foreground leading-snug">{title}</p>
+        <p className="text-xs text-muted-foreground mt-0.5">{sub ?? year}</p>
+      </div>
+    </Link>
+  );
+}
 
 export default function SearchPage() {
   const [searchTerm, setSearchTerm] = useState('');
-  const [selectedGenre, setSelectedGenre] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<'recent' | 'advanced'>('recent');
+  const [recentItems, setRecentItems] = useState<RecentItem[]>([]);
 
-  const fallback = {
-   movies: [],
-  shows: [],
-  trending: [],
-  };
-
-  const { data } = usePopularMovies(fallback);
   const { results: searchResults, loading: searchLoading } = useSearch(searchTerm, []);
-
-  const genreFiltered = useMemo(() => {
-    if (!selectedGenre) return [];
-    return [...data.movies, ...data.shows].filter(m => m.genre.includes(selectedGenre));
-  }, [selectedGenre, data]);
-
-  const comingSoonList = data.movies.slice().reverse();
   const isSearching = searchTerm.trim().length > 0;
 
-  return (
-    <main className="pt-10 pb-20">
-      <div className="px-6 space-y-6 mb-10">
-        <h1 className="text-3xl font-headline font-bold">Search</h1>
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem('recently-viewed');
+      if (stored) setRecentItems((JSON.parse(stored) as RecentItem[]).slice(0, 30));
+    } catch { /* ignore */ }
+  }, []);
 
-        <div className="relative">
-          <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
-          <Input
-            placeholder="Search movies, shows, people..."
-            className="pl-12 pr-12 bg-white/5 border-none h-14 rounded-2xl text-base focus-visible:ring-primary/50"
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-          />
+  return (
+    <main className="pt-10 pb-28 max-w-2xl mx-auto">
+      {/* Search bar */}
+      <div className="px-6 mb-4">
+        <div className="relative flex items-center gap-3">
+          <div className="relative flex-1">
+            <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
+            <input
+              type="text"
+              placeholder="Search movies, shows, people..."
+              value={searchTerm}
+              onChange={e => setSearchTerm(e.target.value)}
+              className="w-full pl-11 pr-11 py-3.5 rounded-2xl border-2 border-foreground/80 bg-background text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-foreground transition-colors"
+            />
+            {searchTerm && (
+              <button
+                onClick={() => setSearchTerm('')}
+                className="absolute right-4 top-1/2 -translate-y-1/2 h-6 w-6 rounded-full bg-muted flex items-center justify-center"
+              >
+                <X className="h-3.5 w-3.5 text-muted-foreground" />
+              </button>
+            )}
+          </div>
           {searchTerm && (
             <button
               onClick={() => setSearchTerm('')}
-              className="absolute right-4 top-1/2 -translate-y-1/2 h-7 w-7 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center transition-colors"
+              className="text-sm font-medium text-foreground shrink-0"
             >
-              <X className="h-4 w-4 text-muted-foreground" />
+              Cancel
             </button>
           )}
         </div>
       </div>
 
-      {/* Live search results */}
       {isSearching ? (
-        <div className="px-6 space-y-6">
-          <div className="flex items-center justify-between">
-            <p className="text-sm text-muted-foreground font-medium">
-              {searchLoading
-                ? 'Searching…'
-                : `${searchResults.length} result${searchResults.length !== 1 ? 's' : ''} for `}
-              {!searchLoading && <span className="text-foreground font-bold">&quot;{searchTerm}&quot;</span>}
-            </p>
-            {searchLoading && <Loader2 className="h-4 w-4 text-muted-foreground animate-spin" />}
-          </div>
-
+        /* ── Search results ── */
+        <div className="px-6">
           {searchLoading ? (
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 pb-10">
-              {Array(6).fill(0).map((_, i) => (
-                <div key={i} className="space-y-3">
-                  <div className="aspect-[2/3] rounded-xl bg-white/5 animate-pulse" />
-                  <div className="h-4 w-3/4 rounded bg-white/5 animate-pulse" />
-                  <div className="h-3 w-1/2 rounded bg-white/5 animate-pulse" />
-                </div>
-              ))}
+            <div className="flex items-center gap-2 py-6 text-muted-foreground text-sm">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              Searching…
             </div>
           ) : searchResults.length > 0 ? (
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 pb-10">
-              {searchResults.map(m => <MovieCard key={m.id} movie={m} className="w-full" />)}
+            <div className="divide-y divide-border">
+              {searchResults.map(m => (
+                <ResultRow
+                  key={m.id}
+                  id={m.id}
+                  poster={m.poster}
+                  title={m.title}
+                  year={m.year}
+                />
+              ))}
             </div>
           ) : (
-            <EmptyState message={`No titles found for "${searchTerm}". Try a different search.`} />
+            <p className="text-sm text-muted-foreground py-8 text-center">
+              No results for &ldquo;{searchTerm}&rdquo;
+            </p>
           )}
         </div>
       ) : (
-        <div className="space-y-10">
-          {/* Genre Grid */}
-          <section className="px-6 space-y-4">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="w-1 h-5 bg-primary rounded-full" />
-                <h3 className="text-xl font-headline font-bold">Browse by Genre</h3>
-              </div>
-              {selectedGenre && (
-                <button
-                  onClick={() => setSelectedGenre(null)}
-                  className="text-xs text-muted-foreground border border-white/10 rounded-full px-3 py-1 hover:bg-white/5 flex items-center gap-1 transition-colors"
-                >
-                  Clear <X className="h-3 w-3" />
-                </button>
-              )}
-            </div>
-            <div className="grid grid-cols-3 gap-3">
-              {GENRES.map((genre) => (
-                <button
-                  key={genre.name}
-                  onClick={() => setSelectedGenre(genre.name === selectedGenre ? null : genre.name)}
-                  className={`relative aspect-square rounded-2xl flex flex-col items-center justify-center gap-2 font-headline font-bold text-sm transition-all hover:scale-105 ${genre.color} border ${selectedGenre === genre.name ? 'ring-2 ring-primary ring-offset-2 ring-offset-background scale-105' : ''}`}
-                >
-                  {genre.name}
-                </button>
-              ))}
-            </div>
-          </section>
+        /* ── Default: Recent / Advanced ── */
+        <div>
+          {/* Tabs */}
+          <div className="flex border-b border-border px-6 mb-2">
+            <button
+              onClick={() => setActiveTab('recent')}
+              className={`pb-2.5 text-sm font-semibold mr-6 border-b-2 transition-colors ${
+                activeTab === 'recent'
+                  ? 'border-primary text-foreground'
+                  : 'border-transparent text-muted-foreground'
+              }`}
+            >
+              Recent
+            </button>
+            <button
+              onClick={() => setActiveTab('advanced')}
+              className={`pb-2.5 text-sm font-semibold border-b-2 transition-colors ${
+                activeTab === 'advanced'
+                  ? 'border-primary text-foreground'
+                  : 'border-transparent text-muted-foreground'
+              }`}
+            >
+              Advanced Search
+            </button>
+          </div>
 
-          {selectedGenre ? (
-            <div className="px-6 space-y-6">
-              <div className="flex items-center gap-3">
-                <div className="w-1 h-5 bg-primary rounded-full" />
-                <h2 className="text-2xl font-headline font-bold">
-                  <span className="text-primary">{selectedGenre}</span>
-                </h2>
-              </div>
-              {genreFiltered.length > 0 ? (
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 pb-10">
-                  {genreFiltered.map(m => <MovieCard key={m.id} movie={m} className="w-full" />)}
+          {activeTab === 'recent' ? (
+            <div className="px-6">
+              {recentItems.length > 0 ? (
+                <div className="divide-y divide-border">
+                  {recentItems.map(item => (
+                    <ResultRow
+                      key={item.id}
+                      id={item.id}
+                      poster={item.poster}
+                      title={item.title}
+                      year={item.year}
+                      sub={item.type === 'show' ? `${item.year} · TV Series` : item.year}
+                    />
+                  ))}
                 </div>
               ) : (
-                <EmptyState message={`No titles found in ${selectedGenre}. More coming soon.`} />
+                <p className="text-sm text-muted-foreground py-10 text-center">
+                  No recently viewed titles yet
+                </p>
               )}
             </div>
           ) : (
-            <>
-              <div className="space-y-4">
-                <SectionHeader title="Top Movies" allItems={data.movies} />
-                <div className="flex overflow-x-auto gap-4 px-6 pb-4 no-scrollbar">
-                  {data.movies.slice(0, 10).map(movie => <MovieCard key={movie.id} movie={movie} />)}
-                </div>
-              </div>
-              <div className="space-y-4">
-                <SectionHeader title="Top Shows" allItems={data.shows} />
-                {data.shows.length > 0 ? (
-                  <div className="flex overflow-x-auto gap-4 px-6 pb-4 no-scrollbar">
-                    {data.shows.slice(0, 10).map(movie => <MovieCard key={movie.id} movie={movie} />)}
-                  </div>
-                ) : (
-                  <EmptyState message="No shows yet. Check back soon." />
-                )}
-              </div>
-              <div className="space-y-4">
-                <SectionHeader title="Coming Soon" allItems={comingSoonList} />
-                <div className="flex overflow-x-auto gap-4 px-6 pb-4 no-scrollbar">
-                  {comingSoonList.slice(0, 10).map(movie => <MovieCard key={movie.id} movie={movie} />)}
-                </div>
-              </div>
-            </>
+            <div className="px-6 py-10 text-center">
+              <p className="text-sm text-muted-foreground">Advanced search coming soon</p>
+            </div>
           )}
         </div>
       )}
