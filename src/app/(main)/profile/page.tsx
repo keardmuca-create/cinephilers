@@ -80,8 +80,7 @@ export default function ProfilePage() {
   const [showAllBadges, setShowAllBadges] = useState(false);
   const [recentWatched, setRecentWatched] = useState<RecentItem[]>([]);
   const [watchedCount, setWatchedCount] = useState(0);
-
-  const watchlist: Movie[] = [];
+  const [watchlist, setWatchlist] = useState<Movie[]>([]);
 
   useEffect(() => {
     ensureSignupDate();
@@ -147,6 +146,39 @@ export default function ProfilePage() {
         });
       }
       setRecentWatched(items.slice(0, 50));
+    } catch { /* ignore */ }
+
+    // Build watchlist from watchlist-* keys
+    try {
+      const wlItems: Movie[] = [];
+      for (let i = 0; i < localStorage.length; i++) {
+        const k = localStorage.key(i)!;
+        if (!k.startsWith('watchlist-')) continue;
+        const raw = localStorage.getItem(k);
+        if (!raw) continue;
+        let meta: Record<string, unknown>;
+        try { meta = JSON.parse(raw); } catch { continue; }
+        if (!meta.title) continue;
+        wlItems.push({
+          id: k.slice('watchlist-'.length),
+          title: meta.title as string,
+          poster: (meta.poster as string) ?? '',
+          backdrop: (meta.backdrop as string) ?? '',
+          year: (meta.year as string) ?? '',
+          genre: (meta.genre as string) ?? '',
+          rating: typeof meta.tmdbRating === 'number' ? meta.tmdbRating : 0,
+          description: (meta.description as string) ?? '',
+          type: (meta.type as 'movie' | 'show') ?? 'movie',
+          followingsRating: 0,
+          votes: 0,
+          director: '',
+          cast: [],
+          reviews: [],
+          quotes: [],
+          trivia: [],
+        } as Movie);
+      }
+      setWatchlist(wlItems);
     } catch { /* ignore */ }
   }, []);
 

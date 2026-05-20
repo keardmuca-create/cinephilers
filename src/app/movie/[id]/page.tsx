@@ -418,6 +418,7 @@ export default function MovieDetailPage() {
     ensureSignupDate();
     try {
       setIsWatched(localStorage.getItem(`watched-${id}`) === 'true');
+      setIsInWatchlist(localStorage.getItem(`watchlist-${id}`) !== null);
       const saved = localStorage.getItem(`movie-rating-${id}`);
       if (saved) setUserRating(parseInt(saved, 10));
       // Load watched episodes for TV shows
@@ -436,6 +437,19 @@ export default function MovieDetailPage() {
       .then((data: Movie & { error?: string }) => {
         if (!data.error) {
           setMovie(data);
+          // Cache metadata for profile/watchlist lookups
+          try {
+            localStorage.setItem(`meta-${data.id}`, JSON.stringify({
+              title: data.title,
+              poster: data.poster,
+              backdrop: data.backdrop,
+              year: data.year,
+              genre: data.genre,
+              description: data.description,
+              type: data.type,
+              tmdbRating: data.rating,
+            }));
+          } catch { /* ignore */ }
           // Track recently viewed in localStorage
           try {
             const stored = localStorage.getItem('recently-viewed');
@@ -624,7 +638,28 @@ export default function MovieDetailPage() {
           <Button
             variant={isInWatchlist ? 'default' : 'outline'}
             className={`h-14 px-8 rounded-2xl font-bold flex-1 md:flex-none text-base transition-all ${isInWatchlist ? 'bg-primary border-primary' : 'border-2 border-foreground bg-background text-foreground'}`}
-            onClick={() => { setIsInWatchlist(p => !p); toast({ title: isInWatchlist ? 'Removed from watchlist' : 'Added to watchlist' }); }}
+            onClick={() => {
+              const next = !isInWatchlist;
+              setIsInWatchlist(next);
+              try {
+                if (next) {
+                  localStorage.setItem(`watchlist-${id}`, JSON.stringify({
+                    id: movie!.id,
+                    title: movie!.title,
+                    poster: movie!.poster,
+                    backdrop: movie!.backdrop,
+                    year: movie!.year,
+                    genre: movie!.genre,
+                    description: movie!.description,
+                    type: movie!.type,
+                    tmdbRating: movie!.rating,
+                  }));
+                } else {
+                  localStorage.removeItem(`watchlist-${id}`);
+                }
+              } catch { /* ignore */ }
+              toast({ title: next ? 'Added to watchlist' : 'Removed from watchlist' });
+            }}
           >
             {isInWatchlist ? <Check className="h-5 w-5 mr-2" /> : <Plus className="h-5 w-5 mr-2" />}
             {isInWatchlist ? 'In Watchlist' : 'Add to Watchlist'}
