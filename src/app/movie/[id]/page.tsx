@@ -640,7 +640,7 @@ export default function MovieDetailPage() {
         <section className="flex flex-wrap gap-4">
           <Button
             variant={isInWatchlist ? 'default' : 'outline'}
-            className={`h-14 px-8 rounded-2xl font-bold flex-1 md:flex-none text-base transition-all ${isInWatchlist ? 'bg-primary border-primary' : 'border-white/10 bg-white/5'}`}
+            className={`h-14 px-8 rounded-2xl font-bold flex-1 md:flex-none text-base transition-all ${isInWatchlist ? 'bg-primary border-primary' : 'border-2 border-foreground bg-background text-foreground'}`}
             onClick={() => { setIsInWatchlist(p => !p); toast({ title: isInWatchlist ? 'Removed from watchlist' : 'Added to watchlist' }); }}
           >
             {isInWatchlist ? <Check className="h-5 w-5 mr-2" /> : <Plus className="h-5 w-5 mr-2" />}
@@ -648,7 +648,7 @@ export default function MovieDetailPage() {
           </Button>
           <Button
             variant={isWatched ? 'default' : 'outline'}
-            className={`h-14 px-8 rounded-2xl font-bold flex-1 md:flex-none text-base transition-all ${isWatched ? 'bg-accent border-accent' : 'border-white/10 bg-white/5'}`}
+            className={`h-14 px-8 rounded-2xl font-bold flex-1 md:flex-none text-base transition-all ${isWatched ? 'bg-accent border-accent' : 'border-2 border-foreground bg-background text-foreground'}`}
             onClick={() => {
               const next = !isWatched;
               setIsWatched(next);
@@ -676,7 +676,7 @@ export default function MovieDetailPage() {
           </Button>
           <Dialog>
             <DialogTrigger asChild>
-              <Button variant="outline" className="h-14 px-8 rounded-2xl border-white/10 bg-white/5 font-bold flex-1 md:flex-none text-base">
+              <Button variant="outline" className="h-14 px-8 rounded-2xl border-2 border-foreground bg-background text-foreground font-bold flex-1 md:flex-none text-base">
                 <ListPlus className="h-5 w-5 mr-2" /> Add to List
               </Button>
             </DialogTrigger>
