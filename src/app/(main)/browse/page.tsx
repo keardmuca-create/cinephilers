@@ -83,11 +83,15 @@ export default function SearchPage() {
   const [focused, setFocused]         = useState(false);
   const [recentItems, setRecentItems] = useState<RecentItem[]>([]);
 
+  const [comingSoonTab, setComingSoonTab] = useState<'movie' | 'show'>('movie');
+
   const fallback = { movies: [], shows: [], trending: [] };
   const { data } = usePopularMovies(fallback);
   const { results: searchResults, loading: searchLoading } = useSearch(searchTerm, []);
 
-  const comingSoonList = useMemo(() => data.movies.slice().reverse(), [data.movies]);
+  const comingSoonMovies = useMemo(() => data.movies.slice().reverse(), [data.movies]);
+  const comingSoonShows  = useMemo(() => data.shows.slice().reverse(),  [data.shows]);
+  const comingSoonList   = comingSoonTab === 'movie' ? comingSoonMovies : comingSoonShows;
   const isSearching = searchTerm.trim().length > 0;
   const showOverlay  = focused || isSearching; // search bar active
 
@@ -197,10 +201,41 @@ export default function SearchPage() {
             )}
           </div>
           <div className="space-y-4">
-            <SectionHeader title="Coming Soon" allItems={comingSoonList} />
-            <div className="flex overflow-x-auto gap-4 px-6 pb-4 no-scrollbar">
-              {comingSoonList.slice(0, 10).map(movie => <MovieCard key={movie.id} movie={movie} />)}
+            <div className="flex items-center justify-between px-6">
+              <div className="flex items-center gap-3">
+                <div className="w-1 h-5 bg-primary rounded-full" />
+                <h3 className="text-xl font-headline font-bold">Coming Soon</h3>
+              </div>
+              <div className="flex items-center bg-muted rounded-full p-0.5 border border-border">
+                <button
+                  onClick={() => setComingSoonTab('movie')}
+                  className={`px-3 py-1 rounded-full text-xs font-semibold transition-colors ${
+                    comingSoonTab === 'movie'
+                      ? 'bg-primary text-primary-foreground'
+                      : 'text-muted-foreground hover:text-foreground'
+                  }`}
+                >
+                  Movie
+                </button>
+                <button
+                  onClick={() => setComingSoonTab('show')}
+                  className={`px-3 py-1 rounded-full text-xs font-semibold transition-colors ${
+                    comingSoonTab === 'show'
+                      ? 'bg-primary text-primary-foreground'
+                      : 'text-muted-foreground hover:text-foreground'
+                  }`}
+                >
+                  Show
+                </button>
+              </div>
             </div>
+            {comingSoonList.length > 0 ? (
+              <div className="flex overflow-x-auto gap-4 px-6 pb-4 no-scrollbar">
+                {comingSoonList.slice(0, 10).map(movie => <MovieCard key={movie.id} movie={movie} />)}
+              </div>
+            ) : (
+              <EmptyState message={`No ${comingSoonTab === 'movie' ? 'movies' : 'shows'} coming soon yet.`} />
+            )}
           </div>
         </div>
       )}
