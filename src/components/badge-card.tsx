@@ -113,7 +113,7 @@ function RoadmapRow({ rowTier, threshold, unit, current, activeTier, history }: 
       </span>
 
       {/* Right label */}
-      <div className="text-right shrink-0 min-w-[3.5rem]">
+      <div className="text-right shrink-0 min-w-[2rem]">
         {isEarned && dateLabel ? (
           <span className="text-[10px] text-muted-foreground tabular-nums">{dateLabel}</span>
         ) : isCurrent ? (
