@@ -402,19 +402,24 @@ function SeasonsSection({
 
 interface UserReview { movieId: string; movieTitle: string; moviePoster: string; movieYear: string; content: string; rating: number; date: string; }
 
-function ReviewsSection({ movie }: { movie: Movie }) {
-  const [writeOpen, setWriteOpen] = useState(false);
+function ReviewsSection({ movie, writeOpen, setWriteOpen, myReview, setMyReview }: {
+  movie: Movie;
+  writeOpen: boolean;
+  setWriteOpen: (v: boolean) => void;
+  myReview: UserReview | null;
+  setMyReview: (r: UserReview | null) => void;
+}) {
   const [draftContent, setDraftContent] = useState('');
   const [draftRating, setDraftRating] = useState(0);
   const [hoverRating, setHoverRating] = useState(0);
-  const [myReview, setMyReview] = useState<UserReview | null>(null);
 
+  // Sync draft when dialog opens
   useEffect(() => {
-    try {
-      const raw = localStorage.getItem(`review-${movie.id}`);
-      if (raw) setMyReview(JSON.parse(raw));
-    } catch { /* ignore */ }
-  }, [movie.id]);
+    if (writeOpen) {
+      setDraftContent(myReview?.content ?? '');
+      setDraftRating(myReview?.rating ?? 0);
+    }
+  }, [writeOpen, myReview]);
 
   const submitReview = () => {
     if (!draftContent.trim()) return;
@@ -430,8 +435,6 @@ function ReviewsSection({ movie }: { movie: Movie }) {
     try { localStorage.setItem(`review-${movie.id}`, JSON.stringify(review)); } catch { /* ignore */ }
     setMyReview(review);
     setWriteOpen(false);
-    setDraftContent('');
-    setDraftRating(0);
     toast({ title: 'Review saved' });
   };
 
@@ -441,51 +444,40 @@ function ReviewsSection({ movie }: { movie: Movie }) {
     <section className="space-y-6">
       <div className="flex items-center justify-between">
         <h3 className="text-2xl font-headline font-bold">Community Reviews</h3>
-        <div className="flex items-center gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            className="rounded-full border-foreground/20 text-sm font-semibold gap-1.5"
-            onClick={() => { setDraftContent(myReview?.content ?? ''); setDraftRating(myReview?.rating ?? 0); setWriteOpen(true); }}
-          >
-            <PenLine className="h-3.5 w-3.5" />
-            {myReview ? 'Edit Review' : 'Write a Review'}
-          </Button>
-          {allReviews.length > 0 && (
-            <Dialog>
-              <DialogTrigger asChild>
-                <Button variant="link" className="text-primary font-bold px-0">See All</Button>
-              </DialogTrigger>
-              <DialogContent className="max-w-xl rounded-[2.5rem] h-[80vh] flex flex-col p-0 border-border">
-                <DialogHeader className="px-8 pt-8 pb-4 border-b border-border shrink-0">
-                  <DialogTitle className="font-headline text-2xl">All Reviews</DialogTitle>
-                </DialogHeader>
-                <ScrollArea className="flex-1 px-8 pb-8">
-                  <div className="space-y-6 pt-4">
-                    {allReviews.map(r => (
-                      <div key={r.id} className="space-y-3">
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-3">
-                            <Avatar className="h-9 w-9"><AvatarImage src={r.userAvatar} /></Avatar>
-                            <div>
-                              <span className="text-sm font-bold font-headline block">{r.userName}</span>
-                              <span className="text-[10px] text-muted-foreground uppercase tracking-widest font-bold">{r.date}</span>
-                            </div>
-                          </div>
-                          <div className="flex items-center gap-1 bg-yellow-400/10 text-yellow-500 px-3 py-1 rounded-full text-xs font-black">
-                            <Star className="h-3 w-3 fill-current" /> {r.rating}
+        {allReviews.length > 0 && (
+          <Dialog>
+            <DialogTrigger asChild>
+              <Button variant="link" className="text-primary font-bold px-0">See All</Button>
+            </DialogTrigger>
+            <DialogContent className="max-w-xl rounded-[2.5rem] h-[80vh] flex flex-col p-0 border-border">
+              <DialogHeader className="px-8 pt-8 pb-4 border-b border-border shrink-0">
+                <DialogTitle className="font-headline text-2xl">All Reviews</DialogTitle>
+              </DialogHeader>
+              <ScrollArea className="flex-1 px-8 pb-8">
+                <div className="space-y-6 pt-4">
+                  {allReviews.map(r => (
+                    <div key={r.id} className="space-y-3">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                          <Avatar className="h-9 w-9"><AvatarImage src={r.userAvatar} /></Avatar>
+                          <div>
+                            <span className="text-sm font-bold font-headline block">{r.userName}</span>
+                            <span className="text-[10px] text-muted-foreground uppercase tracking-widest font-bold">{r.date}</span>
                           </div>
                         </div>
-                        <p className="text-sm text-foreground leading-relaxed italic">&ldquo;{r.content}&rdquo;</p>
-                        <Separator />
+                        <div className="flex items-center gap-1 bg-yellow-400/10 text-yellow-500 px-3 py-1 rounded-full text-xs font-black">
+                          <Star className="h-3 w-3 fill-current" /> {r.rating}
+                        </div>
                       </div>
-                    ))}
-                  </div>
-                </ScrollArea>
-              </DialogContent>
-            </Dialog>
-          )}
-        </div>
+                      <p className="text-sm text-foreground leading-relaxed italic">&ldquo;{r.content}&rdquo;</p>
+                      <Separator />
+                    </div>
+                  ))}
+                </div>
+              </ScrollArea>
+            </DialogContent>
+          </Dialog>
+        )}
       </div>
 
       {/* My review */}
@@ -527,7 +519,7 @@ function ReviewsSection({ movie }: { movie: Movie }) {
         </div>
       )}
 
-      {/* Write review dialog */}
+      {/* Write / edit review dialog */}
       <Dialog open={writeOpen} onOpenChange={setWriteOpen}>
         <DialogContent className="max-w-lg rounded-3xl border-border">
           <DialogHeader>
@@ -585,6 +577,8 @@ export default function MovieDetailPage() {
   const [lightboxImg, setLightboxImg] = useState<string | null>(null);
   const [episodeModal, setEpisodeModal] = useState<{ ep: TvEpisode; seasonNumber: number } | null>(null);
   const [watchedEpisodes, setWatchedEpisodes] = useState<Set<string>>(new Set());
+  const [writeReviewOpen, setWriteReviewOpen] = useState(false);
+  const [myReview, setMyReview] = useState<UserReview | null>(null);
 
   useEffect(() => {
     if (!id) return;
@@ -593,6 +587,8 @@ export default function MovieDetailPage() {
       setIsWatched(localStorage.getItem(`watched-${id}`) === 'true');
       setIsInWatchlist(localStorage.getItem(`watchlist-${id}`) !== null);
       const saved = localStorage.getItem(`movie-rating-${id}`);
+      const rev = localStorage.getItem(`review-${id}`);
+      if (rev) setMyReview(JSON.parse(rev));
       if (saved) setUserRating(parseInt(saved, 10));
       // Load watched episodes for TV shows
       const prefix = `watched-ep-${id}-`;
@@ -803,6 +799,17 @@ export default function MovieDetailPage() {
               {movie.director && <span className="flex items-center gap-1.5"><Film className="h-4 w-4 text-primary" />Dir. {movie.director}</span>}
             </div>
             <p className="text-foreground leading-relaxed font-medium text-base">{movie.description}</p>
+
+            {/* Write a review bar */}
+            <button
+              onClick={() => setWriteReviewOpen(true)}
+              className="flex items-center gap-3 w-full px-4 py-3 rounded-2xl border-2 border-foreground/15 bg-muted/40 hover:border-foreground/30 hover:bg-muted/60 transition-colors text-left"
+            >
+              <PenLine className="h-4 w-4 text-muted-foreground shrink-0" />
+              <span className="text-sm text-muted-foreground">
+                {myReview ? `Your review: "${myReview.content.slice(0, 50)}${myReview.content.length > 50 ? '…' : ''}"` : `Share your thoughts on ${movie.title}…`}
+              </span>
+            </button>
           </div>
         </section>
 
@@ -999,7 +1006,7 @@ export default function MovieDetailPage() {
         )}
 
         {/* Reviews */}
-        <ReviewsSection movie={movie} />
+        <ReviewsSection movie={movie} writeOpen={writeReviewOpen} setWriteOpen={setWriteReviewOpen} myReview={myReview} setMyReview={setMyReview} />
 
         {/* Quotes (kept for any future data) */}
         {movie.quotes.length > 0 && (
