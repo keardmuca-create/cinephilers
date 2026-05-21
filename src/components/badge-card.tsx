@@ -86,17 +86,16 @@ function RoadmapRow({ rowTier, threshold, unit, current, activeTier, history }: 
 
   return (
     <div
-      className={`flex items-center gap-3 rounded-xl px-3 py-2.5 transition-colors ${
-        isCurrent
-          ? 'bg-white/[0.07]'
-          : isFuture
-          ? 'opacity-40'
-          : ''
+      className={`grid items-center gap-x-2 rounded-xl px-3 py-2.5 transition-colors ${
+        isCurrent ? 'bg-white/[0.07]' : isFuture ? 'opacity-40' : ''
       }`}
-      style={isCurrent ? { borderLeft: `2px solid ${color}` } : { borderLeft: '2px solid transparent' }}
+      style={{
+        gridTemplateColumns: '1.25rem 4.5rem 1fr auto',
+        borderLeft: isCurrent ? `2px solid ${color}` : '2px solid transparent',
+      }}
     >
       {/* Status icon */}
-      <div className="shrink-0 h-5 w-5 flex items-center justify-center">
+      <div className="flex items-center justify-center h-5 w-5">
         {isEarned ? (
           <Check className="h-3.5 w-3.5" style={{ color }} />
         ) : isCurrent ? (
@@ -106,24 +105,24 @@ function RoadmapRow({ rowTier, threshold, unit, current, activeTier, history }: 
         )}
       </div>
 
-      {/* Tier label + threshold */}
-      <div className="flex-1 min-w-0">
-        <span className="text-xs font-bold" style={{ color: isFuture ? undefined : color }}>
-          {TIER_LABELS[rowTier]}
-        </span>
-        <span className="text-xs text-muted-foreground ml-2">
-          {threshold.toLocaleString()} {unit}
-        </span>
-      </div>
+      {/* Tier label */}
+      <span className="text-xs font-bold truncate" style={{ color: isFuture ? undefined : color }}>
+        {TIER_LABELS[rowTier]}
+      </span>
+
+      {/* Threshold */}
+      <span className="text-xs text-muted-foreground tabular-nums">
+        {threshold.toLocaleString()} {unit}
+      </span>
 
       {/* Right label */}
-      <div className="shrink-0 text-right">
+      <div className="text-right">
         {isEarned && dateLabel ? (
-          <span className="text-[10px] text-muted-foreground">{dateLabel}</span>
+          <span className="text-[10px] text-muted-foreground tabular-nums">{dateLabel}</span>
         ) : isCurrent ? (
           <span className="text-[10px] font-bold" style={{ color }}>Current</span>
         ) : remaining > 0 ? (
-          <span className="text-[10px] text-muted-foreground">{remaining.toLocaleString()} more</span>
+          <span className="text-[10px] text-muted-foreground tabular-nums">{remaining.toLocaleString()} more</span>
         ) : null}
       </div>
     </div>
