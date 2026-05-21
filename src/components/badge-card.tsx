@@ -262,7 +262,7 @@ function BadgeDetailModal({ badge, open, onClose }: BadgeDetailModalProps) {
           {!badge.isSpecial && t && (
             <div className="space-y-1">
               <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground px-1 pb-1">Tier Roadmap</p>
-              <div className="space-y-0.5">
+              <div className="space-y-0.5 max-w-[17rem] mx-auto">
                 {EARNED_TIERS.map(rowTier => (
                   <RoadmapRow
                     key={rowTier}
