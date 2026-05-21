@@ -18,12 +18,7 @@ import { Separator } from '@/components/ui/separator';
 import { Progress } from '@/components/ui/progress';
 import { toast } from '@/hooks/use-toast';
 
-const RATING_DATA = [
-  { rating: '1', count: 0 }, { rating: '2', count: 0 }, { rating: '3', count: 0 },
-  { rating: '4', count: 0 }, { rating: '5', count: 0 }, { rating: '6', count: 0 },
-  { rating: '7', count: 0 }, { rating: '8', count: 0 }, { rating: '9', count: 0 },
-  { rating: '10', count: 0 },
-];
+interface RatedItem { id: string; title: string; poster: string; year: string; tmdbRating?: number; userRating: number; }
 
 type LucideIcon = React.ComponentType<{ className?: string }>;
 
@@ -274,6 +269,7 @@ export default function ProfilePage() {
   const [watchedCount, setWatchedCount] = useState(0);
   const [watchlist, setWatchlist] = useState<Movie[]>([]);
   const [userReviews, setUserReviews] = useState<UserReview[]>([]);
+  const [ratedItems, setRatedItems] = useState<RatedItem[]>([]);
 
   useEffect(() => {
     ensureSignupDate();
@@ -411,7 +407,41 @@ export default function ProfilePage() {
       }
       setUserReviews(reviews.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()));
     } catch { /* ignore */ }
+
+    // Load rated items
+    try {
+      const rvMap = new Map<string, { title: string; poster: string; year: string; tmdbRating?: number }>();
+      try {
+        const stored = localStorage.getItem('recently-viewed');
+        if (stored) {
+          const rv = JSON.parse(stored) as { id: string; title: string; poster: string; year: string; rating?: number }[];
+          for (const item of rv) rvMap.set(item.id, { title: item.title, poster: item.poster, year: item.year, tmdbRating: item.rating });
+        }
+      } catch { /* ignore */ }
+
+      const rated: RatedItem[] = [];
+      for (let i = 0; i < localStorage.length; i++) {
+        const k = localStorage.key(i)!;
+        if (!k.startsWith('movie-rating-')) continue;
+        const userRating = Number(localStorage.getItem(k));
+        if (!userRating) continue;
+        const id = k.slice('movie-rating-'.length);
+        const raw = localStorage.getItem(`meta-${id}`);
+        const meta = raw ? JSON.parse(raw) : null;
+        const rv = rvMap.get(id);
+        const title = meta?.title ?? rv?.title;
+        const poster = meta?.poster ?? rv?.poster;
+        if (!title || !poster) continue;
+        rated.push({ id, title, poster, year: meta?.year ?? rv?.year ?? '', tmdbRating: meta?.tmdbRating ?? rv?.tmdbRating, userRating });
+      }
+      setRatedItems(rated);
+    } catch { /* ignore */ }
   }, []);
+
+  const ratingData = [1,2,3,4,5,6,7,8,9,10].map(n => ({
+    rating: String(n),
+    count: ratedItems.filter(r => r.userRating === n).length,
+  }));
 
   const activeSeasonal = badges.filter(b => b.isSeasonal && b.isSeasonActive);
   const otherBadges = badges.filter(b => !(b.isSeasonal && b.isSeasonActive));
@@ -537,24 +567,106 @@ export default function ProfilePage() {
         )}
       </section>
 
+      {/* Ratings */}
+      <section>
+        <div className="flex items-center justify-between mb-6">
+          <h3 className="text-2xl font-headline font-bold flex items-center gap-3">
+            <Star className="h-6 w-6 text-primary" />
+            Ratings
+            {ratedItems.length > 0 && <span className="text-2xl font-bold text-foreground">{ratedItems.length}</span>}
+          </h3>
+          {ratedItems.length > 0 && (
+            <Dialog>
+              <DialogTrigger asChild>
+                <Button variant="ghost" size="sm" className="text-primary hover:opacity-80 font-semibold">
+                  See All <ChevronRight className="h-4 w-4 ml-1" />
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="max-w-lg rounded-3xl h-[80vh] flex flex-col p-0 bg-background border-border">
+                <DialogHeader className="px-6 pt-6 pb-3 border-b border-border shrink-0">
+                  <DialogTitle className="font-headline text-2xl font-bold">Ratings ({ratedItems.length})</DialogTitle>
+                </DialogHeader>
+                <ScrollArea className="flex-1 px-6 pb-6">
+                  <div className="pt-2">
+                    {ratedItems.map(item => (
+                      <Link key={item.id} href={`/movie/${item.id}`} className="group flex items-center gap-4 py-3.5 border-b border-border last:border-0">
+                        <div className="w-16 aspect-[2/3] rounded-lg overflow-hidden bg-muted shadow-sm shrink-0">
+                          <img src={item.poster} alt={item.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-semibold font-headline line-clamp-2 group-hover:text-primary transition-colors leading-snug mb-0.5">{item.title}</p>
+                          <p className="text-xs text-muted-foreground mb-1.5">{item.year}</p>
+                          <div className="flex items-center gap-2.5">
+                            {item.tmdbRating !== undefined && (
+                              <div className="flex items-center gap-0.5">
+                                <span className="text-xs text-yellow-400 font-bold">★</span>
+                                <span className="text-xs font-bold text-foreground">{item.tmdbRating.toFixed(1)}</span>
+                              </div>
+                            )}
+                            <div className="flex items-center gap-0.5">
+                              <span className="text-xs text-blue-400 font-bold">★</span>
+                              <span className="text-xs font-bold text-blue-400">{item.userRating}</span>
+                            </div>
+                          </div>
+                        </div>
+                      </Link>
+                    ))}
+                  </div>
+                </ScrollArea>
+              </DialogContent>
+            </Dialog>
+          )}
+        </div>
+        {ratedItems.length > 0 ? (
+          <div className="flex overflow-x-auto gap-4 pb-4 no-scrollbar -mx-6 px-6">
+            {ratedItems.slice(0, 50).map(item => (
+              <Link key={item.id} href={`/movie/${item.id}`} className="group shrink-0 w-36">
+                <div className="relative aspect-[2/3] overflow-hidden rounded-xl bg-muted shadow-lg movie-card-hover mb-2">
+                  <img src={item.poster} alt={item.title} className="w-full h-full object-cover transition-transform group-hover:scale-110" />
+                </div>
+                <div className="flex items-center gap-1.5 mb-0.5 flex-wrap">
+                  {item.tmdbRating !== undefined && (
+                    <div className="flex items-center gap-0.5">
+                      <span className="text-xs text-yellow-400 font-bold">★</span>
+                      <span className="text-xs font-bold text-foreground">{item.tmdbRating.toFixed(1)}</span>
+                    </div>
+                  )}
+                  <div className="flex items-center gap-0.5">
+                    <span className="text-xs text-blue-400 font-bold">★</span>
+                    <span className="text-xs font-bold text-blue-400">{item.userRating}</span>
+                  </div>
+                </div>
+                <p className="text-xs font-semibold font-headline line-clamp-2 group-hover:text-primary transition-colors leading-snug">
+                  {item.title} {item.year ? `(${item.year})` : ''}
+                </p>
+              </Link>
+            ))}
+          </div>
+        ) : (
+          <EmptyRow message="Rate movies and shows to see them here" />
+        )}
+      </section>
+
       {/* Rating Distribution */}
-      <section className="space-y-6">
+      <section className="space-y-4">
         <SectionHeader title="Rating Distribution" icon={Star} />
-        <div className="h-64 w-full bg-white/5 rounded-[2.5rem] p-8 border border-white/5 shadow-inner">
+        <div className="h-56 w-full bg-muted/40 rounded-3xl p-6 border border-border">
           <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={RATING_DATA}>
+            <BarChart data={ratingData}>
               <XAxis dataKey="rating" axisLine={false} tickLine={false} tick={{ fill: '#888', fontSize: 11, fontWeight: 'bold' }} />
               <YAxis hide />
-              <ChartTooltip cursor={{ fill: 'rgba(255,255,255,0.05)' }} contentStyle={{ backgroundColor: '#1a1a1a', border: 'none', borderRadius: '12px' }} />
+              <ChartTooltip cursor={{ fill: 'rgba(0,0,0,0.05)' }} contentStyle={{ backgroundColor: '#fff', border: '1px solid #eee', borderRadius: '12px', color: '#111' }} />
               <Bar dataKey="count" radius={[6, 6, 0, 0]}>
-                {RATING_DATA.map((entry, index) => (
-                  <Cell key={`cell-${index}`} fill={parseInt(entry.rating) >= 7 ? 'hsl(var(--primary))' : 'hsl(var(--accent))'} opacity={0.9} />
+                {ratingData.map((entry, index) => (
+                  <Cell key={`cell-${index}`} fill={parseInt(entry.rating) >= 7 ? 'hsl(var(--primary))' : 'hsl(var(--accent))'} opacity={0.85} />
                 ))}
               </Bar>
             </BarChart>
           </ResponsiveContainer>
         </div>
-        <div className="text-center text-sm text-muted-foreground font-medium">Rate movies to build your chart</div>
+        {ratedItems.length === 0 && (
+          <p className="text-center text-sm text-muted-foreground">Rate movies to build your chart</p>
+        )}
       </section>
 
       {/* Watchlist */}
