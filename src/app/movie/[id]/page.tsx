@@ -398,6 +398,120 @@ function SeasonsSection({
   );
 }
 
+// ─── Lists helpers ────────────────────────────────────────────────────────────
+
+interface UserList {
+  id: string;
+  title: string;
+  isPrivate: boolean;
+  createdAt: string;
+  items: { movieId: string; title: string; poster: string; year: string; type: string }[];
+}
+
+function loadLists(): UserList[] {
+  try { return JSON.parse(localStorage.getItem('user-lists') ?? '[]'); } catch { return []; }
+}
+function saveLists(lists: UserList[]) {
+  try { localStorage.setItem('user-lists', JSON.stringify(lists)); } catch { /* ignore */ }
+}
+
+function AddToListButton({ movie }: { movie: Movie }) {
+  const [open, setOpen] = useState(false);
+  const [lists, setLists] = useState<UserList[]>([]);
+  const [createOpen, setCreateOpen] = useState(false);
+  const [newTitle, setNewTitle] = useState('');
+  const [newPrivate, setNewPrivate] = useState(false);
+
+  useEffect(() => { if (open) setLists(loadLists()); }, [open]);
+
+  const addToList = (listId: string) => {
+    const updated = lists.map(l => {
+      if (l.id !== listId) return l;
+      if (l.items.some(i => i.movieId === movie.id)) return l;
+      return { ...l, items: [...l.items, { movieId: movie.id, title: movie.title, poster: movie.poster, year: movie.year, type: movie.type }] };
+    });
+    saveLists(updated);
+    setLists(updated);
+    toast({ title: 'Added to list' });
+  };
+
+  const createAndAdd = () => {
+    if (!newTitle.trim()) return;
+    const newList: UserList = { id: Date.now().toString(), title: newTitle.trim(), isPrivate: newPrivate, createdAt: new Date().toISOString(), items: [{ movieId: movie.id, title: movie.title, poster: movie.poster, year: movie.year, type: movie.type }] };
+    const updated = [...lists, newList];
+    saveLists(updated);
+    setLists(updated);
+    setCreateOpen(false);
+    setNewTitle('');
+    setNewPrivate(false);
+    toast({ title: `Added to "${newList.title}"` });
+  };
+
+  const isInList = (listId: string) => lists.find(l => l.id === listId)?.items.some(i => i.movieId === movie.id) ?? false;
+
+  return (
+    <>
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogTrigger asChild>
+          <Button variant="outline" className="h-14 px-8 rounded-2xl border-2 border-foreground bg-background text-foreground font-bold flex-1 md:flex-none text-base">
+            <ListPlus className="h-5 w-5 mr-2" /> Add to List
+          </Button>
+        </DialogTrigger>
+        <DialogContent className="rounded-3xl max-w-sm border-border">
+          <DialogHeader><DialogTitle className="font-headline">Add to List</DialogTitle></DialogHeader>
+          <div className="space-y-2 pt-2">
+            {lists.length === 0 && <p className="text-sm text-muted-foreground text-center py-4">No lists yet. Create one below.</p>}
+            {lists.map(l => (
+              <button
+                key={l.id}
+                onClick={() => addToList(l.id)}
+                className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-left transition-colors ${isInList(l.id) ? 'bg-primary/10 border border-primary/30' : 'hover:bg-muted border border-transparent'}`}
+              >
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-semibold truncate">{l.title}</p>
+                  <p className="text-xs text-muted-foreground">{l.items.length} {l.items.length === 1 ? 'title' : 'titles'} · {l.isPrivate ? 'Private' : 'Public'}</p>
+                </div>
+                {isInList(l.id) && <Check className="h-4 w-4 text-primary shrink-0" />}
+              </button>
+            ))}
+            <Separator className="my-2" />
+            <Button className="w-full h-11 rounded-xl" variant="outline" onClick={() => { setOpen(false); setCreateOpen(true); }}>
+              <Plus className="h-4 w-4 mr-2" /> Create New List
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={createOpen} onOpenChange={setCreateOpen}>
+        <DialogContent className="rounded-3xl max-w-sm border-border">
+          <DialogHeader><DialogTitle className="font-headline">Create New List</DialogTitle></DialogHeader>
+          <div className="space-y-4 pt-2">
+            <input
+              value={newTitle}
+              onChange={e => setNewTitle(e.target.value)}
+              placeholder="List title…"
+              className="w-full px-4 py-3 rounded-xl border border-border bg-muted/30 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/40"
+            />
+            <button
+              onClick={() => setNewPrivate(p => !p)}
+              className={`w-full flex items-center justify-between px-4 py-3 rounded-xl border transition-colors ${newPrivate ? 'border-primary/40 bg-primary/5' : 'border-border bg-muted/30'}`}
+            >
+              <span className="text-sm font-semibold">Private list</span>
+              <div className={`w-10 h-5 rounded-full transition-colors flex items-center px-0.5 ${newPrivate ? 'bg-primary' : 'bg-foreground/20'}`}>
+                <div className={`w-4 h-4 rounded-full bg-white transition-transform ${newPrivate ? 'translate-x-5' : 'translate-x-0'}`} />
+              </div>
+            </button>
+            <div className="flex gap-3">
+              <Button variant="outline" className="flex-1 rounded-xl" onClick={() => setCreateOpen(false)}>Cancel</Button>
+              <Button className="flex-1 rounded-xl" disabled={!newTitle.trim()} onClick={createAndAdd}>Create & Add</Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+    </>
+  );
+}
+
 // ─── Reviews section ──────────────────────────────────────────────────────────
 
 interface UserReview { movieId: string; movieTitle: string; moviePoster: string; movieYear: string; content: string; rating: number; date: string; }
@@ -872,25 +986,7 @@ export default function MovieDetailPage() {
             {isWatched ? <Check className="h-5 w-5 mr-2" /> : <Play className="h-5 w-5 mr-2" />}
             {isWatched ? 'Watched' : 'Mark as Watched'}
           </Button>
-          <Dialog>
-            <DialogTrigger asChild>
-              <Button variant="outline" className="h-14 px-8 rounded-2xl border-2 border-foreground bg-background text-foreground font-bold flex-1 md:flex-none text-base">
-                <ListPlus className="h-5 w-5 mr-2" /> Add to List
-              </Button>
-            </DialogTrigger>
-            <DialogContent className="rounded-3xl max-w-sm">
-              <DialogHeader><DialogTitle className="font-headline">Add to Custom List</DialogTitle></DialogHeader>
-              <div className="space-y-2 py-4">
-                <Button variant="ghost" className="w-full justify-start h-14 rounded-2xl" onClick={() => toast({ title: 'Added to list' })}>
-                  <Film className="h-5 w-5 mr-3 text-primary" /> My Favourites
-                </Button>
-                <Separator className="bg-white/5 my-2" />
-                <Button className="w-full h-12 rounded-2xl" variant="outline">
-                  <Plus className="h-4 w-4 mr-2" /> Create New List
-                </Button>
-              </div>
-            </DialogContent>
-          </Dialog>
+          <AddToListButton movie={movie} />
         </section>
 
         {/* Ratings */}

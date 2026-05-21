@@ -9,7 +9,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { MovieCard } from '@/components/movie-card';
 import Link from 'next/link';
-import { Settings, Star, Film, List, MessageSquare, ChevronRight, Award, History, Bookmark, User, Eye } from 'lucide-react';
+import { Settings, Star, Film, List, MessageSquare, ChevronRight, Award, History, Bookmark, User, Eye, Plus } from 'lucide-react';
 import { FavoritesSection } from '@/components/favorites-section';
 import { BarChart, Bar, XAxis, ResponsiveContainer, Cell, YAxis, Tooltip as ChartTooltip } from 'recharts';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
@@ -119,6 +119,150 @@ const EmptyRow = ({ message }: { message: string }) => (
 
 interface RecentItem { id: string; title: string; poster: string; year: string; loggedAt: string; rating?: number; tmdbRating?: number; }
 interface UserReview { movieId: string; movieTitle: string; moviePoster: string; movieYear: string; content: string; rating: number; date: string; }
+interface UserList { id: string; title: string; isPrivate: boolean; createdAt: string; items: { movieId: string; title: string; poster: string; year: string; type: string }[]; }
+
+function loadLists(): UserList[] {
+  try { return JSON.parse(localStorage.getItem('user-lists') ?? '[]'); } catch { return []; }
+}
+function saveLists(ls: UserList[]) {
+  try { localStorage.setItem('user-lists', JSON.stringify(ls)); } catch { /* ignore */ }
+}
+
+function ListsSection() {
+  const [lists, setLists] = useState<UserList[]>([]);
+  const [createOpen, setCreateOpen] = useState(false);
+  const [newTitle, setNewTitle] = useState('');
+  const [newPrivate, setNewPrivate] = useState(false);
+  const [viewList, setViewList] = useState<UserList | null>(null);
+
+  useEffect(() => { setLists(loadLists()); }, []);
+
+  const createList = () => {
+    if (!newTitle.trim()) return;
+    const nl: UserList = { id: Date.now().toString(), title: newTitle.trim(), isPrivate: newPrivate, createdAt: new Date().toISOString(), items: [] };
+    const updated = [...lists, nl];
+    saveLists(updated);
+    setLists(updated);
+    setCreateOpen(false);
+    setNewTitle('');
+    setNewPrivate(false);
+  };
+
+  return (
+    <section className="space-y-4">
+      <SectionHeader
+        title="Lists"
+        icon={List}
+        seeAllContent={
+          <button
+            onClick={() => setCreateOpen(true)}
+            className="text-xs text-primary border border-primary/30 rounded-full px-3 py-1 hover:bg-primary/10 transition-colors font-semibold flex items-center gap-1"
+          >
+            <Plus className="h-3 w-3" /> Create
+          </button>
+        }
+      />
+
+      {lists.length === 0 ? (
+        <div className="flex flex-col items-center justify-center py-10 gap-3 text-center">
+          <p className="text-sm text-muted-foreground">Create lists to organise your movies</p>
+          <Button variant="outline" className="rounded-full px-6" onClick={() => setCreateOpen(true)}>
+            <Plus className="h-4 w-4 mr-2" /> Create a List
+          </Button>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {lists.map(l => (
+            <button
+              key={l.id}
+              onClick={() => setViewList(l)}
+              className="w-full flex items-center gap-4 p-4 rounded-2xl border border-border hover:bg-muted/40 transition-colors text-left"
+            >
+              {/* Mini poster strip */}
+              <div className="flex gap-1 shrink-0">
+                {l.items.slice(0, 3).map(item => (
+                  <div key={item.movieId} className="w-10 aspect-[2/3] rounded-lg overflow-hidden bg-muted">
+                    <img src={item.poster} alt={item.title} className="w-full h-full object-cover" />
+                  </div>
+                ))}
+                {l.items.length === 0 && (
+                  <div className="w-10 aspect-[2/3] rounded-lg bg-muted flex items-center justify-center">
+                    <Film className="h-4 w-4 text-muted-foreground" />
+                  </div>
+                )}
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-bold font-headline truncate">{l.title}</p>
+                <p className="text-xs text-muted-foreground">{l.items.length} {l.items.length === 1 ? 'title' : 'titles'} · {l.isPrivate ? 'Private' : 'Public'}</p>
+              </div>
+              <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
+            </button>
+          ))}
+        </div>
+      )}
+
+      {/* Create list dialog */}
+      <Dialog open={createOpen} onOpenChange={setCreateOpen}>
+        <DialogContent className="rounded-3xl max-w-sm border-border">
+          <DialogHeader><DialogTitle className="font-headline">Create New List</DialogTitle></DialogHeader>
+          <div className="space-y-4 pt-2">
+            <input
+              value={newTitle}
+              onChange={e => setNewTitle(e.target.value)}
+              placeholder="List title…"
+              autoFocus
+              className="w-full px-4 py-3 rounded-xl border border-border bg-muted/30 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/40"
+            />
+            <button
+              onClick={() => setNewPrivate(p => !p)}
+              className={`w-full flex items-center justify-between px-4 py-3 rounded-xl border transition-colors ${newPrivate ? 'border-primary/40 bg-primary/5' : 'border-border bg-muted/30'}`}
+            >
+              <span className="text-sm font-semibold">Private list</span>
+              <div className={`w-10 h-5 rounded-full transition-colors flex items-center px-0.5 ${newPrivate ? 'bg-primary' : 'bg-foreground/20'}`}>
+                <div className={`w-4 h-4 rounded-full bg-white transition-transform ${newPrivate ? 'translate-x-5' : 'translate-x-0'}`} />
+              </div>
+            </button>
+            <div className="flex gap-3">
+              <Button variant="outline" className="flex-1 rounded-xl" onClick={() => setCreateOpen(false)}>Cancel</Button>
+              <Button className="flex-1 rounded-xl" disabled={!newTitle.trim()} onClick={createList}>Create</Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* View list dialog */}
+      <Dialog open={!!viewList} onOpenChange={v => !v && setViewList(null)}>
+        <DialogContent className="max-w-lg rounded-3xl h-[80vh] flex flex-col p-0 bg-background border-border">
+          <DialogHeader className="px-6 pt-6 pb-3 border-b border-border shrink-0">
+            <DialogTitle className="font-headline text-2xl font-bold flex items-center justify-between">
+              {viewList?.title}
+              <span className="text-xs font-normal text-muted-foreground border border-border rounded-full px-2 py-0.5">{viewList?.isPrivate ? 'Private' : 'Public'}</span>
+            </DialogTitle>
+          </DialogHeader>
+          <ScrollArea className="flex-1 px-6 pb-6">
+            {viewList?.items.length === 0 ? (
+              <p className="text-sm text-muted-foreground text-center py-10">No movies added yet</p>
+            ) : (
+              <div className="pt-2">
+                {viewList?.items.map(item => (
+                  <Link key={item.movieId} href={`/movie/${item.movieId}`} className="group flex items-center gap-4 py-3.5 border-b border-border last:border-0">
+                    <div className="w-16 aspect-[2/3] rounded-lg overflow-hidden bg-muted shadow-sm shrink-0">
+                      <img src={item.poster} alt={item.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-semibold font-headline line-clamp-2 group-hover:text-primary transition-colors">{item.title}</p>
+                      <p className="text-xs text-muted-foreground mt-0.5">{item.year}</p>
+                    </div>
+                  </Link>
+                ))}
+              </div>
+            )}
+          </ScrollArea>
+        </DialogContent>
+      </Dialog>
+    </section>
+  );
+}
 
 
 export default function ProfilePage() {
@@ -422,16 +566,8 @@ export default function ProfilePage() {
         )}
       </section>
 
-      {/* Custom Lists */}
-      <section className="space-y-6">
-        <SectionHeader title="Custom Lists" icon={List} />
-        <div className="flex flex-col items-center justify-center py-10 gap-3 text-center">
-          <p className="text-sm text-muted-foreground">Create lists to organise your movies</p>
-          <Button variant="outline" className="rounded-full border-white/10 bg-white/5 px-6">
-            <Film className="h-4 w-4 mr-2" /> Create a List
-          </Button>
-        </div>
-      </section>
+      {/* Lists */}
+      <ListsSection />
 
       {/* Reviews */}
       <section>
