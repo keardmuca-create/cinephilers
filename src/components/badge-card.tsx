@@ -86,16 +86,13 @@ function RoadmapRow({ rowTier, threshold, unit, current, activeTier, history }: 
 
   return (
     <div
-      className={`grid items-center gap-x-2 rounded-xl px-3 py-2.5 transition-colors ${
+      className={`flex items-center gap-2 rounded-xl px-3 py-2.5 transition-colors ${
         isCurrent ? 'bg-white/[0.07]' : isFuture ? 'opacity-40' : ''
       }`}
-      style={{
-        gridTemplateColumns: '1.25rem 4.5rem 1fr auto',
-        borderLeft: isCurrent ? `2px solid ${color}` : '2px solid transparent',
-      }}
+      style={{ borderLeft: isCurrent ? `2px solid ${color}` : '2px solid transparent' }}
     >
       {/* Status icon */}
-      <div className="flex items-center justify-center h-5 w-5">
+      <div className="flex items-center justify-center h-5 w-5 shrink-0">
         {isEarned ? (
           <Check className="h-3.5 w-3.5" style={{ color }} />
         ) : isCurrent ? (
@@ -106,17 +103,17 @@ function RoadmapRow({ rowTier, threshold, unit, current, activeTier, history }: 
       </div>
 
       {/* Tier label */}
-      <span className="text-xs font-bold truncate" style={{ color: isFuture ? undefined : color }}>
+      <span className="text-xs font-bold w-14 shrink-0" style={{ color: isFuture ? undefined : color }}>
         {TIER_LABELS[rowTier]}
       </span>
 
-      {/* Threshold */}
-      <span className="text-xs text-muted-foreground tabular-nums">
+      {/* Threshold — centered */}
+      <span className="flex-1 text-center text-xs text-muted-foreground tabular-nums">
         {threshold.toLocaleString()} {unit}
       </span>
 
       {/* Right label */}
-      <div className="text-right">
+      <div className="text-right shrink-0 min-w-[3.5rem]">
         {isEarned && dateLabel ? (
           <span className="text-[10px] text-muted-foreground tabular-nums">{dateLabel}</span>
         ) : isCurrent ? (
@@ -262,7 +259,7 @@ function BadgeDetailModal({ badge, open, onClose }: BadgeDetailModalProps) {
           {!badge.isSpecial && t && (
             <div className="space-y-1">
               <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground px-1 pb-1">Tier Roadmap</p>
-              <div className="space-y-0.5 max-w-[17rem] mx-auto">
+              <div className="space-y-0.5">
                 {EARNED_TIERS.map(rowTier => (
                   <RoadmapRow
                     key={rowTier}
