@@ -9,7 +9,7 @@ import { Button } from '@/components/ui/button';
 import {
   Play, Check, Plus, Star, ChevronLeft, Share2, ListPlus, Quote,
   Info, Film, Calendar, Clock, Globe, Building2, Tv, ChevronDown, ChevronUp,
-  DollarSign, Images, Clapperboard,
+  DollarSign, Images, Clapperboard, PenLine,
 } from 'lucide-react';
 import { Avatar, AvatarImage } from '@/components/ui/avatar';
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
@@ -394,6 +394,179 @@ function SeasonsSection({
           );
         })}
       </div>
+    </section>
+  );
+}
+
+// ─── Reviews section ──────────────────────────────────────────────────────────
+
+interface UserReview { movieId: string; movieTitle: string; moviePoster: string; movieYear: string; content: string; rating: number; date: string; }
+
+function ReviewsSection({ movie }: { movie: Movie }) {
+  const [writeOpen, setWriteOpen] = useState(false);
+  const [draftContent, setDraftContent] = useState('');
+  const [draftRating, setDraftRating] = useState(0);
+  const [hoverRating, setHoverRating] = useState(0);
+  const [myReview, setMyReview] = useState<UserReview | null>(null);
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(`review-${movie.id}`);
+      if (raw) setMyReview(JSON.parse(raw));
+    } catch { /* ignore */ }
+  }, [movie.id]);
+
+  const submitReview = () => {
+    if (!draftContent.trim()) return;
+    const review: UserReview = {
+      movieId: movie.id,
+      movieTitle: movie.title,
+      moviePoster: movie.poster,
+      movieYear: movie.year,
+      content: draftContent.trim(),
+      rating: draftRating,
+      date: new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }),
+    };
+    try { localStorage.setItem(`review-${movie.id}`, JSON.stringify(review)); } catch { /* ignore */ }
+    setMyReview(review);
+    setWriteOpen(false);
+    setDraftContent('');
+    setDraftRating(0);
+    toast({ title: 'Review saved' });
+  };
+
+  const allReviews = movie.reviews ?? [];
+
+  return (
+    <section className="space-y-6">
+      <div className="flex items-center justify-between">
+        <h3 className="text-2xl font-headline font-bold">Community Reviews</h3>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            className="rounded-full border-foreground/20 text-sm font-semibold gap-1.5"
+            onClick={() => { setDraftContent(myReview?.content ?? ''); setDraftRating(myReview?.rating ?? 0); setWriteOpen(true); }}
+          >
+            <PenLine className="h-3.5 w-3.5" />
+            {myReview ? 'Edit Review' : 'Write a Review'}
+          </Button>
+          {allReviews.length > 0 && (
+            <Dialog>
+              <DialogTrigger asChild>
+                <Button variant="link" className="text-primary font-bold px-0">See All</Button>
+              </DialogTrigger>
+              <DialogContent className="max-w-xl rounded-[2.5rem] h-[80vh] flex flex-col p-0 border-border">
+                <DialogHeader className="px-8 pt-8 pb-4 border-b border-border shrink-0">
+                  <DialogTitle className="font-headline text-2xl">All Reviews</DialogTitle>
+                </DialogHeader>
+                <ScrollArea className="flex-1 px-8 pb-8">
+                  <div className="space-y-6 pt-4">
+                    {allReviews.map(r => (
+                      <div key={r.id} className="space-y-3">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-3">
+                            <Avatar className="h-9 w-9"><AvatarImage src={r.userAvatar} /></Avatar>
+                            <div>
+                              <span className="text-sm font-bold font-headline block">{r.userName}</span>
+                              <span className="text-[10px] text-muted-foreground uppercase tracking-widest font-bold">{r.date}</span>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-1 bg-yellow-400/10 text-yellow-500 px-3 py-1 rounded-full text-xs font-black">
+                            <Star className="h-3 w-3 fill-current" /> {r.rating}
+                          </div>
+                        </div>
+                        <p className="text-sm text-foreground leading-relaxed italic">&ldquo;{r.content}&rdquo;</p>
+                        <Separator />
+                      </div>
+                    ))}
+                  </div>
+                </ScrollArea>
+              </DialogContent>
+            </Dialog>
+          )}
+        </div>
+      </div>
+
+      {/* My review */}
+      {myReview && (
+        <div className="bg-primary/5 border border-primary/20 p-5 rounded-2xl space-y-2">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-bold uppercase tracking-widest text-primary">Your Review</span>
+            {myReview.rating > 0 && (
+              <div className="flex items-center gap-1 text-yellow-500 text-xs font-black">
+                <Star className="h-3 w-3 fill-current" /> {myReview.rating}
+              </div>
+            )}
+          </div>
+          <p className="text-sm text-foreground leading-relaxed italic">&ldquo;{myReview.content}&rdquo;</p>
+          <p className="text-[10px] text-muted-foreground">{myReview.date}</p>
+        </div>
+      )}
+
+      {/* Community preview */}
+      {allReviews.length > 0 && (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {allReviews.slice(0, 2).map(r => (
+            <div key={r.id} className="bg-muted/50 p-5 rounded-2xl border border-border space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <Avatar className="h-8 w-8"><AvatarImage src={r.userAvatar} /></Avatar>
+                  <div>
+                    <span className="text-sm font-bold font-headline block">{r.userName}</span>
+                    <span className="text-[10px] text-muted-foreground font-bold">{r.date}</span>
+                  </div>
+                </div>
+                <div className="flex items-center gap-1 bg-yellow-400/10 text-yellow-500 px-2.5 py-1 rounded-full text-xs font-black">
+                  <Star className="h-3 w-3 fill-current" /> {r.rating}
+                </div>
+              </div>
+              <p className="text-sm text-foreground line-clamp-3 italic leading-relaxed">&ldquo;{r.content}&rdquo;</p>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Write review dialog */}
+      <Dialog open={writeOpen} onOpenChange={setWriteOpen}>
+        <DialogContent className="max-w-lg rounded-3xl border-border">
+          <DialogHeader>
+            <DialogTitle className="font-headline text-xl">{myReview ? 'Edit Your Review' : 'Write a Review'}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-5 pt-2">
+            <div>
+              <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground mb-2">Your Rating (optional)</p>
+              <div className="flex gap-1">
+                {[1,2,3,4,5,6,7,8,9,10].map(n => (
+                  <button
+                    key={n}
+                    onMouseEnter={() => setHoverRating(n)}
+                    onMouseLeave={() => setHoverRating(0)}
+                    onClick={() => setDraftRating(n)}
+                    className={`text-xl transition-colors ${n <= (hoverRating || draftRating) ? 'text-yellow-400' : 'text-foreground/20'}`}
+                  >★</button>
+                ))}
+              </div>
+              {(hoverRating || draftRating) > 0 && (
+                <p className="text-xs text-muted-foreground mt-1">{hoverRating || draftRating}/10</p>
+              )}
+            </div>
+            <div>
+              <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground mb-2">Your Thoughts</p>
+              <textarea
+                value={draftContent}
+                onChange={e => setDraftContent(e.target.value)}
+                placeholder={`What did you think of ${movie.title}?`}
+                className="w-full h-36 p-3 rounded-xl border border-border bg-muted/30 text-sm text-foreground placeholder:text-muted-foreground resize-none focus:outline-none focus:ring-2 focus:ring-primary/40"
+              />
+            </div>
+            <div className="flex gap-3">
+              <Button variant="outline" className="flex-1 rounded-xl" onClick={() => setWriteOpen(false)}>Cancel</Button>
+              <Button className="flex-1 rounded-xl" disabled={!draftContent.trim()} onClick={submitReview}>Save Review</Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </section>
   );
 }
@@ -826,64 +999,7 @@ export default function MovieDetailPage() {
         )}
 
         {/* Reviews */}
-        {movie.reviews.length > 0 && (
-          <section className="space-y-6">
-            <div className="flex items-center justify-between">
-              <h3 className="text-2xl font-headline font-bold">Community Reviews</h3>
-              <Dialog>
-                <DialogTrigger asChild>
-                  <Button variant="link" className="text-primary font-bold">Read All {movie.reviews.length}</Button>
-                </DialogTrigger>
-                <DialogContent className="max-w-xl rounded-[2.5rem] max-h-[80vh] p-0 overflow-hidden border-white/10">
-                  <DialogHeader className="p-8 pb-4">
-                    <DialogTitle className="font-headline text-3xl">All Reviews</DialogTitle>
-                  </DialogHeader>
-                  <ScrollArea className="h-full px-8 pb-8">
-                    <div className="space-y-8 pt-4">
-                      {movie.reviews.map(r => (
-                        <div key={r.id} className="space-y-4">
-                          <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-3">
-                              <Avatar className="h-10 w-10"><AvatarImage src={r.userAvatar} /></Avatar>
-                              <div>
-                                <span className="text-sm font-bold font-headline block">{r.userName}</span>
-                                <span className="text-[10px] text-muted-foreground uppercase tracking-widest font-bold">{r.date}</span>
-                              </div>
-                            </div>
-                            <div className="flex items-center gap-1.5 bg-accent/20 text-accent px-3 py-1.5 rounded-full text-xs font-black">
-                              <Star className="h-3 w-3 fill-current" /> {r.rating}
-                            </div>
-                          </div>
-                          <p className="text-sm text-gray-300 leading-relaxed italic line-clamp-6">&ldquo;{r.content}&rdquo;</p>
-                          <Separator className="bg-white/5" />
-                        </div>
-                      ))}
-                    </div>
-                  </ScrollArea>
-                </DialogContent>
-              </Dialog>
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {movie.reviews.slice(0, 2).map(r => (
-                <div key={r.id} className="bg-white/5 p-6 rounded-3xl border border-white/5 space-y-4 hover:bg-white/10 transition-colors">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <Avatar className="h-9 w-9"><AvatarImage src={r.userAvatar} /></Avatar>
-                      <div>
-                        <span className="text-sm font-bold font-headline block">{r.userName}</span>
-                        <span className="text-[10px] text-muted-foreground font-bold">{r.date}</span>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-1 bg-accent/20 text-accent px-3 py-1 rounded-full text-xs font-black">
-                      <Star className="h-3 w-3 fill-current" /> {r.rating}
-                    </div>
-                  </div>
-                  <p className="text-sm text-gray-300 line-clamp-4 italic leading-relaxed">&ldquo;{r.content}&rdquo;</p>
-                </div>
-              ))}
-            </div>
-          </section>
-        )}
+        <ReviewsSection movie={movie} />
 
         {/* Quotes (kept for any future data) */}
         {movie.quotes.length > 0 && (

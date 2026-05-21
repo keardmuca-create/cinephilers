@@ -118,6 +118,7 @@ const EmptyRow = ({ message }: { message: string }) => (
 );
 
 interface RecentItem { id: string; title: string; poster: string; year: string; loggedAt: string; rating?: number; tmdbRating?: number; }
+interface UserReview { movieId: string; movieTitle: string; moviePoster: string; movieYear: string; content: string; rating: number; date: string; }
 
 
 export default function ProfilePage() {
@@ -128,6 +129,7 @@ export default function ProfilePage() {
   const [recentWatched, setRecentWatched] = useState<RecentItem[]>([]);
   const [watchedCount, setWatchedCount] = useState(0);
   const [watchlist, setWatchlist] = useState<Movie[]>([]);
+  const [userReviews, setUserReviews] = useState<UserReview[]>([]);
 
   useEffect(() => {
     ensureSignupDate();
@@ -251,6 +253,19 @@ export default function ProfilePage() {
         } as Movie);
       }
       setWatchlist(wlItems);
+    } catch { /* ignore */ }
+
+    // Load user-written reviews
+    try {
+      const reviews: UserReview[] = [];
+      for (let i = 0; i < localStorage.length; i++) {
+        const k = localStorage.key(i)!;
+        if (!k.startsWith('review-')) continue;
+        const raw = localStorage.getItem(k);
+        if (!raw) continue;
+        try { reviews.push(JSON.parse(raw)); } catch { /* ignore */ }
+      }
+      setUserReviews(reviews.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()));
     } catch { /* ignore */ }
   }, []);
 
@@ -420,8 +435,32 @@ export default function ProfilePage() {
 
       {/* Reviews */}
       <section>
-        <SectionHeader title="Recent Reviews" icon={MessageSquare} />
-        <EmptyRow message="Your reviews will appear here" />
+        <SectionHeader title="Reviews" icon={MessageSquare} />
+        {userReviews.length > 0 ? (
+          <div className="space-y-4">
+            {userReviews.map(r => (
+              <Link key={r.movieId} href={`/movie/${r.movieId}`} className="group flex gap-4 p-4 rounded-2xl border border-border hover:bg-muted/40 transition-colors">
+                <div className="w-14 shrink-0 aspect-[2/3] rounded-lg overflow-hidden bg-muted">
+                  <img src={r.moviePoster} alt={r.movieTitle} className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
+                </div>
+                <div className="flex-1 min-w-0 space-y-1">
+                  <div className="flex items-start justify-between gap-2">
+                    <p className="text-sm font-bold font-headline line-clamp-1 group-hover:text-primary transition-colors">{r.movieTitle}</p>
+                    {r.rating > 0 && (
+                      <div className="flex items-center gap-0.5 shrink-0 text-yellow-500 text-xs font-black">
+                        <Star className="h-3 w-3 fill-current" /> {r.rating}
+                      </div>
+                    )}
+                  </div>
+                  <p className="text-[10px] text-muted-foreground">{r.movieYear} · {r.date}</p>
+                  <p className="text-xs text-foreground/80 italic line-clamp-2 leading-relaxed">&ldquo;{r.content}&rdquo;</p>
+                </div>
+              </Link>
+            ))}
+          </div>
+        ) : (
+          <EmptyRow message="Your reviews will appear here" />
+        )}
       </section>
 
       {/* Badges */}
