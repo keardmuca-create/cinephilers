@@ -435,10 +435,50 @@ export default function ProfilePage() {
 
       {/* Reviews */}
       <section>
-        <SectionHeader title="Reviews" icon={MessageSquare} />
+        <SectionHeader
+          title="Reviews"
+          icon={MessageSquare}
+          seeAllContent={userReviews.length > 0 ? (
+            <Dialog>
+              <DialogTrigger asChild>
+                <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-primary transition-colors">
+                  See All <ChevronRight className="h-4 w-4 ml-1" />
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="max-w-lg rounded-3xl h-[80vh] flex flex-col p-0 bg-background border-border">
+                <DialogHeader className="px-6 pt-6 pb-3 border-b border-border shrink-0">
+                  <DialogTitle className="font-headline text-2xl font-bold">Your Reviews</DialogTitle>
+                </DialogHeader>
+                <ScrollArea className="flex-1 px-6 pb-6">
+                  <div className="space-y-3 pt-3">
+                    {userReviews.map(r => (
+                      <Link key={r.movieId} href={`/movie/${r.movieId}`} className="group flex gap-4 p-4 rounded-2xl border border-border hover:bg-muted/40 transition-colors">
+                        <div className="w-14 shrink-0 aspect-[2/3] rounded-lg overflow-hidden bg-muted">
+                          <img src={r.moviePoster} alt={r.movieTitle} className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
+                        </div>
+                        <div className="flex-1 min-w-0 space-y-1">
+                          <div className="flex items-start justify-between gap-2">
+                            <p className="text-sm font-bold font-headline line-clamp-1 group-hover:text-primary transition-colors">{r.movieTitle}</p>
+                            {r.rating > 0 && (
+                              <div className="flex items-center gap-0.5 shrink-0 text-yellow-500 text-xs font-black">
+                                <Star className="h-3 w-3 fill-current" /> {r.rating}
+                              </div>
+                            )}
+                          </div>
+                          <p className="text-[10px] text-muted-foreground">{r.movieYear} · {r.date}</p>
+                          <p className="text-xs text-foreground/80 italic line-clamp-2 leading-relaxed">&ldquo;{r.content}&rdquo;</p>
+                        </div>
+                      </Link>
+                    ))}
+                  </div>
+                </ScrollArea>
+              </DialogContent>
+            </Dialog>
+          ) : undefined}
+        />
         {userReviews.length > 0 ? (
           <div className="space-y-4">
-            {userReviews.map(r => (
+            {userReviews.slice(0, 3).map(r => (
               <Link key={r.movieId} href={`/movie/${r.movieId}`} className="group flex gap-4 p-4 rounded-2xl border border-border hover:bg-muted/40 transition-colors">
                 <div className="w-14 shrink-0 aspect-[2/3] rounded-lg overflow-hidden bg-muted">
                   <img src={r.moviePoster} alt={r.movieTitle} className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
