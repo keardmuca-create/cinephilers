@@ -90,7 +90,7 @@ function RoadmapRow({ rowTier, threshold, unit, current, activeTier, history }: 
         isCurrent ? 'bg-white/[0.07]' : isFuture ? 'opacity-40' : ''
       }`}
       style={{
-        gridTemplateColumns: '1.25rem 4.5rem 6.5rem 4.5rem',
+        gridTemplateColumns: '1.25rem 4.5rem 1fr auto',
         borderLeft: isCurrent ? `2px solid ${color}` : '2px solid transparent',
       }}
     >
@@ -262,7 +262,7 @@ function BadgeDetailModal({ badge, open, onClose }: BadgeDetailModalProps) {
           {!badge.isSpecial && t && (
             <div className="space-y-1">
               <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground px-1 pb-1">Tier Roadmap</p>
-              <div className="space-y-0.5 max-w-xs mx-auto">
+              <div className="space-y-0.5">
                 {EARNED_TIERS.map(rowTier => (
                   <RoadmapRow
                     key={rowTier}
