@@ -270,6 +270,7 @@ export default function ProfilePage() {
   const [watchlist, setWatchlist] = useState<Movie[]>([]);
   const [userReviews, setUserReviews] = useState<UserReview[]>([]);
   const [ratedItems, setRatedItems] = useState<RatedItem[]>([]);
+  const [ratingFilter, setRatingFilter] = useState<number | null>(null);
 
   useEffect(() => {
     ensureSignupDate();
@@ -652,11 +653,11 @@ export default function ProfilePage() {
         <SectionHeader title="Rating Distribution" icon={Star} />
         <div className="h-56 w-full bg-muted/40 rounded-3xl p-6 border border-border">
           <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={ratingData}>
+            <BarChart data={ratingData} onClick={d => { if (d?.activePayload?.[0]) { const r = parseInt(d.activePayload[0].payload.rating); if (ratedItems.filter(i => i.userRating === r).length > 0) setRatingFilter(r); } }}>
               <XAxis dataKey="rating" axisLine={false} tickLine={false} tick={{ fill: '#888', fontSize: 11, fontWeight: 'bold' }} />
               <YAxis hide />
               <ChartTooltip cursor={{ fill: 'rgba(0,0,0,0.05)' }} contentStyle={{ backgroundColor: '#fff', border: '1px solid #eee', borderRadius: '12px', color: '#111' }} />
-              <Bar dataKey="count" radius={[6, 6, 0, 0]}>
+              <Bar dataKey="count" radius={[6, 6, 0, 0]} style={{ cursor: 'pointer' }}>
                 {ratingData.map((entry, index) => (
                   <Cell key={`cell-${index}`} fill={parseInt(entry.rating) >= 7 ? 'hsl(var(--primary))' : 'hsl(var(--accent))'} opacity={0.85} />
                 ))}
@@ -667,7 +668,51 @@ export default function ProfilePage() {
         {ratedItems.length === 0 && (
           <p className="text-center text-sm text-muted-foreground">Rate movies to build your chart</p>
         )}
+        {ratedItems.length > 0 && (
+          <p className="text-center text-xs text-muted-foreground">Tap a bar to see titles with that rating</p>
+        )}
       </section>
+
+      {/* Rating filter dialog */}
+      <Dialog open={ratingFilter !== null} onOpenChange={v => !v && setRatingFilter(null)}>
+        <DialogContent className="max-w-lg rounded-3xl h-[80vh] flex flex-col p-0 bg-background border-border">
+          <DialogHeader className="px-6 pt-6 pb-3 border-b border-border shrink-0">
+            <DialogTitle className="font-headline text-2xl font-bold flex items-center gap-2">
+              <span className="text-blue-400">★</span> Rated {ratingFilter}/10
+              <span className="text-sm font-normal text-muted-foreground ml-1">
+                ({ratedItems.filter(i => i.userRating === ratingFilter).length} titles)
+              </span>
+            </DialogTitle>
+          </DialogHeader>
+          <ScrollArea className="flex-1 px-6 pb-6">
+            <div className="pt-2">
+              {ratedItems.filter(i => i.userRating === ratingFilter).map(item => (
+                <Link key={item.id} href={`/movie/${item.id}`} className="group flex items-center gap-4 py-3.5 border-b border-border last:border-0">
+                  <div className="w-16 aspect-[2/3] rounded-lg overflow-hidden bg-muted shadow-sm shrink-0">
+                    <img src={item.poster} alt={item.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-semibold font-headline line-clamp-2 group-hover:text-primary transition-colors leading-snug mb-0.5">{item.title}</p>
+                    <p className="text-xs text-muted-foreground mb-1.5">{item.year}</p>
+                    <div className="flex items-center gap-2.5">
+                      {item.tmdbRating !== undefined && (
+                        <div className="flex items-center gap-0.5">
+                          <span className="text-xs text-yellow-400 font-bold">★</span>
+                          <span className="text-xs font-bold text-foreground">{item.tmdbRating.toFixed(1)}</span>
+                        </div>
+                      )}
+                      <div className="flex items-center gap-0.5">
+                        <span className="text-xs text-blue-400 font-bold">★</span>
+                        <span className="text-xs font-bold text-blue-400">{item.userRating}</span>
+                      </div>
+                    </div>
+                  </div>
+                </Link>
+              ))}
+            </div>
+          </ScrollArea>
+        </DialogContent>
+      </Dialog>
 
       {/* Watchlist */}
       <section>
