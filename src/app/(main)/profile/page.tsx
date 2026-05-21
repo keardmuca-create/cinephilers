@@ -269,7 +269,7 @@ export default function ProfilePage() {
   const [showSettings, setShowSettings] = useState(false);
   const [badges, setBadges] = useState<ComputedBadge[]>([]);
   const [comingSoon, setComingSoon] = useState<ComingSoonBadge[]>([]);
-  const [showAllBadges, setShowAllBadges] = useState(false);
+  const [showBadgesDialog, setShowBadgesDialog] = useState(false);
   const [recentWatched, setRecentWatched] = useState<RecentItem[]>([]);
   const [watchedCount, setWatchedCount] = useState(0);
   const [watchlist, setWatchlist] = useState<Movie[]>([]);
@@ -413,7 +413,14 @@ export default function ProfilePage() {
     } catch { /* ignore */ }
   }, []);
 
-  const visibleBadges = showAllBadges ? badges : badges.slice(0, 3);
+  const activeSeasonal = badges.filter(b => b.isSeasonal && b.isSeasonActive);
+  const otherBadges = badges.filter(b => !(b.isSeasonal && b.isSeasonActive));
+  const mainBadges = [...activeSeasonal, ...otherBadges].slice(0, 3);
+
+  function daysLeft(end?: Date) {
+    if (!end) return 0;
+    return Math.max(0, Math.ceil((new Date(end).getTime() - Date.now()) / 86400000));
+  }
 
   return (
     <main className="p-6 pt-12 pb-32 max-w-2xl mx-auto space-y-16">
@@ -644,12 +651,12 @@ export default function ProfilePage() {
         <SectionHeader
           title="Badges & Achievements"
           icon={Award}
-          seeAllContent={badges.length > 3 ? (
+          seeAllContent={badges.length > 0 ? (
             <button
-              onClick={() => setShowAllBadges(prev => !prev)}
+              onClick={() => setShowBadgesDialog(true)}
               className="text-xs text-primary border border-primary/30 rounded-full px-3 py-1 hover:bg-primary/10 transition-colors font-semibold flex items-center gap-1"
             >
-              {showAllBadges ? 'Show Less' : 'See All'} <ChevronRight className="h-3 w-3" />
+              See All <ChevronRight className="h-3 w-3" />
             </button>
           ) : undefined}
         />
@@ -657,25 +664,53 @@ export default function ProfilePage() {
         {/* Tier guide */}
         <TierGuide />
 
-        {/* Badge grid */}
+        {/* Main badge grid — 3 max, active seasonal first */}
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-          {visibleBadges.map(badge => (
-            <BadgeCard key={badge.id} badge={badge} />
+          {mainBadges.map(badge => (
+            <div key={badge.id} className="flex flex-col gap-1">
+              <BadgeCard badge={badge} />
+              {badge.isSeasonal && badge.isSeasonActive && badge.seasonEndDate && (
+                <p className="text-[10px] font-bold text-center text-primary">
+                  {daysLeft(badge.seasonEndDate)} day{daysLeft(badge.seasonEndDate) !== 1 ? 's' : ''} remaining
+                </p>
+              )}
+            </div>
           ))}
         </div>
-
-        {/* Coming Soon */}
-        {comingSoon.length > 0 && (
-          <div className="space-y-3 pt-2">
-            <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Coming Soon</p>
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-              {comingSoon.map(b => (
-                <ComingSoonCard key={b.id} badge={b} />
-              ))}
-            </div>
-          </div>
-        )}
       </section>
+
+      {/* Badges See All dialog */}
+      <Dialog open={showBadgesDialog} onOpenChange={setShowBadgesDialog}>
+        <DialogContent className="max-w-lg rounded-3xl h-[80vh] flex flex-col p-0 bg-background border-border">
+          <DialogHeader className="px-6 pt-6 pb-3 border-b border-border shrink-0">
+            <DialogTitle className="font-headline text-2xl font-bold">Badges & Achievements</DialogTitle>
+          </DialogHeader>
+          <ScrollArea className="flex-1 px-6 pb-6">
+            <div className="pt-4 space-y-6">
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                {badges.map(badge => (
+                  <div key={badge.id} className="flex flex-col gap-1">
+                    <BadgeCard badge={badge} />
+                    {badge.isSeasonal && badge.isSeasonActive && badge.seasonEndDate && (
+                      <p className="text-[10px] font-bold text-center text-primary">
+                        {daysLeft(badge.seasonEndDate)} day{daysLeft(badge.seasonEndDate) !== 1 ? 's' : ''} remaining
+                      </p>
+                    )}
+                  </div>
+                ))}
+              </div>
+              {comingSoon.length > 0 && (
+                <div className="space-y-3">
+                  <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Coming Soon</p>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                    {comingSoon.map(b => <ComingSoonCard key={b.id} badge={b} />)}
+                  </div>
+                </div>
+              )}
+            </div>
+          </ScrollArea>
+        </DialogContent>
+      </Dialog>
     </main>
   );
 }
