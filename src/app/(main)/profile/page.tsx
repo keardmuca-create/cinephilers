@@ -687,18 +687,36 @@ export default function ProfilePage() {
           </DialogHeader>
           <ScrollArea className="flex-1 px-6 pb-6">
             <div className="pt-4 space-y-6">
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                {badges.map(badge => (
-                  <div key={badge.id} className="flex flex-col gap-1">
-                    <BadgeCard badge={badge} />
-                    {badge.isSeasonal && badge.isSeasonActive && badge.seasonEndDate && (
-                      <p className="text-[10px] font-bold text-center text-primary">
-                        {daysLeft(badge.seasonEndDate)} day{daysLeft(badge.seasonEndDate) !== 1 ? 's' : ''} remaining
-                      </p>
-                    )}
+              {/* All-time badges */}
+              {badges.filter(b => !b.isSeasonal).length > 0 && (
+                <div className="space-y-3">
+                  <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground">All Time</p>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                    {badges.filter(b => !b.isSeasonal).map(badge => (
+                      <BadgeCard key={badge.id} badge={badge} />
+                    ))}
                   </div>
-                ))}
-              </div>
+                </div>
+              )}
+              {/* Seasonal badges */}
+              {badges.filter(b => b.isSeasonal).length > 0 && (
+                <div className="space-y-3">
+                  <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Seasonal</p>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                    {badges.filter(b => b.isSeasonal).map(badge => (
+                      <div key={badge.id} className="flex flex-col gap-1">
+                        <BadgeCard badge={badge} />
+                        {badge.isSeasonActive && badge.seasonEndDate && (
+                          <p className="text-[10px] font-bold text-center text-primary">
+                            {daysLeft(badge.seasonEndDate)} day{daysLeft(badge.seasonEndDate) !== 1 ? 's' : ''} remaining
+                          </p>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {/* Coming Soon */}
               {comingSoon.length > 0 && (
                 <div className="space-y-3">
                   <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Coming Soon</p>
