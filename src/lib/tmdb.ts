@@ -586,6 +586,6 @@ export async function getPersonCredits(personId: number): Promise<{
   return {
     name: person.name,
     profileImage: profileUrl(person.profile_path, String(personId)),
-    credits: credits.slice(0, 60),
+    credits,
   };
 }
