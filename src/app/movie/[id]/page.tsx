@@ -97,13 +97,12 @@ function CreditListItem({ credit, watched, userRating }: {
               <span className="text-xs font-semibold">Watched</span>
             </div>
           )}
-          {!watched && !userRating && credit.character && (
-            <span className="text-[10px] text-muted-foreground">as {credit.character}</span>
-          )}
-          {!watched && !userRating && !credit.character && credit.job && (
-            <span className="text-[10px] text-muted-foreground">{credit.job}</span>
-          )}
         </div>
+        {(credit.character || credit.job) && (
+          <p className="text-[11px] text-muted-foreground mt-0.5">
+            {credit.character || credit.job}
+          </p>
+        )}
       </div>
     </Link>
   );
