@@ -19,10 +19,15 @@ interface PersonCreditItem {
   job?: string;
 }
 
+interface PersonCreditSection {
+  label: string;
+  credits: PersonCreditItem[];
+}
+
 interface PersonData {
   name: string;
   profileImage: string;
-  credits: PersonCreditItem[];
+  sections: PersonCreditSection[];
 }
 
 function CreditSkeleton() {
@@ -102,7 +107,8 @@ export default function PersonPage() {
           const watched: Record<string, boolean> = {};
           const ratings: Record<string, number> = {};
           try {
-            for (const c of json.credits) {
+            const allCredits = json.sections.flatMap(s => s.credits);
+            for (const c of allCredits) {
               if (localStorage.getItem(`watched-${c.id}`) === 'true') watched[c.id] = true;
               const r = localStorage.getItem(`movie-rating-${c.id}`);
               if (r) ratings[c.id] = parseInt(r, 10);
@@ -116,9 +122,11 @@ export default function PersonPage() {
       .finally(() => setLoading(false));
   }, [id]);
 
-  const watchedCount = data ? data.credits.filter(c => watchedMap[c.id]).length : 0;
-  const watchedPct = data && data.credits.length > 0
-    ? Math.round((watchedCount / data.credits.length) * 100) : 0;
+  const allCredits = data ? data.sections.flatMap(s => s.credits) : [];
+  const uniqueIds = new Set(allCredits.map(c => c.id));
+  const watchedCount = [...uniqueIds].filter(id => watchedMap[id]).length;
+  const totalUnique = uniqueIds.size;
+  const watchedPct = totalUnique > 0 ? Math.round((watchedCount / totalUnique) * 100) : 0;
 
   return (
     <main className="min-h-screen pb-24 bg-background">
@@ -139,13 +147,13 @@ export default function PersonPage() {
               <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
                 <Eye className="h-3 w-3 text-blue-400" />
                 <span className="text-blue-400 font-bold">{watchedPct}%</span>
-                <span>watched · {watchedCount} of {data.credits.length}</span>
+                <span>watched · {watchedCount} of {totalUnique}</span>
               </div>
             )}
           </div>
         </div>
         {!loading && data && (
-          <span className="text-sm text-muted-foreground shrink-0">{data.credits.length} titles</span>
+          <span className="text-sm text-muted-foreground shrink-0">{totalUnique} titles</span>
         )}
       </header>
 
@@ -160,13 +168,25 @@ export default function PersonPage() {
         </div>
       ) : (
         <div>
-          {data.credits.map(credit => (
-            <CreditRow
-              key={credit.id}
-              credit={credit}
-              watched={!!watchedMap[credit.id]}
-              userRating={ratingsMap[credit.id]}
-            />
+          {data.sections.map(section => (
+            <div key={section.label}>
+              {/* Section header */}
+              <div className="sticky top-[73px] z-[5] bg-background/95 backdrop-blur-sm px-6 py-2.5 border-b border-white/5 flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div className="w-1 h-4 bg-primary rounded-full" />
+                  <span className="text-sm font-bold font-headline">{section.label}</span>
+                </div>
+                <span className="text-xs text-muted-foreground">{section.credits.length}</span>
+              </div>
+              {section.credits.map(credit => (
+                <CreditRow
+                  key={`${section.label}-${credit.id}`}
+                  credit={credit}
+                  watched={!!watchedMap[credit.id]}
+                  userRating={ratingsMap[credit.id]}
+                />
+              ))}
+            </div>
           ))}
         </div>
       )}

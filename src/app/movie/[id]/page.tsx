@@ -54,10 +54,15 @@ interface PersonCreditItem {
   job?: string;
 }
 
+interface PersonCreditSection {
+  label: string;
+  credits: PersonCreditItem[];
+}
+
 interface PersonFilmographyData {
   name: string;
   profileImage: string;
-  credits: PersonCreditItem[];
+  sections: PersonCreditSection[];
 }
 
 function CreditListItem({ credit, watched, userRating }: {
@@ -135,7 +140,8 @@ function PersonFilmographyDialog({
           const watched: Record<string, boolean> = {};
           const ratings: Record<string, number> = {};
           try {
-            for (const c of json.credits) {
+            const allCredits = json.sections.flatMap((s: PersonCreditSection) => s.credits);
+            for (const c of allCredits) {
               if (localStorage.getItem(`watched-${c.id}`) === 'true') watched[c.id] = true;
               const r = localStorage.getItem(`movie-rating-${c.id}`);
               if (r) ratings[c.id] = parseInt(r, 10);
@@ -149,9 +155,11 @@ function PersonFilmographyDialog({
       .finally(() => setLoading(false));
   }, [open, personId]);
 
-  const watchedCount = data ? data.credits.filter(c => watchedMap[c.id]).length : 0;
-  const watchedPct = data && data.credits.length > 0
-    ? Math.round((watchedCount / data.credits.length) * 100) : 0;
+  const allCredits = data ? data.sections.flatMap(s => s.credits) : [];
+  const uniqueIds = new Set(allCredits.map(c => c.id));
+  const watchedCount = [...uniqueIds].filter(id => watchedMap[id]).length;
+  const totalUnique = uniqueIds.size;
+  const watchedPct = totalUnique > 0 ? Math.round((watchedCount / totalUnique) * 100) : 0;
 
   return (
     <Dialog open={open} onOpenChange={v => !v && onClose()}>
@@ -175,7 +183,7 @@ function PersonFilmographyDialog({
             <div className="flex items-center gap-2 mt-3 px-1">
               <Eye className="h-4 w-4 text-blue-400" />
               <span className="text-sm font-bold text-blue-400">{watchedPct}% watched</span>
-              <span className="text-xs text-muted-foreground">({watchedCount} of {data.credits.length})</span>
+              <span className="text-xs text-muted-foreground">({watchedCount} of {totalUnique})</span>
             </div>
           )}
         </div>
@@ -186,15 +194,26 @@ function PersonFilmographyDialog({
         ) : (
           <ScrollArea className="flex-1">
             <div>
-              {(data?.credits ?? []).map(credit => (
-                <CreditListItem
-                  key={credit.id}
-                  credit={credit}
-                  watched={!!watchedMap[credit.id]}
-                  userRating={ratingsMap[credit.id]}
-                />
+              {(data?.sections ?? []).map(section => (
+                <div key={section.label}>
+                  <div className="px-6 py-2.5 bg-muted/30 border-b border-white/5 flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <div className="w-1 h-4 bg-primary rounded-full" />
+                      <span className="text-xs font-bold uppercase tracking-widest text-foreground">{section.label}</span>
+                    </div>
+                    <span className="text-xs text-muted-foreground">{section.credits.length}</span>
+                  </div>
+                  {section.credits.map(credit => (
+                    <CreditListItem
+                      key={`${section.label}-${credit.id}`}
+                      credit={credit}
+                      watched={!!watchedMap[credit.id]}
+                      userRating={ratingsMap[credit.id]}
+                    />
+                  ))}
+                </div>
               ))}
-              {data && data.credits.length === 0 && (
+              {data && data.sections.length === 0 && (
                 <p className="text-sm text-muted-foreground text-center py-12">No credits found.</p>
               )}
             </div>

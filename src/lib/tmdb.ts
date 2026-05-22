@@ -560,7 +560,14 @@ export interface PersonCreditItem {
   job?: string;
 }
 
+export interface PersonCreditSection {
+  label: string;
+  credits: PersonCreditItem[];
+}
+
 const EXCLUDED_GENRE_IDS = new Set([10767, 10764, 10763]); // talk, reality, news
+
+const SECTION_ORDER = ['Actor', 'Director', 'Producer', 'Writer', 'Composer', 'Cinematographer', 'Editor'];
 
 function isValidCredit(item: TmdbMovie & { job?: string; department?: string }): boolean {
   if (item.media_type !== 'movie' && item.media_type !== 'tv') return false;
@@ -574,10 +581,37 @@ function isValidCredit(item: TmdbMovie & { job?: string; department?: string }):
   return true;
 }
 
+function crewSectionLabel(job: string, department: string): string {
+  const j = job.toLowerCase();
+  if (j.includes('director') && !j.includes('photography') && !j.includes('casting')) return 'Director';
+  if (j.includes('producer')) return 'Producer';
+  if (['writer', 'screenplay', 'story', 'novel', 'characters', 'comic book', 'book', 'script'].some(k => j.includes(k))) return 'Writer';
+  if (j.includes('composer') || j.includes('music composer') || j === 'original music') return 'Composer';
+  if (j.includes('photography') || j.includes('cinematograph')) return 'Cinematographer';
+  if (j === 'editor' || j === 'film editor' || j === 'editing') return 'Editor';
+  return department || 'Other';
+}
+
+function buildCredit(item: TmdbMovie & { character?: string; job?: string }, role?: string): PersonCreditItem {
+  const isShow = item.media_type === 'tv';
+  const title = item.title ?? item.name ?? '';
+  const year = (item.release_date ?? item.first_air_date ?? '').slice(0, 4);
+  return {
+    id: isShow ? `tmdb-tv-${item.id}` : `tmdb-${item.id}`,
+    title,
+    year,
+    poster: posterUrl(item.poster_path, 'w185'),
+    rating: item.vote_average ?? 0,
+    type: isShow ? 'show' : 'movie',
+    character: item.character || undefined,
+    job: role ?? item.job || undefined,
+  };
+}
+
 export async function getPersonCredits(personId: number): Promise<{
   name: string;
   profileImage: string;
-  credits: PersonCreditItem[];
+  sections: PersonCreditSection[];
 }> {
   const [person, raw] = await Promise.all([
     tmdbFetch<{ name: string; profile_path: string | null }>(`/person/${personId}`),
@@ -587,35 +621,45 @@ export async function getPersonCredits(personId: number): Promise<{
     }>(`/person/${personId}/combined_credits`),
   ]);
 
-  const seen = new Set<string>();
-  const credits: PersonCreditItem[] = [];
+  const bySection: Record<string, Map<string, PersonCreditItem>> = {};
 
-  for (const item of [...(raw.cast ?? []), ...(raw.crew ?? [])]) {
+  const addToSection = (label: string, id: string, credit: PersonCreditItem) => {
+    if (!bySection[label]) bySection[label] = new Map();
+    if (!bySection[label].has(id)) bySection[label].set(id, credit);
+  };
+
+  // Cast → Actor section
+  for (const item of raw.cast ?? []) {
     if (!isValidCredit(item as TmdbMovie & { job?: string; department?: string })) continue;
     const isShow = item.media_type === 'tv';
     const id = isShow ? `tmdb-tv-${item.id}` : `tmdb-${item.id}`;
-    if (seen.has(id)) continue;
-    seen.add(id);
     const title = item.title ?? item.name ?? '';
     if (!title) continue;
-    const year = (item.release_date ?? item.first_air_date ?? '').slice(0, 4);
-    credits.push({
-      id,
-      title,
-      year,
-      poster: posterUrl(item.poster_path, 'w185'),
-      rating: item.vote_average ?? 0,
-      type: isShow ? 'show' : 'movie',
-      character: (item as { character?: string }).character || undefined,
-      job: (item as { job?: string }).job || undefined,
-    });
+    addToSection('Actor', id, buildCredit(item as TmdbMovie & { character?: string; job?: string }));
   }
 
-  credits.sort((a, b) => (b.year || '0').localeCompare(a.year || '0'));
+  // Crew → grouped by role
+  for (const item of raw.crew ?? []) {
+    if (!isValidCredit(item as TmdbMovie & { job?: string; department?: string })) continue;
+    const isShow = item.media_type === 'tv';
+    const id = isShow ? `tmdb-tv-${item.id}` : `tmdb-${item.id}`;
+    const title = item.title ?? item.name ?? '';
+    if (!title) continue;
+    const label = crewSectionLabel(item.job ?? '', item.department ?? '');
+    addToSection(label, id, buildCredit(item as TmdbMovie & { character?: string; job?: string }, item.job));
+  }
+
+  const sortByYear = (credits: PersonCreditItem[]) =>
+    credits.sort((a, b) => (b.year || '0').localeCompare(a.year || '0'));
+
+  const sections: PersonCreditSection[] = [
+    ...SECTION_ORDER.filter(l => bySection[l]).map(l => ({ label: l, credits: sortByYear([...bySection[l].values()]) })),
+    ...Object.keys(bySection).filter(l => !SECTION_ORDER.includes(l)).sort().map(l => ({ label: l, credits: sortByYear([...bySection[l].values()]) })),
+  ];
 
   return {
     name: person.name,
     profileImage: profileUrl(person.profile_path, String(personId)),
-    credits,
+    sections,
   };
 }
