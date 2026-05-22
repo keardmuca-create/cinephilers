@@ -520,7 +520,7 @@ export function computeAllBadges(stats: UserStats): ComputedBadge[] {
         progressPct: 100,
         isSpecial: true,
         memberSince: stats.signupDate
-          ? new Date(stats.signupDate).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
+          ? new Date(stats.signupDate).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })
           : undefined,
         isSeasonal: false,
       };
