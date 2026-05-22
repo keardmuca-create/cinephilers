@@ -93,7 +93,7 @@ export interface Movie {
   seasons?: TvSeason[];
   networks?: string[];
   episodeRuntime?: number;
-  crew?: { name: string; job: string }[];
+  crew?: { id?: string; name: string; job: string }[];
   originalLanguage?: string;
   productionCompanies?: string[];
   totalEpisodes?: number;

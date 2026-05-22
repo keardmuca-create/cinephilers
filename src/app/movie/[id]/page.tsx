@@ -3,13 +3,14 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Image from 'next/image';
+import Link from 'next/link';
 import { Movie, Actor, TvEpisode, TvSeason } from '@/lib/types';
 import { EpisodeModal } from '@/components/episode-modal';
 import { Button } from '@/components/ui/button';
 import {
   Play, Check, Plus, Star, ChevronLeft, Share2, ListPlus, Quote,
   Info, Film, Calendar, Clock, Globe, Building2, Tv, ChevronDown, ChevronUp,
-  DollarSign, Images, Clapperboard, PenLine,
+  DollarSign, Images, Clapperboard, PenLine, Eye, ChevronRight,
 } from 'lucide-react';
 import { Avatar, AvatarImage } from '@/components/ui/avatar';
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
@@ -40,42 +41,298 @@ function DetailSkeleton() {
   );
 }
 
+// ─── Person filmography ────────────────────────────────────────────────────────
+
+interface PersonCreditItem {
+  id: string;
+  title: string;
+  year: string;
+  poster: string;
+  rating: number;
+  type: 'movie' | 'show';
+  character?: string;
+  job?: string;
+}
+
+interface PersonFilmographyData {
+  name: string;
+  profileImage: string;
+  credits: PersonCreditItem[];
+}
+
+function CreditListItem({ credit, watched, userRating }: {
+  credit: PersonCreditItem;
+  watched: boolean;
+  userRating?: number;
+}) {
+  return (
+    <Link
+      href={`/movie/${credit.id}`}
+      className="group flex items-center gap-4 px-6 py-3.5 border-b border-border hover:bg-muted/40 transition-colors"
+    >
+      <div className="relative w-12 shrink-0 rounded-lg overflow-hidden shadow-sm bg-muted" style={{ aspectRatio: '2/3' }}>
+        <Image src={credit.poster} alt={credit.title} fill className="object-cover transition-transform group-hover:scale-105" sizes="48px" />
+      </div>
+      <div className="flex-1 min-w-0">
+        <h3 className="text-sm font-semibold font-headline line-clamp-2 group-hover:text-primary transition-colors leading-snug mb-0.5">
+          {credit.title}
+        </h3>
+        <p className="text-xs text-muted-foreground mb-1">{credit.year}</p>
+        <div className="flex items-center gap-2 flex-wrap">
+          {credit.rating > 0 && (
+            <div className="flex items-center gap-0.5">
+              <span className="text-xs text-yellow-400 font-bold">★</span>
+              <span className="text-xs font-bold">{credit.rating.toFixed(1)}</span>
+            </div>
+          )}
+          {userRating !== undefined && (
+            <div className="flex items-center gap-0.5">
+              <span className="text-xs text-blue-400 font-bold">★</span>
+              <span className="text-xs font-bold text-blue-400">{userRating}</span>
+            </div>
+          )}
+          {watched && (
+            <div className="flex items-center gap-1 text-blue-400">
+              <Eye className="h-3 w-3" />
+              <span className="text-xs font-semibold">Watched</span>
+            </div>
+          )}
+          {!watched && !userRating && credit.character && (
+            <span className="text-[10px] text-muted-foreground">as {credit.character}</span>
+          )}
+          {!watched && !userRating && !credit.character && credit.job && (
+            <span className="text-[10px] text-muted-foreground">{credit.job}</span>
+          )}
+        </div>
+      </div>
+    </Link>
+  );
+}
+
+function PersonFilmographyDialog({
+  personId, personName, personRole, personImage, open, onClose,
+}: {
+  personId: string;
+  personName: string;
+  personRole: string;
+  personImage?: string;
+  open: boolean;
+  onClose: () => void;
+}) {
+  const [data, setData] = useState<PersonFilmographyData | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [watchedMap, setWatchedMap] = useState<Record<string, boolean>>({});
+  const [ratingsMap, setRatingsMap] = useState<Record<string, number>>({});
+
+  useEffect(() => {
+    if (!open || !personId) return;
+    setLoading(true);
+    setData(null);
+    fetch(`/api/person/${personId}`)
+      .then(r => r.json())
+      .then((json: PersonFilmographyData & { error?: string }) => {
+        if (!json.error) {
+          setData(json);
+          const watched: Record<string, boolean> = {};
+          const ratings: Record<string, number> = {};
+          try {
+            for (const c of json.credits) {
+              if (localStorage.getItem(`watched-${c.id}`) === 'true') watched[c.id] = true;
+              const r = localStorage.getItem(`movie-rating-${c.id}`);
+              if (r) ratings[c.id] = parseInt(r, 10);
+            }
+          } catch { /* ignore */ }
+          setWatchedMap(watched);
+          setRatingsMap(ratings);
+        }
+      })
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, [open, personId]);
+
+  const watchedCount = data ? data.credits.filter(c => watchedMap[c.id]).length : 0;
+  const watchedPct = data && data.credits.length > 0
+    ? Math.round((watchedCount / data.credits.length) * 100) : 0;
+
+  return (
+    <Dialog open={open} onOpenChange={v => !v && onClose()}>
+      <DialogContent className="max-w-lg rounded-[2.5rem] h-[85vh] flex flex-col p-0 border-border">
+        <div className="px-6 pt-6 pb-4 border-b border-border shrink-0">
+          <div className="flex items-center gap-4">
+            <div className="relative h-14 w-14 rounded-2xl overflow-hidden shrink-0 bg-muted">
+              <Image
+                src={personImage ?? `https://picsum.photos/seed/${personId}/200/200`}
+                alt={personName}
+                fill
+                className="object-cover"
+              />
+            </div>
+            <div className="flex-1 min-w-0">
+              <h2 className="font-headline font-bold text-lg leading-tight">{personName}</h2>
+              <p className="text-sm text-primary font-semibold truncate">{personRole}</p>
+            </div>
+          </div>
+          {data && (
+            <div className="flex items-center gap-2 mt-3 px-1">
+              <Eye className="h-4 w-4 text-blue-400" />
+              <span className="text-sm font-bold text-blue-400">{watchedPct}% watched</span>
+              <span className="text-xs text-muted-foreground">({watchedCount} of {data.credits.length})</span>
+            </div>
+          )}
+        </div>
+        {loading ? (
+          <div className="flex-1 flex items-center justify-center">
+            <div className="h-8 w-8 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+          </div>
+        ) : (
+          <ScrollArea className="flex-1">
+            <div>
+              {(data?.credits ?? []).map(credit => (
+                <CreditListItem
+                  key={credit.id}
+                  credit={credit}
+                  watched={!!watchedMap[credit.id]}
+                  userRating={ratingsMap[credit.id]}
+                />
+              ))}
+              {data && data.credits.length === 0 && (
+                <p className="text-sm text-muted-foreground text-center py-12">No credits found.</p>
+              )}
+            </div>
+          </ScrollArea>
+        )}
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 // ─── Person card ──────────────────────────────────────────────────────────────
 
 function PersonCard({ actor }: { actor: Actor }) {
+  const [open, setOpen] = useState(false);
   return (
-    <Dialog>
-      <DialogTrigger asChild>
-        <div className="shrink-0 w-28 group cursor-pointer">
-          <div className="relative aspect-square rounded-2xl overflow-hidden mb-2 group-hover:ring-2 ring-primary ring-offset-2 ring-offset-background transition-all">
-            <Image
-              src={actor.profileImage ?? `https://picsum.photos/seed/${actor.id}/200/200`}
-              alt={actor.name}
-              fill
-              className="object-cover"
-            />
-          </div>
-          <h4 className="text-xs font-bold font-headline line-clamp-1">{actor.name}</h4>
-          <p className="text-[10px] text-muted-foreground line-clamp-1">{actor.role}</p>
+    <>
+      <div className="shrink-0 w-28 group cursor-pointer" onClick={() => setOpen(true)}>
+        <div className="relative aspect-square rounded-2xl overflow-hidden mb-2 group-hover:ring-2 ring-primary ring-offset-2 ring-offset-background transition-all">
+          <Image
+            src={actor.profileImage ?? `https://picsum.photos/seed/${actor.id}/200/200`}
+            alt={actor.name}
+            fill
+            className="object-cover"
+          />
         </div>
-      </DialogTrigger>
-      <DialogContent className="max-w-md rounded-3xl">
-        <DialogHeader>
-          <DialogTitle className="font-headline">{actor.name}</DialogTitle>
-        </DialogHeader>
-        <div className="flex gap-6 py-4">
-          <Avatar className="h-24 w-24 rounded-2xl shrink-0">
-            <AvatarImage
-              src={actor.profileImage ?? `https://picsum.photos/seed/${actor.id}/200/200`}
-              className="object-cover"
-            />
-          </Avatar>
-          <div className="space-y-1">
-            <p className="text-sm text-primary font-bold">{actor.role}</p>
-          </div>
-        </div>
-      </DialogContent>
-    </Dialog>
+        <h4 className="text-xs font-bold font-headline line-clamp-1">{actor.name}</h4>
+        <p className="text-[10px] text-muted-foreground line-clamp-1">{actor.role}</p>
+      </div>
+      <PersonFilmographyDialog
+        personId={actor.id}
+        personName={actor.name}
+        personRole={actor.role}
+        personImage={actor.profileImage}
+        open={open}
+        onClose={() => setOpen(false)}
+      />
+    </>
+  );
+}
+
+// ─── Cast & Crew See All dialog ────────────────────────────────────────────────
+
+function CastCrewSeeAllDialog({ movie }: { movie: Movie }) {
+  const [listOpen, setListOpen] = useState(false);
+  const [selectedPerson, setSelectedPerson] = useState<{
+    id: string; name: string; role: string; image?: string;
+  } | null>(null);
+
+  const openPerson = (id: string, name: string, role: string, image?: string) => {
+    setListOpen(false);
+    setSelectedPerson({ id, name, role, image });
+  };
+
+  const crew = (movie.crew ?? []).filter(c => c.id);
+
+  return (
+    <>
+      <Dialog open={listOpen} onOpenChange={setListOpen}>
+        <DialogTrigger asChild>
+          <button className="text-xs text-primary border border-primary/30 rounded-full px-3 py-1 hover:bg-primary/10 transition-colors font-semibold">
+            See All
+          </button>
+        </DialogTrigger>
+        <DialogContent className="max-w-md rounded-[2.5rem] h-[80vh] flex flex-col p-0 border-border">
+          <DialogHeader className="px-6 pt-6 pb-4 border-b border-border shrink-0">
+            <DialogTitle className="font-headline text-xl">Cast & Crew</DialogTitle>
+          </DialogHeader>
+          <ScrollArea className="flex-1">
+            <div className="px-4 py-3">
+              {movie.cast.length > 0 && (
+                <>
+                  <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground px-2 mb-2">Cast</p>
+                  <div className="space-y-0.5">
+                    {movie.cast.map(actor => (
+                      <button
+                        key={actor.id}
+                        onClick={() => openPerson(actor.id, actor.name, actor.role, actor.profileImage)}
+                        className="w-full flex items-center gap-3 px-2 py-2.5 rounded-xl hover:bg-muted/40 transition-colors text-left"
+                      >
+                        <div className="relative h-10 w-10 rounded-xl overflow-hidden shrink-0 bg-muted">
+                          <Image
+                            src={actor.profileImage ?? `https://picsum.photos/seed/${actor.id}/100/100`}
+                            alt={actor.name}
+                            fill
+                            className="object-cover"
+                          />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-semibold truncate">{actor.name}</p>
+                          <p className="text-xs text-muted-foreground truncate">{actor.role}</p>
+                        </div>
+                        <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
+                      </button>
+                    ))}
+                  </div>
+                </>
+              )}
+              {crew.length > 0 && (
+                <div className="mt-4">
+                  <Separator className="mb-4" />
+                  <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground px-2 mb-2">Crew</p>
+                  <div className="space-y-0.5">
+                    {crew.map(member => (
+                      <button
+                        key={`${member.id}-${member.job}`}
+                        onClick={() => openPerson(member.id!, member.name, member.job)}
+                        className="w-full flex items-center gap-3 px-2 py-2.5 rounded-xl hover:bg-muted/40 transition-colors text-left"
+                      >
+                        <div className="h-10 w-10 rounded-xl bg-muted/50 flex items-center justify-center shrink-0">
+                          <Film className="h-4 w-4 text-muted-foreground" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-semibold truncate">{member.name}</p>
+                          <p className="text-xs text-muted-foreground truncate">{member.job}</p>
+                        </div>
+                        <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          </ScrollArea>
+        </DialogContent>
+      </Dialog>
+
+      {selectedPerson && (
+        <PersonFilmographyDialog
+          personId={selectedPerson.id}
+          personName={selectedPerson.name}
+          personRole={selectedPerson.role}
+          personImage={selectedPerson.image}
+          open
+          onClose={() => setSelectedPerson(null)}
+        />
+      )}
+    </>
   );
 }
 
@@ -1043,7 +1300,10 @@ export default function MovieDetailPage() {
         {/* Cast & Crew */}
         {(movie.cast.length > 0 || (movie.crew && movie.crew.length > 0)) && (
           <section className="space-y-6">
-            <h3 className="text-2xl font-headline font-bold">Cast & Crew</h3>
+            <div className="flex items-center justify-between">
+              <h3 className="text-2xl font-headline font-bold">Cast & Crew</h3>
+              <CastCrewSeeAllDialog movie={movie} />
+            </div>
             <div className="bg-white/5 rounded-3xl p-6 border border-white/5 space-y-6">
               {/* Key crew */}
               {movie.crew && movie.crew.length > 0 && (

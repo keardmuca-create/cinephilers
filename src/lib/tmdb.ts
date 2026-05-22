@@ -320,7 +320,7 @@ export async function getMovieDetail(tmdbId: number): Promise<Movie> {
   const keyCrew = ['Director', 'Screenplay', 'Writer', 'Story', 'Director of Photography', 'Original Music Composer'];
   const crew = (detail.credits?.crew ?? [])
     .filter(c => keyCrew.includes(c.job))
-    .map(c => ({ name: c.name, job: c.job }));
+    .map(c => ({ id: String(c.id), name: c.name, job: c.job }));
 
   return {
     ...base,
@@ -352,7 +352,7 @@ export async function getShowDetail(tmdbId: number): Promise<Movie> {
   const crew = (detail.credits?.crew ?? [])
     .filter(c => keyCrew.includes(c.job))
     .slice(0, 6)
-    .map(c => ({ name: c.name, job: c.job }));
+    .map(c => ({ id: String(c.id), name: c.name, job: c.job }));
 
   const seasons: TvSeason[] = (detail.seasons ?? [])
     .filter(s => s.season_number > 0)
@@ -448,7 +448,7 @@ export async function getEpisodeDetail(
     crew: (detail.credits?.crew ?? [])
       .filter(c => keyCrew.includes(c.job))
       .slice(0, 8)
-      .map(c => ({ name: c.name, job: c.job })),
+      .map(c => ({ id: String(c.id), name: c.name, job: c.job })),
     stills: (detail.images?.stills ?? []).slice(0, 12).map(s => `${IMAGE_BASE}/w780${s.file_path}`),
     trailers: parseTrailers(detail.videos?.results ?? []),
   };
@@ -515,4 +515,62 @@ export async function getShowsByGenre(genreId: number, count = 25): Promise<Movi
     include_adult: 'false',
   });
   return results.map(m => tmdbToMovie({ ...m, media_type: 'tv' }));
+}
+
+// ─── Person filmography ────────────────────────────────────────────────────────
+
+export interface PersonCreditItem {
+  id: string;
+  title: string;
+  year: string;
+  poster: string;
+  rating: number;
+  type: 'movie' | 'show';
+  character?: string;
+  job?: string;
+}
+
+export async function getPersonCredits(personId: number): Promise<{
+  name: string;
+  profileImage: string;
+  credits: PersonCreditItem[];
+}> {
+  const [person, raw] = await Promise.all([
+    tmdbFetch<{ name: string; profile_path: string | null }>(`/person/${personId}`),
+    tmdbFetch<{
+      cast: Array<TmdbMovie & { character?: string; media_type: 'movie' | 'tv' }>;
+      crew: Array<TmdbMovie & { job?: string; media_type: 'movie' | 'tv' }>;
+    }>(`/person/${personId}/combined_credits`),
+  ]);
+
+  const seen = new Set<string>();
+  const credits: PersonCreditItem[] = [];
+
+  for (const item of [...(raw.cast ?? []), ...(raw.crew ?? [])]) {
+    const isShow = item.media_type === 'tv';
+    const id = isShow ? `tmdb-tv-${item.id}` : `tmdb-${item.id}`;
+    if (seen.has(id)) continue;
+    seen.add(id);
+    const title = item.title ?? item.name ?? '';
+    if (!title) continue;
+    const year = (item.release_date ?? item.first_air_date ?? '').slice(0, 4);
+    credits.push({
+      id,
+      title,
+      year,
+      poster: posterUrl(item.poster_path, 'w185'),
+      rating: item.vote_average ?? 0,
+      type: isShow ? 'show' : 'movie',
+      character: (item as { character?: string }).character || undefined,
+      job: (item as { job?: string }).job || undefined,
+    });
+  }
+
+  credits.sort((a, b) => (b.year || '0').localeCompare(a.year || '0'));
+
+  return {
+    name: person.name,
+    profileImage: profileUrl(person.profile_path, String(personId)),
+    credits: credits.slice(0, 60),
+  };
 }
