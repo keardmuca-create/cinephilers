@@ -604,7 +604,7 @@ function buildCredit(item: TmdbMovie & { character?: string; job?: string }, rol
     rating: item.vote_average ?? 0,
     type: isShow ? 'show' : 'movie',
     character: item.character || undefined,
-    job: role ?? item.job || undefined,
+    job: role ?? (item.job || undefined),
   };
 }
 
