@@ -565,7 +565,7 @@ export interface PersonCreditSection {
   credits: PersonCreditItem[];
 }
 
-const EXCLUDED_GENRE_IDS = new Set([10767, 10764, 10763]); // talk, reality, news
+const EXCLUDED_GENRE_IDS = new Set([10767, 10764, 10763, 99, 10402]); // talk, reality, news, documentary, music
 
 const SECTION_ORDER = ['Actor', 'Director', 'Producer', 'Writer', 'Composer', 'Cinematographer', 'Editor'];
 
