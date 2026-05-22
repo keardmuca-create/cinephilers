@@ -8,12 +8,12 @@ function apiKey() {
 }
 
 function posterUrl(path: string | null, size = 'w500'): string {
-  if (!path) return `https://picsum.photos/seed/noposter/400/600`;
+  if (!path) return '';
   return `${IMAGE_BASE}/${size}${path}`;
 }
 
 function backdropUrl(path: string | null, size = 'w1280'): string {
-  if (!path) return `https://picsum.photos/seed/nobackdrop/1200/600`;
+  if (!path) return '';
   return `${IMAGE_BASE}/${size}${path}`;
 }
 
