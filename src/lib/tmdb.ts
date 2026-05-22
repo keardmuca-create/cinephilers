@@ -307,36 +307,30 @@ export interface PersonResult {
   department: string;
 }
 
-interface TmdbMultiRaw {
+interface TmdbPersonSearchResult {
   id: number;
-  name?: string;
-  title?: string;
-  media_type: string;
-  profile_path?: string | null;
-  poster_path?: string | null;
-  backdrop_path?: string | null;
-  known_for_department?: string;
-  release_date?: string;
-  first_air_date?: string;
-  genre_ids?: number[];
-  overview?: string;
-  vote_average?: number;
-  vote_count?: number;
+  name: string;
+  profile_path: string | null;
+  known_for_department: string;
+  popularity: number;
 }
 
 export async function searchTmdb(query: string): Promise<{ results: Movie[]; people: PersonResult[] }> {
-  const data = await tmdbFetch<{ results: TmdbMultiRaw[] }>('/search/multi', { query });
+  const [multiData, personData] = await Promise.all([
+    tmdbFetch<{ results: (TmdbMovie & { media_type: string })[] }>('/search/multi', { query }),
+    tmdbFetch<{ results: TmdbPersonSearchResult[] }>('/search/person', { query }),
+  ]);
 
-  const results = data.results
+  const results = multiData.results
     .filter(m => m.media_type === 'movie' || m.media_type === 'tv')
     .map(m => tmdbToMovie(m as TmdbMovie));
 
-  const people: PersonResult[] = data.results
-    .filter(m => m.media_type === 'person')
+  const people: PersonResult[] = (personData.results ?? [])
+    .sort((a, b) => b.popularity - a.popularity)
     .map(p => ({
       id: String(p.id),
-      name: p.name ?? '',
-      profileImage: profileUrl(p.profile_path ?? null, String(p.id)),
+      name: p.name,
+      profileImage: profileUrl(p.profile_path, String(p.id)),
       department: p.known_for_department ?? 'Entertainment',
     }));
 
