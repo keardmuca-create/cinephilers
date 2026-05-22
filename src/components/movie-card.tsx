@@ -4,7 +4,7 @@
 import React, { useState, useEffect } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
-import { Star, BookmarkPlus, Check, Eye, Film } from 'lucide-react';
+import { Star, Eye, Film } from 'lucide-react';
 import { Movie } from '@/lib/types';
 import { cn } from '@/lib/utils';
 import { toast } from '@/hooks/use-toast';
@@ -16,7 +16,6 @@ interface MovieCardProps {
 }
 
 export const MovieCard: React.FC<MovieCardProps> = ({ movie, className, horizontal = false }) => {
-  const [saved, setSaved] = useState(false);
   const [watched, setWatched] = useState(false);
   const [userRating, setUserRating] = useState<number | undefined>(undefined);
 
@@ -38,13 +37,6 @@ export const MovieCard: React.FC<MovieCardProps> = ({ movie, className, horizont
     return () => window.removeEventListener('cinephilers-rating-changed', handler);
   }, [movie.id]);
 
-  const handleSave = (e: React.MouseEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setSaved(prev => !prev);
-    toast({ title: saved ? 'Removed from watchlist' : 'Added to watchlist' });
-  };
-
   return (
     <Link href={`/movie/${movie.id}`} className={cn("block shrink-0", className)}>
       <div className={cn(
@@ -65,22 +57,6 @@ export const MovieCard: React.FC<MovieCardProps> = ({ movie, className, horizont
               <Film className="h-12 w-12 text-muted-foreground/30" />
             </div>
           )}
-          {/* Quick-save button */}
-          <button
-            onClick={handleSave}
-            className={cn(
-              "absolute top-2 right-2 h-8 w-8 rounded-full flex items-center justify-center transition-all duration-200",
-              "opacity-0 group-hover:opacity-100 translate-y-1 group-hover:translate-y-0",
-              saved
-                ? "bg-primary text-white"
-                : "bg-black/60 backdrop-blur-sm text-white hover:bg-primary"
-            )}
-          >
-            {saved
-              ? <Check className="h-4 w-4" />
-              : <BookmarkPlus className="h-4 w-4" />
-            }
-          </button>
         </div>
 
         <div className="space-y-1 px-1">
