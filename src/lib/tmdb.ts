@@ -530,6 +530,20 @@ export interface PersonCreditItem {
   job?: string;
 }
 
+const EXCLUDED_GENRE_IDS = new Set([10767, 10764, 10763]); // talk, reality, news
+
+function isValidCredit(item: TmdbMovie & { job?: string; department?: string }): boolean {
+  if (item.media_type !== 'movie' && item.media_type !== 'tv') return false;
+  const genres = item.genre_ids ?? [];
+  if (genres.some(g => EXCLUDED_GENRE_IDS.has(g))) return false;
+  const job = item.job ?? '';
+  const dept = item.department ?? '';
+  if (job === 'Video Game' || dept === 'Video Game') return false;
+  const title = item.title ?? item.name ?? '';
+  if (title.toLowerCase().includes('video game version')) return false;
+  return true;
+}
+
 export async function getPersonCredits(personId: number): Promise<{
   name: string;
   profileImage: string;
@@ -538,8 +552,8 @@ export async function getPersonCredits(personId: number): Promise<{
   const [person, raw] = await Promise.all([
     tmdbFetch<{ name: string; profile_path: string | null }>(`/person/${personId}`),
     tmdbFetch<{
-      cast: Array<TmdbMovie & { character?: string; media_type: 'movie' | 'tv' }>;
-      crew: Array<TmdbMovie & { job?: string; media_type: 'movie' | 'tv' }>;
+      cast: Array<TmdbMovie & { character?: string; media_type: string; department?: string }>;
+      crew: Array<TmdbMovie & { job?: string; department?: string; media_type: string }>;
     }>(`/person/${personId}/combined_credits`),
   ]);
 
@@ -547,6 +561,7 @@ export async function getPersonCredits(personId: number): Promise<{
   const credits: PersonCreditItem[] = [];
 
   for (const item of [...(raw.cast ?? []), ...(raw.crew ?? [])]) {
+    if (!isValidCredit(item as TmdbMovie & { job?: string; department?: string })) continue;
     const isShow = item.media_type === 'tv';
     const id = isShow ? `tmdb-tv-${item.id}` : `tmdb-${item.id}`;
     if (seen.has(id)) continue;
