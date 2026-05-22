@@ -17,8 +17,8 @@ function backdropUrl(path: string | null, size = 'w1280'): string {
   return `${IMAGE_BASE}/${size}${path}`;
 }
 
-function profileUrl(path: string | null, seed: string): string {
-  if (!path) return `https://picsum.photos/seed/${seed}/200/200`;
+function profileUrl(path: string | null): string {
+  if (!path) return '';
   return `${IMAGE_BASE}/w185${path}`;
 }
 
@@ -141,7 +141,7 @@ function buildCast(credits?: TmdbCredits): Actor[] {
     id: String(a.id),
     name: a.name,
     role: a.character,
-    profileImage: profileUrl(a.profile_path, String(a.id)),
+    profileImage: profileUrl(a.profile_path),
     bio: '',
     knownFor: [],
   }));
@@ -330,7 +330,7 @@ export async function searchTmdb(query: string): Promise<{ results: Movie[]; peo
     .map(p => ({
       id: String(p.id),
       name: p.name,
-      profileImage: profileUrl(p.profile_path, String(p.id)),
+      profileImage: profileUrl(p.profile_path),
       department: p.known_for_department ?? 'Entertainment',
     }));
 
@@ -471,7 +471,7 @@ export async function getEpisodeDetail(
       id: String(a.id),
       name: a.name,
       role: a.character,
-      profileImage: profileUrl(a.profile_path, String(a.id)),
+      profileImage: profileUrl(a.profile_path),
       bio: '',
       knownFor: [],
     })),
@@ -664,7 +664,7 @@ export async function getPersonCredits(personId: number): Promise<{
 
   return {
     name: person.name,
-    profileImage: profileUrl(person.profile_path, String(personId)),
+    profileImage: profileUrl(person.profile_path),
     sections: toSections(bySection),
     upcoming: toSections(byUpcoming),
   };

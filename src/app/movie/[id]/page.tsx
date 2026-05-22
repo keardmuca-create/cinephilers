@@ -10,7 +10,7 @@ import { Button } from '@/components/ui/button';
 import {
   Play, Check, Plus, Star, ChevronLeft, Share2, ListPlus, Quote,
   Info, Film, Calendar, Clock, Globe, Building2, Tv, ChevronDown, ChevronUp,
-  DollarSign, Images, Clapperboard, PenLine, Eye, ChevronRight,
+  DollarSign, Images, Clapperboard, PenLine, Eye, ChevronRight, User,
 } from 'lucide-react';
 import { Avatar, AvatarImage } from '@/components/ui/avatar';
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
@@ -229,13 +229,12 @@ function PersonFilmographyDialog({
       <DialogContent className="max-w-lg rounded-[2.5rem] h-[85vh] flex flex-col p-0 border-border">
         <div className="px-6 pt-6 pb-4 border-b border-border shrink-0">
           <div className="flex items-center gap-4">
-            <div className="relative h-14 w-14 rounded-2xl overflow-hidden shrink-0 bg-muted">
-              <Image
-                src={personImage ?? `https://picsum.photos/seed/${personId}/200/200`}
-                alt={personName}
-                fill
-                className="object-cover"
-              />
+            <div className="relative h-14 w-14 rounded-2xl overflow-hidden shrink-0 bg-muted flex items-center justify-center">
+              {personImage ? (
+                <Image src={personImage} alt={personName} fill className="object-cover" />
+              ) : (
+                <User className="h-7 w-7 text-muted-foreground/50" />
+              )}
             </div>
             <div className="flex-1 min-w-0">
               <h2 className="font-headline font-bold text-lg leading-tight">{personName}</h2>
@@ -294,13 +293,12 @@ function PersonCard({ actor }: { actor: Actor }) {
   return (
     <>
       <div className="shrink-0 w-28 group cursor-pointer" onClick={() => setOpen(true)}>
-        <div className="relative aspect-square rounded-2xl overflow-hidden mb-2 group-hover:ring-2 ring-primary ring-offset-2 ring-offset-background transition-all">
-          <Image
-            src={actor.profileImage ?? `https://picsum.photos/seed/${actor.id}/200/200`}
-            alt={actor.name}
-            fill
-            className="object-cover"
-          />
+        <div className="relative aspect-square rounded-2xl overflow-hidden mb-2 group-hover:ring-2 ring-primary ring-offset-2 ring-offset-background transition-all bg-muted flex items-center justify-center">
+          {actor.profileImage ? (
+            <Image src={actor.profileImage} alt={actor.name} fill className="object-cover" />
+          ) : (
+            <User className="h-10 w-10 text-muted-foreground/40" />
+          )}
         </div>
         <h4 className="text-xs font-bold font-headline line-clamp-1">{actor.name}</h4>
         <p className="text-[10px] text-muted-foreground line-clamp-1">{actor.role}</p>
@@ -356,13 +354,12 @@ function CastCrewSeeAllDialog({ movie }: { movie: Movie }) {
                         onClick={() => openPerson(actor.id, actor.name, actor.role, actor.profileImage)}
                         className="w-full flex items-center gap-3 px-2 py-2.5 rounded-xl hover:bg-muted/40 transition-colors text-left"
                       >
-                        <div className="relative h-10 w-10 rounded-xl overflow-hidden shrink-0 bg-muted">
-                          <Image
-                            src={actor.profileImage ?? `https://picsum.photos/seed/${actor.id}/100/100`}
-                            alt={actor.name}
-                            fill
-                            className="object-cover"
-                          />
+                        <div className="relative h-10 w-10 rounded-xl overflow-hidden shrink-0 bg-muted flex items-center justify-center">
+                          {actor.profileImage ? (
+                            <Image src={actor.profileImage} alt={actor.name} fill className="object-cover" />
+                          ) : (
+                            <User className="h-5 w-5 text-muted-foreground/50" />
+                          )}
                         </div>
                         <div className="flex-1 min-w-0">
                           <p className="text-sm font-semibold truncate">{actor.name}</p>

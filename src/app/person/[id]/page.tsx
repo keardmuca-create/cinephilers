@@ -4,7 +4,7 @@ import React, { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Image from 'next/image';
 import Link from 'next/link';
-import { ChevronLeft, Eye, Star, Film } from 'lucide-react';
+import { ChevronLeft, Eye, Star, Film, User } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 
@@ -207,8 +207,12 @@ export default function PersonPage() {
         </Button>
         <div className="flex-1 min-w-0 flex items-center gap-3">
           {data && (
-            <div className="relative h-9 w-9 rounded-xl overflow-hidden shrink-0 bg-muted">
-              <Image src={data.profileImage} alt={data.name} fill className="object-cover" />
+            <div className="relative h-9 w-9 rounded-xl overflow-hidden shrink-0 bg-muted flex items-center justify-center">
+              {data.profileImage ? (
+                <Image src={data.profileImage} alt={data.name} fill className="object-cover" />
+              ) : (
+                <User className="h-5 w-5 text-muted-foreground/50" />
+              )}
             </div>
           )}
           <h1 className="text-base font-headline font-bold truncate">{data?.name ?? '…'}</h1>
