@@ -3,12 +3,12 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
 import Link from 'next/link';
-import { Search, X, ChevronRight, Film, Loader2, Eye } from 'lucide-react';
+import { Search, X, ChevronRight, Film, Loader2, Eye, User } from 'lucide-react';
 import { Movie } from '@/lib/mock-data';
 import { MovieCard } from '@/components/movie-card';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { useSearch, usePopularMovies } from '@/hooks/use-movies';
+import { useSearch, usePopularMovies, PersonResult } from '@/hooks/use-movies';
 
 interface RecentItem {
   id: string;
@@ -16,6 +16,28 @@ interface RecentItem {
   poster: string;
   year: string;
   type: string;
+}
+
+// ─── Person row in search results ─────────────────────────────────────────────
+
+function PersonRow({ person }: { person: PersonResult }) {
+  return (
+    <Link href={`/person/${person.id}`} className="flex items-center gap-4 py-3 hover:bg-black/5 transition-colors -mx-6 px-6">
+      <div className="w-14 h-14 rounded-full overflow-hidden bg-muted shrink-0 shadow-sm border border-white/10">
+        {person.profileImage ? (
+          <img src={person.profileImage} alt={person.name} className="w-full h-full object-cover" loading="lazy" />
+        ) : (
+          <div className="w-full h-full flex items-center justify-center">
+            <User className="h-6 w-6 text-muted-foreground" />
+          </div>
+        )}
+      </div>
+      <div className="flex-1 min-w-0">
+        <p className="text-sm font-semibold text-foreground leading-snug">{person.name}</p>
+        <p className="text-xs text-muted-foreground mt-0.5">{person.department}</p>
+      </div>
+    </Link>
+  );
 }
 
 // ─── Shared row used in Recent + search results ───────────────────────────────
@@ -134,7 +156,7 @@ export default function SearchPage() {
 
   const fallback = { movies: [], shows: [], trending: [] };
   const { data } = usePopularMovies(fallback);
-  const { results: searchResults, loading: searchLoading } = useSearch(searchTerm, []);
+  const { results: searchResults, people: searchPeople, loading: searchLoading } = useSearch(searchTerm, []);
 
   const comingSoonMovies = useMemo(() => data.movies.slice().reverse(), [data.movies]);
   const comingSoonShows  = useMemo(() => data.shows.slice().reverse(),  [data.shows]);
@@ -195,11 +217,28 @@ export default function SearchPage() {
               <div className="flex items-center gap-2 py-6 text-muted-foreground text-sm">
                 <Loader2 className="h-4 w-4 animate-spin" /> Searching…
               </div>
-            ) : searchResults.length > 0 ? (
-              <div className="divide-y divide-border">
-                {searchResults.map(m => (
-                  <ResultRow key={m.id} id={m.id} poster={m.poster} title={m.title} sub={m.year} />
-                ))}
+            ) : (searchResults.length > 0 || searchPeople.length > 0) ? (
+              <div>
+                {searchPeople.length > 0 && (
+                  <>
+                    <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground mb-1 mt-1">People</p>
+                    <div className="divide-y divide-border">
+                      {searchPeople.map(p => <PersonRow key={p.id} person={p} />)}
+                    </div>
+                  </>
+                )}
+                {searchResults.length > 0 && (
+                  <>
+                    {searchPeople.length > 0 && (
+                      <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground mt-5 mb-1">Movies & Shows</p>
+                    )}
+                    <div className="divide-y divide-border">
+                      {searchResults.map(m => (
+                        <ResultRow key={m.id} id={m.id} poster={m.poster} title={m.title} sub={m.year} />
+                      ))}
+                    </div>
+                  </>
+                )}
               </div>
             ) : (
               <p className="text-sm text-muted-foreground py-8 text-center">

@@ -8,8 +8,8 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ results: [] });
   }
   try {
-    const results = await searchTmdb(query);
-    return NextResponse.json({ results });
+    const { results, people } = await searchTmdb(query);
+    return NextResponse.json({ results, people });
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Unknown error';
     return NextResponse.json({ error: message }, { status: 500 });

@@ -2,6 +2,13 @@
 import { useEffect, useState } from 'react';
 import { Movie } from '@/lib/types';
 
+export interface PersonResult {
+  id: string;
+  name: string;
+  profileImage: string;
+  department: string;
+}
+
 interface PopularData {
   movies: Movie[];
   shows: Movie[];
@@ -27,26 +34,28 @@ export function usePopularMovies(fallback: PopularData) {
 
 export function useSearch(query: string, fallback: Movie[]) {
   const [results, setResults] = useState<Movie[]>(fallback);
+  const [people, setPeople] = useState<PersonResult[]>([]);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     if (!query.trim()) {
       setResults(fallback);
+      setPeople([]);
       return;
     }
     setLoading(true);
     const controller = new AbortController();
     fetch(`/api/movies/search?q=${encodeURIComponent(query)}`, { signal: controller.signal })
       .then(r => r.json())
-      .then((json: { results?: Movie[]; error?: string }) => {
-        if (json.results) setResults(json.results);
-        else setResults(fallback);
+      .then((json: { results?: Movie[]; people?: PersonResult[]; error?: string }) => {
+        setResults(json.results ?? fallback);
+        setPeople(json.people ?? []);
       })
-      .catch(() => setResults(fallback))
+      .catch(() => { setResults(fallback); setPeople([]); })
       .finally(() => setLoading(false));
     return () => controller.abort();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [query]);
 
-  return { results, loading };
+  return { results, people, loading };
 }

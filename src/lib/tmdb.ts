@@ -300,11 +300,47 @@ export async function getPopularShowsEnriched(count = 100): Promise<Movie[]> {
   return enriched;
 }
 
-export async function searchTmdb(query: string): Promise<Movie[]> {
-  const data = await tmdbFetch<{ results: TmdbMovie[] }>('/search/multi', { query });
-  return data.results
+export interface PersonResult {
+  id: string;
+  name: string;
+  profileImage: string;
+  department: string;
+}
+
+interface TmdbMultiRaw {
+  id: number;
+  name?: string;
+  title?: string;
+  media_type: string;
+  profile_path?: string | null;
+  poster_path?: string | null;
+  backdrop_path?: string | null;
+  known_for_department?: string;
+  release_date?: string;
+  first_air_date?: string;
+  genre_ids?: number[];
+  overview?: string;
+  vote_average?: number;
+  vote_count?: number;
+}
+
+export async function searchTmdb(query: string): Promise<{ results: Movie[]; people: PersonResult[] }> {
+  const data = await tmdbFetch<{ results: TmdbMultiRaw[] }>('/search/multi', { query });
+
+  const results = data.results
     .filter(m => m.media_type === 'movie' || m.media_type === 'tv')
-    .map(m => tmdbToMovie(m));
+    .map(m => tmdbToMovie(m as TmdbMovie));
+
+  const people: PersonResult[] = data.results
+    .filter(m => m.media_type === 'person')
+    .map(p => ({
+      id: String(p.id),
+      name: p.name ?? '',
+      profileImage: profileUrl(p.profile_path ?? null, String(p.id)),
+      department: p.known_for_department ?? 'Entertainment',
+    }));
+
+  return { results, people };
 }
 
 // ─── Detail endpoints (full extended data) ────────────────────────────────────
