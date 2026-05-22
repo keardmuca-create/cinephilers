@@ -63,6 +63,7 @@ interface PersonFilmographyData {
   name: string;
   profileImage: string;
   sections: PersonCreditSection[];
+  upcoming: PersonCreditSection[];
 }
 
 function CreditListItem({ credit, watched, userRating }: {
@@ -75,14 +76,20 @@ function CreditListItem({ credit, watched, userRating }: {
       href={`/movie/${credit.id}`}
       className="group flex items-center gap-4 px-6 py-3.5 border-b border-border hover:bg-muted/40 transition-colors"
     >
-      <div className="relative w-12 shrink-0 rounded-lg overflow-hidden shadow-sm bg-muted" style={{ aspectRatio: '2/3' }}>
-        <Image src={credit.poster} alt={credit.title} fill className="object-cover transition-transform group-hover:scale-105" sizes="48px" />
+      <div className="relative w-12 shrink-0 rounded-lg overflow-hidden shadow-sm bg-muted/60 border border-white/5" style={{ aspectRatio: '2/3' }}>
+        {credit.poster ? (
+          <Image src={credit.poster} alt={credit.title} fill className="object-cover transition-transform group-hover:scale-105" sizes="48px" />
+        ) : (
+          <div className="w-full h-full flex items-center justify-center">
+            <Film className="h-5 w-5 text-muted-foreground/40" />
+          </div>
+        )}
       </div>
       <div className="flex-1 min-w-0">
         <h3 className="text-sm font-semibold font-headline line-clamp-2 group-hover:text-primary transition-colors leading-snug mb-0.5">
           {credit.title}
         </h3>
-        <p className="text-xs text-muted-foreground mb-1">{credit.year}</p>
+        <p className="text-xs text-muted-foreground mb-1">{credit.year || 'TBA'}</p>
         <div className="flex items-center gap-2 flex-wrap">
           {credit.rating > 0 && (
             <div className="flex items-center gap-0.5">
@@ -140,7 +147,7 @@ function PersonFilmographyDialog({
           const watched: Record<string, boolean> = {};
           const ratings: Record<string, number> = {};
           try {
-            const allCredits = json.sections.flatMap((s: PersonCreditSection) => s.credits);
+            const allCredits = [...json.sections, ...(json.upcoming ?? [])].flatMap((s: PersonCreditSection) => s.credits);
             for (const c of allCredits) {
               if (localStorage.getItem(`watched-${c.id}`) === 'true') watched[c.id] = true;
               const r = localStorage.getItem(`movie-rating-${c.id}`);
@@ -156,6 +163,7 @@ function PersonFilmographyDialog({
   }, [open, personId]);
 
   const allCredits = data ? data.sections.flatMap(s => s.credits) : [];
+  const upcomingCredits = data ? (data.upcoming ?? []).flatMap(s => s.credits) : [];
   const uniqueIds = new Set(allCredits.map(c => c.id));
   const watchedCount = [...uniqueIds].filter(id => watchedMap[id]).length;
   const totalUnique = uniqueIds.size;
@@ -194,26 +202,60 @@ function PersonFilmographyDialog({
         ) : (
           <ScrollArea className="flex-1">
             <div>
-              {(data?.sections ?? []).map(section => (
-                <div key={section.label}>
-                  <div className="px-6 py-2.5 bg-muted/30 border-b border-white/5 flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <div className="w-1 h-4 bg-primary rounded-full" />
-                      <span className="text-xs font-bold uppercase tracking-widest text-foreground">{section.label}</span>
+              {(data?.sections ?? []).map(section => {
+                const sw = section.credits.filter(c => watchedMap[c.id]).length;
+                const sp = section.credits.length > 0 ? Math.round((sw / section.credits.length) * 100) : 0;
+                return (
+                  <div key={section.label}>
+                    <div className="px-6 py-2.5 bg-muted/30 border-b border-white/5 flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <div className="w-1 h-4 bg-primary rounded-full" />
+                        <span className="text-xs font-bold uppercase tracking-widest">{section.label}</span>
+                        <span className="text-xs text-muted-foreground">({section.credits.length})</span>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <Eye className="h-3 w-3 text-blue-400" />
+                        <span className="text-xs font-bold text-blue-400">{sp}%</span>
+                      </div>
                     </div>
-                    <span className="text-xs text-muted-foreground">{section.credits.length}</span>
+                    {section.credits.map(credit => (
+                      <CreditListItem
+                        key={`${section.label}-${credit.id}`}
+                        credit={credit}
+                        watched={!!watchedMap[credit.id]}
+                        userRating={ratingsMap[credit.id]}
+                      />
+                    ))}
                   </div>
-                  {section.credits.map(credit => (
-                    <CreditListItem
-                      key={`${section.label}-${credit.id}`}
-                      credit={credit}
-                      watched={!!watchedMap[credit.id]}
-                      userRating={ratingsMap[credit.id]}
-                    />
+                );
+              })}
+              {data && (data.upcoming ?? []).length > 0 && (
+                <div>
+                  <div className="px-6 py-2.5 bg-orange-400/5 border-b border-orange-400/20 flex items-center gap-2">
+                    <Clock className="h-3.5 w-3.5 text-orange-400" />
+                    <span className="text-xs font-bold text-orange-400 uppercase tracking-widest">Upcoming</span>
+                    <span className="text-xs text-muted-foreground">({upcomingCredits.length})</span>
+                  </div>
+                  {(data.upcoming ?? []).map(section => (
+                    <div key={`up-${section.label}`}>
+                      <div className="px-6 py-2 bg-muted/20 border-b border-white/5 flex items-center gap-2">
+                        <div className="w-1 h-3.5 bg-orange-400/60 rounded-full" />
+                        <span className="text-xs font-bold uppercase tracking-widest text-muted-foreground">{section.label}</span>
+                        <span className="text-xs text-muted-foreground">({section.credits.length})</span>
+                      </div>
+                      {section.credits.map(credit => (
+                        <CreditListItem
+                          key={`up-${section.label}-${credit.id}`}
+                          credit={credit}
+                          watched={!!watchedMap[credit.id]}
+                          userRating={ratingsMap[credit.id]}
+                        />
+                      ))}
+                    </div>
                   ))}
                 </div>
-              ))}
-              {data && data.sections.length === 0 && (
+              )}
+              {data && data.sections.length === 0 && (data.upcoming ?? []).length === 0 && (
                 <p className="text-sm text-muted-foreground text-center py-12">No credits found.</p>
               )}
             </div>

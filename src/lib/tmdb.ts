@@ -600,7 +600,7 @@ function buildCredit(item: TmdbMovie & { character?: string; job?: string }, rol
     id: isShow ? `tmdb-tv-${item.id}` : `tmdb-${item.id}`,
     title,
     year,
-    poster: posterUrl(item.poster_path, 'w185'),
+    poster: item.poster_path ? posterUrl(item.poster_path, 'w185') : '',
     rating: item.vote_average ?? 0,
     type: isShow ? 'show' : 'movie',
     character: item.character || undefined,
@@ -608,10 +608,16 @@ function buildCredit(item: TmdbMovie & { character?: string; job?: string }, rol
   };
 }
 
+function isUpcoming(year: string): boolean {
+  if (!year) return true;
+  return parseInt(year, 10) > new Date().getFullYear();
+}
+
 export async function getPersonCredits(personId: number): Promise<{
   name: string;
   profileImage: string;
   sections: PersonCreditSection[];
+  upcoming: PersonCreditSection[];
 }> {
   const [person, raw] = await Promise.all([
     tmdbFetch<{ name: string; profile_path: string | null }>(`/person/${personId}`),
@@ -622,44 +628,44 @@ export async function getPersonCredits(personId: number): Promise<{
   ]);
 
   const bySection: Record<string, Map<string, PersonCreditItem>> = {};
+  const byUpcoming: Record<string, Map<string, PersonCreditItem>> = {};
 
-  const addToSection = (label: string, id: string, credit: PersonCreditItem) => {
-    if (!bySection[label]) bySection[label] = new Map();
-    if (!bySection[label].has(id)) bySection[label].set(id, credit);
+  const add = (maps: Record<string, Map<string, PersonCreditItem>>, label: string, id: string, credit: PersonCreditItem) => {
+    if (!maps[label]) maps[label] = new Map();
+    if (!maps[label].has(id)) maps[label].set(id, credit);
   };
 
-  // Cast → Actor section
   for (const item of raw.cast ?? []) {
     if (!isValidCredit(item as TmdbMovie & { job?: string; department?: string })) continue;
-    const isShow = item.media_type === 'tv';
-    const id = isShow ? `tmdb-tv-${item.id}` : `tmdb-${item.id}`;
     const title = item.title ?? item.name ?? '';
     if (!title) continue;
-    addToSection('Actor', id, buildCredit(item as TmdbMovie & { character?: string; job?: string }));
+    const credit = buildCredit(item as TmdbMovie & { character?: string; job?: string });
+    const dest = isUpcoming(credit.year) ? byUpcoming : bySection;
+    add(dest, 'Actor', credit.id, credit);
   }
 
-  // Crew → grouped by role
   for (const item of raw.crew ?? []) {
     if (!isValidCredit(item as TmdbMovie & { job?: string; department?: string })) continue;
-    const isShow = item.media_type === 'tv';
-    const id = isShow ? `tmdb-tv-${item.id}` : `tmdb-${item.id}`;
     const title = item.title ?? item.name ?? '';
     if (!title) continue;
     const label = crewSectionLabel(item.job ?? '', item.department ?? '');
-    addToSection(label, id, buildCredit(item as TmdbMovie & { character?: string; job?: string }, item.job));
+    const credit = buildCredit(item as TmdbMovie & { character?: string; job?: string }, item.job);
+    const dest = isUpcoming(credit.year) ? byUpcoming : bySection;
+    add(dest, label, credit.id, credit);
   }
 
   const sortByYear = (credits: PersonCreditItem[]) =>
     credits.sort((a, b) => (b.year || '0').localeCompare(a.year || '0'));
 
-  const sections: PersonCreditSection[] = [
-    ...SECTION_ORDER.filter(l => bySection[l]).map(l => ({ label: l, credits: sortByYear([...bySection[l].values()]) })),
-    ...Object.keys(bySection).filter(l => !SECTION_ORDER.includes(l)).sort().map(l => ({ label: l, credits: sortByYear([...bySection[l].values()]) })),
+  const toSections = (map: Record<string, Map<string, PersonCreditItem>>): PersonCreditSection[] => [
+    ...SECTION_ORDER.filter(l => map[l]).map(l => ({ label: l, credits: sortByYear([...map[l].values()]) })),
+    ...Object.keys(map).filter(l => !SECTION_ORDER.includes(l)).sort().map(l => ({ label: l, credits: sortByYear([...map[l].values()]) })),
   ];
 
   return {
     name: person.name,
     profileImage: profileUrl(person.profile_path, String(personId)),
-    sections,
+    sections: toSections(bySection),
+    upcoming: toSections(byUpcoming),
   };
 }
