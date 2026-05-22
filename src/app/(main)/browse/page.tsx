@@ -50,12 +50,34 @@ function ResultRow({ id, poster, title, sub }: {
 }) {
   return (
     <Link href={`/movie/${id}`} className="flex items-center gap-4 py-3 hover:bg-black/5 transition-colors -mx-6 px-6">
-      <div className="w-14 aspect-[2/3] rounded-lg overflow-hidden bg-muted shrink-0 shadow-sm">
-        <img src={poster} alt={title} className="w-full h-full object-cover" loading="lazy" />
+      <div className="w-14 aspect-[2/3] rounded-lg overflow-hidden bg-muted shrink-0 shadow-sm flex items-center justify-center">
+        {poster ? (
+          <img src={poster} alt={title} className="w-full h-full object-cover" loading="lazy" />
+        ) : (
+          <Film className="h-6 w-6 text-muted-foreground/40" />
+        )}
       </div>
       <div className="flex-1 min-w-0">
         <p className="text-sm font-semibold text-foreground leading-snug">{title}</p>
         <p className="text-xs text-muted-foreground mt-0.5">{sub}</p>
+      </div>
+    </Link>
+  );
+}
+
+function RecentPersonRow({ item }: { item: RecentItem }) {
+  return (
+    <Link href={`/person/${item.id}`} className="flex items-center gap-4 py-3 hover:bg-black/5 transition-colors -mx-6 px-6">
+      <div className="w-14 h-14 rounded-full overflow-hidden bg-muted shrink-0 shadow-sm border border-white/10 flex items-center justify-center">
+        {item.poster ? (
+          <img src={item.poster} alt={item.title} className="w-full h-full object-cover" loading="lazy" />
+        ) : (
+          <User className="h-6 w-6 text-muted-foreground" />
+        )}
+      </div>
+      <div className="flex-1 min-w-0">
+        <p className="text-sm font-semibold text-foreground leading-snug">{item.title}</p>
+        <p className="text-xs text-muted-foreground mt-0.5">Person</p>
       </div>
     </Link>
   );
@@ -252,13 +274,17 @@ export default function SearchPage() {
               {recentItems.length > 0 ? (
                 <div className="divide-y divide-border">
                   {recentItems.map(item => (
-                    <ResultRow
-                      key={item.id}
-                      id={item.id}
-                      poster={item.poster}
-                      title={item.title}
-                      sub={item.type === 'show' ? `${item.year} · TV Series` : item.year}
-                    />
+                    item.type === 'person' ? (
+                      <RecentPersonRow key={item.id} item={item} />
+                    ) : (
+                      <ResultRow
+                        key={item.id}
+                        id={item.id}
+                        poster={item.poster}
+                        title={item.title}
+                        sub={item.type === 'show' ? `${item.year} · TV Series` : item.year}
+                      />
+                    )
                   ))}
                 </div>
               ) : (

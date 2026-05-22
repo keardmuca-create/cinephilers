@@ -4,7 +4,7 @@
 import React, { useState, useEffect } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
-import { Star, BookmarkPlus, Check, Eye } from 'lucide-react';
+import { Star, BookmarkPlus, Check, Eye, Film } from 'lucide-react';
 import { Movie } from '@/lib/types';
 import { cn } from '@/lib/utils';
 import { toast } from '@/hooks/use-toast';
@@ -52,13 +52,19 @@ export const MovieCard: React.FC<MovieCardProps> = ({ movie, className, horizont
         horizontal ? "w-40" : "w-44"
       )}>
         <div className="relative aspect-[2/3] overflow-hidden rounded-xl bg-muted shadow-lg movie-card-hover mb-3">
-          <Image
-            src={movie.poster}
-            alt={movie.title}
-            fill
-            className="object-cover transition-transform group-hover:scale-110"
-            sizes="(max-width: 768px) 160px, 200px"
-          />
+          {movie.poster ? (
+            <Image
+              src={movie.poster}
+              alt={movie.title}
+              fill
+              className="object-cover transition-transform group-hover:scale-110"
+              sizes="(max-width: 768px) 160px, 200px"
+            />
+          ) : (
+            <div className="w-full h-full flex items-center justify-center">
+              <Film className="h-12 w-12 text-muted-foreground/30" />
+            </div>
+          )}
           {/* Quick-save button */}
           <button
             onClick={handleSave}

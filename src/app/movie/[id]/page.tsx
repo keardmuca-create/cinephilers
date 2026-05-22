@@ -1233,8 +1233,14 @@ export default function MovieDetailPage() {
         {/* Poster & Overview */}
         <section className="flex flex-col md:flex-row gap-8 -mt-20 relative z-10">
           <div className="shrink-0 mx-auto md:mx-0">
-            <div className="relative aspect-[2/3] w-48 md:w-64 rounded-[2rem] overflow-hidden shadow-2xl border-4 border-background ring-1 ring-white/10">
-              <Image src={movie.poster} alt={movie.title} fill className="object-cover" />
+            <div className="relative aspect-[2/3] w-48 md:w-64 rounded-[2rem] overflow-hidden shadow-2xl border-4 border-background ring-1 ring-white/10 bg-muted">
+              {movie.poster ? (
+                <Image src={movie.poster} alt={movie.title} fill className="object-cover" />
+              ) : (
+                <div className="w-full h-full flex items-center justify-center">
+                  <Film className="h-20 w-20 text-muted-foreground/30" />
+                </div>
+              )}
             </div>
           </div>
           <div className="flex-1 flex flex-col justify-end gap-3">

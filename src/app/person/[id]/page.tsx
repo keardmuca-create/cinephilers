@@ -173,6 +173,12 @@ export default function PersonPage() {
       .then((json: PersonData & { error?: string }) => {
         if (!json.error) {
           setData(json);
+          try {
+            const stored = localStorage.getItem('recently-viewed');
+            const viewed: { id: string }[] = stored ? JSON.parse(stored) : [];
+            const entry = { id: String(id), title: json.name, poster: json.profileImage, year: '', type: 'person' };
+            localStorage.setItem('recently-viewed', JSON.stringify([entry, ...viewed.filter(v => v.id !== String(id))].slice(0, 30)));
+          } catch { /* ignore */ }
           const watched: Record<string, boolean> = {};
           const ratings: Record<string, number> = {};
           try {
