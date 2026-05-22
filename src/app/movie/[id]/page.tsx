@@ -120,6 +120,68 @@ function CreditListItem({ credit, watched, userRating }: {
   );
 }
 
+function FilmographySectionBlock({ section, upcomingSection, watchedMap, ratingsMap }: {
+  section: PersonCreditSection;
+  upcomingSection?: PersonCreditSection;
+  watchedMap: Record<string, boolean>;
+  ratingsMap: Record<string, number>;
+}) {
+  const hasReleased = section.credits.length > 0;
+  const hasUpcoming = !!(upcomingSection && upcomingSection.credits.length > 0);
+  const showToggle = hasReleased && hasUpcoming;
+  const [tab, setTab] = useState<'released' | 'upcoming'>(hasReleased ? 'released' : 'upcoming');
+
+  const activeCredits = tab === 'upcoming' && hasUpcoming ? upcomingSection!.credits : section.credits;
+  const isUpcomingView = tab === 'upcoming' || (!hasReleased && hasUpcoming);
+
+  const watchedCount = section.credits.filter(c => watchedMap[c.id]).length;
+  const pct = section.credits.length > 0 ? Math.round((watchedCount / section.credits.length) * 100) : 0;
+
+  return (
+    <div>
+      <div className="px-6 py-2.5 bg-muted/30 border-b border-white/5 flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <div className={`w-1 h-4 rounded-full ${isUpcomingView ? 'bg-orange-400' : 'bg-primary'}`} />
+          <span className="text-xs font-bold uppercase tracking-widest">{section.label}</span>
+          <span className="text-xs text-muted-foreground">({activeCredits.length})</span>
+        </div>
+        <div className="flex items-center gap-2">
+          {!isUpcomingView && section.credits.length > 0 && (
+            <div className="flex items-center gap-1">
+              <Eye className="h-3 w-3 text-blue-400" />
+              <span className="text-xs font-bold text-blue-400">{pct}%</span>
+            </div>
+          )}
+          {showToggle && (
+            <div className="flex rounded-full overflow-hidden border border-border text-[10px] font-bold">
+              <button
+                onClick={() => setTab('released')}
+                className={`px-2 py-0.5 transition-colors ${tab === 'released' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground'}`}
+              >
+                Released
+              </button>
+              <button
+                onClick={() => setTab('upcoming')}
+                className={`px-2 py-0.5 transition-colors ${tab === 'upcoming' ? 'bg-orange-400 text-white' : 'text-muted-foreground hover:text-foreground'}`}
+              >
+                Upcoming
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+      {activeCredits.map(credit => (
+        <CreditListItem
+          key={`${section.label}-${tab}-${credit.id}`}
+          credit={credit}
+          watched={!!watchedMap[credit.id]}
+          userRating={ratingsMap[credit.id]}
+        />
+      ))}
+    </div>
+  );
+}
+
 function PersonFilmographyDialog({
   personId, personName, personRole, personImage, open, onClose,
 }: {
@@ -162,13 +224,6 @@ function PersonFilmographyDialog({
       .finally(() => setLoading(false));
   }, [open, personId]);
 
-  const allCredits = data ? data.sections.flatMap(s => s.credits) : [];
-  const upcomingCredits = data ? (data.upcoming ?? []).flatMap(s => s.credits) : [];
-  const uniqueIds = new Set(allCredits.map(c => c.id));
-  const watchedCount = [...uniqueIds].filter(id => watchedMap[id]).length;
-  const totalUnique = uniqueIds.size;
-  const watchedPct = totalUnique > 0 ? Math.round((watchedCount / totalUnique) * 100) : 0;
-
   return (
     <Dialog open={open} onOpenChange={v => !v && onClose()}>
       <DialogContent className="max-w-lg rounded-[2.5rem] h-[85vh] flex flex-col p-0 border-border">
@@ -187,13 +242,6 @@ function PersonFilmographyDialog({
               <p className="text-sm text-primary font-semibold truncate">{personRole}</p>
             </div>
           </div>
-          {data && (
-            <div className="flex items-center gap-2 mt-3 px-1">
-              <Eye className="h-4 w-4 text-blue-400" />
-              <span className="text-sm font-bold text-blue-400">{watchedPct}% watched</span>
-              <span className="text-xs text-muted-foreground">({watchedCount} of {totalUnique})</span>
-            </div>
-          )}
         </div>
         {loading ? (
           <div className="flex-1 flex items-center justify-center">
@@ -202,62 +250,35 @@ function PersonFilmographyDialog({
         ) : (
           <ScrollArea className="flex-1">
             <div>
-              {(data?.sections ?? []).map(section => {
-                const sw = section.credits.filter(c => watchedMap[c.id]).length;
-                const sp = section.credits.length > 0 ? Math.round((sw / section.credits.length) * 100) : 0;
+              {(() => {
+                const upcomingByLabel = new Map((data?.upcoming ?? []).map((s: PersonCreditSection) => [s.label, s]));
+                const upcomingOnlySections = (data?.upcoming ?? []).filter((us: PersonCreditSection) => !(data?.sections ?? []).find(s => s.label === us.label));
                 return (
-                  <div key={section.label}>
-                    <div className="px-6 py-2.5 bg-muted/30 border-b border-white/5 flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <div className="w-1 h-4 bg-primary rounded-full" />
-                        <span className="text-xs font-bold uppercase tracking-widest">{section.label}</span>
-                        <span className="text-xs text-muted-foreground">({section.credits.length})</span>
-                      </div>
-                      <div className="flex items-center gap-1">
-                        <Eye className="h-3 w-3 text-blue-400" />
-                        <span className="text-xs font-bold text-blue-400">{sp}%</span>
-                      </div>
-                    </div>
-                    {section.credits.map(credit => (
-                      <CreditListItem
-                        key={`${section.label}-${credit.id}`}
-                        credit={credit}
-                        watched={!!watchedMap[credit.id]}
-                        userRating={ratingsMap[credit.id]}
+                  <>
+                    {(data?.sections ?? []).map(section => (
+                      <FilmographySectionBlock
+                        key={section.label}
+                        section={section}
+                        upcomingSection={upcomingByLabel.get(section.label)}
+                        watchedMap={watchedMap}
+                        ratingsMap={ratingsMap}
                       />
                     ))}
-                  </div>
+                    {upcomingOnlySections.map((upSection: PersonCreditSection) => (
+                      <FilmographySectionBlock
+                        key={`only-${upSection.label}`}
+                        section={{ label: upSection.label, credits: [] }}
+                        upcomingSection={upSection}
+                        watchedMap={watchedMap}
+                        ratingsMap={ratingsMap}
+                      />
+                    ))}
+                    {data && data.sections.length === 0 && (data.upcoming ?? []).length === 0 && (
+                      <p className="text-sm text-muted-foreground text-center py-12">No credits found.</p>
+                    )}
+                  </>
                 );
-              })}
-              {data && (data.upcoming ?? []).length > 0 && (
-                <div>
-                  <div className="px-6 py-2.5 bg-orange-400/5 border-b border-orange-400/20 flex items-center gap-2">
-                    <Clock className="h-3.5 w-3.5 text-orange-400" />
-                    <span className="text-xs font-bold text-orange-400 uppercase tracking-widest">Upcoming</span>
-                    <span className="text-xs text-muted-foreground">({upcomingCredits.length})</span>
-                  </div>
-                  {(data.upcoming ?? []).map(section => (
-                    <div key={`up-${section.label}`}>
-                      <div className="px-6 py-2 bg-muted/20 border-b border-white/5 flex items-center gap-2">
-                        <div className="w-1 h-3.5 bg-orange-400/60 rounded-full" />
-                        <span className="text-xs font-bold uppercase tracking-widest text-muted-foreground">{section.label}</span>
-                        <span className="text-xs text-muted-foreground">({section.credits.length})</span>
-                      </div>
-                      {section.credits.map(credit => (
-                        <CreditListItem
-                          key={`up-${section.label}-${credit.id}`}
-                          credit={credit}
-                          watched={!!watchedMap[credit.id]}
-                          userRating={ratingsMap[credit.id]}
-                        />
-                      ))}
-                    </div>
-                  ))}
-                </div>
-              )}
-              {data && data.sections.length === 0 && (data.upcoming ?? []).length === 0 && (
-                <p className="text-sm text-muted-foreground text-center py-12">No credits found.</p>
-              )}
+              })()}
             </div>
           </ScrollArea>
         )}

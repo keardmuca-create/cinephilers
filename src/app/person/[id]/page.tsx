@@ -4,7 +4,7 @@ import React, { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Image from 'next/image';
 import Link from 'next/link';
-import { ChevronLeft, Eye, Star, Film, Clock } from 'lucide-react';
+import { ChevronLeft, Eye, Star, Film } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 
@@ -96,12 +96,20 @@ function CreditRow({ credit, watched, userRating }: {
   );
 }
 
-function SectionBlock({ section, watchedMap, ratingsMap, isUpcoming }: {
+function SectionBlock({ section, upcomingSection, watchedMap, ratingsMap }: {
   section: PersonCreditSection;
+  upcomingSection?: PersonCreditSection;
   watchedMap: Record<string, boolean>;
   ratingsMap: Record<string, number>;
-  isUpcoming?: boolean;
 }) {
+  const hasReleased = section.credits.length > 0;
+  const hasUpcoming = !!(upcomingSection && upcomingSection.credits.length > 0);
+  const showToggle = hasReleased && hasUpcoming;
+  const [tab, setTab] = useState<'released' | 'upcoming'>(hasReleased ? 'released' : 'upcoming');
+
+  const activeCredits = tab === 'upcoming' && hasUpcoming ? upcomingSection!.credits : section.credits;
+  const isUpcomingView = tab === 'upcoming' || (!hasReleased && hasUpcoming);
+
   const watchedCount = section.credits.filter(c => watchedMap[c.id]).length;
   const pct = section.credits.length > 0 ? Math.round((watchedCount / section.credits.length) * 100) : 0;
 
@@ -109,20 +117,38 @@ function SectionBlock({ section, watchedMap, ratingsMap, isUpcoming }: {
     <div>
       <div className="sticky top-[73px] z-[5] bg-background/95 backdrop-blur-sm px-6 py-2.5 border-b border-white/5 flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <div className={`w-1 h-4 rounded-full ${isUpcoming ? 'bg-orange-400' : 'bg-primary'}`} />
+          <div className={`w-1 h-4 rounded-full ${isUpcomingView ? 'bg-orange-400' : 'bg-primary'}`} />
           <span className="text-sm font-bold font-headline">{section.label}</span>
-          <span className="text-xs text-muted-foreground">({section.credits.length})</span>
+          <span className="text-xs text-muted-foreground">({activeCredits.length})</span>
         </div>
-        {!isUpcoming && section.credits.length > 0 && (
-          <div className="flex items-center gap-1">
-            <Eye className="h-3 w-3 text-blue-400" />
-            <span className="text-xs font-bold text-blue-400">{pct}%</span>
-          </div>
-        )}
+        <div className="flex items-center gap-2">
+          {!isUpcomingView && section.credits.length > 0 && (
+            <div className="flex items-center gap-1">
+              <Eye className="h-3 w-3 text-blue-400" />
+              <span className="text-xs font-bold text-blue-400">{pct}%</span>
+            </div>
+          )}
+          {showToggle && (
+            <div className="flex rounded-full overflow-hidden border border-border text-[10px] font-bold">
+              <button
+                onClick={() => setTab('released')}
+                className={`px-2.5 py-1 transition-colors ${tab === 'released' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground'}`}
+              >
+                Released
+              </button>
+              <button
+                onClick={() => setTab('upcoming')}
+                className={`px-2.5 py-1 transition-colors ${tab === 'upcoming' ? 'bg-orange-400 text-white' : 'text-muted-foreground hover:text-foreground'}`}
+              >
+                Upcoming
+              </button>
+            </div>
+          )}
+        </div>
       </div>
-      {section.credits.map(credit => (
+      {activeCredits.map(credit => (
         <CreditRow
-          key={`${section.label}-${credit.id}`}
+          key={`${section.label}-${tab}-${credit.id}`}
           credit={credit}
           watched={!!watchedMap[credit.id]}
           userRating={ratingsMap[credit.id]}
@@ -165,11 +191,7 @@ export default function PersonPage() {
       .finally(() => setLoading(false));
   }, [id]);
 
-  const releasedIds = new Set(data?.sections.flatMap(s => s.credits.map(c => c.id)) ?? []);
-  const watchedCount = [...releasedIds].filter(i => watchedMap[i]).length;
-  const totalUnique = releasedIds.size;
-  const watchedPct = totalUnique > 0 ? Math.round((watchedCount / totalUnique) * 100) : 0;
-  const upcomingCount = data ? new Set(data.upcoming.flatMap(s => s.credits.map(c => c.id))).size : 0;
+  const totalUnique = new Set(data?.sections.flatMap(s => s.credits.map(c => c.id)) ?? []).size;
 
   return (
     <main className="min-h-screen pb-24 bg-background">
@@ -183,19 +205,7 @@ export default function PersonPage() {
               <Image src={data.profileImage} alt={data.name} fill className="object-cover" />
             </div>
           )}
-          <div className="min-w-0">
-            <h1 className="text-base font-headline font-bold truncate">{data?.name ?? '…'}</h1>
-            {data && (
-              <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                <Eye className="h-3 w-3 text-blue-400" />
-                <span className="text-blue-400 font-bold">{watchedPct}%</span>
-                <span>watched · {watchedCount} of {totalUnique}</span>
-                {upcomingCount > 0 && (
-                  <span className="text-orange-400 font-bold ml-1">· {upcomingCount} upcoming</span>
-                )}
-              </div>
-            )}
-          </div>
+          <h1 className="text-base font-headline font-bold truncate">{data?.name ?? '…'}</h1>
         </div>
         {!loading && data && (
           <span className="text-sm text-muted-foreground shrink-0">{totalUnique} titles</span>
@@ -211,24 +221,32 @@ export default function PersonPage() {
         </div>
       ) : (
         <div>
-          {/* Released sections */}
-          {data.sections.map(section => (
-            <SectionBlock key={section.label} section={section} watchedMap={watchedMap} ratingsMap={ratingsMap} />
-          ))}
-
-          {/* Upcoming block */}
-          {data.upcoming.length > 0 && (
-            <div>
-              <div className="px-6 py-3 mt-2 flex items-center gap-2 border-b border-orange-400/20 bg-orange-400/5">
-                <Clock className="h-4 w-4 text-orange-400" />
-                <span className="text-sm font-bold text-orange-400">Upcoming</span>
-                <span className="text-xs text-muted-foreground">({upcomingCount})</span>
-              </div>
-              {data.upcoming.map(section => (
-                <SectionBlock key={`upcoming-${section.label}`} section={section} watchedMap={watchedMap} ratingsMap={ratingsMap} isUpcoming />
-              ))}
-            </div>
-          )}
+          {(() => {
+            const upcomingByLabel = new Map((data.upcoming ?? []).map(s => [s.label, s]));
+            const upcomingOnlySections = (data.upcoming ?? []).filter(us => !data.sections.find(s => s.label === us.label));
+            return (
+              <>
+                {data.sections.map(section => (
+                  <SectionBlock
+                    key={section.label}
+                    section={section}
+                    upcomingSection={upcomingByLabel.get(section.label)}
+                    watchedMap={watchedMap}
+                    ratingsMap={ratingsMap}
+                  />
+                ))}
+                {upcomingOnlySections.map(upSection => (
+                  <SectionBlock
+                    key={`only-${upSection.label}`}
+                    section={{ label: upSection.label, credits: [] }}
+                    upcomingSection={upSection}
+                    watchedMap={watchedMap}
+                    ratingsMap={ratingsMap}
+                  />
+                ))}
+              </>
+            );
+          })()}
         </div>
       )}
     </main>
