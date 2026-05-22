@@ -42,11 +42,12 @@ function PersonRow({ person }: { person: PersonResult }) {
 
 // ─── Shared row used in Recent + search results ───────────────────────────────
 
-function ResultRow({ id, poster, title, sub }: {
+function ResultRow({ id, poster, title, sub, onRemove }: {
   id: string;
   poster: string;
   title: string;
   sub: string;
+  onRemove?: () => void;
 }) {
   return (
     <Link href={`/movie/${id}`} className="flex items-center gap-4 py-3 hover:bg-black/5 transition-colors -mx-6 px-6">
@@ -61,11 +62,19 @@ function ResultRow({ id, poster, title, sub }: {
         <p className="text-sm font-semibold text-foreground leading-snug">{title}</p>
         <p className="text-xs text-muted-foreground mt-0.5">{sub}</p>
       </div>
+      {onRemove && (
+        <button
+          onClick={e => { e.preventDefault(); e.stopPropagation(); onRemove(); }}
+          className="shrink-0 h-7 w-7 rounded-full flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+        >
+          <X className="h-3.5 w-3.5" />
+        </button>
+      )}
     </Link>
   );
 }
 
-function RecentPersonRow({ item }: { item: RecentItem }) {
+function RecentPersonRow({ item, onRemove }: { item: RecentItem; onRemove?: () => void }) {
   return (
     <Link href={`/person/${item.id}`} className="flex items-center gap-4 py-3 hover:bg-black/5 transition-colors -mx-6 px-6">
       <div className="w-14 h-14 rounded-full overflow-hidden bg-muted shrink-0 shadow-sm border border-white/10 flex items-center justify-center">
@@ -79,6 +88,14 @@ function RecentPersonRow({ item }: { item: RecentItem }) {
         <p className="text-sm font-semibold text-foreground leading-snug">{item.title}</p>
         <p className="text-xs text-muted-foreground mt-0.5">Person</p>
       </div>
+      {onRemove && (
+        <button
+          onClick={e => { e.preventDefault(); e.stopPropagation(); onRemove(); }}
+          className="shrink-0 h-7 w-7 rounded-full flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+        >
+          <X className="h-3.5 w-3.5" />
+        </button>
+      )}
     </Link>
   );
 }
@@ -198,6 +215,12 @@ export default function SearchPage() {
     setFocused(false);
   };
 
+  const removeRecent = (id: string) => {
+    const updated = recentItems.filter(item => item.id !== id);
+    setRecentItems(updated);
+    try { localStorage.setItem('recently-viewed', JSON.stringify(updated)); } catch { /* ignore */ }
+  };
+
   return (
     <main className="pt-10 pb-28 max-w-2xl mx-auto">
       {/* Search bar */}
@@ -275,7 +298,7 @@ export default function SearchPage() {
                 <div className="divide-y divide-border">
                   {recentItems.map(item => (
                     item.type === 'person' ? (
-                      <RecentPersonRow key={item.id} item={item} />
+                      <RecentPersonRow key={item.id} item={item} onRemove={() => removeRecent(item.id)} />
                     ) : (
                       <ResultRow
                         key={item.id}
@@ -283,6 +306,7 @@ export default function SearchPage() {
                         poster={item.poster}
                         title={item.title}
                         sub={item.type === 'show' ? `${item.year} · TV Series` : item.year}
+                        onRemove={() => removeRecent(item.id)}
                       />
                     )
                   ))}
