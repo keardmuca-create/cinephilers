@@ -195,7 +195,7 @@ export default function SearchPage() {
 
   const fallback = { movies: [], shows: [], trending: [] };
   const { data } = usePopularMovies(fallback);
-  const { results: searchResults, people: searchPeople, loading: searchLoading } = useSearch(searchTerm, []);
+  const { combined: searchCombined, loading: searchLoading } = useSearch(searchTerm, []);
 
   const comingSoonMovies = useMemo(() => data.movies.slice().reverse(), [data.movies]);
   const comingSoonShows  = useMemo(() => data.shows.slice().reverse(),  [data.shows]);
@@ -262,27 +262,14 @@ export default function SearchPage() {
               <div className="flex items-center gap-2 py-6 text-muted-foreground text-sm">
                 <Loader2 className="h-4 w-4 animate-spin" /> Searching…
               </div>
-            ) : (searchResults.length > 0 || searchPeople.length > 0) ? (
-              <div>
-                {searchPeople.length > 0 && (
-                  <>
-                    <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground mb-1 mt-1">People</p>
-                    <div className="divide-y divide-border">
-                      {searchPeople.map(p => <PersonRow key={p.id} person={p} />)}
-                    </div>
-                  </>
-                )}
-                {searchResults.length > 0 && (
-                  <>
-                    {searchPeople.length > 0 && (
-                      <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground mt-5 mb-1">Movies & Shows</p>
-                    )}
-                    <div className="divide-y divide-border">
-                      {searchResults.map(m => (
-                        <ResultRow key={m.id} id={m.id} poster={m.poster} title={m.title} sub={m.year} />
-                      ))}
-                    </div>
-                  </>
+            ) : searchCombined.length > 0 ? (
+              <div className="divide-y divide-border">
+                {searchCombined.map((item, i) =>
+                  item.kind === 'person' ? (
+                    <PersonRow key={`person-${item.data.id}-${i}`} person={item.data} />
+                  ) : (
+                    <ResultRow key={`movie-${item.data.id}-${i}`} id={item.data.id} poster={item.data.poster} title={item.data.title} sub={item.data.year} />
+                  )
                 )}
               </div>
             ) : (

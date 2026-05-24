@@ -1,6 +1,9 @@
 
 import { useEffect, useState } from 'react';
 import { Movie } from '@/lib/types';
+import type { CombinedSearchResult } from '@/lib/tmdb';
+
+export type { CombinedSearchResult };
 
 export interface PersonResult {
   id: string;
@@ -35,27 +38,33 @@ export function usePopularMovies(fallback: PopularData) {
 export function useSearch(query: string, fallback: Movie[]) {
   const [results, setResults] = useState<Movie[]>(fallback);
   const [people, setPeople] = useState<PersonResult[]>([]);
+  const [combined, setCombined] = useState<CombinedSearchResult[]>([]);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     if (!query.trim()) {
       setResults(fallback);
       setPeople([]);
+      setCombined([]);
+      setLoading(false);
       return;
     }
     setLoading(true);
     const controller = new AbortController();
-    fetch(`/api/movies/search?q=${encodeURIComponent(query)}`, { signal: controller.signal })
-      .then(r => r.json())
-      .then((json: { results?: Movie[]; people?: PersonResult[]; error?: string }) => {
-        setResults(json.results ?? fallback);
-        setPeople(json.people ?? []);
-      })
-      .catch(() => { setResults(fallback); setPeople([]); })
-      .finally(() => setLoading(false));
-    return () => controller.abort();
+    const timer = setTimeout(() => {
+      fetch(`/api/movies/search?q=${encodeURIComponent(query)}`, { signal: controller.signal })
+        .then(r => r.json())
+        .then((json: { results?: Movie[]; people?: PersonResult[]; combined?: CombinedSearchResult[]; error?: string }) => {
+          setResults(json.results ?? fallback);
+          setPeople(json.people ?? []);
+          setCombined(json.combined ?? []);
+        })
+        .catch(() => { setResults(fallback); setPeople([]); setCombined([]); })
+        .finally(() => setLoading(false));
+    }, 250);
+    return () => { clearTimeout(timer); controller.abort(); };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [query]);
 
-  return { results, people, loading };
+  return { results, people, combined, loading };
 }

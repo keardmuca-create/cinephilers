@@ -315,26 +315,37 @@ interface TmdbPersonSearchResult {
   popularity: number;
 }
 
-export async function searchTmdb(query: string): Promise<{ results: Movie[]; people: PersonResult[] }> {
-  const [multiData, personData] = await Promise.all([
-    tmdbFetch<{ results: (TmdbMovie & { media_type: string })[] }>('/search/multi', { query }),
-    tmdbFetch<{ results: TmdbPersonSearchResult[] }>('/search/person', { query }),
-  ]);
+export type CombinedSearchResult =
+  | { kind: 'movie'; data: Movie }
+  | { kind: 'person'; data: PersonResult }
 
-  const results = multiData.results
-    .filter(m => m.media_type === 'movie' || m.media_type === 'tv')
-    .map(m => tmdbToMovie(m as TmdbMovie));
+export async function searchTmdb(query: string): Promise<{ results: Movie[]; people: PersonResult[]; combined: CombinedSearchResult[] }> {
+  const multiData = await tmdbFetch<{
+    results: (TmdbMovie & { media_type: string; profile_path?: string | null; known_for_department?: string })[]
+  }>('/search/multi', { query });
 
-  const people: PersonResult[] = (personData.results ?? [])
-    .sort((a, b) => b.popularity - a.popularity)
-    .map(p => ({
-      id: String(p.id),
-      name: p.name,
-      profileImage: profileUrl(p.profile_path),
-      department: p.known_for_department ?? 'Entertainment',
-    }));
+  const combined: CombinedSearchResult[] = [];
+  const results: Movie[] = [];
+  const people: PersonResult[] = [];
 
-  return { results, people };
+  for (const item of multiData.results ?? []) {
+    if (item.media_type === 'movie' || item.media_type === 'tv') {
+      const movie = tmdbToMovie(item as TmdbMovie);
+      results.push(movie);
+      combined.push({ kind: 'movie', data: movie });
+    } else if (item.media_type === 'person') {
+      const person: PersonResult = {
+        id: String(item.id),
+        name: (item as { name?: string }).name ?? '',
+        profileImage: profileUrl(item.profile_path ?? null),
+        department: item.known_for_department ?? 'Entertainment',
+      };
+      people.push(person);
+      combined.push({ kind: 'person', data: person });
+    }
+  }
+
+  return { results, people, combined };
 }
 
 // ─── Detail endpoints (full extended data) ────────────────────────────────────
