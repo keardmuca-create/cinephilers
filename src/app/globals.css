@@ -42,7 +42,7 @@
 }
 
 .movie-card-hover {
-  @apply transition-transform duration-300 hover:scale-105 hover:z-10 cursor-pointer;
+  @apply cursor-pointer;
 }
 
 .no-scrollbar {

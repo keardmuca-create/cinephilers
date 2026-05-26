@@ -49,7 +49,7 @@ export const MovieCard: React.FC<MovieCardProps> = ({ movie, className, horizont
               src={movie.poster}
               alt={movie.title}
               fill
-              className="object-cover transition-transform group-hover:scale-110"
+              className="object-cover"
               sizes="(max-width: 768px) 160px, 200px"
             />
           ) : (
