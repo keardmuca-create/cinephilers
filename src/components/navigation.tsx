@@ -3,6 +3,7 @@
 
 import React from 'react';
 import Link from 'next/link';
+import Image from 'next/image';
 import { usePathname } from 'next/navigation';
 import { Home, Search as SearchIcon, Users, User } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -19,6 +20,13 @@ export const BottomNav = () => {
 
   return (
     <nav className="fixed bottom-0 left-0 right-0 z-50 bg-background/80 backdrop-blur-xl border-t border-white/5 pb-safe">
+      {/* TMDB Attribution */}
+      <div className="flex items-center justify-center gap-2 py-1 border-b border-white/5">
+        <Image src="/tmdb-logo.svg" alt="TMDB Logo" width={40} height={8} className="opacity-60" />
+        <p className="text-[9px] text-muted-foreground/60 leading-tight">
+          This product uses the TMDB API but is not endorsed or certified by TMDB.
+        </p>
+      </div>
       <div className="flex items-center justify-around h-16 max-w-lg mx-auto px-2">
         {navItems.map((item) => {
           const isActive = pathname === item.href;
