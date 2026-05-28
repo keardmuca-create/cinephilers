@@ -20,6 +20,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Badge } from '@/components/ui/badge';
 import { toast } from '@/hooks/use-toast';
 import { appendWatchLog, removeFromWatchLog, saveMovieRating, ensureSignupDate } from '@/lib/badges';
+import { logActivity, removeActivity } from '@/lib/activity';
 
 // ─── Skeleton ─────────────────────────────────────────────────────────────────
 
@@ -1293,6 +1294,11 @@ export default function MovieDetailPage() {
                   localStorage.removeItem(`watchlist-${id}`);
                 }
               } catch { /* ignore */ }
+              if (next && movie) {
+                logActivity({ action: 'watchlist', contentId: id, contentTitle: movie.title, contentPoster: movie.poster, contentYear: movie.year });
+              } else {
+                removeActivity('watchlist', id);
+              }
               toast({ title: next ? 'Added to watchlist' : 'Removed from watchlist' });
             }}
           >
@@ -1318,8 +1324,10 @@ export default function MovieDetailPage() {
                   genre: movie.genre ?? '',
                   language: movie.originalLanguage ?? '',
                 });
+                logActivity({ action: 'watched', contentId: id, contentTitle: movie.title, contentPoster: movie.poster, contentYear: movie.year });
               } else {
                 removeFromWatchLog(id, 'movie');
+                removeActivity('watched', id);
               }
               toast({ title: next ? 'Marked as watched' : 'Removed from watched' });
             }}
@@ -1351,7 +1359,7 @@ export default function MovieDetailPage() {
             <div className="flex flex-col gap-2">
               <div className="flex items-center gap-1">
                 {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(i => (
-                  <button key={i} onClick={() => { setUserRating(i); saveMovieRating(id, i); toast({ title: `You rated it ${i}/10!` }); window.dispatchEvent(new CustomEvent('cinephilers-rating-changed', { detail: { id, rating: i } })); }} className="transition-all hover:scale-125 active:scale-90 p-0.5">
+                  <button key={i} onClick={() => { setUserRating(i); saveMovieRating(id, i); if (movie) logActivity({ action: 'rated', contentId: id, contentTitle: movie.title, contentPoster: movie.poster, contentYear: movie.year, rating: i }); toast({ title: `You rated it ${i}/10!` }); window.dispatchEvent(new CustomEvent('cinephilers-rating-changed', { detail: { id, rating: i } })); }} className="transition-all hover:scale-125 active:scale-90 p-0.5">
                     <Star className={`h-5 w-5 transition-colors ${userRating >= i ? 'fill-yellow-400 text-yellow-400' : 'text-foreground/25 hover:text-foreground/50'}`} />
                   </button>
                 ))}
@@ -1363,6 +1371,7 @@ export default function MovieDetailPage() {
                     onClick={() => {
                       setUserRating(0);
                       try { localStorage.removeItem(`movie-rating-${id}`); } catch { /* ignore */ }
+                      removeActivity('rated', id);
                       toast({ title: 'Rating removed' });
                       window.dispatchEvent(new CustomEvent('cinephilers-rating-changed', { detail: { id, rating: null } }));
                     }}
