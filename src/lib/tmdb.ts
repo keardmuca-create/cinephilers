@@ -319,20 +319,27 @@ export type CombinedSearchResult =
   | { kind: 'movie'; data: Movie }
   | { kind: 'person'; data: PersonResult }
 
+// Departments considered "main talent" — shown after movies without requiring a full-name match
+const MAIN_TALENT_DEPTS = new Set(['Acting', 'Directing']);
+
 export async function searchTmdb(query: string): Promise<{ results: Movie[]; people: PersonResult[]; combined: CombinedSearchResult[] }> {
   const multiData = await tmdbFetch<{
     results: (TmdbMovie & { media_type: string; profile_path?: string | null; known_for_department?: string })[]
   }>('/search/multi', { query });
 
-  const combined: CombinedSearchResult[] = [];
+  const movieItems: CombinedSearchResult[] = [];
+  const talentItems: CombinedSearchResult[] = [];   // actors + directors
+  const crewItems: CombinedSearchResult[] = [];     // other crew — only shown on full-name match
   const results: Movie[] = [];
   const people: PersonResult[] = [];
+
+  const queryLower = query.toLowerCase().trim();
 
   for (const item of multiData.results ?? []) {
     if (item.media_type === 'movie' || item.media_type === 'tv') {
       const movie = tmdbToMovie(item as TmdbMovie);
       results.push(movie);
-      combined.push({ kind: 'movie', data: movie });
+      movieItems.push({ kind: 'movie', data: movie });
     } else if (item.media_type === 'person') {
       const person: PersonResult = {
         id: String(item.id),
@@ -341,10 +348,20 @@ export async function searchTmdb(query: string): Promise<{ results: Movie[]; peo
         department: item.known_for_department ?? 'Entertainment',
       };
       people.push(person);
-      combined.push({ kind: 'person', data: person });
+
+      const dept = person.department;
+      if (MAIN_TALENT_DEPTS.has(dept)) {
+        talentItems.push({ kind: 'person', data: person });
+      } else {
+        // Only include other crew if every word of their name appears in the query
+        const nameWords = person.name.toLowerCase().split(/\s+/).filter(Boolean);
+        const isFullName = nameWords.length > 1 && nameWords.every(w => queryLower.includes(w));
+        if (isFullName) crewItems.push({ kind: 'person', data: person });
+      }
     }
   }
 
+  const combined: CombinedSearchResult[] = [...movieItems, ...talentItems, ...crewItems];
   return { results, people, combined };
 }
 
