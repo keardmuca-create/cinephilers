@@ -3,7 +3,7 @@ import { prisma } from '@/lib/db';
 import { ok, err } from '@/lib/api-response';
 import { getCurrentUser } from '@/lib/auth-utils';
 import { awardBadgeIfEarned } from '@/lib/badge-service';
-import { MediaType } from '@prisma/client';
+import { MediaType } from '@/generated/prisma/client';
 
 export async function POST(req: NextRequest) {
   const auth = await getCurrentUser(req);

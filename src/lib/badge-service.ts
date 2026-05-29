@@ -1,5 +1,5 @@
 import { prisma } from './db';
-import { BadgeTier } from '@prisma/client';
+import { BadgeTier } from '@/generated/prisma/client';
 
 const TIER_THRESHOLDS: { tier: BadgeTier; min: number }[] = [
   { tier: 'GOLD', min: 500 },
