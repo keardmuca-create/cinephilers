@@ -1,0 +1,25 @@
+import { NextRequest } from 'next/server';
+import { prisma } from '@/lib/db';
+import { ok, err } from '@/lib/api-response';
+import { getCurrentUser } from '@/lib/auth-utils';
+import { MediaType } from '@prisma/client';
+
+export async function POST(req: NextRequest) {
+  const auth = await getCurrentUser(req);
+  if (!auth) return err('Unauthorized', 401);
+
+  const body = await req.json().catch(() => null);
+  if (!body) return err('Invalid JSON');
+
+  const { tmdbId, mediaType } = body as { tmdbId: string; mediaType: string };
+  if (!tmdbId || !mediaType) return err('tmdbId and mediaType are required');
+  if (!['MOVIE', 'SHOW'].includes(mediaType)) return err('mediaType must be MOVIE or SHOW');
+
+  const item = await prisma.watchlistItem.upsert({
+    where: { userId_tmdbId_mediaType: { userId: auth.sub, tmdbId, mediaType: mediaType as MediaType } },
+    create: { userId: auth.sub, tmdbId, mediaType: mediaType as MediaType },
+    update: {},
+  });
+
+  return ok(item, 'Added to watchlist', { status: 201 });
+}

@@ -17,6 +17,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
 import { Progress } from '@/components/ui/progress';
 import { toast } from '@/hooks/use-toast';
+import { useAuth } from '@/contexts/auth-context';
 
 interface RatedItem { id: string; title: string; poster: string; year: string; tmdbRating?: number; userRating: number; }
 
@@ -261,6 +262,7 @@ function ListsSection() {
 
 
 export default function ProfilePage() {
+  const { user: authUser, logout } = useAuth();
   const [showSettings, setShowSettings] = useState(false);
   const [badges, setBadges] = useState<ComputedBadge[]>([]);
   const [comingSoon, setComingSoon] = useState<ComingSoonBadge[]>([]);
@@ -458,6 +460,7 @@ export default function ProfilePage() {
       {/* Header */}
       <div className="flex justify-between items-start">
         <Avatar className="h-32 w-32 ring-4 ring-primary/20 ring-offset-4 ring-offset-background shadow-2xl">
+          {authUser?.avatarUrl && <AvatarImage src={authUser.avatarUrl} alt={authUser.username} />}
           <AvatarFallback className="bg-primary/20">
             <User className="h-14 w-14 text-primary" />
           </AvatarFallback>
@@ -484,7 +487,7 @@ export default function ProfilePage() {
                 <Button variant="ghost" className="w-full justify-start text-sm h-12 rounded-xl">Help & Support</Button>
               </div>
               <Separator className="bg-white/5" />
-              <Button variant="destructive" className="w-full rounded-xl h-12">Logout</Button>
+              <Button variant="destructive" className="w-full rounded-xl h-12" onClick={logout}>Logout</Button>
             </div>
           </DialogContent>
         </Dialog>
@@ -492,17 +495,21 @@ export default function ProfilePage() {
 
       <div className="space-y-4">
         <div>
-          <h1 className="text-4xl font-headline font-bold">Your Profile</h1>
-          <p className="text-muted-foreground text-lg">@username</p>
+          <h1 className="text-4xl font-headline font-bold">
+            {authUser?.displayName ?? authUser?.username ?? 'Your Profile'}
+          </h1>
+          <p className="text-muted-foreground text-lg">@{authUser?.username ?? 'username'}</p>
         </div>
-        <p className="text-lg text-gray-400 leading-relaxed max-w-md">Set up your profile to track movies and connect with friends.</p>
+        <p className="text-lg text-gray-400 leading-relaxed max-w-md">
+          {authUser?.bio ?? 'Set up your profile to track movies and connect with friends.'}
+        </p>
         <div className="flex gap-10 pt-4">
           <div className="flex flex-col">
-            <span className="text-2xl font-bold font-headline">0</span>
+            <span className="text-2xl font-bold font-headline">{authUser?.followingCount ?? 0}</span>
             <span className="text-xs text-muted-foreground uppercase tracking-widest font-bold">Following</span>
           </div>
           <div className="flex flex-col">
-            <span className="text-2xl font-bold font-headline">0</span>
+            <span className="text-2xl font-bold font-headline">{authUser?.followersCount ?? 0}</span>
             <span className="text-xs text-muted-foreground uppercase tracking-widest font-bold">Followers</span>
           </div>
         </div>

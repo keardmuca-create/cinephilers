@@ -1,0 +1,187 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  USER
+  ADMIN
+  CRITIC
+}
+
+enum MediaType {
+  MOVIE
+  SHOW
+}
+
+enum BadgeTier {
+  GREY
+  BRONZE
+  SILVER
+  GOLD
+}
+
+model User {
+  id             String   @id @default(uuid())
+  email          String   @unique
+  username       String   @unique
+  passwordHash   String
+  displayName    String?
+  avatarUrl      String?
+  bio            String?  @db.VarChar(300)
+  favoriteGenres String[]
+  country        String?
+  role           Role     @default(USER)
+  isVerified     Boolean  @default(false)
+  isPrivate      Boolean  @default(false)
+  ratingsCount   Int      @default(0)
+  reviewsCount   Int      @default(0)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  emailVerificationToken   String?
+  emailVerificationExpires DateTime?
+  passwordResetToken       String?
+  passwordResetExpires     DateTime?
+  refreshTokenHash         String?
+
+  ratings     Rating[]
+  reviews     Review[]
+  watched     WatchedItem[]
+  watchlist   WatchlistItem[]
+  favorites   Favorite[]
+  lists       CustomList[]
+  badges      Badge[]
+  reviewLikes ReviewLike[]
+  followers   Follow[]        @relation("Following")
+  following   Follow[]        @relation("Follower")
+}
+
+model Rating {
+  id        String    @id @default(uuid())
+  userId    String
+  tmdbId    String
+  mediaType MediaType
+  score     Int
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, tmdbId, mediaType])
+}
+
+model Review {
+  id              String    @id @default(uuid())
+  userId          String
+  tmdbId          String
+  mediaType       MediaType
+  body            String
+  containsSpoiler Boolean   @default(false)
+  likesCount      Int       @default(0)
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  user  User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  likes ReviewLike[]
+
+  @@unique([userId, tmdbId, mediaType])
+}
+
+model ReviewLike {
+  userId    String
+  reviewId  String
+  createdAt DateTime @default(now())
+
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  review Review @relation(fields: [reviewId], references: [id], onDelete: Cascade)
+
+  @@id([userId, reviewId])
+}
+
+model WatchedItem {
+  id        String    @id @default(uuid())
+  userId    String
+  tmdbId    String
+  mediaType MediaType
+  watchedAt DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, tmdbId, mediaType])
+}
+
+model WatchlistItem {
+  id        String    @id @default(uuid())
+  userId    String
+  tmdbId    String
+  mediaType MediaType
+  addedAt   DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, tmdbId, mediaType])
+}
+
+model Favorite {
+  id        String    @id @default(uuid())
+  userId    String
+  tmdbId    String
+  mediaType MediaType
+  addedAt   DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, tmdbId, mediaType])
+}
+
+model CustomList {
+  id          String   @id @default(uuid())
+  userId      String
+  name        String
+  description String?
+  isPublic    Boolean  @default(true)
+  itemsCount  Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user  User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  items CustomListItem[]
+}
+
+model CustomListItem {
+  id        String    @id @default(uuid())
+  listId    String
+  tmdbId    String
+  mediaType MediaType
+  note      String?
+  addedAt   DateTime  @default(now())
+
+  list CustomList @relation(fields: [listId], references: [id], onDelete: Cascade)
+
+  @@unique([listId, tmdbId, mediaType])
+}
+
+model Follow {
+  followerId  String
+  followingId String
+  createdAt   DateTime @default(now())
+
+  follower  User @relation("Follower", fields: [followerId], references: [id], onDelete: Cascade)
+  following User @relation("Following", fields: [followingId], references: [id], onDelete: Cascade)
+
+  @@id([followerId, followingId])
+}
+
+model Badge {
+  id        String    @id @default(uuid())
+  userId    String
+  tier      BadgeTier
+  awardedAt DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
