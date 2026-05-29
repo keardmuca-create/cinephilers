@@ -1,15 +1,15 @@
 "use client"
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
-import { Heart, Star, Eye, Bookmark, Film, User } from 'lucide-react';
-import { ActivityEntry, getFeed, toggleLike, relativeTime } from '@/lib/activity';
+import { Heart, Star, Eye, Bookmark, Film, User, MoreHorizontal, Share2, Trash2 } from 'lucide-react';
+import { ActivityEntry, getFeed, toggleLike, removeActivity, relativeTime } from '@/lib/activity';
 
 function actionLabel(action: ActivityEntry['action']) {
-  if (action === 'watched') return 'watched';
-  if (action === 'rated') return 'rated';
-  return 'added to watchlist';
+  if (action === 'watched') return 'Watched';
+  if (action === 'rated') return 'Rated';
+  return 'Added to watchlist';
 }
 
 function ActionIcon({ action }: { action: ActivityEntry['action'] }) {
@@ -18,8 +18,33 @@ function ActionIcon({ action }: { action: ActivityEntry['action'] }) {
   return <Bookmark className="h-3.5 w-3.5 text-primary" />;
 }
 
-function ActivityCard({ entry, onLike }: { entry: ActivityEntry; onLike: (id: string) => void }) {
+function ActivityCard({ entry, onLike, onRemove }: { entry: ActivityEntry; onLike: (id: string) => void; onRemove: (entry: ActivityEntry) => void }) {
   const liked = entry.likes.includes('me');
+  const [menuOpen, setMenuOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!menuOpen) return;
+    const close = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) setMenuOpen(false);
+    };
+    document.addEventListener('mousedown', close);
+    return () => document.removeEventListener('mousedown', close);
+  }, [menuOpen]);
+
+  const handleShare = () => {
+    setMenuOpen(false);
+    if (navigator.share) {
+      navigator.share({ title: entry.contentTitle, url: `/movie/${entry.contentId}` }).catch(() => {});
+    } else {
+      navigator.clipboard.writeText(`${window.location.origin}/movie/${entry.contentId}`).catch(() => {});
+    }
+  };
+
+  const handleRemove = () => {
+    setMenuOpen(false);
+    onRemove(entry);
+  };
 
   return (
     <div className="bg-card rounded-3xl border border-white/5 shadow-lg overflow-hidden">
@@ -36,6 +61,32 @@ function ActivityCard({ entry, onLike }: { entry: ActivityEntry; onLike: (id: st
             <span>·</span>
             <span>{relativeTime(entry.timestamp)}</span>
           </div>
+        </div>
+        <div className="relative" ref={menuRef}>
+          <button
+            onClick={() => setMenuOpen(v => !v)}
+            className="h-8 w-8 flex items-center justify-center rounded-full hover:bg-muted/60 text-muted-foreground transition-colors"
+          >
+            <MoreHorizontal className="h-4 w-4" />
+          </button>
+          {menuOpen && (
+            <div className="absolute right-0 top-9 z-50 min-w-[140px] bg-card border border-white/10 rounded-2xl shadow-xl overflow-hidden">
+              <button
+                onClick={handleShare}
+                className="flex items-center gap-2.5 w-full px-4 py-3 text-sm hover:bg-muted/50 transition-colors"
+              >
+                <Share2 className="h-4 w-4 text-muted-foreground" />
+                Share
+              </button>
+              <button
+                onClick={handleRemove}
+                className="flex items-center gap-2.5 w-full px-4 py-3 text-sm hover:bg-muted/50 transition-colors text-destructive"
+              >
+                <Trash2 className="h-4 w-4" />
+                Remove
+              </button>
+            </div>
+          )}
         </div>
       </div>
 
@@ -96,6 +147,11 @@ export default function SocialPage() {
     setFeed(toggleLike(id));
   };
 
+  const handleRemove = (entry: ActivityEntry) => {
+    removeActivity(entry.action, entry.contentId);
+    setFeed(getFeed());
+  };
+
   return (
     <main className="max-w-xl mx-auto px-4 pt-10 pb-20 space-y-6">
       <h1 className="text-3xl font-headline font-bold px-2">Activity</h1>
@@ -115,7 +171,7 @@ export default function SocialPage() {
       ) : (
         <div className="space-y-4">
           {feed.map(entry => (
-            <ActivityCard key={entry.id} entry={entry} onLike={handleLike} />
+            <ActivityCard key={entry.id} entry={entry} onLike={handleLike} onRemove={handleRemove} />
           ))}
         </div>
       )}
