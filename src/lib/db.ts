@@ -3,8 +3,9 @@ import { PrismaClient } from '@/generated/prisma/client';
 const globalForPrisma = globalThis as unknown as { prisma: PrismaClient };
 
 function createClient() {
-  // Falls back to a placeholder during build — actual DB URL is required at runtime
-  const url = process.env.DATABASE_URL ?? 'postgresql://localhost:5432/cinephilers';
+  const isBuild = process.env.NEXT_PHASE === 'phase-production-build';
+  const url = process.env.DATABASE_URL ?? (isBuild ? 'postgresql://localhost:5432/placeholder' : null);
+  if (!url) throw new Error('DATABASE_URL environment variable is not set');
   return new PrismaClient({ accelerateUrl: url });
 }
 
