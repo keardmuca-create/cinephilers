@@ -264,11 +264,15 @@ function ListsSection() {
 type SettingsView = 'main' | 'edit-profile' | 'privacy';
 
 export default function ProfilePage() {
-  const { user: authUser, logout, refetch } = useAuth();
+  const { user: authUser, logout, refetch, updateUserLocally } = useAuth();
   const [showSettings, setShowSettings] = useState(false);
   const [settingsView, setSettingsView] = useState<SettingsView>('main');
   const [editForm, setEditForm] = useState({ displayName: '', bio: '', avatarUrl: '' });
   const [saving, setSaving] = useState(false);
+  const [localIsPrivate, setLocalIsPrivate] = useState(authUser?.isPrivate ?? false);
+
+  // Keep local privacy toggle in sync when authUser loads
+  useEffect(() => { setLocalIsPrivate(authUser?.isPrivate ?? false); }, [authUser?.isPrivate]);
   const [badges, setBadges] = useState<ComputedBadge[]>([]);
   const [comingSoon, setComingSoon] = useState<ComingSoonBadge[]>([]);
   const [showBadgesDialog, setShowBadgesDialog] = useState(false);
@@ -291,46 +295,38 @@ export default function ProfilePage() {
 
   async function saveProfile() {
     setSaving(true);
+    const patch = {
+      displayName: editForm.displayName.trim() || null,
+      bio: editForm.bio.trim() || null,
+      avatarUrl: editForm.avatarUrl.trim() || null,
+    };
+    // Update locally first so the UI reflects changes immediately
+    updateUserLocally(patch);
+    setSettingsView('main');
+    toast({ title: 'Profile updated' });
     try {
-      const res = await fetch('/api/users/me', {
+      await fetch('/api/users/me', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
-        body: JSON.stringify({
-          displayName: editForm.displayName.trim() || null,
-          bio: editForm.bio.trim() || null,
-          avatarUrl: editForm.avatarUrl.trim() || null,
-        }),
+        body: JSON.stringify(patch),
       });
-      if (res.ok) {
-        await refetch();
-        setSettingsView('main');
-        toast({ title: 'Profile updated' });
-      } else {
-        const d = await res.json();
-        toast({ title: d.message ?? 'Failed to save', variant: 'destructive' });
-      }
     } finally {
       setSaving(false);
     }
   }
 
-  async function savePrivacy(isPrivate: boolean) {
-    setSaving(true);
-    try {
-      const res = await fetch('/api/users/me', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({ isPrivate }),
-      });
-      if (res.ok) {
-        await refetch();
-        toast({ title: isPrivate ? 'Account set to private' : 'Account set to public' });
-      }
-    } finally {
-      setSaving(false);
-    }
+  async function savePrivacy(newValue: boolean) {
+    // Update toggle immediately — no waiting for the API
+    setLocalIsPrivate(newValue);
+    updateUserLocally({ isPrivate: newValue });
+    toast({ title: newValue ? 'Account set to private' : 'Account set to public' });
+    fetch('/api/users/me', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({ isPrivate: newValue }),
+    }).catch(() => { /* fire-and-forget */ });
   }
 
   useEffect(() => {
@@ -627,16 +623,15 @@ export default function ProfilePage() {
                 </DialogHeader>
                 <div className="space-y-4 py-4">
                   <button
-                    disabled={saving}
-                    onClick={() => savePrivacy(!(authUser?.isPrivate ?? false))}
-                    className={`w-full flex items-center justify-between px-4 py-4 rounded-xl border transition-colors ${authUser?.isPrivate ? 'border-primary/40 bg-primary/5' : 'border-border bg-muted/30'}`}
+                    onClick={() => savePrivacy(!localIsPrivate)}
+                    className={`w-full flex items-center justify-between px-4 py-4 rounded-xl border transition-colors ${localIsPrivate ? 'border-primary/40 bg-primary/5' : 'border-border bg-muted/30'}`}
                   >
                     <div className="text-left">
                       <p className="text-sm font-semibold">Private account</p>
                       <p className="text-xs text-muted-foreground mt-0.5">Only approved followers can see your activity</p>
                     </div>
-                    <div className={`w-11 h-6 rounded-full transition-colors flex items-center px-0.5 ml-4 shrink-0 ${authUser?.isPrivate ? 'bg-primary' : 'bg-foreground/20'}`}>
-                      <div className={`w-5 h-5 rounded-full bg-white shadow transition-transform ${authUser?.isPrivate ? 'translate-x-5' : 'translate-x-0'}`} />
+                    <div className={`w-11 h-6 rounded-full transition-colors flex items-center px-0.5 ml-4 shrink-0 ${localIsPrivate ? 'bg-primary' : 'bg-foreground/20'}`}>
+                      <div className={`w-5 h-5 rounded-full bg-white shadow transition-transform ${localIsPrivate ? 'translate-x-5' : 'translate-x-0'}`} />
                     </div>
                   </button>
                   <p className="text-xs text-muted-foreground px-1">

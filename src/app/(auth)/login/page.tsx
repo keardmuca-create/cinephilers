@@ -34,6 +34,9 @@ export default function LoginPage() {
       return;
     }
 
+    // Persist basic user info so profile shows immediately even after cold starts
+    try { localStorage.setItem('cinephilers_user', JSON.stringify(data.data)); } catch { /* ignore */ }
+
     router.push('/profile');
     router.refresh();
   };
