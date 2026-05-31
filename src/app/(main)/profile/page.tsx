@@ -261,9 +261,14 @@ function ListsSection() {
 }
 
 
+type SettingsView = 'main' | 'edit-profile' | 'privacy';
+
 export default function ProfilePage() {
-  const { user: authUser, logout } = useAuth();
+  const { user: authUser, logout, refetch } = useAuth();
   const [showSettings, setShowSettings] = useState(false);
+  const [settingsView, setSettingsView] = useState<SettingsView>('main');
+  const [editForm, setEditForm] = useState({ displayName: '', bio: '', avatarUrl: '' });
+  const [saving, setSaving] = useState(false);
   const [badges, setBadges] = useState<ComputedBadge[]>([]);
   const [comingSoon, setComingSoon] = useState<ComingSoonBadge[]>([]);
   const [showBadgesDialog, setShowBadgesDialog] = useState(false);
@@ -273,6 +278,60 @@ export default function ProfilePage() {
   const [userReviews, setUserReviews] = useState<UserReview[]>([]);
   const [ratedItems, setRatedItems] = useState<RatedItem[]>([]);
   const [ratingFilter, setRatingFilter] = useState<number | null>(null);
+
+  function openSettings() {
+    setEditForm({
+      displayName: authUser?.displayName ?? '',
+      bio: authUser?.bio ?? '',
+      avatarUrl: authUser?.avatarUrl ?? '',
+    });
+    setSettingsView('main');
+    setShowSettings(true);
+  }
+
+  async function saveProfile() {
+    setSaving(true);
+    try {
+      const res = await fetch('/api/users/me', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          displayName: editForm.displayName.trim() || null,
+          bio: editForm.bio.trim() || null,
+          avatarUrl: editForm.avatarUrl.trim() || null,
+        }),
+      });
+      if (res.ok) {
+        await refetch();
+        setSettingsView('main');
+        toast({ title: 'Profile updated' });
+      } else {
+        const d = await res.json();
+        toast({ title: d.message ?? 'Failed to save', variant: 'destructive' });
+      }
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function savePrivacy(isPrivate: boolean) {
+    setSaving(true);
+    try {
+      const res = await fetch('/api/users/me', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ isPrivate }),
+      });
+      if (res.ok) {
+        await refetch();
+        toast({ title: isPrivate ? 'Account set to private' : 'Account set to public' });
+      }
+    } finally {
+      setSaving(false);
+    }
+  }
 
   useEffect(() => {
     ensureSignupDate();
@@ -465,30 +524,127 @@ export default function ProfilePage() {
             <User className="h-14 w-14 text-primary" />
           </AvatarFallback>
         </Avatar>
-        <Dialog open={showSettings} onOpenChange={setShowSettings}>
-          <DialogTrigger asChild>
-            <Button variant="outline" size="icon" className="rounded-full border-white/10 bg-white/5 hover:bg-white/10">
-              <Settings className="h-5 w-5" />
-            </Button>
-          </DialogTrigger>
+        <Button variant="outline" size="icon" className="rounded-full border-white/10 bg-white/5 hover:bg-white/10" onClick={openSettings}>
+          <Settings className="h-5 w-5" />
+        </Button>
+
+        <Dialog open={showSettings} onOpenChange={v => { setShowSettings(v); if (!v) setSettingsView('main'); }}>
           <DialogContent className="sm:max-w-md rounded-3xl">
-            <DialogHeader>
-              <DialogTitle className="font-headline">Settings</DialogTitle>
-            </DialogHeader>
-            <div className="space-y-6 py-4">
-              <div className="space-y-2">
-                <h4 className="text-sm font-bold">Account</h4>
-                <Button variant="ghost" className="w-full justify-start text-sm h-12 rounded-xl">Edit Profile</Button>
-                <Button variant="ghost" className="w-full justify-start text-sm h-12 rounded-xl">Privacy Settings</Button>
-              </div>
-              <div className="space-y-2">
-                <h4 className="text-sm font-bold">App</h4>
-                <Button variant="ghost" className="w-full justify-start text-sm h-12 rounded-xl" onClick={() => toast({ title: 'Notifications updated' })}>Notification Preferences</Button>
-                <Button variant="ghost" className="w-full justify-start text-sm h-12 rounded-xl">Help & Support</Button>
-              </div>
-              <Separator className="bg-white/5" />
-              <Button variant="destructive" className="w-full rounded-xl h-12" onClick={logout}>Logout</Button>
-            </div>
+            {/* ── Main settings view ── */}
+            {settingsView === 'main' && (
+              <>
+                <DialogHeader>
+                  <DialogTitle className="font-headline">Settings</DialogTitle>
+                </DialogHeader>
+                <div className="space-y-6 py-4">
+                  <div className="space-y-2">
+                    <h4 className="text-sm font-bold">Account</h4>
+                    <Button variant="ghost" className="w-full justify-start text-sm h-12 rounded-xl" onClick={() => setSettingsView('edit-profile')}>
+                      Edit Profile <ChevronRight className="h-4 w-4 ml-auto" />
+                    </Button>
+                    <Button variant="ghost" className="w-full justify-start text-sm h-12 rounded-xl" onClick={() => setSettingsView('privacy')}>
+                      Privacy Settings <ChevronRight className="h-4 w-4 ml-auto" />
+                    </Button>
+                  </div>
+                  <div className="space-y-2">
+                    <h4 className="text-sm font-bold">App</h4>
+                    <Button variant="ghost" className="w-full justify-start text-sm h-12 rounded-xl" onClick={() => toast({ title: 'Notifications coming soon' })}>
+                      Notification Preferences <ChevronRight className="h-4 w-4 ml-auto" />
+                    </Button>
+                    <Button variant="ghost" className="w-full justify-start text-sm h-12 rounded-xl" onClick={() => toast({ title: 'Email us at support@cinephilers.app' })}>
+                      Help & Support <ChevronRight className="h-4 w-4 ml-auto" />
+                    </Button>
+                  </div>
+                  <Separator className="bg-white/5" />
+                  <Button variant="destructive" className="w-full rounded-xl h-12" onClick={logout}>Logout</Button>
+                </div>
+              </>
+            )}
+
+            {/* ── Edit Profile view ── */}
+            {settingsView === 'edit-profile' && (
+              <>
+                <DialogHeader>
+                  <div className="flex items-center gap-3">
+                    <button onClick={() => setSettingsView('main')} className="text-muted-foreground hover:text-foreground transition-colors">
+                      ←
+                    </button>
+                    <DialogTitle className="font-headline">Edit Profile</DialogTitle>
+                  </div>
+                </DialogHeader>
+                <div className="space-y-4 py-4">
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Display Name</label>
+                    <input
+                      value={editForm.displayName}
+                      onChange={e => setEditForm(f => ({ ...f, displayName: e.target.value }))}
+                      placeholder={authUser?.username ?? 'Your name'}
+                      maxLength={50}
+                      className="w-full px-4 py-3 rounded-xl border border-border bg-muted/30 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/40"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Bio</label>
+                    <textarea
+                      value={editForm.bio}
+                      onChange={e => setEditForm(f => ({ ...f, bio: e.target.value }))}
+                      placeholder="Tell people about your taste in films…"
+                      maxLength={300}
+                      rows={3}
+                      className="w-full px-4 py-3 rounded-xl border border-border bg-muted/30 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/40 resize-none"
+                    />
+                    <p className="text-xs text-muted-foreground text-right">{editForm.bio.length}/300</p>
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Avatar URL</label>
+                    <input
+                      value={editForm.avatarUrl}
+                      onChange={e => setEditForm(f => ({ ...f, avatarUrl: e.target.value }))}
+                      placeholder="https://…"
+                      className="w-full px-4 py-3 rounded-xl border border-border bg-muted/30 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/40"
+                    />
+                  </div>
+                  <div className="flex gap-3 pt-2">
+                    <Button variant="outline" className="flex-1 rounded-xl" onClick={() => setSettingsView('main')}>Cancel</Button>
+                    <Button className="flex-1 rounded-xl" disabled={saving} onClick={saveProfile}>
+                      {saving ? 'Saving…' : 'Save'}
+                    </Button>
+                  </div>
+                </div>
+              </>
+            )}
+
+            {/* ── Privacy Settings view ── */}
+            {settingsView === 'privacy' && (
+              <>
+                <DialogHeader>
+                  <div className="flex items-center gap-3">
+                    <button onClick={() => setSettingsView('main')} className="text-muted-foreground hover:text-foreground transition-colors">
+                      ←
+                    </button>
+                    <DialogTitle className="font-headline">Privacy Settings</DialogTitle>
+                  </div>
+                </DialogHeader>
+                <div className="space-y-4 py-4">
+                  <button
+                    disabled={saving}
+                    onClick={() => savePrivacy(!(authUser?.isPrivate ?? false))}
+                    className={`w-full flex items-center justify-between px-4 py-4 rounded-xl border transition-colors ${authUser?.isPrivate ? 'border-primary/40 bg-primary/5' : 'border-border bg-muted/30'}`}
+                  >
+                    <div className="text-left">
+                      <p className="text-sm font-semibold">Private account</p>
+                      <p className="text-xs text-muted-foreground mt-0.5">Only approved followers can see your activity</p>
+                    </div>
+                    <div className={`w-11 h-6 rounded-full transition-colors flex items-center px-0.5 ml-4 shrink-0 ${authUser?.isPrivate ? 'bg-primary' : 'bg-foreground/20'}`}>
+                      <div className={`w-5 h-5 rounded-full bg-white shadow transition-transform ${authUser?.isPrivate ? 'translate-x-5' : 'translate-x-0'}`} />
+                    </div>
+                  </button>
+                  <p className="text-xs text-muted-foreground px-1">
+                    When your account is public, anyone can follow you and see your ratings, reviews, and lists.
+                  </p>
+                </div>
+              </>
+            )}
           </DialogContent>
         </Dialog>
       </div>

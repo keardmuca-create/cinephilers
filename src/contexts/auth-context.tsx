@@ -15,6 +15,7 @@ interface AuthUser {
   reviewsCount: number;
   followersCount: number;
   followingCount: number;
+  isPrivate: boolean;
 }
 
 interface AuthContextValue {
