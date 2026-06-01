@@ -1,7 +1,7 @@
 
 "use client"
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Movie } from '@/lib/types';
 import { readUserStats, computeAllBadges, getComingSoonBadges, ensureSignupDate, ComputedBadge, ComingSoonBadge } from '@/lib/badges';
 import { BadgeCard, FeaturedSeasonalBadge, ComingSoonCard, TierGuide } from '@/components/badge-card';
@@ -274,6 +274,37 @@ export default function ProfilePage() {
   // Keep local privacy toggle in sync when authUser loads
   useEffect(() => { setLocalIsPrivate(authUser?.isPrivate ?? false); }, [authUser?.isPrivate]);
 
+  const avatarInputRef = useRef<HTMLInputElement>(null);
+
+  const handleAvatarFile = useCallback((file: File) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const img = new window.Image();
+      img.onload = () => {
+        const size = 400;
+        const canvas = document.createElement('canvas');
+        canvas.width = size;
+        canvas.height = size;
+        const ctx = canvas.getContext('2d')!;
+        const min = Math.min(img.width, img.height);
+        const sx = (img.width - min) / 2;
+        const sy = (img.height - min) / 2;
+        ctx.drawImage(img, sx, sy, min, min, 0, 0, size, size);
+        const dataUrl = canvas.toDataURL('image/jpeg', 0.82);
+        updateUserLocally({ avatarUrl: dataUrl });
+        fetch('/api/users/me', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify({ avatarUrl: dataUrl }),
+        }).catch(() => {});
+        toast({ title: 'Profile photo updated' });
+      };
+      img.src = e.target!.result as string;
+    };
+    reader.readAsDataURL(file);
+  }, [updateUserLocally]);
+
   const [badges, setBadges] = useState<ComputedBadge[]>([]);
   const [comingSoon, setComingSoon] = useState<ComingSoonBadge[]>([]);
   const [showBadgesDialog, setShowBadgesDialog] = useState(false);
@@ -513,12 +544,21 @@ export default function ProfilePage() {
       <div className="flex justify-between items-start">
         {/* Avatar + change photo link */}
         <div className="flex flex-col items-center gap-2">
-          <Avatar className="h-32 w-32 ring-4 ring-primary/20 ring-offset-4 ring-offset-background shadow-2xl">
-            {authUser?.avatarUrl && <AvatarImage src={authUser.avatarUrl} alt={authUser.username ?? 'avatar'} />}
-            <AvatarFallback className="bg-primary/20">
-              <User className="h-14 w-14 text-primary" />
-            </AvatarFallback>
-          </Avatar>
+          <button onClick={() => avatarInputRef.current?.click()} className="rounded-full focus:outline-none">
+            <Avatar className="h-32 w-32 ring-4 ring-primary/20 ring-offset-4 ring-offset-background shadow-2xl">
+              {authUser?.avatarUrl && <AvatarImage src={authUser.avatarUrl} alt={authUser.username ?? 'avatar'} />}
+              <AvatarFallback className="bg-primary/20">
+                <User className="h-14 w-14 text-primary" />
+              </AvatarFallback>
+            </Avatar>
+          </button>
+          <input
+            ref={avatarInputRef}
+            type="file"
+            accept="image/*"
+            className="hidden"
+            onChange={e => { const f = e.target.files?.[0]; if (f) handleAvatarFile(f); e.target.value = ''; }}
+          />
         </div>
         <Button variant="outline" size="icon" className="rounded-full border-white/10 bg-white/5 hover:bg-white/10" onClick={openSettings}>
           <Settings className="h-5 w-5" />
