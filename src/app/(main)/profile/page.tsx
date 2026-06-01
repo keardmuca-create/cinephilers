@@ -986,9 +986,17 @@ export default function ProfilePage() {
         {/* All-time badges — 3-column grid */}
         {otherBadges.slice(0, 3).length > 0 && (
           <div className="space-y-3">
-            {activeSeasonal.length > 0 && (
+            <div className="flex items-center justify-between">
               <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground">All Time</p>
-            )}
+              {otherBadges.length > 3 && (
+                <button
+                  onClick={() => setShowBadgesDialog(true)}
+                  className="text-xs text-primary border border-primary/30 rounded-full px-3 py-1 hover:bg-primary/10 transition-colors font-semibold flex items-center gap-1"
+                >
+                  See All <ChevronRight className="h-3 w-3" />
+                </button>
+              )}
+            </div>
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
               {otherBadges.slice(0, 3).map(badge => (
                 <BadgeCard key={badge.id} badge={badge} />
