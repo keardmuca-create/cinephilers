@@ -84,8 +84,8 @@ export default function HomePage() {
   const dailyPool  = seededShuffle(allMovies, daySeed);
   const weeklyPool = seededShuffle(allMovies, weekSeed);
 
-  // Today's Pick hero — first of daily pool
-  const heroMovie = dailyPool[0] ?? null;
+  // Today's Pick hero — first movie (not show) in daily pool
+  const heroMovie = dailyPool.find(m => m.type === 'movie') ?? null;
 
   // Featured Today — next 15 from daily pool (skip hero)
   const featured = dailyPool.slice(1, 16);
