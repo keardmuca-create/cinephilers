@@ -391,8 +391,10 @@ export function BadgeCard({ badge }: BadgeCardProps) {
             <div className="space-y-1.5">
               <ProgressBar pct={badge.progressPct} color={color} />
               <div className="flex justify-between text-[10px] font-bold tabular-nums">
-                <span style={{ color: isLocked ? '#4b5563' : color }}>{badge.current.toLocaleString()}</span>
-                <span className="text-muted-foreground">{badge.nextThreshold?.toLocaleString() ?? '—'}</span>
+                <span style={{ color: isLocked ? '#4b5563' : color }}>
+                  {badge.current.toLocaleString()}
+                  <span className="text-muted-foreground font-normal"> / {badge.nextThreshold?.toLocaleString() ?? '—'}</span>
+                </span>
               </div>
             </div>
           )
