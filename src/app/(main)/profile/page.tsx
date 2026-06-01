@@ -113,7 +113,7 @@ const EmptyRow = ({ message }: { message: string }) => (
   </div>
 );
 
-interface RecentItem { id: string; title: string; poster: string; year: string; loggedAt: string; rating?: number; tmdbRating?: number; }
+interface RecentItem { id: string; title: string; poster: string; year: string; loggedAt: string; rating?: number; tmdbRating?: number; linkId?: string; }
 interface UserReview { movieId: string; movieTitle: string; moviePoster: string; movieYear: string; content: string; rating: number; date: string; }
 interface UserList { id: string; title: string; isPrivate: boolean; createdAt: string; items: { movieId: string; title: string; poster: string; year: string; type: string }[]; }
 
@@ -373,10 +373,8 @@ export default function ProfilePage() {
         const k = localStorage.key(i)!;
         if (k.startsWith('watched-') && !k.startsWith('watched-ep-') && localStorage.getItem(k) === 'true')
           allWatchedIds.add(k.slice('watched-'.length));
-        if (k.startsWith('watched-ep-')) {
-          const m = k.slice('watched-ep-'.length).match(/^(.+)-S\d+E\d+$/);
-          if (m) allWatchedIds.add(m[1]);
-        }
+        if (k.startsWith('watched-ep-'))
+          allWatchedIds.add(k.slice('watched-ep-'.length));
       }
       setWatchedCount(allWatchedIds.size);
     } catch { /* ignore */ }
@@ -384,7 +382,6 @@ export default function ProfilePage() {
     // Build recent watch preview from all watched-* keys
     const buildWatchHistory = async () => {
       try {
-        // Fallback lookup from recently-viewed
         const rvMap = new Map<string, { title: string; poster: string; year: string; type: string; tmdbRating?: number }>();
         try {
           const stored = localStorage.getItem('recently-viewed');
@@ -394,59 +391,68 @@ export default function ProfilePage() {
           }
         } catch { /* ignore */ }
 
-        // Collect all watched IDs
+        // Read watch log for date ordering
+        let watchLog: { id: string; loggedAt: string }[] = [];
+        try { watchLog = JSON.parse(localStorage.getItem('watch-log') ?? '[]'); } catch { /* ignore */ }
+        const logMap = new Map<string, string>();
+        for (const entry of watchLog) logMap.set(entry.id, entry.loggedAt);
+
+        // Collect all watched IDs — episodes kept as full IDs (e.g. tmdb-tv-299167-S1E2)
         const allWatchedIds = new Set<string>();
         for (let i = 0; i < localStorage.length; i++) {
           const k = localStorage.key(i)!;
           if (k.startsWith('watched-') && !k.startsWith('watched-ep-') && localStorage.getItem(k) === 'true')
             allWatchedIds.add(k.slice('watched-'.length));
-          if (k.startsWith('watched-ep-')) {
-            const m = k.slice('watched-ep-'.length).match(/^(.+)-S\d+E\d+$/);
-            if (m) allWatchedIds.add(m[1]);
-          }
+          if (k.startsWith('watched-ep-'))
+            allWatchedIds.add(k.slice('watched-ep-'.length));
         }
 
         const items: RecentItem[] = [];
         const fetchPromises: Promise<void>[] = [];
 
         for (const id of allWatchedIds) {
+          const isEpisode = /^tmdb-tv-.+-S\d+E\d+$/.test(id);
+          const showId = isEpisode ? id.replace(/-S\d+E\d+$/, '') : undefined;
           const raw = localStorage.getItem(`meta-${id}`);
           const meta = raw ? JSON.parse(raw) : null;
-          const rv = rvMap.get(id);
+          const rv = !isEpisode ? rvMap.get(id) : undefined;
+          const loggedAt = logMap.get(id) ?? new Date(0).toISOString();
 
           if (!meta && !rv) {
-            // Fetch from API and cache
+            const apiUrl = isEpisode ? `/api/meta/${id}` : `/api/movies/${id}`;
             fetchPromises.push(
-              fetch(`/api/movies/${id}`)
+              fetch(apiUrl)
                 .then(r => r.json())
-                .then((data: { title?: string; poster?: string; year?: string; type?: string; rating?: number; error?: string }) => {
+                .then((data: { title?: string; poster?: string; year?: string; type?: string; rating?: number; tmdbRating?: number; error?: string }) => {
                   if (data.error || !data.title) return;
-                  const cached = { title: data.title, poster: data.poster ?? '', year: data.year ?? '', type: data.type ?? 'movie', tmdbRating: data.rating };
+                  const cached = { title: data.title, poster: data.poster ?? '', year: data.year ?? '', type: data.type ?? 'movie', tmdbRating: data.rating ?? data.tmdbRating };
                   try { localStorage.setItem(`meta-${id}`, JSON.stringify(cached)); } catch { /* ignore */ }
-                  const rating = localStorage.getItem(`movie-rating-${id}`);
-                  items.push({ id, title: cached.title, poster: cached.poster, year: cached.year, loggedAt: '', rating: rating ? Number(rating) : undefined, tmdbRating: cached.tmdbRating });
+                  const rating = localStorage.getItem(`movie-rating-${showId ?? id}`);
+                  items.push({ id, title: cached.title, poster: cached.poster, year: cached.year, loggedAt, rating: rating ? Number(rating) : undefined, tmdbRating: cached.tmdbRating, linkId: showId });
                 })
                 .catch(() => { /* ignore */ })
             );
             continue;
           }
 
-          const rating = localStorage.getItem(`movie-rating-${id}`);
+          const rating = localStorage.getItem(`movie-rating-${showId ?? id}`);
           items.push({
             id,
             title: meta?.title ?? rv?.title ?? '',
             poster: meta?.poster ?? rv?.poster ?? '',
             year: meta?.year ?? rv?.year ?? '',
-            loggedAt: '',
+            loggedAt,
             rating: rating ? Number(rating) : undefined,
             tmdbRating: typeof meta?.tmdbRating === 'number' ? meta.tmdbRating : rv?.tmdbRating,
+            linkId: showId,
           });
         }
 
-        // Wait for any API fetches, then update state
         if (fetchPromises.length > 0) {
           await Promise.allSettled(fetchPromises);
         }
+        // Sort by most recent first to match the history page
+        items.sort((a, b) => new Date(b.loggedAt).getTime() - new Date(a.loggedAt).getTime());
         setRecentWatched(items.slice(0, 50));
       } catch { /* ignore */ }
     };
@@ -736,7 +742,7 @@ export default function ProfilePage() {
         {recentWatched.length > 0 ? (
           <div className="flex overflow-x-auto gap-4 pb-4 no-scrollbar -mx-6 px-6">
             {recentWatched.map(item => (
-              <Link key={item.id} href={`/movie/${item.id}`} className="group shrink-0 w-36">
+              <Link key={item.id} href={`/movie/${item.linkId ?? item.id}`} className="group shrink-0 w-36">
                 <div className="relative aspect-[2/3] overflow-hidden rounded-xl bg-muted shadow-lg movie-card-hover mb-2">
                   <img src={item.poster} alt={item.title} className="w-full h-full object-cover transition-transform group-hover:scale-110" />
                 </div>
