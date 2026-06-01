@@ -1,7 +1,7 @@
 
 "use client"
 
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Movie } from '@/lib/types';
 import { readUserStats, computeAllBadges, getComingSoonBadges, ensureSignupDate, ComputedBadge, ComingSoonBadge } from '@/lib/badges';
 import { BadgeCard, FeaturedSeasonalBadge, ComingSoonCard, TierGuide } from '@/components/badge-card';
@@ -274,38 +274,6 @@ export default function ProfilePage() {
   // Keep local privacy toggle in sync when authUser loads
   useEffect(() => { setLocalIsPrivate(authUser?.isPrivate ?? false); }, [authUser?.isPrivate]);
 
-  const avatarInputRef = useRef<HTMLInputElement>(null);
-
-  const handleAvatarFile = useCallback((file: File) => {
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      const img = new window.Image();
-      img.onload = () => {
-        // Resize to 400x400 max via canvas
-        const size = 400;
-        const canvas = document.createElement('canvas');
-        canvas.width = size;
-        canvas.height = size;
-        const ctx = canvas.getContext('2d')!;
-        // Center-crop square
-        const min = Math.min(img.width, img.height);
-        const sx = (img.width - min) / 2;
-        const sy = (img.height - min) / 2;
-        ctx.drawImage(img, sx, sy, min, min, 0, 0, size, size);
-        const dataUrl = canvas.toDataURL('image/jpeg', 0.82);
-        updateUserLocally({ avatarUrl: dataUrl });
-        fetch('/api/users/me', {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          credentials: 'include',
-          body: JSON.stringify({ avatarUrl: dataUrl }),
-        }).catch(() => {});
-        toast({ title: 'Profile photo updated' });
-      };
-      img.src = e.target!.result as string;
-    };
-    reader.readAsDataURL(file);
-  }, [updateUserLocally]);
   const [badges, setBadges] = useState<ComputedBadge[]>([]);
   const [comingSoon, setComingSoon] = useState<ComingSoonBadge[]>([]);
   const [showBadgesDialog, setShowBadgesDialog] = useState(false);
@@ -533,6 +501,8 @@ export default function ProfilePage() {
     rating: String(n),
     count: ratedItems.filter(r => r.userRating === n).length,
   }));
+  const maxRatingCount = Math.max(...ratingData.map(d => d.count), 1);
+  const yDomainMax = Math.ceil(maxRatingCount / 0.65);
 
   const activeSeasonal = badges.filter(b => b.isSeasonal && b.isSeasonActive);
   const otherBadges = badges.filter(b => !(b.isSeasonal && b.isSeasonActive));
@@ -549,19 +519,6 @@ export default function ProfilePage() {
               <User className="h-14 w-14 text-primary" />
             </AvatarFallback>
           </Avatar>
-          <button
-            onClick={() => avatarInputRef.current?.click()}
-            className="text-xs font-semibold text-primary hover:underline"
-          >
-            Choose photo
-          </button>
-          <input
-            ref={avatarInputRef}
-            type="file"
-            accept="image/*"
-            className="hidden"
-            onChange={e => { const f = e.target.files?.[0]; if (f) handleAvatarFile(f); e.target.value = ''; }}
-          />
         </div>
         <Button variant="outline" size="icon" className="rounded-full border-white/10 bg-white/5 hover:bg-white/10" onClick={openSettings}>
           <Settings className="h-5 w-5" />
@@ -856,7 +813,7 @@ export default function ProfilePage() {
           <ResponsiveContainer width="100%" height="100%">
             <BarChart data={ratingData} onClick={d => { if (d?.activePayload?.[0]) { const r = parseInt(d.activePayload[0].payload.rating); if (ratedItems.filter(i => i.userRating === r).length > 0) setRatingFilter(r); } }}>
               <XAxis dataKey="rating" axisLine={false} tickLine={false} tick={{ fill: '#888', fontSize: 11, fontWeight: 'bold' }} />
-              <YAxis hide />
+              <YAxis hide domain={[0, yDomainMax]} />
               <ChartTooltip cursor={{ fill: 'rgba(0,0,0,0.05)' }} contentStyle={{ backgroundColor: '#fff', border: '1px solid #eee', borderRadius: '12px', color: '#111' }} />
               <Bar dataKey="count" radius={[6, 6, 0, 0]} style={{ cursor: 'pointer' }}>
                 {ratingData.map((entry, index) => (
