@@ -9,7 +9,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { MovieCard } from '@/components/movie-card';
 import Link from 'next/link';
-import { Settings, Star, Film, List, MessageSquare, ChevronRight, Award, History, Bookmark, User, Eye, Plus, Camera } from 'lucide-react';
+import { Settings, Star, Film, List, MessageSquare, ChevronRight, Award, History, Bookmark, User, Eye, Plus } from 'lucide-react';
 import { FavoritesSection } from '@/components/favorites-section';
 import { BarChart, Bar, XAxis, ResponsiveContainer, Cell, YAxis, Tooltip as ChartTooltip } from 'recharts';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
@@ -541,34 +541,28 @@ export default function ProfilePage() {
     <main className="p-6 pt-12 pb-32 max-w-2xl mx-auto space-y-16">
       {/* Header */}
       <div className="flex justify-between items-start">
-        {/* Clickable avatar with camera overlay */}
-        <button
-          className="relative group"
-          onClick={() => avatarInputRef.current?.click()}
-          title="Change profile photo"
-        >
+        {/* Avatar + change photo link */}
+        <div className="flex flex-col items-center gap-2">
           <Avatar className="h-32 w-32 ring-4 ring-primary/20 ring-offset-4 ring-offset-background shadow-2xl">
             {authUser?.avatarUrl && <AvatarImage src={authUser.avatarUrl} alt={authUser.username ?? 'avatar'} />}
             <AvatarFallback className="bg-primary/20">
               <User className="h-14 w-14 text-primary" />
             </AvatarFallback>
           </Avatar>
-          {/* Camera icon overlay */}
-          <div className="absolute inset-0 rounded-full flex items-center justify-center bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity">
-            <Camera className="h-8 w-8 text-white" />
-          </div>
-          {/* Small camera badge */}
-          <div className="absolute bottom-1 right-1 bg-primary rounded-full p-1.5 shadow-lg border-2 border-background">
-            <Camera className="h-3.5 w-3.5 text-white" />
-          </div>
-        </button>
-        <input
-          ref={avatarInputRef}
-          type="file"
-          accept="image/*"
-          className="hidden"
-          onChange={e => { const f = e.target.files?.[0]; if (f) handleAvatarFile(f); e.target.value = ''; }}
-        />
+          <button
+            onClick={() => avatarInputRef.current?.click()}
+            className="text-xs font-semibold text-primary hover:underline"
+          >
+            Choose photo
+          </button>
+          <input
+            ref={avatarInputRef}
+            type="file"
+            accept="image/*"
+            className="hidden"
+            onChange={e => { const f = e.target.files?.[0]; if (f) handleAvatarFile(f); e.target.value = ''; }}
+          />
+        </div>
         <Button variant="outline" size="icon" className="rounded-full border-white/10 bg-white/5 hover:bg-white/10" onClick={openSettings}>
           <Settings className="h-5 w-5" />
         </Button>
