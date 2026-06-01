@@ -547,12 +547,12 @@ function EpisodeRow({
     : `https://picsum.photos/seed/${ep.id}/300/170`;
 
   return (
-    <div className={`flex gap-4 p-4 rounded-2xl border transition-colors ${isWatched ? 'bg-white/[0.03] border-white/[0.04]' : 'bg-white/5 border-white/5 hover:bg-white/8'}`}>
+    <div className={`flex gap-4 p-4 rounded-2xl border transition-colors ${isWatched ? 'bg-gray-50 border-gray-100' : 'bg-white border-gray-100 hover:bg-gray-50'}`}>
       {/* Still — opens modal */}
       <button className="relative aspect-video w-28 shrink-0 rounded-xl overflow-hidden group" onClick={onClick}>
         <Image src={still} alt={ep.name} fill className="object-cover" />
         <div className="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity">
-          <Play className="h-6 w-6 fill-current" />
+          <Play className="h-6 w-6 fill-current text-white" />
         </div>
       </button>
 
@@ -560,19 +560,19 @@ function EpisodeRow({
       <button className="flex-1 min-w-0 space-y-1 text-left" onClick={onClick}>
         <div className="flex items-center gap-2">
           <span className="text-[10px] font-bold text-primary uppercase tracking-widest shrink-0">E{ep.episode_number}</span>
-          <h5 className={`text-sm font-bold font-headline line-clamp-1 ${isWatched ? 'text-white/50' : 'text-white'}`}>{ep.name}</h5>
+          <h5 className={`text-sm font-bold font-headline line-clamp-1 ${isWatched ? 'text-gray-400' : 'text-gray-900'}`}>{ep.name}</h5>
         </div>
         {ep.air_date && (
-          <p className="text-[10px] text-muted-foreground font-bold">{new Date(ep.air_date).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })}</p>
+          <p className="text-[10px] text-gray-500 font-bold">{new Date(ep.air_date).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })}</p>
         )}
-        {ep.overview && <p className="text-xs text-white/60 line-clamp-2">{ep.overview}</p>}
+        {ep.overview && <p className="text-xs text-gray-500 line-clamp-2">{ep.overview}</p>}
         <div className="flex items-center gap-3 pt-1">
           {ep.vote_average > 0 && (
-            <span className="flex items-center gap-1 text-[10px] font-bold text-accent">
-              <Star className="h-3 w-3 fill-current" /> {ep.vote_average.toFixed(1)}
+            <span className="flex items-center gap-1 text-[10px] font-bold text-gray-900">
+              <Star className="h-3 w-3 fill-yellow-400 text-yellow-400" /> {ep.vote_average.toFixed(1)}
             </span>
           )}
-          {ep.runtime && <span className="text-[10px] text-muted-foreground font-bold">{ep.runtime} min</span>}
+          {ep.runtime && <span className="text-[10px] text-gray-500 font-bold">{ep.runtime} min</span>}
         </div>
       </button>
 
@@ -583,7 +583,7 @@ function EpisodeRow({
         className={`shrink-0 self-center h-7 w-7 rounded-full border-2 flex items-center justify-center transition-all ${
           isWatched
             ? 'bg-primary border-primary text-white hover:bg-primary/80'
-            : 'border-white/20 bg-transparent hover:border-white/60 hover:bg-white/5'
+            : 'border-gray-300 bg-transparent hover:border-primary hover:bg-primary/5'
         }`}
       >
         {isWatched && <Check className="h-3.5 w-3.5" />}
@@ -713,8 +713,8 @@ function SeasonsSection({
 
               {/* Episodes */}
               {isOpen && cache[sn] && (
-                <div className="p-4 space-y-2 bg-black/40">
-                  {season.overview && <p className="text-sm text-white/60 italic pb-2">{season.overview}</p>}
+                <div className="p-4 space-y-2 bg-gray-50">
+                  {season.overview && <p className="text-sm text-gray-500 italic pb-2">{season.overview}</p>}
                   {cache[sn].map(ep => (
                     <EpisodeRow
                       key={ep.id}
