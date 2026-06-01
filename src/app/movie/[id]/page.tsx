@@ -560,12 +560,12 @@ function EpisodeRow({
       <button className="flex-1 min-w-0 space-y-1 text-left" onClick={onClick}>
         <div className="flex items-center gap-2">
           <span className="text-[10px] font-bold text-primary uppercase tracking-widest shrink-0">E{ep.episode_number}</span>
-          <h5 className={`text-sm font-bold font-headline line-clamp-1 ${isWatched ? 'text-muted-foreground' : ''}`}>{ep.name}</h5>
+          <h5 className={`text-sm font-bold font-headline line-clamp-1 ${isWatched ? 'text-white/50' : 'text-white'}`}>{ep.name}</h5>
         </div>
         {ep.air_date && (
           <p className="text-[10px] text-muted-foreground font-bold">{new Date(ep.air_date).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })}</p>
         )}
-        {ep.overview && <p className="text-xs text-gray-400 line-clamp-2">{ep.overview}</p>}
+        {ep.overview && <p className="text-xs text-white/60 line-clamp-2">{ep.overview}</p>}
         <div className="flex items-center gap-3 pt-1">
           {ep.vote_average > 0 && (
             <span className="flex items-center gap-1 text-[10px] font-bold text-accent">
@@ -713,8 +713,8 @@ function SeasonsSection({
 
               {/* Episodes */}
               {isOpen && cache[sn] && (
-                <div className="p-4 space-y-2 bg-black/20">
-                  {season.overview && <p className="text-sm text-gray-400 italic pb-2">{season.overview}</p>}
+                <div className="p-4 space-y-2 bg-black/40">
+                  {season.overview && <p className="text-sm text-white/60 italic pb-2">{season.overview}</p>}
                   {cache[sn].map(ep => (
                     <EpisodeRow
                       key={ep.id}
