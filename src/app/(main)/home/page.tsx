@@ -12,28 +12,9 @@ import { RecentlyViewed } from '@/components/recently-viewed';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { usePopularMovies } from '@/hooks/use-movies';
+import { seededShuffle, dedup, DAY_MS, WEEK_MS } from '@/lib/seed-shuffle';
 
 const EMPTY = { movies: [] as Movie[], shows: [] as Movie[], trending: [] as Movie[] };
-
-// Seeded PRNG — same seed always produces the same shuffle
-function seededShuffle<T>(arr: T[], seed: number): T[] {
-  let s = seed | 0;
-  const rng = () => {
-    s = (s + 0x6D2B79F5) | 0;
-    let t = Math.imul(s ^ (s >>> 15), 1 | s);
-    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
-  const out = [...arr];
-  for (let i = out.length - 1; i > 0; i--) {
-    const j = Math.floor(rng() * (i + 1));
-    [out[i], out[j]] = [out[j], out[i]];
-  }
-  return out;
-}
-
-const DAY_MS  = 86_400_000;
-const WEEK_MS = DAY_MS * 7;
 
 const SectionHeader = ({ title, seeAllSection }: { title: string; seeAllSection?: string }) => (
   <div className="flex items-center justify-between px-6">
@@ -73,10 +54,8 @@ const HeroSkeleton = () => (
 export default function HomePage() {
   const { data, loading } = usePopularMovies(EMPTY);
 
-  // Deduplicated pool of everything fetched
-  const allMovies = Array.from(
-    new Map([...data.trending, ...data.movies, ...data.shows].map(m => [m.id, m])).values()
-  );
+  // Deduplicated pool of everything fetched (~40×3 ≈ 100+ unique items)
+  const allMovies = dedup([...data.trending, ...data.movies, ...data.shows]);
 
   const daySeed  = Math.floor(Date.now() / DAY_MS);
   const weekSeed = Math.floor(Date.now() / WEEK_MS) + 99_999; // offset so weekly ≠ daily
@@ -166,7 +145,7 @@ export default function HomePage() {
       {/* Top 10 on Cinephilers */}
       {top10.length > 0 && (
         <section className="space-y-4">
-          <SectionHeader title="Top 10 on Cinephilers This Week" />
+          <SectionHeader title="Top 10 on Cinephilers This Week" seeAllSection="top-10-week" />
           <div className="flex overflow-x-auto gap-4 px-6 pb-6 no-scrollbar">
             {top10.map((movie, index) => (
               <Link href={`/movie/${movie.id}`} key={movie.id} className="group shrink-0 w-44">

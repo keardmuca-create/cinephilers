@@ -23,7 +23,7 @@ export function usePopularMovies(fallback: PopularData) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetch('/api/movies/popular')
+    fetch('/api/movies/popular?count=40')
       .then(r => r.json())
       .then((json: PopularData & { error?: string }) => {
         if (!json.error) setData(json);

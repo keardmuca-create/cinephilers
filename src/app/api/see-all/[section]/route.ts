@@ -11,6 +11,7 @@ import {
   getShowsByGenre,
 } from '@/lib/tmdb';
 import type { Movie } from '@/lib/types';
+import { seededShuffle, dedup, DAY_MS, WEEK_MS } from '@/lib/seed-shuffle';
 
 export async function GET(
   _req: NextRequest,
@@ -39,9 +40,29 @@ export async function GET(
     }
 
     switch (section) {
-      case 'featured':
-        items = await getTrendingPaged(100);
+      case 'featured': {
+        // Same pool + seed as home page so lists always match
+        const [trending, movies, shows] = await Promise.all([
+          getTrendingPaged(40),
+          getPopularMoviesPaged(40),
+          getPopularShowsEnriched(40),
+        ]);
+        const pool = dedup([...trending, ...movies, ...shows]);
+        const daySeed = Math.floor(Date.now() / DAY_MS);
+        items = seededShuffle(pool, daySeed).slice(0, 100);
         break;
+      }
+      case 'top-10-week': {
+        const [trending, movies, shows] = await Promise.all([
+          getTrendingPaged(40),
+          getPopularMoviesPaged(40),
+          getPopularShowsEnriched(40),
+        ]);
+        const pool = dedup([...trending, ...movies, ...shows]);
+        const weekSeed = Math.floor(Date.now() / WEEK_MS) + 99_999;
+        items = seededShuffle(pool, weekSeed).slice(0, 100);
+        break;
+      }
       case 'popular-movies':
         items = await getPopularMoviesPaged(100);
         break;
