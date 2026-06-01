@@ -1,7 +1,7 @@
 
 "use client"
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Movie } from '@/lib/types';
 import { readUserStats, computeAllBadges, getComingSoonBadges, ensureSignupDate, ComputedBadge, ComingSoonBadge } from '@/lib/badges';
 import { BadgeCard, FeaturedSeasonalBadge, ComingSoonCard, TierGuide } from '@/components/badge-card';
@@ -9,7 +9,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { MovieCard } from '@/components/movie-card';
 import Link from 'next/link';
-import { Settings, Star, Film, List, MessageSquare, ChevronRight, Award, History, Bookmark, User, Eye, Plus } from 'lucide-react';
+import { Settings, Star, Film, List, MessageSquare, ChevronRight, Award, History, Bookmark, User, Eye, Plus, Camera } from 'lucide-react';
 import { FavoritesSection } from '@/components/favorites-section';
 import { BarChart, Bar, XAxis, ResponsiveContainer, Cell, YAxis, Tooltip as ChartTooltip } from 'recharts';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
@@ -273,6 +273,39 @@ export default function ProfilePage() {
 
   // Keep local privacy toggle in sync when authUser loads
   useEffect(() => { setLocalIsPrivate(authUser?.isPrivate ?? false); }, [authUser?.isPrivate]);
+
+  const avatarInputRef = useRef<HTMLInputElement>(null);
+
+  const handleAvatarFile = useCallback((file: File) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const img = new window.Image();
+      img.onload = () => {
+        // Resize to 400x400 max via canvas
+        const size = 400;
+        const canvas = document.createElement('canvas');
+        canvas.width = size;
+        canvas.height = size;
+        const ctx = canvas.getContext('2d')!;
+        // Center-crop square
+        const min = Math.min(img.width, img.height);
+        const sx = (img.width - min) / 2;
+        const sy = (img.height - min) / 2;
+        ctx.drawImage(img, sx, sy, min, min, 0, 0, size, size);
+        const dataUrl = canvas.toDataURL('image/jpeg', 0.82);
+        updateUserLocally({ avatarUrl: dataUrl });
+        fetch('/api/users/me', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify({ avatarUrl: dataUrl }),
+        }).catch(() => {});
+        toast({ title: 'Profile photo updated' });
+      };
+      img.src = e.target!.result as string;
+    };
+    reader.readAsDataURL(file);
+  }, [updateUserLocally]);
   const [badges, setBadges] = useState<ComputedBadge[]>([]);
   const [comingSoon, setComingSoon] = useState<ComingSoonBadge[]>([]);
   const [showBadgesDialog, setShowBadgesDialog] = useState(false);
@@ -508,12 +541,34 @@ export default function ProfilePage() {
     <main className="p-6 pt-12 pb-32 max-w-2xl mx-auto space-y-16">
       {/* Header */}
       <div className="flex justify-between items-start">
-        <Avatar className="h-32 w-32 ring-4 ring-primary/20 ring-offset-4 ring-offset-background shadow-2xl">
-          {authUser?.avatarUrl && <AvatarImage src={authUser.avatarUrl} alt={authUser.username} />}
-          <AvatarFallback className="bg-primary/20">
-            <User className="h-14 w-14 text-primary" />
-          </AvatarFallback>
-        </Avatar>
+        {/* Clickable avatar with camera overlay */}
+        <button
+          className="relative group"
+          onClick={() => avatarInputRef.current?.click()}
+          title="Change profile photo"
+        >
+          <Avatar className="h-32 w-32 ring-4 ring-primary/20 ring-offset-4 ring-offset-background shadow-2xl">
+            {authUser?.avatarUrl && <AvatarImage src={authUser.avatarUrl} alt={authUser.username ?? 'avatar'} />}
+            <AvatarFallback className="bg-primary/20">
+              <User className="h-14 w-14 text-primary" />
+            </AvatarFallback>
+          </Avatar>
+          {/* Camera icon overlay */}
+          <div className="absolute inset-0 rounded-full flex items-center justify-center bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity">
+            <Camera className="h-8 w-8 text-white" />
+          </div>
+          {/* Small camera badge */}
+          <div className="absolute bottom-1 right-1 bg-primary rounded-full p-1.5 shadow-lg border-2 border-background">
+            <Camera className="h-3.5 w-3.5 text-white" />
+          </div>
+        </button>
+        <input
+          ref={avatarInputRef}
+          type="file"
+          accept="image/*"
+          className="hidden"
+          onChange={e => { const f = e.target.files?.[0]; if (f) handleAvatarFile(f); e.target.value = ''; }}
+        />
         <Button variant="outline" size="icon" className="rounded-full border-white/10 bg-white/5 hover:bg-white/10" onClick={openSettings}>
           <Settings className="h-5 w-5" />
         </Button>
