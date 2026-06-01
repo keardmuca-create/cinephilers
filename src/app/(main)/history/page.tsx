@@ -33,8 +33,8 @@ function readAllWatchedIds(): string[] {
         ids.add(k.slice('watched-'.length));
       }
       if (k.startsWith('watched-ep-')) {
-        const m = k.slice('watched-ep-'.length).match(/^(.+)-S\d+E\d+$/);
-        if (m) ids.add(m[1]);
+        // Keep the full episode ID: e.g. tmdb-tv-299167-S1E2
+        ids.add(k.slice('watched-ep-'.length));
       }
     }
   } catch { /* ignore */ }
@@ -75,6 +75,7 @@ async function fetchAndCacheMeta(id: string): Promise<ItemMeta | null> {
 }
 
 function getItemType(meta: ItemMeta): TypeFilter {
+  if (meta.isEpisode) return 'tv-episode';
   if (meta.type === 'show') {
     const st = (meta.showType ?? '').toLowerCase();
     if (st === 'miniseries' || st.includes('mini')) return 'tv-mini-series';
@@ -116,9 +117,10 @@ function HistoryCard({ id, meta, userRating, addedAt }: {
   }
 
   const dateStr = formatAddedDate(addedAt);
+  const linkId = meta.showId ?? id;
 
   return (
-    <Link href={`/movie/${id}`} className="group flex items-center gap-4 py-3.5">
+    <Link href={`/movie/${linkId}`} className="group flex items-center gap-4 py-3.5">
       {/* Thumbnail */}
       <div className="relative w-16 aspect-[2/3] overflow-hidden rounded-lg bg-muted shadow-md shrink-0">
         <img

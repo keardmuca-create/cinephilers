@@ -14,6 +14,8 @@ export interface ItemMeta {
   tmdbStatus?: string;
   totalEps?: number;
   tmdbRating?: number;
+  showId?: string;  // set for episode entries — use to link back to the show page
+  isEpisode?: boolean;
 }
 
 export async function GET(
@@ -23,6 +25,38 @@ export async function GET(
   const { id } = await params;
   const key = process.env.TMDB_API_KEY ?? '';
   if (!key) return NextResponse.json({ error: 'No API key' }, { status: 500 });
+
+  // Episode ID: tmdb-tv-{num}-S{season}E{episode}
+  const epMatch = id.match(/^(tmdb-tv-(\d+))-S(\d+)E(\d+)$/);
+  if (epMatch) {
+    const showId = epMatch[1];
+    const tvNum  = parseInt(epMatch[2], 10);
+    const season = parseInt(epMatch[3], 10);
+    const epNum  = parseInt(epMatch[4], 10);
+    try {
+      const [showRes, epRes] = await Promise.all([
+        fetch(`${BASE}/tv/${tvNum}?api_key=${key}&language=en-US`, { next: { revalidate: 3600 } }),
+        fetch(`${BASE}/tv/${tvNum}/season/${season}/episode/${epNum}?api_key=${key}&language=en-US`, { next: { revalidate: 3600 } }),
+      ]);
+      const showData = await showRes.json();
+      const epData   = await epRes.json();
+      const poster   = showData.poster_path
+        ? `${IMG}/w342${showData.poster_path}`
+        : `https://picsum.photos/seed/${showId}/400/600`;
+      const epTitle  = epData.name ?? `Episode ${epNum}`;
+      const airDate  = epData.air_date ?? showData.first_air_date ?? '';
+      const year     = airDate ? airDate.slice(0, 4) : '—';
+      const meta: ItemMeta = {
+        id, title: `S${season}E${epNum} · ${epTitle}`, year, poster,
+        type: 'show', showId, isEpisode: true,
+        tmdbRating: typeof epData.vote_average === 'number' ? epData.vote_average : undefined,
+      };
+      return NextResponse.json(meta);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Unknown error';
+      return NextResponse.json({ error: msg }, { status: 500 });
+    }
+  }
 
   const isShow = id.startsWith('tmdb-tv-');
   const numStr = isShow ? id.replace('tmdb-tv-', '') : id.replace('tmdb-', '');
