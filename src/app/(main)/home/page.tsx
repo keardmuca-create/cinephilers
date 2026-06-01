@@ -145,7 +145,7 @@ export default function HomePage() {
       {/* Top 10 on Cinephilers */}
       {top10.length > 0 && (
         <section className="space-y-4">
-          <SectionHeader title="Top 10 on Cinephilers This Week" seeAllSection="top-10-week" />
+          <SectionHeader title="Top 10 on Cinephilers This Week" />
           <div className="flex overflow-x-auto gap-4 px-6 pb-6 no-scrollbar">
             {top10.map((movie, index) => (
               <Link href={`/movie/${movie.id}`} key={movie.id} className="group shrink-0 w-44">

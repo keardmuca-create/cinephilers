@@ -49,7 +49,7 @@ export async function GET(
         ]);
         const pool = dedup([...trending, ...movies, ...shows]);
         const daySeed = Math.floor(Date.now() / DAY_MS);
-        items = seededShuffle(pool, daySeed).slice(0, 100);
+        items = seededShuffle(pool, daySeed).slice(1, 101);
         break;
       }
       case 'top-10-week': {
