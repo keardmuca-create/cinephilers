@@ -406,6 +406,92 @@ export function BadgeCard({ badge }: BadgeCardProps) {
   );
 }
 
+// ─── Featured seasonal badge (full-width hero card) ───────────────────────────
+
+interface FeaturedSeasonalBadgeProps {
+  badge: ComputedBadge;
+}
+
+export function FeaturedSeasonalBadge({ badge }: FeaturedSeasonalBadgeProps) {
+  const [modalOpen, setModalOpen] = useState(false);
+  const color = TIER_COLORS[badge.tier];
+  const isLocked = badge.tier === 'locked';
+  const countdown = useCountdown(badge.seasonEndDate);
+
+  return (
+    <>
+      <button
+        onClick={() => setModalOpen(true)}
+        className="w-full text-left rounded-3xl border overflow-hidden transition-transform active:scale-[0.99] hover:opacity-95"
+        style={{ borderColor: `${color}44`, background: `linear-gradient(135deg, ${color}12 0%, ${color}06 100%)` }}
+      >
+        {/* Seasonal label bar */}
+        <div className="flex items-center justify-between px-5 pt-4 pb-2">
+          <span
+            className="text-[10px] font-bold uppercase tracking-widest px-2 py-0.5 rounded-full"
+            style={{ color, backgroundColor: `${color}20`, border: `1px solid ${color}44` }}
+          >
+            Seasonal
+          </span>
+          {countdown && (
+            <span className="text-[10px] font-bold tabular-nums" style={{ color }}>
+              {countdown} remaining
+            </span>
+          )}
+        </div>
+
+        {/* Main content row */}
+        <div className="flex items-center gap-5 px-5 pb-5">
+          {/* Big medal */}
+          <div className="shrink-0">
+            <MedalIcon color={color} size={64} />
+            {isLocked && (
+              <div className="flex justify-center mt-1">
+                <Lock className="h-3.5 w-3.5" style={{ color }} />
+              </div>
+            )}
+          </div>
+
+          {/* Info */}
+          <div className="flex-1 min-w-0 space-y-2">
+            <div>
+              <div className="flex items-center gap-2 mb-1">
+                <h4 className={`text-lg font-bold font-headline leading-tight ${isLocked ? 'text-muted-foreground' : 'text-foreground'}`}>
+                  {badge.name}
+                </h4>
+                <span
+                  className="text-[9px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded-full shrink-0"
+                  style={{ color, backgroundColor: `${color}18`, border: `1px solid ${color}33` }}
+                >
+                  {TIER_LABELS[badge.tier]}
+                </span>
+              </div>
+              <p className="text-xs text-muted-foreground leading-snug">{badge.description}</p>
+            </div>
+
+            {/* Progress */}
+            {!badge.isSpecial && badge.tier !== 'gold' && (
+              <div className="space-y-1.5">
+                <ProgressBar pct={badge.progressPct} color={color} />
+                <span className="text-[11px] font-bold tabular-nums" style={{ color: isLocked ? '#4b5563' : color }}>
+                  {badge.current.toLocaleString()}
+                  <span className="text-muted-foreground font-normal"> / {badge.nextThreshold?.toLocaleString() ?? '—'}</span>
+                </span>
+              </div>
+            )}
+
+            {badge.seasonWindowText && (
+              <p className="text-[10px] text-muted-foreground">Active: {badge.seasonWindowText}</p>
+            )}
+          </div>
+        </div>
+      </button>
+
+      <BadgeDetailModal badge={badge} open={modalOpen} onClose={() => setModalOpen(false)} />
+    </>
+  );
+}
+
 // ─── Coming soon card ──────────────────────────────────────────────────────────
 
 interface ComingSoonCardProps {

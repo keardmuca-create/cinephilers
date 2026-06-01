@@ -4,7 +4,7 @@
 import React, { useState, useEffect } from 'react';
 import { Movie } from '@/lib/types';
 import { readUserStats, computeAllBadges, getComingSoonBadges, ensureSignupDate, ComputedBadge, ComingSoonBadge } from '@/lib/badges';
-import { BadgeCard, ComingSoonCard, TierGuide } from '@/components/badge-card';
+import { BadgeCard, FeaturedSeasonalBadge, ComingSoonCard, TierGuide } from '@/components/badge-card';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { MovieCard } from '@/components/movie-card';
@@ -503,12 +503,6 @@ export default function ProfilePage() {
 
   const activeSeasonal = badges.filter(b => b.isSeasonal && b.isSeasonActive);
   const otherBadges = badges.filter(b => !(b.isSeasonal && b.isSeasonActive));
-  const mainBadges = [...activeSeasonal, ...otherBadges].slice(0, 3);
-
-  function daysLeft(end?: Date) {
-    if (!end) return 0;
-    return Math.max(0, Math.ceil((new Date(end).getTime() - Date.now()) / 86400000));
-  }
 
   return (
     <main className="p-6 pt-12 pb-32 max-w-2xl mx-auto space-y-16">
@@ -979,19 +973,29 @@ export default function ProfilePage() {
         {/* Tier guide */}
         <TierGuide />
 
-        {/* Main badge grid — 3 max, active seasonal first */}
-        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-          {mainBadges.map(badge => (
-            <div key={badge.id} className="flex flex-col gap-1">
-              <BadgeCard badge={badge} />
-              {badge.isSeasonal && badge.isSeasonActive && badge.seasonEndDate && (
-                <p className="text-[10px] font-bold text-center text-primary">
-                  {daysLeft(badge.seasonEndDate)} day{daysLeft(badge.seasonEndDate) !== 1 ? 's' : ''} remaining
-                </p>
-              )}
+        {/* Active seasonal badges — full-width featured cards */}
+        {activeSeasonal.length > 0 && (
+          <div className="space-y-3">
+            <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Seasonal</p>
+            {activeSeasonal.map(badge => (
+              <FeaturedSeasonalBadge key={badge.id} badge={badge} />
+            ))}
+          </div>
+        )}
+
+        {/* All-time badges — 3-column grid */}
+        {otherBadges.slice(0, 3).length > 0 && (
+          <div className="space-y-3">
+            {activeSeasonal.length > 0 && (
+              <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground">All Time</p>
+            )}
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+              {otherBadges.slice(0, 3).map(badge => (
+                <BadgeCard key={badge.id} badge={badge} />
+              ))}
             </div>
-          ))}
-        </div>
+          </div>
+        )}
       </section>
 
       {/* Badges See All dialog */}
@@ -1019,14 +1023,7 @@ export default function ProfilePage() {
                   <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Seasonal</p>
                   <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                     {badges.filter(b => b.isSeasonal).map(badge => (
-                      <div key={badge.id} className="flex flex-col gap-1">
-                        <BadgeCard badge={badge} />
-                        {badge.isSeasonActive && badge.seasonEndDate && (
-                          <p className="text-[10px] font-bold text-center text-primary">
-                            {daysLeft(badge.seasonEndDate)} day{daysLeft(badge.seasonEndDate) !== 1 ? 's' : ''} remaining
-                          </p>
-                        )}
-                      </div>
+                      <BadgeCard key={badge.id} badge={badge} />
                     ))}
                   </div>
                 </div>
