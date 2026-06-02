@@ -67,8 +67,8 @@ export async function setAuthCookies(accessToken: string, refreshToken: string) 
 
 export async function clearAuthCookies() {
   const jar = await cookies();
-  jar.delete('access_token');
-  jar.delete('refresh_token');
+  jar.set('access_token', '', { ...COOKIE_OPTS, maxAge: 0 });
+  jar.set('refresh_token', '', { ...COOKIE_OPTS, maxAge: 0 });
 }
 
 export async function getAccessTokenFromRequest(req: NextRequest): Promise<string | null> {

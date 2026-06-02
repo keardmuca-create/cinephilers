@@ -2,6 +2,7 @@
 "use client"
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { useRouter } from 'next/navigation';
 import { Movie } from '@/lib/types';
 import { readUserStats, computeAllBadges, getComingSoonBadges, ensureSignupDate, ComputedBadge, ComingSoonBadge } from '@/lib/badges';
 import { BadgeCard, FeaturedSeasonalBadge, ComingSoonCard, TierGuide } from '@/components/badge-card';
@@ -264,12 +265,18 @@ function ListsSection() {
 type SettingsView = 'main' | 'edit-profile' | 'privacy';
 
 export default function ProfilePage() {
-  const { user: authUser, logout, refetch, updateUserLocally } = useAuth();
+  const { user: authUser, loading: authLoading, logout, refetch, updateUserLocally } = useAuth();
+  const router = useRouter();
   const [showSettings, setShowSettings] = useState(false);
   const [settingsView, setSettingsView] = useState<SettingsView>('main');
   const [editForm, setEditForm] = useState({ displayName: '', bio: '', avatarUrl: '' });
   const [saving, setSaving] = useState(false);
   const [localIsPrivate, setLocalIsPrivate] = useState(authUser?.isPrivate ?? false);
+
+  // Redirect to login if not authenticated after auth has finished loading
+  useEffect(() => {
+    if (!authLoading && !authUser) router.replace('/login');
+  }, [authLoading, authUser, router]);
 
   // Keep local privacy toggle in sync when authUser loads
   useEffect(() => { setLocalIsPrivate(authUser?.isPrivate ?? false); }, [authUser?.isPrivate]);
