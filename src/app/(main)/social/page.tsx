@@ -5,6 +5,7 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { Heart, Star, Eye, Bookmark, Film, User, MoreHorizontal, Share2, Trash2 } from 'lucide-react';
 import { ActivityEntry, getFeed, toggleLike, removeActivity, relativeTime } from '@/lib/activity';
+import { useAuth } from '@/contexts/auth-context';
 
 function actionLabel(action: ActivityEntry['action']) {
   if (action === 'watched') return 'Watched';
@@ -18,7 +19,7 @@ function ActionIcon({ action }: { action: ActivityEntry['action'] }) {
   return <Bookmark className="h-3.5 w-3.5 text-primary" />;
 }
 
-function ActivityCard({ entry, onLike, onRemove }: { entry: ActivityEntry; onLike: (id: string) => void; onRemove: (entry: ActivityEntry) => void }) {
+function ActivityCard({ entry, avatarUrl, onLike, onRemove }: { entry: ActivityEntry; avatarUrl?: string; onLike: (id: string) => void; onRemove: (entry: ActivityEntry) => void }) {
   const liked = entry.likes.includes('me');
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -50,8 +51,11 @@ function ActivityCard({ entry, onLike, onRemove }: { entry: ActivityEntry; onLik
     <div className="bg-card rounded-3xl border border-white/5 shadow-lg overflow-hidden">
       {/* Header */}
       <div className="flex items-center gap-3 px-5 pt-5 pb-3">
-        <div className="h-10 w-10 rounded-2xl bg-primary/20 flex items-center justify-center shrink-0">
-          <User className="h-5 w-5 text-primary" />
+        <div className="h-10 w-10 rounded-2xl bg-primary/20 flex items-center justify-center shrink-0 overflow-hidden">
+          {avatarUrl
+            ? <img src={avatarUrl} alt="avatar" className="w-full h-full object-cover" />
+            : <User className="h-5 w-5 text-primary" />
+          }
         </div>
         <div className="flex-1 min-w-0">
           <p className="text-sm font-bold font-headline">You</p>
@@ -134,6 +138,7 @@ function ActivityCard({ entry, onLike, onRemove }: { entry: ActivityEntry; onLik
 }
 
 export default function SocialPage() {
+  const { user } = useAuth();
   const [feed, setFeed] = useState<ActivityEntry[]>([]);
 
   useEffect(() => {
@@ -171,7 +176,7 @@ export default function SocialPage() {
       ) : (
         <div className="space-y-4">
           {feed.map(entry => (
-            <ActivityCard key={entry.id} entry={entry} onLike={handleLike} onRemove={handleRemove} />
+            <ActivityCard key={entry.id} entry={entry} avatarUrl={user?.avatarUrl ?? undefined} onLike={handleLike} onRemove={handleRemove} />
           ))}
         </div>
       )}

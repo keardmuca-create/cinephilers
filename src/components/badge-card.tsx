@@ -87,7 +87,7 @@ function RoadmapRow({ rowTier, threshold, unit, current, activeTier, history }: 
   return (
     <div
       className={`flex items-center gap-2 rounded-xl px-3 py-2.5 transition-colors ${
-        isCurrent ? 'bg-white/[0.07]' : isFuture ? 'opacity-40' : ''
+        isCurrent ? 'bg-gray-100' : isFuture ? 'opacity-40' : ''
       }`}
       style={{ borderLeft: isCurrent ? `2px solid ${color}` : '2px solid transparent' }}
     >
@@ -98,7 +98,7 @@ function RoadmapRow({ rowTier, threshold, unit, current, activeTier, history }: 
         ) : isCurrent ? (
           <div className="h-2 w-2 rounded-full" style={{ backgroundColor: color }} />
         ) : (
-          <div className="h-2 w-2 rounded-full bg-white/20" />
+          <div className="h-2 w-2 rounded-full bg-gray-300" />
         )}
       </div>
 
@@ -168,7 +168,7 @@ function BadgeDetailModal({ badge, open, onClose }: BadgeDetailModalProps) {
 
   return (
     <Dialog open={open} onOpenChange={v => !v && onClose()}>
-      <DialogContent className="max-w-sm w-full rounded-3xl bg-[#111] border border-white/[0.08] p-0 gap-0 overflow-hidden">
+      <DialogContent className="max-w-sm w-full rounded-3xl bg-white border border-gray-200 p-0 gap-0 overflow-hidden">
         {/* Header */}
         <div className="flex items-start justify-between p-5 pb-4" style={{ borderBottom: `1px solid ${color}22` }}>
           <div className="flex items-center gap-3">
@@ -185,9 +185,9 @@ function BadgeDetailModal({ badge, open, onClose }: BadgeDetailModalProps) {
           </div>
           <button
             onClick={onClose}
-            className="h-7 w-7 rounded-full flex items-center justify-center bg-white/[0.06] hover:bg-white/[0.12] transition-colors shrink-0"
+            className="h-7 w-7 rounded-full flex items-center justify-center bg-gray-100 hover:bg-gray-200 transition-colors shrink-0"
           >
-            <X className="h-3.5 w-3.5 text-muted-foreground" />
+            <X className="h-3.5 w-3.5 text-gray-500" />
           </button>
         </div>
 
@@ -198,7 +198,7 @@ function BadgeDetailModal({ badge, open, onClose }: BadgeDetailModalProps) {
           <p className="text-sm text-muted-foreground leading-relaxed">{badge.description}</p>
 
           {/* Summary block */}
-          <div className="rounded-xl bg-white/[0.04] border border-white/[0.06] p-4 space-y-3">
+          <div className="rounded-xl bg-gray-50 border border-gray-100 p-4 space-y-3">
             <p className="text-base font-bold" style={{ color }}>{summaryText}</p>
 
             {nextInstruction && (
@@ -219,12 +219,12 @@ function BadgeDetailModal({ badge, open, onClose }: BadgeDetailModalProps) {
 
           {/* Seasonal info */}
           {badge.isSeasonal && (
-            <div className="rounded-xl bg-white/[0.04] border border-white/[0.06] p-4 space-y-2">
+            <div className="rounded-xl bg-gray-50 border border-gray-100 p-4 space-y-2">
               <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Seasonal</p>
               {badge.seasonWindowText && (
                 <p className="text-sm">
                   <span className="text-muted-foreground">Active window: </span>
-                  <span className="font-medium text-white/80">{badge.seasonWindowText}</span>
+                  <span className="font-medium text-gray-700">{badge.seasonWindowText}</span>
                 </p>
               )}
               {badge.isSeasonActive && countdown && (
@@ -233,7 +233,7 @@ function BadgeDetailModal({ badge, open, onClose }: BadgeDetailModalProps) {
               {!badge.isSeasonActive && badge.seasonEndDate && (
                 <p className="text-sm text-muted-foreground">
                   Next season starts{' '}
-                  <span className="font-medium text-white/70">
+                  <span className="font-medium text-gray-600">
                     {badge.seasonEndDate.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}
                   </span>
                 </p>
@@ -283,7 +283,7 @@ function BadgeDetailModal({ badge, open, onClose }: BadgeDetailModalProps) {
                 {EARNED_TIERS.map(t => {
                   const date = badge.tierHistory![t];
                   return (
-                    <div key={t} className="flex items-center justify-between px-3 py-2 rounded-xl bg-white/[0.03]">
+                    <div key={t} className="flex items-center justify-between px-3 py-2 rounded-xl bg-gray-50">
                       <div className="flex items-center gap-2">
                         <Check className="h-3 w-3" style={{ color: TIER_COLORS[t] }} />
                         <span className="text-xs font-bold" style={{ color: TIER_COLORS[t] }}>{TIER_LABELS[t]}</span>
