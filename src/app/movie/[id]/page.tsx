@@ -977,23 +977,6 @@ function ReviewsSection({ movie, writeOpen, setWriteOpen, myReview, setMyReview 
           </DialogHeader>
           <div className="space-y-5 pt-2">
             <div>
-              <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground mb-2">Your Rating (optional)</p>
-              <div className="flex gap-1">
-                {[1,2,3,4,5,6,7,8,9,10].map(n => (
-                  <button
-                    key={n}
-                    onMouseEnter={() => setHoverRating(n)}
-                    onMouseLeave={() => setHoverRating(0)}
-                    onClick={() => setDraftRating(n)}
-                    className={`text-xl transition-colors ${n <= (hoverRating || draftRating) ? 'text-yellow-400' : 'text-foreground/20'}`}
-                  >★</button>
-                ))}
-              </div>
-              {(hoverRating || draftRating) > 0 && (
-                <p className="text-xs text-muted-foreground mt-1">{hoverRating || draftRating}/10</p>
-              )}
-            </div>
-            <div>
               <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground mb-2">Your Thoughts</p>
               <textarea
                 value={draftContent}
