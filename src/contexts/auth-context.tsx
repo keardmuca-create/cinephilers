@@ -95,7 +95,27 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const logout = useCallback(async () => {
     await fetch('/api/auth/logout', { method: 'POST' });
     setUser(null);
-    saveUserToStorage(null);
+    // Clear all user data from localStorage
+    try {
+      const keysToRemove: string[] = [];
+      for (let i = 0; i < localStorage.length; i++) {
+        const k = localStorage.key(i);
+        if (!k) continue;
+        if (
+          k === STORAGE_KEY ||
+          k === 'recently-viewed' ||
+          k === 'watch-log' ||
+          k.startsWith('movie-rating-') ||
+          k.startsWith('watchlist-') ||
+          k.startsWith('watched-') ||
+          k.startsWith('meta-') ||
+          k.startsWith('review-')
+        ) {
+          keysToRemove.push(k);
+        }
+      }
+      keysToRemove.forEach(k => localStorage.removeItem(k));
+    } catch { /* ignore */ }
     window.location.href = '/login';
   }, []);
 
