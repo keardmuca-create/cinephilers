@@ -697,7 +697,7 @@ export default function ProfilePage() {
           </h1>
           <p className="text-muted-foreground text-lg">@{authUser?.username ?? 'username'}</p>
         </div>
-        <p className="text-lg text-gray-400 leading-relaxed max-w-md">
+        <p className="text-lg text-foreground/70 leading-relaxed max-w-md">
           {authUser?.bio ?? 'Set up your profile to track movies and connect with friends.'}
         </p>
         <div className="flex gap-10 pt-4">

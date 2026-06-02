@@ -203,15 +203,15 @@ export default function RatingsPage() {
 
       {/* Refine modal */}
       {refineOpen && (
-        <div className="fixed inset-0 z-50 flex items-end justify-center p-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-6">
           <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setRefineOpen(false)} />
-          <div className="relative bg-white rounded-3xl w-full max-w-sm flex flex-col overflow-hidden shadow-2xl border border-gray-200">
+          <div className="relative bg-white rounded-3xl w-full max-w-sm max-h-[75vh] flex flex-col overflow-hidden shadow-2xl border border-gray-200">
             <div className="flex items-center justify-between px-6 pt-5 pb-4 border-b border-gray-100 shrink-0">
               <button onClick={() => setRefineOpen(false)} className="text-sm text-gray-500 hover:text-gray-800 transition-colors">Cancel</button>
               <span className="text-sm font-bold text-gray-900">{items.length} Titles</span>
               <button onClick={() => { setSort(pendingSort); setRefineOpen(false); }} className="text-sm font-bold text-primary hover:opacity-80 transition-opacity">Refine</button>
             </div>
-            <div className="px-6 py-4">
+            <div className="overflow-y-auto flex-1 px-6 py-4">
               <div className="flex items-center justify-between mb-3">
                 <span className="text-sm font-bold text-gray-900">Sort By</span>
                 <span className="text-sm text-gray-500">{SORT_LABELS[pendingSort]}</span>
