@@ -127,11 +127,6 @@ export default function SeeAllPage() {
           <ChevronLeft className="h-5 w-5" />
         </Button>
         <h1 className="text-lg font-headline font-bold truncate">{title}</h1>
-        {!loading && !error && (
-          <span className="text-sm text-muted-foreground ml-auto shrink-0">
-            {items.length} titles
-          </span>
-        )}
       </header>
 
       {error ? (

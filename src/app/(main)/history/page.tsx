@@ -7,7 +7,7 @@ import type { ItemMeta } from '@/app/api/meta/[id]/route';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-type SortOption = 'date' | 'title-asc' | 'title-desc';
+type SortOption = 'date-desc' | 'date-asc' | 'title-asc' | 'title-desc';
 type TypeFilter = 'any' | 'movie' | 'tv-series' | 'tv-mini-series' | 'tv-movie' | 'tv-episode' | 'short';
 
 const TYPE_LABELS: Record<TypeFilter, string> = {
@@ -17,7 +17,8 @@ const TYPE_LABELS: Record<TypeFilter, string> = {
 };
 
 const SORT_LABELS: Record<SortOption, string> = {
-  date: 'Date Added', 'title-asc': 'Title A–Z', 'title-desc': 'Title Z–A',
+  'date-desc': 'Newest First', 'date-asc': 'Oldest First',
+  'title-asc': 'Title A–Z', 'title-desc': 'Title Z–A',
 };
 
 const TYPE_ORDER: TypeFilter[] = ['any', 'movie', 'tv-series', 'tv-mini-series', 'tv-movie', 'tv-episode', 'short'];
@@ -173,12 +174,12 @@ export default function HistoryPage() {
   const [userRatings, setUserRatings]   = useState<Map<string, number>>(new Map());
   const [displayCount, setDisplayCount] = useState(BATCH);
   const [fetching, setFetching]         = useState(false);
-  const [sort, setSort]                 = useState<SortOption>('date');
+  const [sort, setSort]                 = useState<SortOption>('date-desc');
   const [typeFilter, setTypeFilter]     = useState<TypeFilter>('any');
   const [search, setSearch]             = useState('');
   const [refineOpen, setRefineOpen]     = useState(false);
   // pending values inside refine sheet (applied on "Refine")
-  const [pendingSort, setPendingSort]   = useState<SortOption>('date');
+  const [pendingSort, setPendingSort]   = useState<SortOption>('date-desc');
   const [pendingType, setPendingType]   = useState<TypeFilter>('any');
 
   const sentinelRef = useRef<HTMLDivElement>(null);
@@ -302,7 +303,10 @@ export default function HistoryPage() {
       ids.sort((a, b) => (metaMap.get(a)?.title ?? '').localeCompare(metaMap.get(b)?.title ?? ''));
     } else if (sort === 'title-desc') {
       ids.sort((a, b) => (metaMap.get(b)?.title ?? '').localeCompare(metaMap.get(a)?.title ?? ''));
+    } else if (sort === 'date-asc') {
+      ids.sort((a, b) => new Date(dateMapRef.current.get(a) ?? 0).getTime() - new Date(dateMapRef.current.get(b) ?? 0).getTime());
     }
+    // date-desc: allIds is already sorted newest-first
 
     return ids;
   }, [allIds, sort, typeFilter, search, metaMap]);
@@ -323,7 +327,7 @@ export default function HistoryPage() {
   };
 
   const clearRefine = () => {
-    setPendingSort('date');
+    setPendingSort('date-desc');
     setPendingType('any');
   };
 
@@ -409,16 +413,16 @@ export default function HistoryPage() {
             className="absolute inset-0 bg-black/60 backdrop-blur-sm"
             onClick={() => setRefineOpen(false)}
           />
-          <div className="relative bg-[#111] rounded-3xl w-full max-w-sm max-h-[75vh] flex flex-col overflow-hidden shadow-2xl border border-white/[0.08]">
+          <div className="relative bg-white rounded-3xl w-full max-w-sm max-h-[75vh] flex flex-col overflow-hidden shadow-2xl border border-gray-200">
             {/* Modal header */}
-            <div className="flex items-center justify-between px-6 pt-5 pb-4 border-b border-white/[0.08] shrink-0">
+            <div className="flex items-center justify-between px-6 pt-5 pb-4 border-b border-gray-100 shrink-0">
               <button
                 onClick={() => setRefineOpen(false)}
-                className="text-sm text-muted-foreground hover:text-foreground transition-colors"
+                className="text-sm text-gray-500 hover:text-gray-800 transition-colors"
               >
                 Cancel
               </button>
-              <span className="text-sm font-bold">{allIds.length} Titles</span>
+              <span className="text-sm font-bold text-gray-900">{allIds.length} Titles</span>
               <button
                 onClick={applyRefine}
                 className="text-sm font-bold text-primary hover:opacity-80 transition-opacity"
@@ -430,19 +434,19 @@ export default function HistoryPage() {
             {/* Scrollable content */}
             <div className="overflow-y-auto flex-1">
               {/* Sort By */}
-              <div className="px-6 py-4 border-b border-white/[0.06]">
+              <div className="px-6 py-4 border-b border-gray-100">
                 <div className="flex items-center justify-between mb-3">
-                  <span className="text-sm font-bold">Sort By</span>
-                  <span className="text-sm text-muted-foreground">{SORT_LABELS[pendingSort]}</span>
+                  <span className="text-sm font-bold text-gray-900">Sort By</span>
+                  <span className="text-sm text-gray-500">{SORT_LABELS[pendingSort]}</span>
                 </div>
                 <div className="space-y-1">
-                  {(['date', 'title-asc', 'title-desc'] as SortOption[]).map(s => (
+                  {(['date-desc', 'date-asc', 'title-asc', 'title-desc'] as SortOption[]).map(s => (
                     <button
                       key={s}
                       onClick={() => setPendingSort(s)}
                       className="w-full flex items-center justify-between py-2.5 text-sm"
                     >
-                      <span className={pendingSort === s ? 'font-semibold text-foreground' : 'text-muted-foreground'}>
+                      <span className={pendingSort === s ? 'font-semibold text-gray-900' : 'text-gray-500'}>
                         {SORT_LABELS[s]}
                       </span>
                       {pendingSort === s && <Check className="h-4 w-4 text-primary" />}
@@ -453,7 +457,7 @@ export default function HistoryPage() {
 
               {/* Type */}
               <div className="px-6 py-4">
-                <p className="text-sm font-bold mb-3">Type (Movie, TV, etc.)</p>
+                <p className="text-sm font-bold mb-3 text-gray-900">Type (Movie, TV, etc.)</p>
                 <div className="space-y-1">
                   {TYPE_ORDER.map(t => {
                     const count = typeCounts[t];
@@ -462,18 +466,18 @@ export default function HistoryPage() {
                       <button
                         key={t}
                         onClick={() => setPendingType(t)}
-                        className="w-full flex items-center justify-between py-2.5 border-b border-white/[0.04] last:border-0"
+                        className="w-full flex items-center justify-between py-2.5 border-b border-gray-50 last:border-0"
                       >
                         <div className="flex items-center gap-3">
                           {pendingType === t
                             ? <Check className="h-4 w-4 text-primary" />
                             : <span className="w-4" />
                           }
-                          <span className={`text-sm ${pendingType === t ? 'font-semibold text-foreground' : 'text-muted-foreground'}`}>
+                          <span className={`text-sm ${pendingType === t ? 'font-semibold text-gray-900' : 'text-gray-500'}`}>
                             {TYPE_LABELS[t]}
                           </span>
                         </div>
-                        <span className="text-sm text-muted-foreground">{count}</span>
+                        <span className="text-sm text-gray-400">{count}</span>
                       </button>
                     );
                   })}
