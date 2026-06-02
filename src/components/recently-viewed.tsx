@@ -3,7 +3,6 @@
 import React, { useEffect, useState } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
-import Link from 'next/link';
 import { Clock, Star, Eye, ChevronRight } from 'lucide-react';
 
 interface RecentItem {
