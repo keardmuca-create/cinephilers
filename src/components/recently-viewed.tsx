@@ -3,7 +3,8 @@
 import React, { useEffect, useState } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
-import { Clock, Star, Eye } from 'lucide-react';
+import Link from 'next/link';
+import { Clock, Star, Eye, ChevronRight } from 'lucide-react';
 
 interface RecentItem {
   id: string;
@@ -70,11 +71,16 @@ export function RecentlyViewed() {
 
   return (
     <section className="space-y-4">
-      <div className="flex items-center gap-3 px-6">
-        <div className="w-1 h-5 bg-primary rounded-full" />
-        <h2 className="text-xl font-headline font-bold flex items-center gap-2">
-          <Clock className="h-5 w-5 text-primary" /> Recently Viewed
-        </h2>
+      <div className="flex items-center justify-between px-6">
+        <div className="flex items-center gap-3">
+          <div className="w-1 h-5 bg-primary rounded-full" />
+          <h2 className="text-xl font-headline font-bold flex items-center gap-2">
+            <Clock className="h-5 w-5 text-primary" /> Recently Viewed
+          </h2>
+        </div>
+        <Link href="/recently-viewed" className="text-xs text-primary border border-primary/30 rounded-full px-3 py-1 hover:bg-primary/10 transition-colors font-semibold flex items-center gap-1 shrink-0">
+          See All <ChevronRight className="h-3 w-3" />
+        </Link>
       </div>
       <div className="flex overflow-x-auto gap-4 px-6 pb-4 no-scrollbar">
         {items.map(item => {

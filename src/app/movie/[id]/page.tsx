@@ -1059,7 +1059,7 @@ export default function MovieDetailPage() {
               stored ? JSON.parse(stored) : [];
             const entry = { id: data.id, title: data.title, poster: data.poster, year: data.year, type: data.type, rating: data.rating };
             const filtered = viewed.filter(v => v.id !== data.id);
-            localStorage.setItem('recently-viewed', JSON.stringify([entry, ...filtered].slice(0, 30)));
+            localStorage.setItem('recently-viewed', JSON.stringify([entry, ...filtered].slice(0, 100)));
           } catch { /* ignore */ }
         } else {
           setMovie(null);

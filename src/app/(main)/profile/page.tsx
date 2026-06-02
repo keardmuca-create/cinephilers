@@ -732,10 +732,8 @@ export default function ProfilePage() {
               )}
             </h3>
           </div>
-          <Link href="/history">
-            <Button variant="ghost" size="sm" className="text-primary hover:opacity-80 transition-opacity font-semibold">
-              See All <ChevronRight className="h-4 w-4 ml-1" />
-            </Button>
+          <Link href="/history" className="text-xs text-primary border border-primary/30 rounded-full px-3 py-1 hover:bg-primary/10 transition-colors font-semibold flex items-center gap-1">
+            See All <ChevronRight className="h-3 w-3" />
           </Link>
         </div>
         <p className="text-sm text-muted-foreground mb-5">Everything you&apos;ve watched, rated, or checked into</p>
