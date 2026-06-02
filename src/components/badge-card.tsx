@@ -2,7 +2,7 @@
 "use client"
 
 import React, { useEffect, useState } from 'react';
-import { X, Check, Lock } from 'lucide-react';
+import { Check, Lock } from 'lucide-react';
 import {
   ComputedBadge, ComingSoonBadge,
   TIER_COLORS, TIER_LABELS, TIER_ORDER, EARNED_TIERS,
@@ -183,12 +183,6 @@ function BadgeDetailModal({ badge, open, onClose }: BadgeDetailModalProps) {
               </span>
             </div>
           </div>
-          <button
-            onClick={onClose}
-            className="h-7 w-7 rounded-full flex items-center justify-center bg-gray-100 hover:bg-gray-200 transition-colors shrink-0"
-          >
-            <X className="h-3.5 w-3.5 text-gray-500" />
-          </button>
         </div>
 
         {/* Body */}
