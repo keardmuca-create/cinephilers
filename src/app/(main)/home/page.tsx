@@ -57,8 +57,11 @@ export default function HomePage() {
   // Deduplicated pool of everything fetched (~40×3 ≈ 100+ unique items)
   const allMovies = dedup([...data.trending, ...data.movies, ...data.shows]);
 
+  // Changes at UTC midnight every day
   const daySeed  = Math.floor(Date.now() / DAY_MS);
-  const weekSeed = Math.floor(Date.now() / WEEK_MS) + 99_999; // offset so weekly ≠ daily
+  // Changes every Monday at UTC midnight (epoch Jan 1 1970 was Thursday, offset 4 days to align with Monday)
+  const MONDAY_OFFSET = 4 * DAY_MS;
+  const weekSeed = Math.floor((Date.now() - MONDAY_OFFSET) / WEEK_MS) + 99_999;
 
   const dailyPool  = seededShuffle(allMovies, daySeed);
   const weeklyPool = seededShuffle(allMovies, weekSeed);
