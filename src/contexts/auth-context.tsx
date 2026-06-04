@@ -39,11 +39,12 @@ async function restoreFromDb() {
     const res = await fetch('/api/sync', { credentials: 'include' });
     if (!res.ok) return;
     const { data } = await res.json();
-    const { ratings, watchlist, watched, reviews } = data as {
+    const { ratings, watchlist, watched, reviews, favorites } = data as {
       ratings: { tmdbId: string; mediaType: string; score: number }[];
       watchlist: { tmdbId: string; mediaType: string }[];
       watched: { tmdbId: string; mediaType: string }[];
       reviews: { tmdbId: string; mediaType: string; body: string; containsSpoiler: boolean; createdAt: string }[];
+      favorites: { tmdbId: string; mediaType: string }[];
     };
 
     for (const r of ratings) {
@@ -69,6 +70,36 @@ async function restoreFromDb() {
             date: new Date(r.createdAt).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }),
           }));
         } catch { /* ignore */ }
+      }
+    }
+
+    // Restore favorites — only if localStorage is empty to preserve ordering
+    const existingFavs = localStorage.getItem('user-favorites');
+    if ((!existingFavs || existingFavs === '[]') && favorites.length > 0) {
+      const favsWithMeta = await Promise.all(
+        favorites.map(async (f) => {
+          // Try meta cache first
+          try {
+            const cached = localStorage.getItem(`meta-${f.tmdbId}`);
+            if (cached) {
+              const m = JSON.parse(cached);
+              return { id: f.tmdbId, title: m.title, year: m.year, poster: m.poster, type: (m.type ?? (f.mediaType === 'SHOW' ? 'show' : 'movie')) as 'movie' | 'show' };
+            }
+          } catch { /* ignore */ }
+          // Fetch from meta API
+          try {
+            const metaRes = await fetch(`/api/meta/${f.tmdbId}`);
+            if (metaRes.ok) {
+              const m = await metaRes.json();
+              return { id: f.tmdbId, title: m.title, year: m.year, poster: m.poster, type: (m.type ?? (f.mediaType === 'SHOW' ? 'show' : 'movie')) as 'movie' | 'show' };
+            }
+          } catch { /* ignore */ }
+          return null;
+        })
+      );
+      const resolved = favsWithMeta.filter(Boolean);
+      if (resolved.length > 0) {
+        try { localStorage.setItem('user-favorites', JSON.stringify(resolved)); } catch { /* ignore */ }
       }
     }
   } catch { /* ignore */ }
@@ -147,6 +178,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           k === STORAGE_KEY ||
           k === 'recently-viewed' ||
           k === 'watch-log' ||
+          k === 'user-favorites' ||
+          k === 'user-lists' ||
           k.startsWith('movie-rating-') ||
           k.startsWith('watchlist-') ||
           k.startsWith('watched-') ||

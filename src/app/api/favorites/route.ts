@@ -16,7 +16,7 @@ export async function POST(req: NextRequest) {
   if (!['MOVIE', 'SHOW'].includes(mediaType)) return err('mediaType must be MOVIE or SHOW');
 
   const count = await prisma.favorite.count({ where: { userId: auth.sub } });
-  if (count >= 4) return err('Maximum 4 favorites allowed');
+  if (count >= 10) return err('Maximum 10 favorites allowed');
 
   const item = await prisma.favorite.upsert({
     where: { userId_tmdbId_mediaType: { userId: auth.sub, tmdbId, mediaType: mediaType as MediaType } },

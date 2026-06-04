@@ -80,21 +80,41 @@ export function FavoritesSection() {
     setSearchOpen(true);
   };
 
+  const syncFavoriteDb = (method: string, item: FavoriteItem) => {
+    const mediaType = item.type === 'show' ? 'SHOW' : 'MOVIE';
+    if (method === 'POST') {
+      fetch('/api/favorites', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tmdbId: item.id, mediaType }),
+      }).catch(() => {});
+    } else {
+      fetch(`/api/favorites/${item.id}?mediaType=${mediaType}`, { method: 'DELETE', credentials: 'include' }).catch(() => {});
+    }
+  };
+
   const addFavorite = (item: FavoriteItem) => {
     if (swapIndex !== null) {
+      const removed = favorites[swapIndex];
       const updated = [...favorites];
       updated[swapIndex] = item;
       updateFavorites(updated);
+      if (removed) syncFavoriteDb('DELETE', removed);
+      syncFavoriteDb('POST', item);
     } else {
       if (favorites.length >= MAX_FAVORITES) return;
       updateFavorites([...favorites, item]);
+      syncFavoriteDb('POST', item);
     }
     setSearchOpen(false);
   };
 
   const removeFavorite = (index: number, e: React.MouseEvent) => {
     e.stopPropagation();
+    const removed = favorites[index];
     updateFavorites(favorites.filter((_, i) => i !== index));
+    if (removed) syncFavoriteDb('DELETE', removed);
   };
 
   const onDragStart = (index: number) => {
