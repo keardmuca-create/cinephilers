@@ -234,7 +234,7 @@ export default function SearchPage() {
               value={searchTerm}
               onChange={e => setSearchTerm(e.target.value)}
               onFocus={() => setFocused(true)}
-              className="w-full pl-11 pr-11 py-3.5 rounded-2xl border-2 border-foreground/80 bg-background text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-foreground transition-colors"
+              className="w-full pl-11 pr-11 py-3.5 rounded-2xl border-2 border-primary/80 bg-background text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary transition-colors"
             />
             {searchTerm && (
               <button

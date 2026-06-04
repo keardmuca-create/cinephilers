@@ -193,7 +193,7 @@ export default function FriendsPage() {
         )}
         <Input
           placeholder="Search by username or name…"
-          className="pl-10 pr-10 bg-white/5 border-none h-12 rounded-2xl"
+          className="pl-10 pr-10 bg-white/5 border-2 border-primary/80 focus-visible:border-primary focus-visible:ring-0 h-12 rounded-2xl"
           value={query}
           onChange={e => setQuery(e.target.value)}
           autoComplete="off"
