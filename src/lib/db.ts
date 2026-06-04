@@ -10,7 +10,7 @@ function createClient(): unknown {
     }
     return mockDb;
   }
-  return new PrismaClient({ accelerateUrl: process.env.DATABASE_URL });
+  return new PrismaClient({ datasourceUrl: process.env.DATABASE_URL });
 }
 
 export const prisma = (globalForPrisma.prisma ?? createClient()) as PrismaClient;
