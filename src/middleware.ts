@@ -5,7 +5,7 @@ const ACCESS_SECRET = new TextEncoder().encode(
   process.env.JWT_ACCESS_SECRET ?? 'dev-access-secret-change-me'
 );
 
-const PROTECTED = ['/history', '/friends'];
+const PROTECTED = ['/history'];
 const AUTH_ONLY = ['/login', '/signup', '/forgot-password', '/reset-password', '/verify-email'];
 
 async function verifyToken(token: string): Promise<boolean> {
@@ -45,7 +45,6 @@ export async function middleware(req: NextRequest) {
 export const config = {
   matcher: [
     '/history/:path*',
-    '/friends/:path*',
     '/login',
     '/signup',
     '/forgot-password',
