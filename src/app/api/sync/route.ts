@@ -10,7 +10,7 @@ export async function GET(req: NextRequest) {
   const [ratings, watchlist, watched, reviews, favorites] = await Promise.all([
     prisma.rating.findMany({ where: { userId: auth.sub }, select: { tmdbId: true, mediaType: true, score: true } }),
     prisma.watchlistItem.findMany({ where: { userId: auth.sub }, select: { tmdbId: true, mediaType: true } }),
-    prisma.watchedItem.findMany({ where: { userId: auth.sub }, select: { tmdbId: true, mediaType: true } }),
+    prisma.watchedItem.findMany({ where: { userId: auth.sub }, select: { tmdbId: true, mediaType: true, watchedAt: true } }),
     prisma.review.findMany({
       where: { userId: auth.sub },
       select: { tmdbId: true, mediaType: true, body: true, containsSpoiler: true, createdAt: true },

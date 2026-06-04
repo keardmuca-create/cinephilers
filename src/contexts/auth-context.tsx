@@ -42,7 +42,7 @@ async function restoreFromDb() {
     const { ratings, watchlist, watched, reviews, favorites } = data as {
       ratings: { tmdbId: string; mediaType: string; score: number }[];
       watchlist: { tmdbId: string; mediaType: string }[];
-      watched: { tmdbId: string; mediaType: string }[];
+      watched: { tmdbId: string; mediaType: string; watchedAt: string }[];
       reviews: { tmdbId: string; mediaType: string; body: string; containsSpoiler: boolean; createdAt: string }[];
       favorites: { tmdbId: string; mediaType: string }[];
     };
@@ -73,24 +73,26 @@ async function restoreFromDb() {
       }
     }
 
-    // Rebuild watch-log from watched items + meta cache (preserves genre/language data for badges)
-    // Uses a neutral past timestamp so binge/late-night/seasonal badges aren't falsely triggered
+    // Rebuild watch-log from watched items using real watchedAt timestamps from DB
     if (!localStorage.getItem('watch-log') || localStorage.getItem('watch-log') === '[]') {
       try {
         const log: { id: string; type: string; genre: string; language: string; hour: number; loggedAt: string }[] = [];
         for (const w of watched) {
-          const cached = localStorage.getItem(`meta-${w.tmdbId}`);
-          if (cached) {
-            const m = JSON.parse(cached);
-            log.push({
-              id: w.tmdbId,
-              type: 'movie',
-              genre: m.genre ?? '',
-              language: '',
-              hour: 12,
-              loggedAt: '2020-01-01T12:00:00.000Z',
-            });
-          }
+          const watchedDate = new Date(w.watchedAt);
+          const hour = watchedDate.getHours();
+          let genre = '';
+          try {
+            const cached = localStorage.getItem(`meta-${w.tmdbId}`);
+            if (cached) genre = JSON.parse(cached).genre ?? '';
+          } catch { /* ignore */ }
+          log.push({
+            id: w.tmdbId,
+            type: 'movie',
+            genre,
+            language: '',
+            hour,
+            loggedAt: w.watchedAt,
+          });
         }
         if (log.length > 0) localStorage.setItem('watch-log', JSON.stringify(log));
       } catch { /* ignore */ }
