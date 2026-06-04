@@ -275,6 +275,16 @@ export default function ProfilePage() {
 
   // Show sign-in prompt if not authenticated
   if (!authLoading && !authUser) {
+    const Pulse = ({ className }: { className: string }) => (
+      <div className={`bg-muted animate-pulse rounded-lg ${className}`} />
+    );
+    const SkeletonCard = () => (
+      <div className="shrink-0 w-36 space-y-2">
+        <div className="aspect-[2/3] rounded-xl bg-muted animate-pulse" />
+        <Pulse className="h-3 w-3/4" />
+        <Pulse className="h-3 w-1/2" />
+      </div>
+    );
     return (
       <main className="p-6 pt-12 pb-32 max-w-2xl mx-auto space-y-12">
         {/* Sign-up banner */}
@@ -293,113 +303,140 @@ export default function ProfilePage() {
           </div>
         </div>
 
-        {/* Header skeleton */}
+        {/* Header */}
         <div className="flex justify-between items-start">
-          <div className="flex flex-col items-center gap-2">
-            <div className="h-24 w-24 rounded-full bg-muted border-4 border-border flex items-center justify-center">
-              <User className="h-10 w-10 text-muted-foreground/40" />
-            </div>
-          </div>
+          <div className="h-24 w-24 rounded-full bg-muted animate-pulse border-4 border-border" />
         </div>
         <div className="space-y-3">
-          <div className="h-8 w-48 bg-muted rounded-xl animate-pulse" />
-          <div className="h-4 w-28 bg-muted rounded-lg animate-pulse" />
-          <div className="h-4 w-64 bg-muted rounded-lg animate-pulse" />
+          <Pulse className="h-9 w-44" />
+          <Pulse className="h-4 w-28" />
+          <Pulse className="h-4 w-64" />
           <div className="flex gap-10 pt-2">
-            <div className="flex flex-col gap-1">
-              <div className="h-7 w-8 bg-muted rounded-lg animate-pulse" />
-              <div className="h-3 w-16 bg-muted rounded animate-pulse" />
-            </div>
-            <div className="flex flex-col gap-1">
-              <div className="h-7 w-8 bg-muted rounded-lg animate-pulse" />
-              <div className="h-3 w-16 bg-muted rounded animate-pulse" />
-            </div>
+            {[1,2].map(i => (
+              <div key={i} className="flex flex-col gap-1">
+                <Pulse className="h-7 w-8" />
+                <Pulse className="h-3 w-16" />
+              </div>
+            ))}
           </div>
         </div>
 
         <Separator className="bg-border" />
 
-        {/* Favorites empty */}
+        {/* Favorites — 10 slots */}
         <section>
-          <div className="flex items-center justify-between mb-6">
-            <h3 className="text-2xl font-headline font-bold flex items-center gap-3">
-              <Heart className="h-6 w-6 text-primary" /> Favorites
-            </h3>
-          </div>
+          <h3 className="text-2xl font-headline font-bold flex items-center gap-3 mb-6">
+            <Heart className="h-6 w-6 text-primary" /> Favorites
+          </h3>
           <div className="grid grid-cols-5 gap-2">
-            {Array.from({ length: 5 }).map((_, i) => (
-              <div key={i} className="relative aspect-[2/3] rounded-xl border-2 border-dashed border-foreground/15 flex items-center justify-center">
+            {Array.from({ length: 10 }).map((_, i) => (
+              <div key={i} className="aspect-[2/3] rounded-xl border-2 border-dashed border-foreground/15 flex items-center justify-center">
                 <Plus className="h-4 w-4 text-foreground/20" />
               </div>
             ))}
           </div>
-          <p className="text-xs text-muted-foreground mt-3">Your favourite movies will appear here.</p>
         </section>
 
         <Separator className="bg-border" />
 
-        {/* Watch History empty */}
+        {/* Watch History */}
         <section>
-          <div className="flex items-center justify-between mb-6">
-            <h3 className="text-2xl font-headline font-bold flex items-center gap-3">
+          <div className="flex items-center justify-between mb-2">
+            <h3 className="text-2xl font-headline font-bold flex items-center gap-2">
               <History className="h-6 w-6 text-primary" /> Watch History
             </h3>
+            <Pulse className="h-6 w-16 rounded-full" />
           </div>
-          <div className="space-y-3">
-            {[1, 2, 3].map(i => (
-              <div key={i} className="flex items-center gap-4 py-3 border-b border-border last:border-0">
-                <div className="w-16 aspect-[2/3] rounded-lg bg-muted animate-pulse shrink-0" />
-                <div className="flex-1 space-y-2">
-                  <div className="h-4 bg-muted rounded w-3/4 animate-pulse" />
-                  <div className="h-3 bg-muted rounded w-1/4 animate-pulse" />
-                </div>
-              </div>
-            ))}
+          <Pulse className="h-4 w-56 mb-5" />
+          <div className="flex gap-4 overflow-hidden">
+            {Array.from({ length: 4 }).map((_, i) => <SkeletonCard key={i} />)}
           </div>
-          <p className="text-xs text-muted-foreground mt-3">Movies you mark as watched will appear here.</p>
         </section>
 
         <Separator className="bg-border" />
 
-        {/* Ratings empty */}
+        {/* Ratings */}
         <section>
           <div className="flex items-center justify-between mb-6">
             <h3 className="text-2xl font-headline font-bold flex items-center gap-3">
               <Star className="h-6 w-6 text-primary" /> Ratings
             </h3>
+            <Pulse className="h-6 w-16 rounded-full" />
           </div>
-          <div className="space-y-3">
-            {[1, 2, 3].map(i => (
-              <div key={i} className="flex items-center gap-4 py-3 border-b border-border last:border-0">
-                <div className="w-16 aspect-[2/3] rounded-lg bg-muted animate-pulse shrink-0" />
-                <div className="flex-1 space-y-2">
-                  <div className="h-4 bg-muted rounded w-3/4 animate-pulse" />
-                  <div className="h-3 bg-muted rounded w-1/3 animate-pulse" />
-                </div>
-              </div>
-            ))}
+          <div className="flex gap-4 overflow-hidden">
+            {Array.from({ length: 4 }).map((_, i) => <SkeletonCard key={i} />)}
           </div>
-          <p className="text-xs text-muted-foreground mt-3">Movies you rate will appear here.</p>
         </section>
 
         <Separator className="bg-border" />
 
-        {/* Badges empty */}
-        <section>
-          <div className="flex items-center justify-between mb-6">
-            <h3 className="text-2xl font-headline font-bold flex items-center gap-3">
-              <Award className="h-6 w-6 text-primary" /> Badges
-            </h3>
-          </div>
-          <div className="grid grid-cols-3 gap-3">
-            {[1, 2, 3].map(i => (
-              <div key={i} className="aspect-square rounded-2xl border border-dashed border-foreground/15 bg-muted/20 flex flex-col items-center justify-center gap-2">
-                <Award className="h-8 w-8 text-foreground/15" />
-                <div className="h-2 w-12 bg-muted rounded animate-pulse" />
+        {/* Rating Distribution chart */}
+        <section className="space-y-4">
+          <h3 className="text-2xl font-headline font-bold flex items-center gap-3">
+            <Star className="h-6 w-6 text-primary" /> Rating Distribution
+          </h3>
+          <div className="h-56 w-full bg-muted/40 rounded-3xl p-6 border border-border flex items-end justify-between gap-1">
+            {[3,5,7,6,8,10,9,6,4,2].map((h, i) => (
+              <div key={i} className="flex-1 flex flex-col items-center justify-end gap-1">
+                <div className="w-full rounded-t-md bg-muted animate-pulse" style={{ height: `${h * 10}%` }} />
+                <span className="text-[10px] text-muted-foreground font-bold">{i + 1}</span>
               </div>
             ))}
           </div>
-          <p className="text-xs text-muted-foreground mt-3">Earn badges by watching and rating movies.</p>
+        </section>
+
+        <Separator className="bg-border" />
+
+        {/* Watchlist */}
+        <section>
+          <div className="flex items-center justify-between mb-6">
+            <h3 className="text-2xl font-headline font-bold flex items-center gap-3">
+              <Bookmark className="h-6 w-6 text-primary" /> Watchlist
+            </h3>
+            <Pulse className="h-6 w-16 rounded-full" />
+          </div>
+          <div className="flex gap-4 overflow-hidden">
+            {Array.from({ length: 4 }).map((_, i) => <SkeletonCard key={i} />)}
+          </div>
+        </section>
+
+        <Separator className="bg-border" />
+
+        {/* Reviews */}
+        <section>
+          <h3 className="text-2xl font-headline font-bold flex items-center gap-3 mb-6">
+            <MessageSquare className="h-6 w-6 text-primary" /> Reviews
+          </h3>
+          <div className="space-y-4">
+            {[1,2,3].map(i => (
+              <div key={i} className="flex gap-4 p-4 rounded-2xl border border-border">
+                <div className="w-14 shrink-0 aspect-[2/3] rounded-lg bg-muted animate-pulse" />
+                <div className="flex-1 space-y-2 pt-1">
+                  <Pulse className="h-4 w-3/4" />
+                  <Pulse className="h-3 w-1/4" />
+                  <Pulse className="h-3 w-full" />
+                  <Pulse className="h-3 w-5/6" />
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
+
+        <Separator className="bg-border" />
+
+        {/* Badges */}
+        <section>
+          <h3 className="text-2xl font-headline font-bold flex items-center gap-3 mb-6">
+            <Award className="h-6 w-6 text-primary" /> Badges
+          </h3>
+          <div className="grid grid-cols-3 gap-3">
+            {[1,2,3,4,5,6].map(i => (
+              <div key={i} className="aspect-square rounded-2xl border border-dashed border-foreground/15 bg-muted/20 flex flex-col items-center justify-center gap-2">
+                <Award className="h-8 w-8 text-foreground/15" />
+                <Pulse className="h-2 w-12" />
+              </div>
+            ))}
+          </div>
         </section>
       </main>
     );
