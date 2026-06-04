@@ -368,6 +368,18 @@ export default function ProfilePage() {
     }).catch(() => { /* fire-and-forget */ });
   }
 
+  const recomputeStats = useCallback(() => {
+    ensureSignupDate();
+    setBadges(computeAllBadges(readUserStats()));
+    setComingSoon(getComingSoonBadges());
+  }, []);
+
+  // Re-run stats when DB restore finishes (data arrives after initial mount)
+  useEffect(() => {
+    window.addEventListener('cinephilers-db-restored', recomputeStats);
+    return () => window.removeEventListener('cinephilers-db-restored', recomputeStats);
+  }, [recomputeStats]);
+
   useEffect(() => {
     ensureSignupDate();
     setBadges(computeAllBadges(readUserStats()));

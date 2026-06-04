@@ -73,6 +73,42 @@ async function restoreFromDb() {
       }
     }
 
+    // Rebuild watch-log from watched items + meta cache (preserves genre/language data for badges)
+    // Uses a neutral past timestamp so binge/late-night/seasonal badges aren't falsely triggered
+    if (!localStorage.getItem('watch-log') || localStorage.getItem('watch-log') === '[]') {
+      try {
+        const log: { id: string; type: string; genre: string; language: string; hour: number; loggedAt: string }[] = [];
+        for (const w of watched) {
+          const cached = localStorage.getItem(`meta-${w.tmdbId}`);
+          if (cached) {
+            const m = JSON.parse(cached);
+            log.push({
+              id: w.tmdbId,
+              type: 'movie',
+              genre: m.genre ?? '',
+              language: '',
+              hour: 12,
+              loggedAt: '2020-01-01T12:00:00.000Z',
+            });
+          }
+        }
+        if (log.length > 0) localStorage.setItem('watch-log', JSON.stringify(log));
+      } catch { /* ignore */ }
+    }
+
+    // Restore signup-date from user createdAt if missing
+    if (!localStorage.getItem('signup-date')) {
+      try {
+        const meRes = await fetch('/api/users/me', { credentials: 'include' });
+        if (meRes.ok) {
+          const meData = await meRes.json();
+          if (meData.data?.createdAt) {
+            localStorage.setItem('signup-date', meData.data.createdAt);
+          }
+        }
+      } catch { /* ignore */ }
+    }
+
     // Restore favorites — only if localStorage is empty to preserve ordering
     const existingFavs = localStorage.getItem('user-favorites');
     if ((!existingFavs || existingFavs === '[]') && favorites.length > 0) {
@@ -102,6 +138,9 @@ async function restoreFromDb() {
         try { localStorage.setItem('user-favorites', JSON.stringify(resolved)); } catch { /* ignore */ }
       }
     }
+
+    // Signal to any mounted pages that localStorage is now populated from DB
+    window.dispatchEvent(new CustomEvent('cinephilers-db-restored'));
   } catch { /* ignore */ }
 }
 
