@@ -1,7 +1,7 @@
 
 "use client"
 
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { Play, Star, ChevronRight, Info } from 'lucide-react';
@@ -12,7 +12,7 @@ import { RecentlyViewed } from '@/components/recently-viewed';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { usePopularMovies } from '@/hooks/use-movies';
-import { seededShuffle, dedup, DAY_MS, WEEK_MS } from '@/lib/seed-shuffle';
+import { seededShuffle, WEEK_MS } from '@/lib/seed-shuffle';
 
 const EMPTY = { movies: [] as Movie[], shows: [] as Movie[], trending: [] as Movie[] };
 
@@ -54,11 +54,16 @@ const HeroSkeleton = () => (
 export default function HomePage() {
   const { data, loading } = usePopularMovies(EMPTY);
 
-  // Deduplicated pool — sorted by id so order is identical across devices/requests
-  // before the deterministic seed shuffle runs. Trending is intentionally excluded
-  // from the seeded pool because it changes composition hourly; movies + shows are
-  // the more stable "popular" lists that TMDB refreshes daily.
-  const allMovies = dedup([...data.movies, ...data.shows]).sort((a, b) => a.id.localeCompare(b.id));
+  // Stable daily pool — server-cached for 24 hours, identical across all devices
+  const [stablePool, setStablePool] = useState<Movie[]>([]);
+  useEffect(() => {
+    fetch('/api/home-pool')
+      .then(r => r.json())
+      .then((pool: Movie[]) => { if (Array.isArray(pool)) setStablePool(pool); })
+      .catch(() => {});
+  }, []);
+
+  const allMovies = stablePool;
 
   // Changes at local midnight every day
   const now = new Date();
