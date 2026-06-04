@@ -263,6 +263,20 @@ function ListsSection() {
 
 type SettingsView = 'main' | 'edit-profile' | 'privacy' | 'delete-account';
 
+function Pulse({ className }: { className: string }) {
+  return <div className={`bg-muted animate-pulse rounded-lg ${className}`} />;
+}
+
+function SkeletonCard() {
+  return (
+    <div className="shrink-0 w-36 space-y-2">
+      <div className="aspect-[2/3] rounded-xl bg-muted animate-pulse" />
+      <Pulse className="h-3 w-3/4" />
+      <Pulse className="h-3 w-1/2" />
+    </div>
+  );
+}
+
 export default function ProfilePage() {
   const { user: authUser, loading: authLoading, logout, refetch, updateUserLocally } = useAuth();
   const [showSettings, setShowSettings] = useState(false);
@@ -275,16 +289,6 @@ export default function ProfilePage() {
 
   // Show sign-in prompt if not authenticated
   if (!authLoading && !authUser) {
-    const Pulse = ({ className }: { className: string }) => (
-      <div className={`bg-muted animate-pulse rounded-lg ${className}`} />
-    );
-    const SkeletonCard = () => (
-      <div className="shrink-0 w-36 space-y-2">
-        <div className="aspect-[2/3] rounded-xl bg-muted animate-pulse" />
-        <Pulse className="h-3 w-3/4" />
-        <Pulse className="h-3 w-1/2" />
-      </div>
-    );
     return (
       <main className="p-6 pt-12 pb-32 max-w-2xl mx-auto space-y-12">
         {/* Sign-up banner */}
