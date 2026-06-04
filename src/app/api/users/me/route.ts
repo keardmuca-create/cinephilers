@@ -57,19 +57,8 @@ export async function DELETE(req: NextRequest) {
   const auth = await getCurrentUser(req);
   if (!auth) return err('Unauthorized', 401);
 
-  // Soft delete: anonymise the account
-  await prisma.user.update({
-    where: { id: auth.sub },
-    data: {
-      email: `deleted-${auth.sub}@deleted.invalid`,
-      username: `deleted_${auth.sub.slice(0, 8)}`,
-      passwordHash: '',
-      displayName: null,
-      avatarUrl: null,
-      bio: null,
-      refreshTokenHash: null,
-    },
-  });
+  // Hard delete — cascades to all related data (ratings, reviews, watchlist, etc.)
+  await prisma.user.delete({ where: { id: auth.sub } });
 
   return ok(null, 'Account deleted');
 }

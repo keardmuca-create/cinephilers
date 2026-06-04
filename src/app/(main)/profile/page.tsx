@@ -262,7 +262,7 @@ function ListsSection() {
 }
 
 
-type SettingsView = 'main' | 'edit-profile' | 'privacy';
+type SettingsView = 'main' | 'edit-profile' | 'privacy' | 'delete-account';
 
 export default function ProfilePage() {
   const { user: authUser, loading: authLoading, logout, refetch, updateUserLocally } = useAuth();
@@ -272,6 +272,8 @@ export default function ProfilePage() {
   const [editForm, setEditForm] = useState({ displayName: '', bio: '', avatarUrl: '' });
   const [saving, setSaving] = useState(false);
   const [localIsPrivate, setLocalIsPrivate] = useState(authUser?.isPrivate ?? false);
+  const [deleteConfirmText, setDeleteConfirmText] = useState('');
+  const [deleting, setDeleting] = useState(false);
 
   // Redirect to login if not authenticated after auth has finished loading
   useEffect(() => {
@@ -366,6 +368,22 @@ export default function ProfilePage() {
       credentials: 'include',
       body: JSON.stringify({ isPrivate: newValue }),
     }).catch(() => { /* fire-and-forget */ });
+  }
+
+  async function deleteAccount() {
+    setDeleting(true);
+    try {
+      const res = await fetch('/api/users/me', { method: 'DELETE', credentials: 'include' });
+      if (!res.ok) { toast({ title: 'Something went wrong. Please try again.', variant: 'destructive' }); return; }
+      // Clear all local data then redirect
+      try {
+        localStorage.clear();
+      } catch { /* ignore */ }
+      await fetch('/api/auth/logout', { method: 'POST' });
+      window.location.href = '/login';
+    } finally {
+      setDeleting(false);
+    }
   }
 
   const recomputeStats = useCallback(() => {
@@ -618,6 +636,13 @@ export default function ProfilePage() {
                   </div>
                   <Separator className="bg-white/5" />
                   <Button variant="destructive" className="w-full rounded-xl h-12" onClick={logout}>Logout</Button>
+                  <Button
+                    variant="ghost"
+                    className="w-full rounded-xl h-12 text-red-500 hover:text-red-600 hover:bg-red-500/10 text-sm"
+                    onClick={() => { setDeleteConfirmText(''); setSettingsView('delete-account'); }}
+                  >
+                    Delete Account
+                  </Button>
                 </div>
               </>
             )}
@@ -702,6 +727,43 @@ export default function ProfilePage() {
                   <p className="text-xs text-muted-foreground px-1">
                     When your account is public, anyone can follow you and see your ratings, reviews, and lists.
                   </p>
+                </div>
+              </>
+            )}
+
+            {settingsView === 'delete-account' && (
+              <>
+                <DialogHeader>
+                  <div className="flex items-center gap-3">
+                    <button onClick={() => setSettingsView('main')} className="text-muted-foreground hover:text-foreground transition-colors">
+                      ←
+                    </button>
+                    <DialogTitle className="font-headline text-red-500">Delete Account</DialogTitle>
+                  </div>
+                </DialogHeader>
+                <div className="space-y-5 py-4">
+                  <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-4 space-y-1">
+                    <p className="text-sm font-semibold text-red-400">This action is permanent and cannot be undone.</p>
+                    <p className="text-xs text-muted-foreground">All your ratings, reviews, watchlist, watch history, favorites, and account data will be permanently deleted.</p>
+                  </div>
+                  <div className="space-y-2">
+                    <p className="text-sm text-muted-foreground">Type <span className="font-bold text-foreground">DELETE</span> to confirm</p>
+                    <input
+                      type="text"
+                      value={deleteConfirmText}
+                      onChange={e => setDeleteConfirmText(e.target.value)}
+                      placeholder="Type DELETE here"
+                      className="w-full px-4 py-3 rounded-xl bg-muted border border-border text-sm focus:outline-none focus:ring-2 focus:ring-red-500/50"
+                    />
+                  </div>
+                  <Button
+                    variant="destructive"
+                    className="w-full rounded-xl h-12"
+                    disabled={deleteConfirmText !== 'DELETE' || deleting}
+                    onClick={deleteAccount}
+                  >
+                    {deleting ? 'Deleting…' : 'Permanently Delete My Account'}
+                  </Button>
                 </div>
               </>
             )}
