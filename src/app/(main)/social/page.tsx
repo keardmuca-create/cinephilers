@@ -27,7 +27,7 @@ interface NotificationItem {
   type: string;
   read: boolean;
   createdAt: string;
-  from: { username: string; displayName: string | null; avatarUrl: string | null };
+  from: { username: string; displayName: string | null; avatarUrl: string | null; isFollowingBack: boolean };
 }
 
 // ─── Shared helpers ────────────────────────────────────────────────────────────
@@ -206,7 +206,7 @@ function ActivityCard({ item, onLike, onRemove }: {
 // ─── Notification Card ─────────────────────────────────────────────────────────
 
 function NotificationCard({ notif, onFollowBack }: { notif: NotificationItem; onFollowBack: (username: string) => void }) {
-  const [followState, setFollowState] = useState<'idle' | 'loading' | 'following'>('idle');
+  const [followState, setFollowState] = useState<'idle' | 'loading' | 'following'>(notif.from.isFollowingBack ? 'following' : 'idle');
 
   const handleFollowBack = async () => {
     setFollowState('loading');

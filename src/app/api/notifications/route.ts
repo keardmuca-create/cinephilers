@@ -12,11 +12,31 @@ export async function GET(req: NextRequest) {
     orderBy: { createdAt: 'desc' },
     take: 50,
     include: {
-      from: { select: { username: true, displayName: true, avatarUrl: true } },
+      from: {
+        select: {
+          username: true,
+          displayName: true,
+          avatarUrl: true,
+          followers: {
+            where: { followerId: auth.sub },
+            select: { followerId: true },
+          },
+        },
+      },
     },
   });
 
   const unreadCount = notifications.filter(n => !n.read).length;
 
-  return ok({ notifications, unreadCount });
+  const result = notifications.map(n => ({
+    ...n,
+    from: {
+      username: n.from.username,
+      displayName: n.from.displayName,
+      avatarUrl: n.from.avatarUrl,
+      isFollowingBack: n.from.followers.length > 0,
+    },
+  }));
+
+  return ok({ notifications: result, unreadCount });
 }
