@@ -1062,6 +1062,7 @@ export default function MovieDetailPage() {
               backdrop: data.backdrop,
               year: data.year,
               genre: data.genre,
+              language: data.originalLanguage,
               description: data.description,
               type: data.type,
               tmdbRating: data.rating,

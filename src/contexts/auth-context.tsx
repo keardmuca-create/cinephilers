@@ -81,15 +81,20 @@ async function restoreFromDb() {
           const watchedDate = new Date(w.watchedAt);
           const hour = watchedDate.getHours();
           let genre = '';
+          let language = '';
           try {
             const cached = localStorage.getItem(`meta-${w.tmdbId}`);
-            if (cached) genre = JSON.parse(cached).genre ?? '';
+            if (cached) {
+              const m = JSON.parse(cached);
+              genre = m.genre ?? '';
+              language = m.language ?? '';
+            }
           } catch { /* ignore */ }
           log.push({
             id: w.tmdbId,
             type: 'movie',
             genre,
-            language: '',
+            language,
             hour,
             loggedAt: w.watchedAt,
           });

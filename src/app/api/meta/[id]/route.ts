@@ -10,6 +10,7 @@ export interface ItemMeta {
   poster: string;
   type: 'movie' | 'show';
   genre?: string;
+  language?: string;
   showType?: string;
   tmdbStatus?: string;
   totalEps?: number;
@@ -89,6 +90,7 @@ export async function GET(
       poster,
       type: isShow ? 'show' : 'movie',
       genre,
+      language: d.original_language ?? undefined,
       showType: isShow ? (d.type ?? undefined) : undefined,
       tmdbStatus: d.status ?? undefined,
       totalEps: isShow ? (d.number_of_episodes ?? undefined) : undefined,
