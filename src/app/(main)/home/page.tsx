@@ -54,8 +54,11 @@ const HeroSkeleton = () => (
 export default function HomePage() {
   const { data, loading } = usePopularMovies(EMPTY);
 
-  // Deduplicated pool of everything fetched (~40×3 ≈ 100+ unique items)
-  const allMovies = dedup([...data.trending, ...data.movies, ...data.shows]);
+  // Deduplicated pool — sorted by id so order is identical across devices/requests
+  // before the deterministic seed shuffle runs. Trending is intentionally excluded
+  // from the seeded pool because it changes composition hourly; movies + shows are
+  // the more stable "popular" lists that TMDB refreshes daily.
+  const allMovies = dedup([...data.movies, ...data.shows]).sort((a, b) => a.id.localeCompare(b.id));
 
   // Changes at local midnight every day
   const now = new Date();
