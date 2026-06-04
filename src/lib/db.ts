@@ -1,4 +1,5 @@
 import { PrismaClient } from '@/generated/prisma/client';
+import { PrismaPg } from '@prisma/adapter-pg';
 import { mockDb } from './mock-db';
 
 const globalForPrisma = globalThis as unknown as { prisma: unknown };
@@ -10,7 +11,8 @@ function createClient(): unknown {
     }
     return mockDb;
   }
-  return new PrismaClient();
+  const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL });
+  return new PrismaClient({ adapter });
 }
 
 export const prisma = (globalForPrisma.prisma ?? createClient()) as PrismaClient;
