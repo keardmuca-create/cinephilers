@@ -2,7 +2,6 @@
 "use client"
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { useRouter } from 'next/navigation';
 import { Movie } from '@/lib/types';
 import { readUserStats, computeAllBadges, getComingSoonBadges, ensureSignupDate, ComputedBadge, ComingSoonBadge } from '@/lib/badges';
 import { BadgeCard, FeaturedSeasonalBadge, ComingSoonCard, TierGuide } from '@/components/badge-card';
@@ -266,7 +265,6 @@ type SettingsView = 'main' | 'edit-profile' | 'privacy' | 'delete-account';
 
 export default function ProfilePage() {
   const { user: authUser, loading: authLoading, logout, refetch, updateUserLocally } = useAuth();
-  const router = useRouter();
   const [showSettings, setShowSettings] = useState(false);
   const [settingsView, setSettingsView] = useState<SettingsView>('main');
   const [editForm, setEditForm] = useState({ displayName: '', bio: '', avatarUrl: '' });
@@ -275,10 +273,30 @@ export default function ProfilePage() {
   const [deleteConfirmText, setDeleteConfirmText] = useState('');
   const [deleting, setDeleting] = useState(false);
 
-  // Redirect to login if not authenticated after auth has finished loading
-  useEffect(() => {
-    if (!authLoading && !authUser) router.replace('/login');
-  }, [authLoading, authUser, router]);
+  // Show sign-in prompt if not authenticated
+  if (!authLoading && !authUser) {
+    return (
+      <main className="min-h-screen flex flex-col items-center justify-center px-6 gap-6 text-center pb-32">
+        <div className="h-20 w-20 rounded-3xl bg-primary/10 border border-primary/20 flex items-center justify-center">
+          <User className="h-10 w-10 text-primary" />
+        </div>
+        <div className="space-y-2">
+          <h1 className="text-2xl font-headline font-bold">Your Profile</h1>
+          <p className="text-muted-foreground text-sm leading-relaxed max-w-xs">
+            Sign in to track your movies, ratings, reviews, and connect with other cinephiles.
+          </p>
+        </div>
+        <div className="flex flex-col gap-3 w-full max-w-xs">
+          <Button asChild className="w-full rounded-xl h-12 font-bold">
+            <Link href="/login">Log In</Link>
+          </Button>
+          <Button asChild variant="outline" className="w-full rounded-xl h-12 font-bold">
+            <Link href="/signup">Create Account</Link>
+          </Button>
+        </div>
+      </main>
+    );
+  }
 
   // Keep local privacy toggle in sync when authUser loads
   useEffect(() => { setLocalIsPrivate(authUser?.isPrivate ?? false); }, [authUser?.isPrivate]);

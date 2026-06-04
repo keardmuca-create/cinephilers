@@ -1,0 +1,43 @@
+"use client"
+
+import React from 'react';
+import Link from 'next/link';
+import { Dialog, DialogContent } from '@/components/ui/dialog';
+import { Button } from '@/components/ui/button';
+import { Film } from 'lucide-react';
+
+interface AuthGateModalProps {
+  open: boolean;
+  onClose: () => void;
+  action?: string;
+}
+
+export function AuthGateModal({ open, onClose, action }: AuthGateModalProps) {
+  return (
+    <Dialog open={open} onOpenChange={onClose}>
+      <DialogContent className="sm:max-w-sm rounded-3xl bg-background border-border text-center">
+        <div className="flex flex-col items-center gap-5 py-4">
+          <div className="h-16 w-16 rounded-2xl bg-primary/10 border border-primary/20 flex items-center justify-center">
+            <Film className="h-8 w-8 text-primary" />
+          </div>
+          <div className="space-y-1.5">
+            <h2 className="text-xl font-headline font-bold">Sign in to continue</h2>
+            <p className="text-sm text-muted-foreground leading-relaxed">
+              {action
+                ? `Create an account or sign in to ${action}.`
+                : 'Create an account or sign in to track movies, rate, and more.'}
+            </p>
+          </div>
+          <div className="flex flex-col gap-2 w-full pt-1">
+            <Button asChild className="w-full rounded-xl h-12 font-bold" onClick={onClose}>
+              <Link href="/login">Log In</Link>
+            </Button>
+            <Button asChild variant="outline" className="w-full rounded-xl h-12 font-bold" onClick={onClose}>
+              <Link href="/signup">Create Account</Link>
+            </Button>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}

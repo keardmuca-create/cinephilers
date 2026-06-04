@@ -21,6 +21,8 @@ import { Badge } from '@/components/ui/badge';
 import { toast } from '@/hooks/use-toast';
 import { appendWatchLog, removeFromWatchLog, saveMovieRating, ensureSignupDate } from '@/lib/badges';
 import { logActivity, removeActivity } from '@/lib/activity';
+import { useAuth } from '@/contexts/auth-context';
+import { AuthGateModal } from '@/components/auth-gate-modal';
 
 // ─── Skeleton ─────────────────────────────────────────────────────────────────
 
@@ -1018,6 +1020,9 @@ export default function MovieDetailPage() {
   const [watchedEpisodes, setWatchedEpisodes] = useState<Set<string>>(new Set());
   const [writeReviewOpen, setWriteReviewOpen] = useState(false);
   const [myReview, setMyReview] = useState<UserReview | null>(null);
+  const [authGate, setAuthGate] = useState<string | null>(null);
+
+  const { user: authUser } = useAuth();
 
   const syncDb = useCallback((method: string, path: string, body?: object) => {
     fetch(path, {
@@ -1257,7 +1262,7 @@ export default function MovieDetailPage() {
 
             {/* Write a review bar */}
             <button
-              onClick={() => setWriteReviewOpen(true)}
+              onClick={() => { if (!authUser) { setAuthGate('write reviews'); return; } setWriteReviewOpen(true); }}
               className="flex items-center gap-3 w-full px-4 py-3 rounded-2xl border-2 border-foreground/15 bg-muted/40 hover:border-foreground/30 hover:bg-muted/60 transition-colors text-left"
             >
               <PenLine className="h-4 w-4 text-muted-foreground shrink-0" />
@@ -1274,6 +1279,7 @@ export default function MovieDetailPage() {
             variant={isInWatchlist ? 'default' : 'outline'}
             className={`h-14 px-8 rounded-2xl font-bold flex-1 md:flex-none text-base transition-all ${isInWatchlist ? 'bg-primary border-primary' : 'border-2 border-foreground bg-background text-foreground'}`}
             onClick={() => {
+              if (!authUser) { setAuthGate('add movies to your watchlist'); return; }
               const next = !isInWatchlist;
               setIsInWatchlist(next);
               try {
@@ -1314,6 +1320,7 @@ export default function MovieDetailPage() {
             variant={isWatched ? 'default' : 'outline'}
             className={`h-14 px-8 rounded-2xl font-bold flex-1 md:flex-none text-base transition-all ${isWatched ? 'bg-accent border-accent' : 'border-2 border-foreground bg-background text-foreground'}`}
             onClick={() => {
+              if (!authUser) { setAuthGate('mark movies as watched'); return; }
               const next = !isWatched;
               setIsWatched(next);
               try {
@@ -1370,7 +1377,7 @@ export default function MovieDetailPage() {
             <div className="flex flex-col gap-2">
               <div className="flex items-center gap-1">
                 {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(i => (
-                  <button key={i} onClick={() => { setUserRating(i); saveMovieRating(id, i); syncDb('POST', '/api/ratings', { tmdbId: id, mediaType: movie?.type === 'show' ? 'SHOW' : 'MOVIE', score: i }); if (movie) logActivity({ action: 'rated', contentId: id, contentTitle: movie.title, contentPoster: movie.poster, contentYear: movie.year, rating: i }); toast({ title: `You rated it ${i}/10!` }); window.dispatchEvent(new CustomEvent('cinephilers-rating-changed', { detail: { id, rating: i } })); }} className="transition-all hover:scale-125 active:scale-90 p-0.5">
+                  <button key={i} onClick={() => { if (!authUser) { setAuthGate('rate movies'); return; } setUserRating(i); saveMovieRating(id, i); syncDb('POST', '/api/ratings', { tmdbId: id, mediaType: movie?.type === 'show' ? 'SHOW' : 'MOVIE', score: i }); if (movie) logActivity({ action: 'rated', contentId: id, contentTitle: movie.title, contentPoster: movie.poster, contentYear: movie.year, rating: i }); toast({ title: `You rated it ${i}/10!` }); window.dispatchEvent(new CustomEvent('cinephilers-rating-changed', { detail: { id, rating: i } })); }} className="transition-all hover:scale-125 active:scale-90 p-0.5">
                     <Star className={`h-5 w-5 transition-colors ${userRating >= i ? 'fill-yellow-400 text-yellow-400' : 'text-foreground/25 hover:text-foreground/50'}`} />
                   </button>
                 ))}
@@ -1508,6 +1515,12 @@ export default function MovieDetailPage() {
           onClose={() => setEpisodeModal(null)}
         />
       )}
+
+      <AuthGateModal
+        open={authGate !== null}
+        onClose={() => setAuthGate(null)}
+        action={authGate ?? undefined}
+      />
     </main>
   );
 }

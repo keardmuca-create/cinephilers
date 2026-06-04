@@ -3,9 +3,10 @@
 import React, { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
-import { Heart, Star, Eye, Bookmark, Film, User, MoreHorizontal, Share2, Trash2 } from 'lucide-react';
+import { Heart, Star, Eye, Bookmark, Film, User, MoreHorizontal, Share2, Trash2, Users } from 'lucide-react';
 import { ActivityEntry, getFeed, toggleLike, removeActivity, relativeTime } from '@/lib/activity';
 import { useAuth } from '@/contexts/auth-context';
+import { Button } from '@/components/ui/button';
 
 function actionLabel(action: ActivityEntry['action']) {
   if (action === 'watched') return 'Watched';
@@ -138,8 +139,32 @@ function ActivityCard({ entry, avatarUrl, onLike, onRemove }: { entry: ActivityE
 }
 
 export default function SocialPage() {
-  const { user } = useAuth();
+  const { user, loading } = useAuth();
   const [feed, setFeed] = useState<ActivityEntry[]>([]);
+
+  if (!loading && !user) {
+    return (
+      <main className="min-h-screen flex flex-col items-center justify-center px-6 gap-6 text-center pb-32">
+        <div className="h-20 w-20 rounded-3xl bg-primary/10 border border-primary/20 flex items-center justify-center">
+          <Users className="h-10 w-10 text-primary" />
+        </div>
+        <div className="space-y-2">
+          <h1 className="text-2xl font-headline font-bold">Activity Feed</h1>
+          <p className="text-muted-foreground text-sm leading-relaxed max-w-xs">
+            Sign in to see your activity, follow friends, and share what you&apos;re watching.
+          </p>
+        </div>
+        <div className="flex flex-col gap-3 w-full max-w-xs">
+          <Button asChild className="w-full rounded-xl h-12 font-bold">
+            <Link href="/login">Log In</Link>
+          </Button>
+          <Button asChild variant="outline" className="w-full rounded-xl h-12 font-bold">
+            <Link href="/signup">Create Account</Link>
+          </Button>
+        </div>
+      </main>
+    );
+  }
 
   useEffect(() => {
     setFeed(getFeed());
