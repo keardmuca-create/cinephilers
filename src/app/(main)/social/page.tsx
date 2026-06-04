@@ -3,10 +3,13 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
-import { Heart, Star, Eye, Bookmark, Film, User, MoreHorizontal, Share2, Trash2, Users, MessageSquare, Loader2, UserPlus } from 'lucide-react';
+import { Heart, Star, Eye, Bookmark, Film, MoreHorizontal, Share2, Trash2, Users, MessageSquare, Loader2, UserPlus, Bell, User } from 'lucide-react';
 import { ActivityEntry, getFeed, toggleLike, removeActivity, relativeTime } from '@/lib/activity';
 import { useAuth } from '@/contexts/auth-context';
 import { Button } from '@/components/ui/button';
+
+// ─── Types ────────────────────────────────────────────────────────────────────
+
 interface FeedItem {
   id: string;
   type: 'watched' | 'rated' | 'reviewed';
@@ -19,150 +22,29 @@ interface FeedItem {
   createdAt: string;
 }
 
+interface NotificationItem {
+  id: string;
+  type: string;
+  read: boolean;
+  createdAt: string;
+  from: { username: string; displayName: string | null; avatarUrl: string | null };
+}
+
 // ─── Shared helpers ────────────────────────────────────────────────────────────
-
-function relativeTimeStr(iso: string) { return relativeTime(iso); }
-
-function UserAvatar({ user, size = 40 }: {
-  user: { username: string; displayName?: string | null; avatarUrl?: string | null };
-  size?: number;
-}) {
-  const initials = (user.displayName ?? user.username).slice(0, 2).toUpperCase();
-  return (
-    <div
-      className="rounded-2xl bg-primary/20 flex items-center justify-center shrink-0 overflow-hidden"
-      style={{ width: size, height: size }}
-    >
-      {user.avatarUrl
-        ? <img src={user.avatarUrl} alt={user.username} className="w-full h-full object-cover" />
-        : <span className="text-primary font-bold text-sm">{initials}</span>
-      }
-    </div>
-  );
-}
-
-// ─── My Activity tab ───────────────────────────────────────────────────────────
-
-function myActionLabel(action: ActivityEntry['action']) {
-  if (action === 'watched') return 'Watched';
-  if (action === 'rated') return 'Rated';
-  return 'Added to watchlist';
-}
-
-function MyActionIcon({ action }: { action: ActivityEntry['action'] }) {
-  if (action === 'watched') return <Eye className="h-3.5 w-3.5 text-blue-400" />;
-  if (action === 'rated') return <Star className="h-3.5 w-3.5 text-yellow-400" />;
-  return <Bookmark className="h-3.5 w-3.5 text-primary" />;
-}
-
-function MyActivityCard({
-  entry, avatarUrl, username, displayName, onLike, onRemove,
-}: {
-  entry: ActivityEntry;
-  avatarUrl?: string;
-  username: string;
-  displayName?: string | null;
-  onLike: (id: string) => void;
-  onRemove: (entry: ActivityEntry) => void;
-}) {
-  const liked = entry.likes.includes('me');
-  const [menuOpen, setMenuOpen] = useState(false);
-  const menuRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (!menuOpen) return;
-    const close = (e: MouseEvent) => {
-      if (menuRef.current && !menuRef.current.contains(e.target as Node)) setMenuOpen(false);
-    };
-    document.addEventListener('mousedown', close);
-    return () => document.removeEventListener('mousedown', close);
-  }, [menuOpen]);
-
-  const handleShare = () => {
-    setMenuOpen(false);
-    if (navigator.share) {
-      navigator.share({ title: entry.contentTitle, url: `/movie/${entry.contentId}` }).catch(() => {});
-    } else {
-      navigator.clipboard.writeText(`${window.location.origin}/movie/${entry.contentId}`).catch(() => {});
-    }
-  };
-
-  return (
-    <div className="bg-card rounded-3xl border border-white/5 shadow-lg overflow-hidden">
-      <div className="flex items-center gap-3 px-5 pt-5 pb-3">
-        <UserAvatar user={{ username, displayName, avatarUrl }} size={40} />
-        <div className="flex-1 min-w-0">
-          <p className="text-sm font-bold font-headline">{displayName ?? username}</p>
-          <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-            <MyActionIcon action={entry.action} />
-            <span>{myActionLabel(entry.action)}</span>
-            <span>·</span>
-            <span>{relativeTimeStr(entry.timestamp)}</span>
-          </div>
-        </div>
-        <div className="relative" ref={menuRef}>
-          <button
-            onClick={() => setMenuOpen(v => !v)}
-            className="h-8 w-8 flex items-center justify-center rounded-full hover:bg-muted/60 text-muted-foreground transition-colors"
-          >
-            <MoreHorizontal className="h-4 w-4" />
-          </button>
-          {menuOpen && (
-            <div className="absolute right-0 top-9 z-50 min-w-[140px] bg-card border border-white/10 rounded-2xl shadow-xl overflow-hidden">
-              <button onClick={handleShare} className="flex items-center gap-2.5 w-full px-4 py-3 text-sm hover:bg-muted/50 transition-colors">
-                <Share2 className="h-4 w-4 text-muted-foreground" />Share
-              </button>
-              <button onClick={() => { setMenuOpen(false); onRemove(entry); }} className="flex items-center gap-2.5 w-full px-4 py-3 text-sm hover:bg-muted/50 transition-colors text-destructive">
-                <Trash2 className="h-4 w-4" />Remove
-              </button>
-            </div>
-          )}
-        </div>
-      </div>
-
-      <Link href={`/movie/${entry.contentId}`} className="block mx-5 mb-4 group">
-        <div className="bg-muted/40 rounded-2xl p-3.5 flex gap-4 hover:bg-muted/70 transition-colors border border-white/5">
-          <div className="relative w-16 shrink-0 rounded-xl overflow-hidden shadow-md bg-muted" style={{ aspectRatio: '2/3' }}>
-            {entry.contentPoster
-              ? <Image src={entry.contentPoster} alt={entry.contentTitle} fill className="object-cover" sizes="64px" />
-              : <div className="w-full h-full flex items-center justify-center"><Film className="h-6 w-6 text-muted-foreground/40" /></div>
-            }
-          </div>
-          <div className="flex flex-col justify-center gap-1.5 flex-1 min-w-0">
-            <h3 className="font-bold font-headline text-base group-hover:text-primary transition-colors line-clamp-2 leading-snug">{entry.contentTitle}</h3>
-            {entry.contentYear && <p className="text-xs text-muted-foreground">{entry.contentYear}</p>}
-            {entry.action === 'rated' && entry.rating !== undefined && (
-              <div className="flex items-center gap-1 text-yellow-400 font-bold text-sm bg-yellow-400/10 w-fit px-2.5 py-0.5 rounded-full">
-                <Star className="h-3.5 w-3.5 fill-current" />{entry.rating} / 10
-              </div>
-            )}
-          </div>
-        </div>
-      </Link>
-
-      <div className="px-5 pb-4 flex items-center gap-2">
-        <button
-          onClick={() => onLike(entry.id)}
-          className="flex items-center gap-1.5 text-xs font-bold text-muted-foreground hover:text-primary transition-colors"
-        >
-          <Heart className={`h-5 w-5 transition-colors ${liked ? 'fill-primary text-primary' : ''}`} />
-          {entry.likes.length > 0 && <span>{entry.likes.length}</span>}
-        </button>
-      </div>
-    </div>
-  );
-}
-
-// ─── Friends Feed tab ──────────────────────────────────────────────────────────
-
-interface EnrichedFeedItem extends FeedItem {
-  meta?: { title: string; year: string; poster: string };
-}
 
 const metaCache: Record<string, { title: string; year: string; poster: string }> = {};
 
 async function fetchMeta(tmdbId: string) {
   if (metaCache[tmdbId]) return metaCache[tmdbId];
+  try {
+    const cached = localStorage.getItem(`meta-${tmdbId}`);
+    if (cached) {
+      const m = JSON.parse(cached);
+      const meta = { title: m.title ?? 'Unknown', year: m.year ?? '', poster: m.poster ?? '' };
+      metaCache[tmdbId] = meta;
+      return meta;
+    }
+  } catch { /* ignore */ }
   try {
     const res = await fetch(`/api/meta/${tmdbId}`);
     if (!res.ok) return null;
@@ -173,45 +55,109 @@ async function fetchMeta(tmdbId: string) {
   } catch { return null; }
 }
 
-function FeedCard({ item }: { item: EnrichedFeedItem }) {
+function UserAvatar({ user, size = 40 }: {
+  user: { username: string; displayName?: string | null; avatarUrl?: string | null };
+  size?: number;
+}) {
+  const initials = (user.displayName ?? user.username).slice(0, 2).toUpperCase();
+  return (
+    <div className="rounded-2xl bg-primary/20 flex items-center justify-center shrink-0 overflow-hidden" style={{ width: size, height: size }}>
+      {user.avatarUrl
+        ? <img src={user.avatarUrl} alt={user.username} className="w-full h-full object-cover" />
+        : <span className="text-primary font-bold text-sm">{initials}</span>
+      }
+    </div>
+  );
+}
+
+// ─── Unified Activity Card ─────────────────────────────────────────────────────
+
+interface UnifiedItem {
+  id: string;
+  isMe: boolean;
+  type: 'watched' | 'rated' | 'reviewed' | 'watchlist';
+  user: { username: string; displayName: string | null; avatarUrl: string | null };
+  tmdbId: string;
+  meta?: { title: string; year: string; poster: string };
+  rating?: number;
+  reviewBody?: string;
+  containsSpoiler?: boolean;
+  createdAt: string;
+  // my-activity-only fields
+  localId?: string;
+  likes?: string[];
+}
+
+function ActivityCard({ item, onLike, onRemove }: {
+  item: UnifiedItem;
+  onLike?: (id: string) => void;
+  onRemove?: (item: UnifiedItem) => void;
+}) {
   const [meta, setMeta] = useState(item.meta ?? null);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (meta) return;
-    // Try localStorage cache first
-    try {
-      const cached = localStorage.getItem(`meta-${item.tmdbId}`);
-      if (cached) {
-        const m = JSON.parse(cached);
-        setMeta({ title: m.title ?? 'Unknown', year: m.year ?? '', poster: m.poster ?? '' });
-        return;
-      }
-    } catch { /* ignore */ }
     fetchMeta(item.tmdbId).then(m => { if (m) setMeta(m); });
   }, [item.tmdbId, meta]);
 
-  const isMovie = item.mediaType === 'MOVIE';
+  useEffect(() => {
+    if (!menuOpen) return;
+    const close = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) setMenuOpen(false);
+    };
+    document.addEventListener('mousedown', close);
+    return () => document.removeEventListener('mousedown', close);
+  }, [menuOpen]);
+
+  const isMovie = item.tmdbId && !item.tmdbId.startsWith('tmdb-tv-');
   const href = isMovie ? `/movie/${item.tmdbId}` : `/tv/${item.tmdbId}`;
+  const liked = item.likes?.includes('me') ?? false;
+
+  const handleShare = () => {
+    setMenuOpen(false);
+    if (navigator.share) navigator.share({ title: meta?.title ?? '', url: href }).catch(() => {});
+    else navigator.clipboard.writeText(`${window.location.origin}${href}`).catch(() => {});
+  };
 
   return (
     <div className="bg-card rounded-3xl border border-white/5 shadow-lg overflow-hidden">
       {/* Header */}
       <div className="flex items-center gap-3 px-5 pt-5 pb-3">
-        <Link href={`/profile/${item.user.username}`}>
+        <Link href={item.isMe ? '/profile' : `/profile/${item.user.username}`}>
           <UserAvatar user={item.user} size={40} />
         </Link>
         <div className="flex-1 min-w-0">
-          <Link href={`/profile/${item.user.username}`} className="text-sm font-bold font-headline hover:text-primary transition-colors">
-            {item.user.displayName ?? item.user.username}
+          <Link href={item.isMe ? '/profile' : `/profile/${item.user.username}`} className="text-sm font-bold font-headline hover:text-primary transition-colors">
+            {item.isMe ? (item.user.displayName ?? item.user.username) : (item.user.displayName ?? item.user.username)}
           </Link>
           <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
             {item.type === 'watched' && <><Eye className="h-3.5 w-3.5 text-blue-400" /><span>Watched</span></>}
             {item.type === 'rated' && <><Star className="h-3.5 w-3.5 text-yellow-400" /><span>Rated</span></>}
             {item.type === 'reviewed' && <><MessageSquare className="h-3.5 w-3.5 text-green-400" /><span>Reviewed</span></>}
+            {item.type === 'watchlist' && <><Bookmark className="h-3.5 w-3.5 text-primary" /><span>Added to watchlist</span></>}
             <span>·</span>
-            <span>{relativeTimeStr(item.createdAt)}</span>
+            <span>{relativeTime(item.createdAt)}</span>
           </div>
         </div>
+        {item.isMe && (
+          <div className="relative" ref={menuRef}>
+            <button onClick={() => setMenuOpen(v => !v)} className="h-8 w-8 flex items-center justify-center rounded-full hover:bg-muted/60 text-muted-foreground transition-colors">
+              <MoreHorizontal className="h-4 w-4" />
+            </button>
+            {menuOpen && (
+              <div className="absolute right-0 top-9 z-50 min-w-[140px] bg-card border border-white/10 rounded-2xl shadow-xl overflow-hidden">
+                <button onClick={handleShare} className="flex items-center gap-2.5 w-full px-4 py-3 text-sm hover:bg-muted/50 transition-colors">
+                  <Share2 className="h-4 w-4 text-muted-foreground" />Share
+                </button>
+                <button onClick={() => { setMenuOpen(false); onRemove?.(item); }} className="flex items-center gap-2.5 w-full px-4 py-3 text-sm hover:bg-muted/50 transition-colors text-destructive">
+                  <Trash2 className="h-4 w-4" />Remove
+                </button>
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Movie card */}
@@ -225,14 +171,9 @@ function FeedCard({ item }: { item: EnrichedFeedItem }) {
           </div>
           <div className="flex flex-col justify-center gap-1.5 flex-1 min-w-0">
             {meta
-              ? <>
-                  <h3 className="font-bold font-headline text-base group-hover:text-primary transition-colors line-clamp-2 leading-snug">{meta.title}</h3>
-                  {meta.year && <p className="text-xs text-muted-foreground">{meta.year}</p>}
-                </>
-              : <>
-                  <div className="h-4 bg-muted rounded-full w-3/4 animate-pulse" />
-                  <div className="h-3 bg-muted rounded-full w-1/4 animate-pulse" />
-                </>
+              ? <><h3 className="font-bold font-headline text-base group-hover:text-primary transition-colors line-clamp-2 leading-snug">{meta.title}</h3>
+                  {meta.year && <p className="text-xs text-muted-foreground">{meta.year}</p>}</>
+              : <><div className="h-4 bg-muted rounded-full w-3/4 animate-pulse" /><div className="h-3 bg-muted rounded-full w-1/4 animate-pulse mt-1" /></>
             }
             {item.type === 'rated' && item.rating !== undefined && (
               <div className="flex items-center gap-1 text-yellow-400 font-bold text-sm bg-yellow-400/10 w-fit px-2.5 py-0.5 rounded-full">
@@ -248,61 +189,173 @@ function FeedCard({ item }: { item: EnrichedFeedItem }) {
           </div>
         </div>
       </Link>
+
+      {/* Like (only for own items) */}
+      {item.isMe && item.localId && (
+        <div className="px-5 pb-4">
+          <button onClick={() => onLike?.(item.localId!)} className="flex items-center gap-1.5 text-xs font-bold text-muted-foreground hover:text-primary transition-colors">
+            <Heart className={`h-5 w-5 transition-colors ${liked ? 'fill-primary text-primary' : ''}`} />
+            {(item.likes?.length ?? 0) > 0 && <span>{item.likes!.length}</span>}
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Notification Card ─────────────────────────────────────────────────────────
+
+function NotificationCard({ notif, onFollowBack }: { notif: NotificationItem; onFollowBack: (username: string) => void }) {
+  const [followState, setFollowState] = useState<'idle' | 'loading' | 'following'>('idle');
+
+  const handleFollowBack = async () => {
+    setFollowState('loading');
+    const res = await fetch(`/api/users/${notif.from.username}/follow`, { method: 'POST', credentials: 'include' });
+    if (res.ok) { setFollowState('following'); onFollowBack(notif.from.username); }
+    else setFollowState('idle');
+  };
+
+  return (
+    <div className={`flex items-center gap-3 p-4 rounded-2xl border transition-colors ${notif.read ? 'border-white/5 bg-card' : 'border-primary/20 bg-primary/5'}`}>
+      <Link href={`/profile/${notif.from.username}`}>
+        <UserAvatar user={notif.from} size={44} />
+      </Link>
+      <div className="flex-1 min-w-0">
+        <p className="text-sm leading-snug">
+          <Link href={`/profile/${notif.from.username}`} className="font-bold hover:text-primary transition-colors">
+            {notif.from.displayName ?? notif.from.username}
+          </Link>
+          {' '}
+          <span className="text-muted-foreground">followed you</span>
+        </p>
+        <p className="text-xs text-muted-foreground mt-0.5">{relativeTime(notif.createdAt)}</p>
+      </div>
+      {followState === 'following'
+        ? <span className="text-xs text-muted-foreground font-bold px-3 py-1.5 rounded-xl border border-white/10">Following</span>
+        : <Button size="sm" variant="outline" className="rounded-xl font-bold text-xs gap-1.5 shrink-0" onClick={handleFollowBack} disabled={followState === 'loading'}>
+            {followState === 'loading' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <><UserPlus className="h-3.5 w-3.5" />Follow back</>}
+          </Button>
+      }
     </div>
   );
 }
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
-type Tab = 'friends' | 'me';
+type Tab = 'activity' | 'notifications';
 
 export default function SocialPage() {
   const { user, loading: authLoading } = useAuth();
-  const [tab, setTab] = useState<Tab>('friends');
+  const [tab, setTab] = useState<Tab>('activity');
 
-  // My Activity state
-  const [myFeed, setMyFeed] = useState<ActivityEntry[]>([]);
+  // Activity: merged my + friends
+  const [myLocalFeed, setMyLocalFeed] = useState<ActivityEntry[]>([]);
+  const [friendFeed, setFriendFeed] = useState<FeedItem[]>([]);
+  const [activityLoading, setActivityLoading] = useState(false);
 
-  // Friends Feed state
-  const [friendFeed, setFriendFeed] = useState<EnrichedFeedItem[]>([]);
-  const [friendLoading, setFriendLoading] = useState(false);
-  const [friendError, setFriendError] = useState<string | null>(null);
+  // Notifications
+  const [notifications, setNotifications] = useState<NotificationItem[]>([]);
+  const [unreadCount, setUnreadCount] = useState(0);
+  const [notifLoading, setNotifLoading] = useState(false);
 
+  // Load local feed
   useEffect(() => {
-    setMyFeed(getFeed());
-    const handler = () => setMyFeed(getFeed());
+    setMyLocalFeed(getFeed());
+    const handler = () => setMyLocalFeed(getFeed());
     window.addEventListener('storage', handler);
     return () => window.removeEventListener('storage', handler);
   }, []);
 
-  const loadFriendFeed = useCallback(async () => {
-    setFriendLoading(true);
-    setFriendError(null);
+  const loadActivity = useCallback(async () => {
+    if (!user) return;
+    setActivityLoading(true);
     try {
       const res = await fetch('/api/feed?limit=30', { credentials: 'include' });
-      if (!res.ok) { setFriendError('Failed to load feed'); return; }
-      const json = await res.json();
-      setFriendFeed(json.data ?? []);
-    } catch {
-      setFriendError('Failed to load feed');
+      if (res.ok) {
+        const json = await res.json();
+        setFriendFeed(json.data ?? []);
+      }
     } finally {
-      setFriendLoading(false);
+      setActivityLoading(false);
     }
-  }, []);
+  }, [user]);
 
-  useEffect(() => {
-    if (tab === 'friends' && user) loadFriendFeed();
-  }, [tab, user, loadFriendFeed]);
+  const loadNotifications = useCallback(async () => {
+    if (!user) return;
+    setNotifLoading(true);
+    try {
+      const res = await fetch('/api/notifications', { credentials: 'include' });
+      if (res.ok) {
+        const json = await res.json();
+        setNotifications(json.data?.notifications ?? []);
+        setUnreadCount(json.data?.unreadCount ?? 0);
+      }
+    } finally {
+      setNotifLoading(false);
+    }
+  }, [user]);
 
-  // Refresh friend feed whenever the page becomes visible again (e.g. after following someone)
+  useEffect(() => { if (user) { loadActivity(); loadNotifications(); } }, [user, loadActivity, loadNotifications]);
+
+  // Refresh on visibility change
   useEffect(() => {
-    const onVisible = () => { if (tab === 'friends' && user && document.visibilityState === 'visible') loadFriendFeed(); };
+    const onVisible = () => {
+      if (!user || document.visibilityState !== 'visible') return;
+      loadActivity();
+      loadNotifications();
+    };
     document.addEventListener('visibilitychange', onVisible);
     return () => document.removeEventListener('visibilitychange', onVisible);
-  }, [tab, user, loadFriendFeed]);
+  }, [user, loadActivity, loadNotifications]);
 
-  const handleLike = (id: string) => { setMyFeed(toggleLike(id)); };
-  const handleRemove = (entry: ActivityEntry) => { removeActivity(entry.action, entry.contentId); setMyFeed(getFeed()); };
+  // Mark notifications as read when tab is opened
+  useEffect(() => {
+    if (tab === 'notifications' && unreadCount > 0) {
+      fetch('/api/notifications/read', { method: 'PATCH', credentials: 'include' })
+        .then(() => {
+          setUnreadCount(0);
+          setNotifications(prev => prev.map(n => ({ ...n, read: true })));
+        })
+        .catch(() => {});
+    }
+  }, [tab, unreadCount]);
+
+  // Build merged + sorted activity list
+  const mergedActivity: UnifiedItem[] = React.useMemo(() => {
+    const myItems: UnifiedItem[] = myLocalFeed.map(e => ({
+      id: `me-${e.id}`,
+      localId: e.id,
+      isMe: true,
+      type: e.action === 'watchlist' ? 'watchlist' : e.action as UnifiedItem['type'],
+      user: { username: user?.username ?? '', displayName: user?.displayName ?? null, avatarUrl: user?.avatarUrl ?? null },
+      tmdbId: e.contentId,
+      meta: { title: e.contentTitle, year: e.contentYear, poster: e.contentPoster },
+      rating: e.rating,
+      likes: e.likes,
+      createdAt: e.timestamp,
+    }));
+
+    const friendItems: UnifiedItem[] = friendFeed.map(f => ({
+      id: f.id,
+      isMe: false,
+      type: f.type,
+      user: f.user,
+      tmdbId: f.tmdbId,
+      rating: f.rating,
+      reviewBody: f.reviewBody,
+      containsSpoiler: f.containsSpoiler,
+      createdAt: f.createdAt,
+    }));
+
+    return [...myItems, ...friendItems].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  }, [myLocalFeed, friendFeed, user]);
+
+  const handleLike = (localId: string) => { setMyLocalFeed(toggleLike(localId)); };
+  const handleRemove = (item: UnifiedItem) => {
+    if (!item.localId) return;
+    const entry = myLocalFeed.find(e => e.id === item.localId);
+    if (entry) { removeActivity(entry.action, entry.contentId); setMyLocalFeed(getFeed()); }
+  };
 
   // Guest view
   if (!authLoading && !user) {
@@ -331,7 +384,6 @@ export default function SocialPage() {
             </div>
           ))}
         </div>
-        <p className="text-center text-sm text-muted-foreground pt-2">Follow friends to see their ratings and watch activity here.</p>
       </main>
     );
   }
@@ -347,23 +399,33 @@ export default function SocialPage() {
 
       {/* Tabs */}
       <div className="flex bg-white/5 rounded-2xl p-1 gap-1">
-        {(['friends', 'me'] as Tab[]).map(t => (
+        {(['activity', 'notifications'] as Tab[]).map(t => (
           <button
             key={t}
             onClick={() => setTab(t)}
-            className={`flex-1 flex items-center justify-center gap-2 h-10 rounded-xl text-sm font-bold transition-all ${
+            className={`flex-1 relative flex items-center justify-center gap-2 h-10 rounded-xl text-sm font-bold transition-all ${
               tab === t ? 'bg-primary text-primary-foreground shadow' : 'text-muted-foreground hover:text-foreground'
             }`}
           >
-            {t === 'friends' ? <><Users className="h-4 w-4" />Friends</> : <><User className="h-4 w-4" />My Activity</>}
+            {t === 'activity'
+              ? <><Users className="h-4 w-4" />Activity</>
+              : <>
+                  <Bell className="h-4 w-4" />Notifications
+                  {unreadCount > 0 && (
+                    <span className="absolute -top-1 -right-1 h-4 w-4 bg-destructive text-destructive-foreground text-[10px] font-bold rounded-full flex items-center justify-center">
+                      {unreadCount > 9 ? '9+' : unreadCount}
+                    </span>
+                  )}
+                </>
+            }
           </button>
         ))}
       </div>
 
-      {/* Friends Feed */}
-      {tab === 'friends' && (
+      {/* Activity tab */}
+      {tab === 'activity' && (
         <>
-          {friendLoading && (
+          {activityLoading && mergedActivity.length === 0 && (
             <div className="space-y-4">
               {[1, 2, 3].map(i => (
                 <div key={i} className="bg-card rounded-3xl border border-white/5 p-5 space-y-4">
@@ -386,21 +448,14 @@ export default function SocialPage() {
             </div>
           )}
 
-          {!friendLoading && friendError && (
-            <div className="flex flex-col items-center justify-center py-16 gap-3 text-center">
-              <p className="text-sm text-muted-foreground">{friendError}</p>
-              <Button size="sm" variant="outline" className="rounded-xl" onClick={loadFriendFeed}>Try again</Button>
-            </div>
-          )}
-
-          {!friendLoading && !friendError && friendFeed.length === 0 && (
+          {!activityLoading && mergedActivity.length === 0 && (
             <div className="flex flex-col items-center justify-center py-20 gap-4 text-center">
               <div className="h-16 w-16 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center">
-                <Users className="h-8 w-8 text-muted-foreground" />
+                <Eye className="h-8 w-8 text-muted-foreground" />
               </div>
               <div>
-                <p className="font-bold font-headline text-lg">No friend activity yet</p>
-                <p className="text-sm text-muted-foreground mt-1">Follow people to see their watches and ratings here</p>
+                <p className="font-bold font-headline text-lg">Nothing here yet</p>
+                <p className="text-sm text-muted-foreground mt-1">Watch or rate something, or follow people to see their activity</p>
               </div>
               <Button asChild size="sm" className="rounded-xl font-bold gap-2 mt-1">
                 <Link href="/friends"><UserPlus className="h-4 w-4" />Find People to Follow</Link>
@@ -408,39 +463,39 @@ export default function SocialPage() {
             </div>
           )}
 
-          {!friendLoading && !friendError && friendFeed.length > 0 && (
+          {mergedActivity.length > 0 && (
             <div className="space-y-4">
-              {friendFeed.map(item => <FeedCard key={item.id} item={item} />)}
+              {mergedActivity.map(item => (
+                <ActivityCard key={item.id} item={item} onLike={handleLike} onRemove={handleRemove} />
+              ))}
             </div>
           )}
         </>
       )}
 
-      {/* My Activity */}
-      {tab === 'me' && (
+      {/* Notifications tab */}
+      {tab === 'notifications' && (
         <>
-          {myFeed.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-24 gap-4 text-center">
+          {notifLoading && (
+            <div className="flex items-center justify-center py-16">
+              <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+            </div>
+          )}
+          {!notifLoading && notifications.length === 0 && (
+            <div className="flex flex-col items-center justify-center py-20 gap-4 text-center">
               <div className="h-16 w-16 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center">
-                <Eye className="h-8 w-8 text-muted-foreground" />
+                <Bell className="h-8 w-8 text-muted-foreground" />
               </div>
               <div>
-                <p className="font-bold font-headline text-lg">No activity yet</p>
-                <p className="text-sm text-muted-foreground mt-1">Watch, rate, or save a movie to see it here</p>
+                <p className="font-bold font-headline text-lg">No notifications yet</p>
+                <p className="text-sm text-muted-foreground mt-1">You&apos;ll be notified when someone follows you</p>
               </div>
             </div>
-          ) : (
-            <div className="space-y-4">
-              {myFeed.map(entry => (
-                <MyActivityCard
-                  key={entry.id}
-                  entry={entry}
-                  avatarUrl={user?.avatarUrl ?? undefined}
-                  username={user?.username ?? ''}
-                  displayName={user?.displayName}
-                  onLike={handleLike}
-                  onRemove={handleRemove}
-                />
+          )}
+          {!notifLoading && notifications.length > 0 && (
+            <div className="space-y-3">
+              {notifications.map(n => (
+                <NotificationCard key={n.id} notif={n} onFollowBack={() => {}} />
               ))}
             </div>
           )}

@@ -12,11 +12,22 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ use
   if (!target) return err('User not found', 404);
   if (target.id === auth.sub) return err('Cannot follow yourself');
 
+  const existing = await prisma.follow.findUnique({
+    where: { followerId_followingId: { followerId: auth.sub, followingId: target.id } },
+  });
+
   await prisma.follow.upsert({
     where: { followerId_followingId: { followerId: auth.sub, followingId: target.id } },
     create: { followerId: auth.sub, followingId: target.id },
     update: {},
   });
+
+  // Create a follow notification only on new follows
+  if (!existing) {
+    await prisma.notification.create({
+      data: { userId: target.id, fromId: auth.sub, type: 'follow' },
+    });
+  }
 
   return ok(null, 'Followed');
 }

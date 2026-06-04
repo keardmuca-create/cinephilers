@@ -1,20 +1,39 @@
 
 "use client"
 
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { usePathname } from 'next/navigation';
 import { Home, Search as SearchIcon, Users, User } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { useAuth } from '@/contexts/auth-context';
 
 export const BottomNav = () => {
   const pathname = usePathname();
+  const { user } = useAuth();
+  const [unread, setUnread] = useState(0);
+
+  useEffect(() => {
+    if (!user) return;
+    const check = async () => {
+      try {
+        const res = await fetch('/api/notifications', { credentials: 'include' });
+        if (res.ok) {
+          const json = await res.json();
+          setUnread(json.data?.unreadCount ?? 0);
+        }
+      } catch { /* ignore */ }
+    };
+    check();
+    // Clear dot when on social page
+    if (pathname === '/social') setUnread(0);
+  }, [user, pathname]);
 
   const navItems = [
     { label: 'Home', icon: Home, href: '/home' },
     { label: 'Search', icon: SearchIcon, href: '/browse' },
-    { label: 'Social',  icon: Users,        href: '/social' },
+    { label: 'Social', icon: Users, href: '/social' },
     { label: 'Profile', icon: User, href: '/profile' },
   ];
 
@@ -42,10 +61,15 @@ export const BottomNav = () => {
                   ? "bg-primary/15 text-primary"
                   : "text-muted-foreground hover:text-foreground"
               )}>
-                <item.icon className={cn(
-                  "h-5 w-5 transition-transform duration-300 group-active:scale-90",
-                  isActive && "scale-110"
-                )} />
+                <div className="relative">
+                  <item.icon className={cn(
+                    "h-5 w-5 transition-transform duration-300 group-active:scale-90",
+                    isActive && "scale-110"
+                  )} />
+                  {item.href === '/social' && unread > 0 && (
+                    <span className="absolute -top-1 -right-1 h-2 w-2 bg-destructive rounded-full" />
+                  )}
+                </div>
                 <span className="text-[10px] font-medium tracking-wide uppercase">{item.label}</span>
               </div>
             </Link>

@@ -57,8 +57,10 @@ model User {
   lists       CustomList[]
   badges      Badge[]
   reviewLikes ReviewLike[]
-  followers   Follow[]        @relation("Following")
-  following   Follow[]        @relation("Follower")
+  followers        Follow[]         @relation("Following")
+  following        Follow[]         @relation("Follower")
+  notifications    Notification[]   @relation("NotificationRecipient")
+  sentNotifications Notification[]  @relation("NotificationSender")
 }
 
 model Rating {
@@ -184,4 +186,16 @@ model Badge {
   awardedAt DateTime  @default(now())
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Notification {
+  id        String   @id @default(uuid())
+  userId    String
+  fromId    String
+  type      String
+  read      Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  user User @relation("NotificationRecipient", fields: [userId], references: [id], onDelete: Cascade)
+  from User @relation("NotificationSender", fields: [fromId], references: [id], onDelete: Cascade)
 }
