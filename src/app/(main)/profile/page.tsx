@@ -287,9 +287,8 @@ export default function ProfilePage() {
   const [deleteConfirmText, setDeleteConfirmText] = useState('');
   const [deleting, setDeleting] = useState(false);
 
-  // Show sign-in prompt if not authenticated
-  if (!authLoading && !authUser) {
-    return (
+  // Captured before hooks — rendered after all hooks to respect Rules of Hooks
+  const guestView = !authLoading && !authUser ? (
       <main className="p-6 pt-12 pb-32 max-w-2xl mx-auto space-y-12">
         {/* Sign-up banner */}
         <div className="bg-primary/10 border border-primary/20 rounded-2xl p-5 flex flex-col gap-3">
@@ -443,8 +442,7 @@ export default function ProfilePage() {
           </div>
         </section>
       </main>
-    );
-  }
+  ) : null;
 
   // Keep local privacy toggle in sync when authUser loads
   useEffect(() => { setLocalIsPrivate(authUser?.isPrivate ?? false); }, [authUser?.isPrivate]);
@@ -746,6 +744,8 @@ export default function ProfilePage() {
 
   const activeSeasonal = badges.filter(b => b.isSeasonal && b.isSeasonActive);
   const otherBadges = badges.filter(b => !(b.isSeasonal && b.isSeasonActive));
+
+  if (guestView) return guestView;
 
   return (
     <main className="p-6 pt-12 pb-32 max-w-2xl mx-auto space-y-16">
