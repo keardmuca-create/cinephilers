@@ -883,6 +883,12 @@ function ReviewsSection({ movie, writeOpen, setWriteOpen, myReview, setMyReview 
       date: new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }),
     };
     try { localStorage.setItem(`review-${movie.id}`, JSON.stringify(review)); } catch { /* ignore */ }
+    fetch('/api/reviews', {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ tmdbId: movie.id, mediaType: movie.type === 'show' ? 'SHOW' : 'MOVIE', body: review.content, containsSpoiler: false }),
+    }).catch(() => { /* background sync */ });
     setMyReview(review);
     setWriteOpen(false);
     toast({ title: 'Review saved' });
@@ -1012,6 +1018,15 @@ export default function MovieDetailPage() {
   const [watchedEpisodes, setWatchedEpisodes] = useState<Set<string>>(new Set());
   const [writeReviewOpen, setWriteReviewOpen] = useState(false);
   const [myReview, setMyReview] = useState<UserReview | null>(null);
+
+  const syncDb = useCallback((method: string, path: string, body?: object) => {
+    fetch(path, {
+      method,
+      credentials: 'include',
+      headers: body ? { 'Content-Type': 'application/json' } : undefined,
+      body: body ? JSON.stringify(body) : undefined,
+    }).catch(() => { /* background sync — ignore errors */ });
+  }, []);
 
   useEffect(() => {
     if (!id) return;
@@ -1277,6 +1292,12 @@ export default function MovieDetailPage() {
                   localStorage.removeItem(`watchlist-${id}`);
                 }
               } catch { /* ignore */ }
+              const mediaType = movie!.type === 'show' ? 'SHOW' : 'MOVIE';
+              if (next) {
+                syncDb('POST', '/api/watchlist', { tmdbId: id, mediaType });
+              } else {
+                syncDb('DELETE', `/api/watchlist/${id}?mediaType=${mediaType}`);
+              }
               if (next && movie) {
                 logActivity({ action: 'watchlist', contentId: id, contentTitle: movie.title, contentPoster: movie.poster, contentYear: movie.year });
               } else {
@@ -1300,6 +1321,12 @@ export default function MovieDetailPage() {
                   localStorage.setItem(`show-status-${id}`, 'completed');
                 }
               } catch { /* ignore */ }
+              const watchedMediaType = movie!.type === 'show' ? 'SHOW' : 'MOVIE';
+              if (next) {
+                syncDb('POST', '/api/watched', { tmdbId: id, mediaType: watchedMediaType });
+              } else {
+                syncDb('DELETE', `/api/watched/${id}?mediaType=${watchedMediaType}`);
+              }
               if (next && movie) {
                 appendWatchLog({
                   id,
@@ -1342,7 +1369,7 @@ export default function MovieDetailPage() {
             <div className="flex flex-col gap-2">
               <div className="flex items-center gap-1">
                 {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(i => (
-                  <button key={i} onClick={() => { setUserRating(i); saveMovieRating(id, i); if (movie) logActivity({ action: 'rated', contentId: id, contentTitle: movie.title, contentPoster: movie.poster, contentYear: movie.year, rating: i }); toast({ title: `You rated it ${i}/10!` }); window.dispatchEvent(new CustomEvent('cinephilers-rating-changed', { detail: { id, rating: i } })); }} className="transition-all hover:scale-125 active:scale-90 p-0.5">
+                  <button key={i} onClick={() => { setUserRating(i); saveMovieRating(id, i); syncDb('POST', '/api/ratings', { tmdbId: id, mediaType: movie?.type === 'show' ? 'SHOW' : 'MOVIE', score: i }); if (movie) logActivity({ action: 'rated', contentId: id, contentTitle: movie.title, contentPoster: movie.poster, contentYear: movie.year, rating: i }); toast({ title: `You rated it ${i}/10!` }); window.dispatchEvent(new CustomEvent('cinephilers-rating-changed', { detail: { id, rating: i } })); }} className="transition-all hover:scale-125 active:scale-90 p-0.5">
                     <Star className={`h-5 w-5 transition-colors ${userRating >= i ? 'fill-yellow-400 text-yellow-400' : 'text-foreground/25 hover:text-foreground/50'}`} />
                   </button>
                 ))}
@@ -1354,6 +1381,7 @@ export default function MovieDetailPage() {
                     onClick={() => {
                       setUserRating(0);
                       try { localStorage.removeItem(`movie-rating-${id}`); } catch { /* ignore */ }
+                      syncDb('DELETE', `/api/ratings/${id}?mediaType=${movie?.type === 'show' ? 'SHOW' : 'MOVIE'}`);
                       removeActivity('rated', id);
                       toast({ title: 'Rating removed' });
                       window.dispatchEvent(new CustomEvent('cinephilers-rating-changed', { detail: { id, rating: null } }));

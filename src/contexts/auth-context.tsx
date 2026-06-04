@@ -34,6 +34,46 @@ function loadUserFromStorage(): AuthUser | null {
   } catch { return null; }
 }
 
+async function restoreFromDb() {
+  try {
+    const res = await fetch('/api/sync', { credentials: 'include' });
+    if (!res.ok) return;
+    const { data } = await res.json();
+    const { ratings, watchlist, watched, reviews } = data as {
+      ratings: { tmdbId: string; mediaType: string; score: number }[];
+      watchlist: { tmdbId: string; mediaType: string }[];
+      watched: { tmdbId: string; mediaType: string }[];
+      reviews: { tmdbId: string; mediaType: string; body: string; containsSpoiler: boolean; createdAt: string }[];
+    };
+
+    for (const r of ratings) {
+      try { localStorage.setItem(`movie-rating-${r.tmdbId}`, String(r.score)); } catch { /* ignore */ }
+    }
+    for (const w of watchlist) {
+      const existing = localStorage.getItem(`watchlist-${w.tmdbId}`);
+      if (!existing) {
+        try { localStorage.setItem(`watchlist-${w.tmdbId}`, JSON.stringify({ id: w.tmdbId, type: w.mediaType === 'SHOW' ? 'show' : 'movie' })); } catch { /* ignore */ }
+      }
+    }
+    for (const w of watched) {
+      try { localStorage.setItem(`watched-${w.tmdbId}`, 'true'); } catch { /* ignore */ }
+    }
+    for (const r of reviews) {
+      const existing = localStorage.getItem(`review-${r.tmdbId}`);
+      if (!existing) {
+        try {
+          localStorage.setItem(`review-${r.tmdbId}`, JSON.stringify({
+            movieId: r.tmdbId,
+            content: r.body,
+            containsSpoiler: r.containsSpoiler,
+            date: new Date(r.createdAt).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }),
+          }));
+        } catch { /* ignore */ }
+      }
+    }
+  } catch { /* ignore */ }
+}
+
 interface AuthContextValue {
   user: AuthUser | null;
   loading: boolean;
@@ -68,6 +108,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const fresh = data.data as AuthUser;
         setUser(fresh);
         saveUserToStorage(fresh);
+        // Restore user data from DB into localStorage
+        restoreFromDb();
       } else {
         // API failed (e.g. mock DB cold-started) — keep whatever we have from localStorage
         const stored = loadUserFromStorage();
