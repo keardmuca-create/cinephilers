@@ -556,6 +556,9 @@ export default function ProfilePage() {
     setComingSoon(getComingSoonBadges());
   }, []);
 
+  // Refresh follower/following counts from DB on mount
+  useEffect(() => { refetch(); }, [refetch]);
+
   // Re-run stats when DB restore finishes (data arrives after initial mount)
   useEffect(() => {
     window.addEventListener('cinephilers-db-restored', recomputeStats);

@@ -294,6 +294,13 @@ export default function SocialPage() {
     if (tab === 'friends' && user) loadFriendFeed();
   }, [tab, user, loadFriendFeed]);
 
+  // Refresh friend feed whenever the page becomes visible again (e.g. after following someone)
+  useEffect(() => {
+    const onVisible = () => { if (tab === 'friends' && user && document.visibilityState === 'visible') loadFriendFeed(); };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => document.removeEventListener('visibilitychange', onVisible);
+  }, [tab, user, loadFriendFeed]);
+
   const handleLike = (id: string) => { setMyFeed(toggleLike(id)); };
   const handleRemove = (entry: ActivityEntry) => { removeActivity(entry.action, entry.contentId); setMyFeed(getFeed()); };
 
