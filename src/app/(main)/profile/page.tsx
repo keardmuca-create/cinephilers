@@ -9,7 +9,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { MovieCard } from '@/components/movie-card';
 import Link from 'next/link';
-import { Settings, Star, Film, List, MessageSquare, ChevronRight, Award, History, Bookmark, User, Eye, Plus } from 'lucide-react';
+import { Settings, Star, Film, List, MessageSquare, ChevronRight, Award, History, Bookmark, User, Eye, Plus, Heart } from 'lucide-react';
 import { FavoritesSection } from '@/components/favorites-section';
 import { BarChart, Bar, XAxis, ResponsiveContainer, Cell, YAxis, Tooltip as ChartTooltip } from 'recharts';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
@@ -276,24 +276,131 @@ export default function ProfilePage() {
   // Show sign-in prompt if not authenticated
   if (!authLoading && !authUser) {
     return (
-      <main className="min-h-screen flex flex-col items-center justify-center px-6 gap-6 text-center pb-32">
-        <div className="h-20 w-20 rounded-3xl bg-primary/10 border border-primary/20 flex items-center justify-center">
-          <User className="h-10 w-10 text-primary" />
+      <main className="p-6 pt-12 pb-32 max-w-2xl mx-auto space-y-12">
+        {/* Sign-up banner */}
+        <div className="bg-primary/10 border border-primary/20 rounded-2xl p-5 flex flex-col gap-3">
+          <div className="space-y-1">
+            <p className="font-bold text-base">Create your Cinephilers profile</p>
+            <p className="text-sm text-muted-foreground">Track every movie you watch, rate them, write reviews, and earn badges.</p>
+          </div>
+          <div className="flex gap-2">
+            <Button asChild size="sm" className="rounded-xl font-bold">
+              <Link href="/signup">Sign Up Free</Link>
+            </Button>
+            <Button asChild size="sm" variant="outline" className="rounded-xl font-bold">
+              <Link href="/login">Log In</Link>
+            </Button>
+          </div>
         </div>
-        <div className="space-y-2">
-          <h1 className="text-2xl font-headline font-bold">Your Profile</h1>
-          <p className="text-muted-foreground text-sm leading-relaxed max-w-xs">
-            Sign in to track your movies, ratings, reviews, and connect with other cinephiles.
-          </p>
+
+        {/* Header skeleton */}
+        <div className="flex justify-between items-start">
+          <div className="flex flex-col items-center gap-2">
+            <div className="h-24 w-24 rounded-full bg-muted border-4 border-border flex items-center justify-center">
+              <User className="h-10 w-10 text-muted-foreground/40" />
+            </div>
+          </div>
         </div>
-        <div className="flex flex-col gap-3 w-full max-w-xs">
-          <Button asChild className="w-full rounded-xl h-12 font-bold">
-            <Link href="/login">Log In</Link>
-          </Button>
-          <Button asChild variant="outline" className="w-full rounded-xl h-12 font-bold">
-            <Link href="/signup">Create Account</Link>
-          </Button>
+        <div className="space-y-3">
+          <div className="h-8 w-48 bg-muted rounded-xl animate-pulse" />
+          <div className="h-4 w-28 bg-muted rounded-lg animate-pulse" />
+          <div className="h-4 w-64 bg-muted rounded-lg animate-pulse" />
+          <div className="flex gap-10 pt-2">
+            <div className="flex flex-col gap-1">
+              <div className="h-7 w-8 bg-muted rounded-lg animate-pulse" />
+              <div className="h-3 w-16 bg-muted rounded animate-pulse" />
+            </div>
+            <div className="flex flex-col gap-1">
+              <div className="h-7 w-8 bg-muted rounded-lg animate-pulse" />
+              <div className="h-3 w-16 bg-muted rounded animate-pulse" />
+            </div>
+          </div>
         </div>
+
+        <Separator className="bg-border" />
+
+        {/* Favorites empty */}
+        <section>
+          <div className="flex items-center justify-between mb-6">
+            <h3 className="text-2xl font-headline font-bold flex items-center gap-3">
+              <Heart className="h-6 w-6 text-primary" /> Favorites
+            </h3>
+          </div>
+          <div className="grid grid-cols-5 gap-2">
+            {Array.from({ length: 5 }).map((_, i) => (
+              <div key={i} className="relative aspect-[2/3] rounded-xl border-2 border-dashed border-foreground/15 flex items-center justify-center">
+                <Plus className="h-4 w-4 text-foreground/20" />
+              </div>
+            ))}
+          </div>
+          <p className="text-xs text-muted-foreground mt-3">Your favourite movies will appear here.</p>
+        </section>
+
+        <Separator className="bg-border" />
+
+        {/* Watch History empty */}
+        <section>
+          <div className="flex items-center justify-between mb-6">
+            <h3 className="text-2xl font-headline font-bold flex items-center gap-3">
+              <History className="h-6 w-6 text-primary" /> Watch History
+            </h3>
+          </div>
+          <div className="space-y-3">
+            {[1, 2, 3].map(i => (
+              <div key={i} className="flex items-center gap-4 py-3 border-b border-border last:border-0">
+                <div className="w-16 aspect-[2/3] rounded-lg bg-muted animate-pulse shrink-0" />
+                <div className="flex-1 space-y-2">
+                  <div className="h-4 bg-muted rounded w-3/4 animate-pulse" />
+                  <div className="h-3 bg-muted rounded w-1/4 animate-pulse" />
+                </div>
+              </div>
+            ))}
+          </div>
+          <p className="text-xs text-muted-foreground mt-3">Movies you mark as watched will appear here.</p>
+        </section>
+
+        <Separator className="bg-border" />
+
+        {/* Ratings empty */}
+        <section>
+          <div className="flex items-center justify-between mb-6">
+            <h3 className="text-2xl font-headline font-bold flex items-center gap-3">
+              <Star className="h-6 w-6 text-primary" /> Ratings
+            </h3>
+          </div>
+          <div className="space-y-3">
+            {[1, 2, 3].map(i => (
+              <div key={i} className="flex items-center gap-4 py-3 border-b border-border last:border-0">
+                <div className="w-16 aspect-[2/3] rounded-lg bg-muted animate-pulse shrink-0" />
+                <div className="flex-1 space-y-2">
+                  <div className="h-4 bg-muted rounded w-3/4 animate-pulse" />
+                  <div className="h-3 bg-muted rounded w-1/3 animate-pulse" />
+                </div>
+              </div>
+            ))}
+          </div>
+          <p className="text-xs text-muted-foreground mt-3">Movies you rate will appear here.</p>
+        </section>
+
+        <Separator className="bg-border" />
+
+        {/* Badges empty */}
+        <section>
+          <div className="flex items-center justify-between mb-6">
+            <h3 className="text-2xl font-headline font-bold flex items-center gap-3">
+              <Award className="h-6 w-6 text-primary" /> Badges
+            </h3>
+          </div>
+          <div className="grid grid-cols-3 gap-3">
+            {[1, 2, 3].map(i => (
+              <div key={i} className="aspect-square rounded-2xl border border-dashed border-foreground/15 bg-muted/20 flex flex-col items-center justify-center gap-2">
+                <Award className="h-8 w-8 text-foreground/15" />
+                <div className="h-2 w-12 bg-muted rounded animate-pulse" />
+              </div>
+            ))}
+          </div>
+          <p className="text-xs text-muted-foreground mt-3">Earn badges by watching and rating movies.</p>
+        </section>
       </main>
     );
   }

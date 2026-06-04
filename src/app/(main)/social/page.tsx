@@ -144,24 +144,42 @@ export default function SocialPage() {
 
   if (!loading && !user) {
     return (
-      <main className="min-h-screen flex flex-col items-center justify-center px-6 gap-6 text-center pb-32">
-        <div className="h-20 w-20 rounded-3xl bg-primary/10 border border-primary/20 flex items-center justify-center">
-          <Users className="h-10 w-10 text-primary" />
+      <main className="max-w-xl mx-auto px-4 pt-10 pb-32 space-y-6">
+        {/* Sign-up banner */}
+        <div className="bg-primary/10 border border-primary/20 rounded-2xl p-5 flex flex-col gap-3">
+          <div className="space-y-1">
+            <p className="font-bold text-base">Join Cinephilers</p>
+            <p className="text-sm text-muted-foreground">Sign up to track what you watch, share your ratings, and follow friends.</p>
+          </div>
+          <div className="flex gap-2">
+            <Button asChild size="sm" className="rounded-xl font-bold">
+              <Link href="/signup">Sign Up Free</Link>
+            </Button>
+            <Button asChild size="sm" variant="outline" className="rounded-xl font-bold">
+              <Link href="/login">Log In</Link>
+            </Button>
+          </div>
         </div>
-        <div className="space-y-2">
-          <h1 className="text-2xl font-headline font-bold">Activity Feed</h1>
-          <p className="text-muted-foreground text-sm leading-relaxed max-w-xs">
-            Sign in to see your activity, follow friends, and share what you&apos;re watching.
-          </p>
+
+        <h1 className="text-3xl font-headline font-bold px-2">Activity</h1>
+
+        {/* Empty activity cards */}
+        <div className="space-y-4">
+          {[1, 2, 3].map(i => (
+            <div key={i} className="flex items-center gap-4 p-4 rounded-2xl border border-border bg-muted/30">
+              <div className="h-10 w-10 rounded-full bg-muted animate-pulse shrink-0" />
+              <div className="flex-1 space-y-2">
+                <div className="h-3 bg-muted rounded-full w-2/3 animate-pulse" />
+                <div className="h-3 bg-muted rounded-full w-1/3 animate-pulse" />
+              </div>
+              <div className="w-10 h-14 rounded-lg bg-muted animate-pulse shrink-0" />
+            </div>
+          ))}
         </div>
-        <div className="flex flex-col gap-3 w-full max-w-xs">
-          <Button asChild className="w-full rounded-xl h-12 font-bold">
-            <Link href="/login">Log In</Link>
-          </Button>
-          <Button asChild variant="outline" className="w-full rounded-xl h-12 font-bold">
-            <Link href="/signup">Create Account</Link>
-          </Button>
-        </div>
+
+        <p className="text-center text-sm text-muted-foreground pt-2">
+          Follow friends to see their ratings and watch activity here.
+        </p>
       </main>
     );
   }
