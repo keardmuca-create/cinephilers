@@ -9,7 +9,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { MovieCard } from '@/components/movie-card';
 import Link from 'next/link';
-import { Settings, Star, Film, List, MessageSquare, ChevronRight, Award, History, Bookmark, User, Eye, Plus, Heart } from 'lucide-react';
+import { Settings, Star, Film, List, MessageSquare, ChevronRight, Award, History, Bookmark, User, Eye, Plus, Heart, Loader2 } from 'lucide-react';
 import { FavoritesSection } from '@/components/favorites-section';
 import { BarChart, Bar, XAxis, ResponsiveContainer, Cell, YAxis, Tooltip as ChartTooltip } from 'recharts';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
@@ -274,6 +274,83 @@ function SkeletonCard() {
       <Pulse className="h-3 w-3/4" />
       <Pulse className="h-3 w-1/2" />
     </div>
+  );
+}
+
+interface FollowUser { username: string; displayName: string | null; avatarUrl: string | null }
+
+function FollowListModal({ username, type, count }: { username: string; type: 'following' | 'followers'; count: number }) {
+  const [open, setOpen] = React.useState(false);
+  const [users, setUsers] = React.useState<FollowUser[]>([]);
+  const [loading, setLoading] = React.useState(false);
+
+  const load = React.useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await fetch(`/api/users/${username}/${type}?limit=50`, { credentials: 'include' });
+      if (res.ok) {
+        const json = await res.json();
+        setUsers(json.data ?? []);
+      }
+    } finally {
+      setLoading(false);
+    }
+  }, [username, type]);
+
+  React.useEffect(() => { if (open) load(); }, [open, load]);
+
+  const label = type === 'following' ? 'Following' : 'Followers';
+
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        <button className="flex flex-col items-start hover:opacity-70 transition-opacity">
+          <span className="text-2xl font-bold font-headline">{count}</span>
+          <span className="text-xs text-muted-foreground uppercase tracking-widest font-bold">{label}</span>
+        </button>
+      </DialogTrigger>
+      <DialogContent className="max-w-sm rounded-3xl p-0 overflow-hidden">
+        <DialogHeader className="px-6 pt-6 pb-4 border-b border-white/5">
+          <DialogTitle className="font-headline">{label}</DialogTitle>
+        </DialogHeader>
+        <ScrollArea className="max-h-[60vh]">
+          {loading ? (
+            <div className="flex items-center justify-center py-12">
+              <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+            </div>
+          ) : users.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-12 gap-2 text-center px-6">
+              <User className="h-8 w-8 text-muted-foreground/40" />
+              <p className="text-sm text-muted-foreground">
+                {type === 'following' ? 'Not following anyone yet' : 'No followers yet'}
+              </p>
+            </div>
+          ) : (
+            <div className="divide-y divide-white/5">
+              {users.map(u => (
+                <Link
+                  key={u.username}
+                  href={`/profile/${u.username}`}
+                  onClick={() => setOpen(false)}
+                  className="flex items-center gap-3 px-6 py-4 hover:bg-white/5 transition-colors"
+                >
+                  <div className="h-10 w-10 rounded-2xl bg-primary/20 flex items-center justify-center shrink-0 overflow-hidden">
+                    {u.avatarUrl
+                      ? <img src={u.avatarUrl} alt={u.username} className="w-full h-full object-cover" />
+                      : <span className="text-primary font-bold text-sm">{(u.displayName ?? u.username).slice(0, 2).toUpperCase()}</span>
+                    }
+                  </div>
+                  <div className="min-w-0">
+                    <p className="font-bold text-sm truncate">{u.displayName ?? u.username}</p>
+                    <p className="text-xs text-muted-foreground truncate">@{u.username}</p>
+                  </div>
+                </Link>
+              ))}
+            </div>
+          )}
+        </ScrollArea>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -951,14 +1028,8 @@ export default function ProfilePage() {
           {authUser?.bio ?? 'Set up your profile to track movies and connect with friends.'}
         </p>
         <div className="flex gap-10 pt-4">
-          <div className="flex flex-col">
-            <span className="text-2xl font-bold font-headline">{authUser?.followingCount ?? 0}</span>
-            <span className="text-xs text-muted-foreground uppercase tracking-widest font-bold">Following</span>
-          </div>
-          <div className="flex flex-col">
-            <span className="text-2xl font-bold font-headline">{authUser?.followersCount ?? 0}</span>
-            <span className="text-xs text-muted-foreground uppercase tracking-widest font-bold">Followers</span>
-          </div>
+          <FollowListModal username={authUser?.username ?? ''} type="following" count={authUser?.followingCount ?? 0} />
+          <FollowListModal username={authUser?.username ?? ''} type="followers" count={authUser?.followersCount ?? 0} />
         </div>
       </div>
 
