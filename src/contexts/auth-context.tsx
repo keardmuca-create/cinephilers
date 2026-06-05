@@ -40,7 +40,7 @@ async function restoreFromDb() {
     if (!res.ok) return;
     const { data } = await res.json();
     const { ratings, watchlist, watched, reviews, favorites, lists } = data as {
-      ratings: { tmdbId: string; mediaType: string; score: number }[];
+      ratings: { tmdbId: string; mediaType: string; score: number; updatedAt: string }[];
       watchlist: { tmdbId: string; mediaType: string }[];
       watched: { tmdbId: string; mediaType: string; watchedAt: string }[];
       reviews: { tmdbId: string; mediaType: string; body: string; containsSpoiler: boolean; createdAt: string }[];
@@ -155,6 +155,40 @@ async function restoreFromDb() {
         localStorage.setItem('user-lists', JSON.stringify(lsLists));
       } catch { /* ignore */ }
     }
+
+    // Merge activity-feed from DB so cross-device watched/rated entries appear in the social feed
+    try {
+      type ActivityEntry = { id: string; action: string; contentId: string; contentTitle: string; contentPoster: string; contentYear: string; rating?: number; timestamp: string; likes: string[] };
+      const existing: ActivityEntry[] = JSON.parse(localStorage.getItem('activity-feed') ?? '[]');
+      const existingKeys = new Set(existing.map(e => `${e.action}-${e.contentId}`));
+      const newEntries: ActivityEntry[] = [];
+
+      const getMeta = (tmdbId: string) => {
+        try {
+          const cached = localStorage.getItem(`meta-${tmdbId}`);
+          if (cached) { const m = JSON.parse(cached); return { title: m.title ?? '', poster: m.poster ?? '', year: m.year ?? '' }; }
+        } catch { /* ignore */ }
+        return { title: '', poster: '', year: '' };
+      };
+
+      for (const w of watched) {
+        if (existingKeys.has(`watched-${w.tmdbId}`)) continue;
+        const { title, poster, year } = getMeta(w.tmdbId);
+        newEntries.push({ id: `db-w-${w.tmdbId}`, action: 'watched', contentId: w.tmdbId, contentTitle: title, contentPoster: poster, contentYear: year, timestamp: w.watchedAt, likes: [] });
+      }
+      for (const r of ratings) {
+        if (existingKeys.has(`rated-${r.tmdbId}`)) continue;
+        const { title, poster, year } = getMeta(r.tmdbId);
+        newEntries.push({ id: `db-r-${r.tmdbId}`, action: 'rated', contentId: r.tmdbId, contentTitle: title, contentPoster: poster, contentYear: year, rating: r.score, timestamp: r.updatedAt, likes: [] });
+      }
+
+      if (newEntries.length > 0) {
+        const merged = [...existing, ...newEntries]
+          .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
+          .slice(0, 100);
+        localStorage.setItem('activity-feed', JSON.stringify(merged));
+      }
+    } catch { /* ignore */ }
 
     // Signal to any mounted pages that localStorage is now populated from DB
     window.dispatchEvent(new CustomEvent('cinephilers-db-restored'));

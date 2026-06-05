@@ -259,12 +259,16 @@ export default function SocialPage() {
   const [unreadCount, setUnreadCount] = useState(0);
   const [notifLoading, setNotifLoading] = useState(false);
 
-  // Load local feed
+  // Load local feed — refresh on storage changes (other tabs) and DB restore (cross-device sync)
   useEffect(() => {
     setMyLocalFeed(getFeed());
     const handler = () => setMyLocalFeed(getFeed());
     window.addEventListener('storage', handler);
-    return () => window.removeEventListener('storage', handler);
+    window.addEventListener('cinephilers-db-restored', handler);
+    return () => {
+      window.removeEventListener('storage', handler);
+      window.removeEventListener('cinephilers-db-restored', handler);
+    };
   }, []);
 
   const loadActivity = useCallback(async () => {
@@ -331,7 +335,7 @@ export default function SocialPage() {
       type: e.action === 'watchlist' ? 'watchlist' : e.action as UnifiedItem['type'],
       user: { username: user?.username ?? '', displayName: user?.displayName ?? null, avatarUrl: user?.avatarUrl ?? null },
       tmdbId: e.contentId,
-      meta: { title: e.contentTitle, year: e.contentYear, poster: e.contentPoster },
+      meta: e.contentTitle ? { title: e.contentTitle, year: e.contentYear, poster: e.contentPoster } : undefined,
       rating: e.rating,
       likes: e.likes,
       createdAt: e.timestamp,
