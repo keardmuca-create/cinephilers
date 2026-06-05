@@ -49,14 +49,15 @@ model User {
   passwordResetExpires     DateTime?
   refreshTokenHash         String?
 
-  ratings     Rating[]
-  reviews     Review[]
-  watched     WatchedItem[]
-  watchlist   WatchlistItem[]
-  favorites   Favorite[]
-  lists       CustomList[]
-  badges      Badge[]
-  reviewLikes ReviewLike[]
+  ratings          Rating[]
+  reviews          Review[]
+  watched          WatchedItem[]
+  watchlist        WatchlistItem[]
+  favorites        Favorite[]
+  lists            CustomList[]
+  badges           Badge[]
+  reviewLikes      ReviewLike[]
+  watchedEpisodes  WatchedEpisode[]
   followers        Follow[]         @relation("Following")
   following        Follow[]         @relation("Follower")
   notifications    Notification[]   @relation("NotificationRecipient")
@@ -161,11 +162,27 @@ model CustomListItem {
   tmdbId    String
   mediaType MediaType
   note      String?
+  title     String?
+  poster    String?
+  year      String?
   addedAt   DateTime  @default(now())
 
   list CustomList @relation(fields: [listId], references: [id], onDelete: Cascade)
 
   @@unique([listId, tmdbId, mediaType])
+}
+
+model WatchedEpisode {
+  id         String   @id @default(uuid())
+  userId     String
+  showTmdbId String
+  season     Int
+  episode    Int
+  watchedAt  DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, showTmdbId, season, episode])
 }
 
 model Follow {

@@ -3,6 +3,19 @@ import { prisma } from '@/lib/db';
 import { ok, err } from '@/lib/api-response';
 import { getCurrentUser } from '@/lib/auth-utils';
 
+export async function GET(req: NextRequest) {
+  const auth = await getCurrentUser(req);
+  if (!auth) return err('Unauthorized', 401);
+
+  const lists = await prisma.customList.findMany({
+    where: { userId: auth.sub },
+    orderBy: { createdAt: 'desc' },
+    include: { items: { orderBy: { addedAt: 'asc' } } },
+  });
+
+  return ok(lists);
+}
+
 export async function POST(req: NextRequest) {
   const auth = await getCurrentUser(req);
   if (!auth) return err('Unauthorized', 401);

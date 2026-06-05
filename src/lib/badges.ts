@@ -72,6 +72,7 @@ export interface UserStats {
   moviesRated: number;
   episodesWatched: number;
   episodesRated: number;
+  showsRated: number;
   reviewsWritten: number;
   maxMoviesInDay: number;
   maxMoviesInWeek: number;
@@ -160,12 +161,12 @@ const BADGE_DEFS: BadgeDefinition[] = [
   {
     id: 'show-rater',
     name: 'Show Rater',
-    description: 'Rate the show episodes you watch to show your taste.',
-    unit: 'episodes rated',
+    description: 'Rate the shows you watch to show your taste.',
+    unit: 'shows rated',
     verb: 'Rate',
     category: 'alltime',
-    statKey: 'episodesRated',
-    tiers: { grey: 1, bronze: 100, silver: 500, gold: 1000 },
+    statKey: 'showsRated',
+    tiers: { grey: 1, bronze: 10, silver: 50, gold: 100 },
   },
   {
     id: 'reviewer',
@@ -371,19 +372,41 @@ export function readUserStats(): UserStats {
   } catch { /* ignore */ }
 
   let episodesRated = 0;
+  let showsRated = 0;
   try {
     for (let i = 0; i < localStorage.length; i++) {
       const key = localStorage.key(i);
       if (key?.startsWith('episode-rating-')) episodesRated++;
+      if (key?.startsWith('movie-rating-tmdb-tv-')) showsRated++;
     }
   } catch { /* ignore */ }
 
-  // Episodes watched: count watched-ep-* keys (more reliable than watch-log)
+  // Episodes watched: individual ep keys + whole-show-watched credits
   let episodesWatched = 0;
+  const showsWithIndividualEps = new Set<string>();
   try {
     for (let i = 0; i < localStorage.length; i++) {
       const key = localStorage.key(i);
-      if (key?.startsWith('watched-ep-') && localStorage.getItem(key) === 'true') episodesWatched++;
+      if (!key) continue;
+      if (key.startsWith('watched-ep-') && localStorage.getItem(key) === 'true') {
+        episodesWatched++;
+        // key format: watched-ep-tmdb-tv-{id}-S{n}E{n}
+        // showId = everything between "watched-ep-" and the last "-S{n}E{n}" segment
+        const m = key.match(/^watched-ep-(.+)-S\d+E\d+$/);
+        if (m) showsWithIndividualEps.add(m[1]);
+      }
+    }
+  } catch { /* ignore */ }
+  // Add episode counts for shows marked as watched via the whole-show button,
+  // but only if the user hasn't also tracked individual episodes for that show.
+  try {
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (!key?.startsWith('watched-show-eps-')) continue;
+      const showId = key.replace('watched-show-eps-', '');
+      if (showsWithIndividualEps.has(showId)) continue;
+      const count = parseInt(localStorage.getItem(key) ?? '0', 10);
+      if (count > 0) episodesWatched += count;
     }
   } catch { /* ignore */ }
 
@@ -430,6 +453,7 @@ export function readUserStats(): UserStats {
     moviesRated,
     episodesWatched,
     episodesRated,
+    showsRated,
     reviewsWritten,
     maxMoviesInDay,
     maxMoviesInWeek,

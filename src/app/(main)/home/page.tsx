@@ -78,8 +78,7 @@ export default function HomePage() {
 
     const hero = dailyPool.find(m => m.type === 'movie') ?? null;
     const feat = dailyPool.slice(1, 16);
-    const featuredIds = new Set([hero?.id, ...feat.map(m => m.id)]);
-    const t10 = weeklyPool.filter(m => !featuredIds.has(m.id)).slice(0, 10);
+    const t10 = weeklyPool.slice(0, 10);
 
     return { heroMovie: hero, featured: feat, top10: t10 };
   }, [stablePool]);

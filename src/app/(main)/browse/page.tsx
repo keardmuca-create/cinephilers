@@ -149,29 +149,38 @@ function DialogMovieRow({ movie }: { movie: Movie }) {
 
 // ─── Section header used for Top Movies / Top Shows / Coming Soon ─────────────
 
-const SectionHeader = ({ title, allItems }: { title: string; allItems: Movie[] }) => (
+const SectionHeader = ({ title, allItems, seeAllHref }: { title: string; allItems?: Movie[]; seeAllHref?: string }) => (
   <div className="flex items-center justify-between px-6">
     <div className="flex items-center gap-3">
       <div className="w-1 h-5 bg-primary rounded-full" />
       <h3 className="text-xl font-headline font-bold">{title}</h3>
     </div>
-    <Dialog>
-      <DialogTrigger asChild>
-        <button className="text-xs text-primary border border-primary/30 rounded-full px-3 py-1 hover:bg-primary/10 transition-colors font-semibold flex items-center gap-1">
-          See All <ChevronRight className="h-3 w-3" />
-        </button>
-      </DialogTrigger>
-      <DialogContent className="max-w-lg rounded-3xl h-[80vh] flex flex-col p-0 bg-background border-border">
-        <DialogHeader className="px-6 pt-6 pb-3 border-b border-border shrink-0">
-          <DialogTitle className="font-headline text-2xl font-bold">{title}</DialogTitle>
-        </DialogHeader>
-        <ScrollArea className="flex-1 px-6 pb-6">
-          <div className="pt-2">
-            {allItems.map(movie => <DialogMovieRow key={movie.id} movie={movie} />)}
-          </div>
-        </ScrollArea>
-      </DialogContent>
-    </Dialog>
+    {seeAllHref ? (
+      <Link
+        href={seeAllHref}
+        className="text-xs text-primary border border-primary/30 rounded-full px-3 py-1 hover:bg-primary/10 transition-colors font-semibold flex items-center gap-1"
+      >
+        See All <ChevronRight className="h-3 w-3" />
+      </Link>
+    ) : allItems ? (
+      <Dialog>
+        <DialogTrigger asChild>
+          <button className="text-xs text-primary border border-primary/30 rounded-full px-3 py-1 hover:bg-primary/10 transition-colors font-semibold flex items-center gap-1">
+            See All <ChevronRight className="h-3 w-3" />
+          </button>
+        </DialogTrigger>
+        <DialogContent className="max-w-lg rounded-3xl h-[80vh] flex flex-col p-0 bg-background border-border">
+          <DialogHeader className="px-6 pt-6 pb-3 border-b border-border shrink-0">
+            <DialogTitle className="font-headline text-2xl font-bold">{title}</DialogTitle>
+          </DialogHeader>
+          <ScrollArea className="flex-1 px-6 pb-6">
+            <div className="pt-2">
+              {allItems.map(movie => <DialogMovieRow key={movie.id} movie={movie} />)}
+            </div>
+          </ScrollArea>
+        </DialogContent>
+      </Dialog>
+    ) : null}
   </div>
 );
 
@@ -308,13 +317,13 @@ export default function SearchPage() {
         /* ── Default: Top Movies, Top Shows, Coming Soon ── */
         <div className="space-y-10">
           <div className="space-y-4">
-            <SectionHeader title="Top Movies" allItems={data.movies} />
+            <SectionHeader title="Top Movies" seeAllHref="/see-all/popular-movies?title=Top+Movies" />
             <div className="flex overflow-x-auto gap-4 px-6 pb-4 no-scrollbar">
               {data.movies.slice(0, 10).map(movie => <MovieCard key={movie.id} movie={movie} />)}
             </div>
           </div>
           <div className="space-y-4">
-            <SectionHeader title="Top Shows" allItems={data.shows} />
+            <SectionHeader title="Top Shows" seeAllHref="/see-all/popular-shows?title=Top+Shows" />
             {data.shows.length > 0 ? (
               <div className="flex overflow-x-auto gap-4 px-6 pb-4 no-scrollbar">
                 {data.shows.slice(0, 10).map(movie => <MovieCard key={movie.id} movie={movie} />)}

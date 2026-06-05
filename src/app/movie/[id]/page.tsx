@@ -760,7 +760,26 @@ function AddToListButton({ movie }: { movie: Movie }) {
   const [newTitle, setNewTitle] = useState('');
   const [newPrivate, setNewPrivate] = useState(false);
 
-  useEffect(() => { if (open) setLists(loadLists()); }, [open]);
+  useEffect(() => {
+    if (!open) return;
+    // Load from localStorage first for instant display, then sync from DB
+    setLists(loadLists());
+    fetch('/api/lists', { credentials: 'include' })
+      .then(r => r.ok ? r.json() : null)
+      .then(json => {
+        if (!json?.data?.length) return;
+        const dbLists: UserList[] = json.data.map((l: { id: string; name: string; isPublic: boolean; createdAt: string; items: { tmdbId: string; mediaType: string; title: string | null; poster: string | null; year: string | null }[] }) => ({
+          id: l.id,
+          title: l.name,
+          isPrivate: !l.isPublic,
+          createdAt: l.createdAt,
+          items: l.items.map((i) => ({ movieId: i.tmdbId, title: i.title ?? '', poster: i.poster ?? '', year: i.year ?? '', type: i.mediaType === 'SHOW' ? 'show' : 'movie' })),
+        }));
+        saveLists(dbLists);
+        setLists(dbLists);
+      })
+      .catch(() => { /* ignore */ });
+  }, [open]);
 
   const addToList = (listId: string) => {
     const updated = lists.map(l => {
@@ -771,18 +790,52 @@ function AddToListButton({ movie }: { movie: Movie }) {
     saveLists(updated);
     setLists(updated);
     toast({ title: 'Added to list' });
+    // Sync to DB in background
+    fetch(`/api/lists/${listId}/items`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({ tmdbId: movie.id, mediaType: movie.type === 'show' ? 'SHOW' : 'MOVIE', title: movie.title, poster: movie.poster, year: movie.year }),
+    }).catch(() => { /* ignore */ });
   };
 
-  const createAndAdd = () => {
+  const createAndAdd = async () => {
     if (!newTitle.trim()) return;
-    const newList: UserList = { id: Date.now().toString(), title: newTitle.trim(), isPrivate: newPrivate, createdAt: new Date().toISOString(), items: [{ movieId: movie.id, title: movie.title, poster: movie.poster, year: movie.year, type: movie.type }] };
-    const updated = [...lists, newList];
+    const optimistic: UserList = { id: Date.now().toString(), title: newTitle.trim(), isPrivate: newPrivate, createdAt: new Date().toISOString(), items: [{ movieId: movie.id, title: movie.title, poster: movie.poster, year: movie.year, type: movie.type }] };
+    const updated = [...lists, optimistic];
     saveLists(updated);
     setLists(updated);
     setCreateOpen(false);
     setNewTitle('');
     setNewPrivate(false);
-    toast({ title: `Added to "${newList.title}"` });
+    toast({ title: `Added to "${optimistic.title}"` });
+    // Persist to DB
+    try {
+      const res = await fetch('/api/lists', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ name: optimistic.title, isPublic: !optimistic.isPrivate }),
+      });
+      if (res.ok) {
+        const json = await res.json();
+        const realId: string = json.data?.id;
+        if (realId) {
+          // Update localStorage and state with real DB id, then add the item
+          setLists(prev => {
+            const next = prev.map(l => l.id === optimistic.id ? { ...l, id: realId } : l);
+            saveLists(next);
+            return next;
+          });
+          fetch(`/api/lists/${realId}/items`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({ tmdbId: movie.id, mediaType: movie.type === 'show' ? 'SHOW' : 'MOVIE', title: movie.title, poster: movie.poster, year: movie.year }),
+          }).catch(() => { /* ignore */ });
+        }
+      }
+    } catch { /* ignore */ }
   };
 
   const isInList = (listId: string) => lists.find(l => l.id === listId)?.items.some(i => i.movieId === movie.id) ?? false;
@@ -1043,10 +1096,28 @@ export default function MovieDetailPage() {
       const rev = localStorage.getItem(`review-${id}`);
       if (rev) setMyReview(JSON.parse(rev));
       if (saved) setUserRating(parseInt(saved, 10));
-      // Load watched episodes — use index key for O(1) lookup instead of full scan
+      // Load watched episodes from localStorage first (fast)
       const indexRaw = localStorage.getItem(`watched-eps-index-${id}`);
       const watched = new Set<string>(indexRaw ? JSON.parse(indexRaw) : []);
       setWatchedEpisodes(watched);
+      // Then merge with DB (authoritative across devices) — fire-and-forget
+      fetch(`/api/watched/episodes/${encodeURIComponent(id)}`, { credentials: 'include' })
+        .then(r => r.ok ? r.json() : null)
+        .then(json => {
+          if (!json?.data) return;
+          const dbKeys: string[] = json.data;
+          if (dbKeys.length === 0) return;
+          setWatchedEpisodes(prev => {
+            const merged = new Set(prev);
+            let changed = false;
+            for (const k of dbKeys) { if (!merged.has(k)) { merged.add(k); changed = true; } }
+            if (!changed) return prev;
+            // Update index in localStorage
+            try { localStorage.setItem(`watched-eps-index-${id}`, JSON.stringify([...merged])); } catch { /* ignore */ }
+            return merged;
+          });
+        })
+        .catch(() => { /* ignore */ });
     } catch { /* ignore */ }
     fetch(`/api/movies/${id}`)
       .then(r => r.json())
@@ -1119,7 +1190,9 @@ export default function MovieDetailPage() {
       removeFromWatchLog(logId, 'episode');
       toast({ title: `${ep.name} removed from watched` });
     }
-  }, [id, watchedEpisodes, movie]);
+    // Sync to DB in background
+    syncDb(`/api/watched/episodes`, 'POST', { showTmdbId: id, season: sn, episode: ep.episode_number, watched: nowWatched });
+  }, [id, watchedEpisodes, movie, syncDb]);
 
   const markSeasonWatched = useCallback(async (season: TvSeason, cached?: TvEpisode[]) => {
     let episodes = cached;
@@ -1139,16 +1212,19 @@ export default function MovieDetailPage() {
           next.add(key);
           try { localStorage.setItem(lsKey, 'true'); } catch { /* ignore */ }
           appendWatchLog({ id: `${id}-${key}`, type: 'episode', genre: movie?.genre ?? '', language: movie?.originalLanguage ?? '' });
+          // Sync each episode to DB
+          syncDb(`/api/watched/episodes`, 'POST', { showTmdbId: id, season: season.season_number, episode: ep.episode_number, watched: true });
         }
       });
       return next;
     });
     toast({ title: `Season ${season.season_number} marked as watched` });
-  }, [id, movie]);
+  }, [id, movie, syncDb]);
 
   const unmarkSeasonWatched = useCallback((season: TvSeason) => {
     const snPrefix = `S${season.season_number}E`;
     const lsPrefix = `watched-ep-${id}-${snPrefix}`;
+    const removedEpisodes: number[] = [];
     try {
       const toRemove: string[] = [];
       for (let i = 0; i < localStorage.length; i++) {
@@ -1158,6 +1234,9 @@ export default function MovieDetailPage() {
       toRemove.forEach(k => {
         localStorage.removeItem(k);
         removeFromWatchLog(`${id}-${k.slice(`watched-ep-${id}-`.length)}`, 'episode');
+        // Extract episode number from key like "watched-ep-{id}-S1E5"
+        const epMatch = k.match(/E(\d+)$/);
+        if (epMatch) removedEpisodes.push(parseInt(epMatch[1]));
       });
     } catch { /* ignore */ }
     setWatchedEpisodes(prev => {
@@ -1165,8 +1244,12 @@ export default function MovieDetailPage() {
       for (const k of [...next]) { if (k.startsWith(snPrefix)) next.delete(k); }
       return next;
     });
+    // Sync removals to DB in background
+    removedEpisodes.forEach(ep => {
+      syncDb(`/api/watched/episodes`, 'POST', { showTmdbId: id, season: season.season_number, episode: ep, watched: false });
+    });
     toast({ title: `Season ${season.season_number} unmarked` });
-  }, [id]);
+  }, [id, syncDb]);
 
   if (loading) return <DetailSkeleton />;
 
@@ -1329,8 +1412,16 @@ export default function MovieDetailPage() {
               setIsWatched(next);
               try {
                 localStorage.setItem(`watched-${id}`, String(next));
-                if (next && movie?.type === 'show') {
-                  localStorage.setItem(`show-status-${id}`, 'completed');
+                if (movie?.type === 'show') {
+                  if (next) {
+                    localStorage.setItem(`show-status-${id}`, 'completed');
+                    // Store episode count so badge stats can credit whole-show watches
+                    if (movie.totalEpisodes && movie.totalEpisodes > 0) {
+                      localStorage.setItem(`watched-show-eps-${id}`, String(movie.totalEpisodes));
+                    }
+                  } else {
+                    localStorage.removeItem(`watched-show-eps-${id}`);
+                  }
                 }
               } catch { /* ignore */ }
               const watchedMediaType = movie!.type === 'show' ? 'SHOW' : 'MOVIE';
