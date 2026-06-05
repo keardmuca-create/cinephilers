@@ -1,12 +1,14 @@
 import { Resend } from 'resend';
 
-const resend = new Resend(process.env.RESEND_API_KEY);
+function getResend() {
+  return new Resend(process.env.RESEND_API_KEY);
+}
 const FROM = process.env.EMAIL_FROM ?? 'Cinephilers <onboarding@resend.dev>';
 const BASE_URL = process.env.APP_URL ?? 'https://cinephilers.app';
 
 export async function sendPasswordResetEmail(to: string, token: string) {
   const link = `${BASE_URL}/reset-password?token=${token}`;
-  await resend.emails.send({
+  await getResend().emails.send({
     from: FROM,
     to,
     subject: 'Reset your Cinephilers password',
@@ -25,7 +27,7 @@ export async function sendPasswordResetEmail(to: string, token: string) {
 
 export async function sendVerificationEmail(to: string, token: string) {
   const link = `${BASE_URL}/verify-email?token=${token}`;
-  await resend.emails.send({
+  await getResend().emails.send({
     from: FROM,
     to,
     subject: 'Verify your Cinephilers account',
@@ -43,7 +45,7 @@ export async function sendVerificationEmail(to: string, token: string) {
 
 export async function sendSupportEmail(opts: { name: string; email: string; subject: string; message: string }) {
   const supportInbox = process.env.SUPPORT_EMAIL ?? 'onboarding@resend.dev';
-  await resend.emails.send({
+  await getResend().emails.send({
     from: FROM,
     to: supportInbox,
     replyTo: opts.email,
