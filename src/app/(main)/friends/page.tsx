@@ -112,15 +112,14 @@ export default function FriendsPage() {
       const res = await fetch(`/api/users/${user.username}/following?limit=50`, { credentials: 'include' });
       if (res.ok) {
         const json = await res.json();
-        const raw: { username: string; displayName: string | null; avatarUrl: string | null }[] = json.data ?? [];
-        // We need to enrich with isFollowing=true and other fields
+        const raw: { username: string; displayName: string | null; avatarUrl: string | null; isVerified?: boolean; followersCount?: number }[] = json.data ?? [];
         setFollowing(raw.map(u => ({
           id: '',
           username: u.username,
           displayName: u.displayName,
           avatarUrl: u.avatarUrl,
-          isVerified: false,
-          followersCount: 0,
+          isVerified: u.isVerified ?? false,
+          followersCount: u.followersCount ?? 0,
           followingCount: 0,
           isFollowing: true,
         })));
@@ -143,6 +142,8 @@ export default function FriendsPage() {
         if (res.ok) {
           const json = await res.json();
           setSearchResults(json.data ?? []);
+        } else if (res.status === 401) {
+          window.location.href = '/login';
         }
       } finally {
         setSearching(false);

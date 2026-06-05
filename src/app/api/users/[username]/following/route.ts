@@ -18,9 +18,28 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ user
       skip: (page - 1) * limit,
       take: limit,
       orderBy: { createdAt: 'desc' },
-      include: { following: { select: { username: true, displayName: true, avatarUrl: true } } },
+      include: {
+        following: {
+          select: {
+            username: true,
+            displayName: true,
+            avatarUrl: true,
+            isVerified: true,
+            _count: { select: { followers: true } },
+          },
+        },
+      },
     }),
   ]);
 
-  return paginated(items.map((f: { following: unknown }) => f.following), page, limit, total);
+  return paginated(
+    items.map(f => ({
+      username: f.following.username,
+      displayName: f.following.displayName,
+      avatarUrl: f.following.avatarUrl,
+      isVerified: f.following.isVerified,
+      followersCount: f.following._count.followers,
+    })),
+    page, limit, total
+  );
 }

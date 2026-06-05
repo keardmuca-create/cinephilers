@@ -16,17 +16,11 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ use
     where: { followerId_followingId: { followerId: auth.sub, followingId: target.id } },
   });
 
-  await prisma.follow.upsert({
-    where: { followerId_followingId: { followerId: auth.sub, followingId: target.id } },
-    create: { followerId: auth.sub, followingId: target.id },
-    update: {},
-  });
-
-  // Create a follow notification only on new follows
   if (!existing) {
-    await prisma.notification.create({
-      data: { userId: target.id, fromId: auth.sub, type: 'follow' },
-    });
+    await prisma.$transaction([
+      prisma.follow.create({ data: { followerId: auth.sub, followingId: target.id } }),
+      prisma.notification.create({ data: { userId: target.id, fromId: auth.sub, type: 'follow' } }),
+    ]);
   }
 
   return ok(null, 'Followed');
