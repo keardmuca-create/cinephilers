@@ -19,7 +19,8 @@ export async function GET(req: NextRequest) {
   const auth = await getCurrentUser(req);
   if (!auth) return err('Unauthorized', 401);
 
-  const limit = Math.min(50, parseInt(req.nextUrl.searchParams.get('limit') ?? '30', 10));
+  const limit = Math.min(100, parseInt(req.nextUrl.searchParams.get('limit') ?? '50', 10));
+  const since = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000); // last 7 days
 
   // Get the IDs of everyone the current user follows
   const following = await prisma.follow.findMany({
@@ -37,19 +38,19 @@ export async function GET(req: NextRequest) {
   // Fetch recent activity from all three tables in parallel
   const [watched, ratings, reviews] = await Promise.all([
     prisma.watchedItem.findMany({
-      where: { userId: { in: followingIds } },
+      where: { userId: { in: followingIds }, watchedAt: { gte: since } },
       take: limit,
       orderBy: { watchedAt: 'desc' },
       include: { user: userSelect },
     }),
     prisma.rating.findMany({
-      where: { userId: { in: followingIds } },
+      where: { userId: { in: followingIds }, updatedAt: { gte: since } },
       take: limit,
       orderBy: { updatedAt: 'desc' },
       include: { user: userSelect },
     }),
     prisma.review.findMany({
-      where: { userId: { in: followingIds } },
+      where: { userId: { in: followingIds }, createdAt: { gte: since } },
       take: limit,
       orderBy: { createdAt: 'desc' },
       include: { user: userSelect },
