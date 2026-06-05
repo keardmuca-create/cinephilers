@@ -6,6 +6,7 @@ import Image from 'next/image';
 import { Heart, Star, Eye, Bookmark, Film, MoreHorizontal, Share2, Trash2, Users, MessageSquare, Loader2, UserPlus, Bell, User } from 'lucide-react';
 import { ActivityEntry, getFeed, toggleLike, removeActivity, relativeTime } from '@/lib/activity';
 import { useAuth } from '@/contexts/auth-context';
+import { fetchWithAuth } from '@/lib/fetch-with-auth';
 import { Button } from '@/components/ui/button';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -270,7 +271,7 @@ export default function SocialPage() {
     if (!user) return;
     setActivityLoading(true);
     try {
-      const res = await fetch('/api/feed?limit=30', { credentials: 'include' });
+      const res = await fetchWithAuth('/api/feed?limit=30');
       if (res.ok) {
         const json = await res.json();
         setFriendFeed(json.data ?? []);
@@ -301,6 +302,7 @@ export default function SocialPage() {
   useEffect(() => {
     const onVisible = () => {
       if (!user || document.visibilityState !== 'visible') return;
+      setMyLocalFeed(getFeed());
       loadActivity();
       loadNotifications();
     };

@@ -8,6 +8,7 @@ import { Star, Film, Eye, UserPlus, UserCheck, Loader2, Lock, User, MessageSquar
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/contexts/auth-context';
 import { relativeTime } from '@/lib/activity';
+import { fetchWithAuth } from '@/lib/fetch-with-auth';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { ScrollArea } from '@/components/ui/scroll-area';
 
@@ -155,7 +156,7 @@ export default function PublicProfilePage() {
   const [followLoading, setFollowLoading] = useState(false);
 
   const loadProfile = useCallback(async () => {
-    const res = await fetch(`/api/users/${username}`, { credentials: 'include' });
+    const res = await fetchWithAuth(`/api/users/${username}`);
     if (res.status === 404) { setNotFound(true); setLoading(false); return; }
     if (!res.ok) { setLoading(false); return; }
     const json = await res.json();

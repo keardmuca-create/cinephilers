@@ -20,7 +20,7 @@ export async function GET(req: NextRequest) {
   if (!auth) return err('Unauthorized', 401);
 
   const limit = Math.min(100, parseInt(req.nextUrl.searchParams.get('limit') ?? '50', 10));
-  const since = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000); // last 7 days
+  const since = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000); // last 30 days
 
   // Get the IDs of everyone the current user follows
   const following = await prisma.follow.findMany({
