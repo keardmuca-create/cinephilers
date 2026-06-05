@@ -876,8 +876,10 @@ export default function ProfilePage() {
                     <Button variant="ghost" className="w-full justify-start text-sm h-12 rounded-xl" onClick={() => toast({ title: 'Notifications coming soon' })}>
                       Notification Preferences <ChevronRight className="h-4 w-4 ml-auto" />
                     </Button>
-                    <Button variant="ghost" className="w-full justify-start text-sm h-12 rounded-xl" onClick={() => toast({ title: 'Email us at support@cinephilers.app' })}>
-                      Help & Support <ChevronRight className="h-4 w-4 ml-auto" />
+                    <Button variant="ghost" className="w-full justify-start text-sm h-12 rounded-xl" asChild>
+                      <Link href="/support" onClick={() => setShowSettings(false)}>
+                        Help & Support <ChevronRight className="h-4 w-4 ml-auto" />
+                      </Link>
                     </Button>
                   </div>
                   <Separator className="bg-white/5" />
