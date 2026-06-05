@@ -2,17 +2,14 @@ import { SignJWT, jwtVerify } from 'jose';
 import { cookies } from 'next/headers';
 import { NextRequest } from 'next/server';
 
-if (process.env.NODE_ENV === 'production') {
-  if (!process.env.JWT_ACCESS_SECRET) throw new Error('JWT_ACCESS_SECRET is not set');
-  if (!process.env.JWT_REFRESH_SECRET) throw new Error('JWT_REFRESH_SECRET is not set');
+function getAccessSecret() {
+  const s = process.env.JWT_ACCESS_SECRET ?? 'dev-access-secret-change-me';
+  return new TextEncoder().encode(s);
 }
-
-const ACCESS_SECRET = new TextEncoder().encode(
-  process.env.JWT_ACCESS_SECRET ?? 'dev-access-secret-change-me'
-);
-const REFRESH_SECRET = new TextEncoder().encode(
-  process.env.JWT_REFRESH_SECRET ?? 'dev-refresh-secret-change-me'
-);
+function getRefreshSecret() {
+  const s = process.env.JWT_REFRESH_SECRET ?? 'dev-refresh-secret-change-me';
+  return new TextEncoder().encode(s);
+}
 
 const ACCESS_EXPIRES = process.env.JWT_ACCESS_EXPIRES ?? '15m';
 const REFRESH_EXPIRES = process.env.JWT_REFRESH_EXPIRES ?? '7d';
@@ -28,7 +25,7 @@ export async function signAccessToken(payload: JwtPayload): Promise<string> {
     .setProtectedHeader({ alg: 'HS256' })
     .setIssuedAt()
     .setExpirationTime(ACCESS_EXPIRES)
-    .sign(ACCESS_SECRET);
+    .sign(getAccessSecret());
 }
 
 export async function signRefreshToken(payload: JwtPayload): Promise<string> {
@@ -36,12 +33,12 @@ export async function signRefreshToken(payload: JwtPayload): Promise<string> {
     .setProtectedHeader({ alg: 'HS256' })
     .setIssuedAt()
     .setExpirationTime(REFRESH_EXPIRES)
-    .sign(REFRESH_SECRET);
+    .sign(getRefreshSecret());
 }
 
 export async function verifyAccessToken(token: string): Promise<JwtPayload | null> {
   try {
-    const { payload } = await jwtVerify(token, ACCESS_SECRET);
+    const { payload } = await jwtVerify(token, getAccessSecret());
     return payload as unknown as JwtPayload;
   } catch {
     return null;
@@ -50,7 +47,7 @@ export async function verifyAccessToken(token: string): Promise<JwtPayload | nul
 
 export async function verifyRefreshToken(token: string): Promise<JwtPayload | null> {
   try {
-    const { payload } = await jwtVerify(token, REFRESH_SECRET);
+    const { payload } = await jwtVerify(token, getRefreshSecret());
     return payload as unknown as JwtPayload;
   } catch {
     return null;
