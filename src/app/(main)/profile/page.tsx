@@ -149,6 +149,10 @@ function ListsSection() {
         setLists(dbLists);
       })
       .catch(() => { /* ignore */ });
+    // Re-read lists whenever DB restore lands new cross-device data
+    const onDbRestored = () => setLists(loadLists());
+    window.addEventListener('cinephilers-db-restored', onDbRestored);
+    return () => window.removeEventListener('cinephilers-db-restored', onDbRestored);
   }, []);
 
   const createList = async () => {

@@ -41,6 +41,9 @@ export function FavoritesSection() {
 
   useEffect(() => {
     setFavorites(loadFavorites());
+    const onDbRestored = () => setFavorites(loadFavorites());
+    window.addEventListener('cinephilers-db-restored', onDbRestored);
+    return () => window.removeEventListener('cinephilers-db-restored', onDbRestored);
   }, []);
 
   const updateFavorites = useCallback((items: FavoriteItem[]) => {
