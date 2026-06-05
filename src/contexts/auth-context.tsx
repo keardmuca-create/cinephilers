@@ -103,18 +103,16 @@ async function restoreFromDb() {
       } catch { /* ignore */ }
     }
 
-    // Restore signup-date from user createdAt if missing
-    if (!localStorage.getItem('signup-date')) {
-      try {
-        const meRes = await fetch('/api/users/me', { credentials: 'include' });
-        if (meRes.ok) {
-          const meData = await meRes.json();
-          if (meData.data?.createdAt) {
-            localStorage.setItem('signup-date', meData.data.createdAt);
-          }
+    // Always sync signup-date from DB so it's never wrong on new devices
+    try {
+      const meRes = await fetch('/api/users/me', { credentials: 'include' });
+      if (meRes.ok) {
+        const meData = await meRes.json();
+        if (meData.data?.createdAt) {
+          localStorage.setItem('signup-date', meData.data.createdAt);
         }
-      } catch { /* ignore */ }
-    }
+      }
+    } catch { /* ignore */ }
 
     // Restore favorites — only if localStorage is empty to preserve ordering
     const existingFavs = localStorage.getItem('user-favorites');
