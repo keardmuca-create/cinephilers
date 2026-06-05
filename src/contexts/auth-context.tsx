@@ -252,6 +252,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => { refetch(); }, [refetch]);
 
+  // Silently refresh the access token every 10 minutes so it never expires mid-session.
+  // This ensures background syncDb calls (watch, rate, etc.) always reach the server.
+  useEffect(() => {
+    const id = setInterval(() => {
+      fetch('/api/auth/refresh', { method: 'POST', credentials: 'include' }).catch(() => {});
+    }, 10 * 60 * 1000);
+    return () => clearInterval(id);
+  }, []);
+
   return (
     <AuthContext.Provider value={{ user, loading, refetch, logout, updateUserLocally }}>
       {children}
