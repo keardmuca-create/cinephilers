@@ -14,6 +14,7 @@ export const BottomNav = () => {
   const { user } = useAuth();
   const [unread, setUnread] = useState(0);
 
+  // Fetch once on mount + every 60s — not on every navigation
   useEffect(() => {
     if (!user) return;
     const check = async () => {
@@ -26,9 +27,14 @@ export const BottomNav = () => {
       } catch { /* ignore */ }
     };
     check();
-    // Clear dot when on social page
+    const interval = setInterval(check, 60_000);
+    return () => clearInterval(interval);
+  }, [user]);
+
+  // Clear dot when visiting social page
+  useEffect(() => {
     if (pathname === '/social') setUnread(0);
-  }, [user, pathname]);
+  }, [pathname]);
 
   const navItems = [
     { label: 'Home', icon: Home, href: '/home' },

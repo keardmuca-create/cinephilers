@@ -7,7 +7,6 @@ import Link from 'next/link';
 import { Star, Eye, Film } from 'lucide-react';
 import { Movie } from '@/lib/types';
 import { cn } from '@/lib/utils';
-import { toast } from '@/hooks/use-toast';
 
 interface MovieCardProps {
   movie: Movie;
@@ -15,14 +14,13 @@ interface MovieCardProps {
   horizontal?: boolean;
 }
 
-export const MovieCard: React.FC<MovieCardProps> = ({ movie, className, horizontal = false }) => {
+export const MovieCard = React.memo(function MovieCard({ movie, className, horizontal = false }: MovieCardProps) {
   const [watched, setWatched] = useState(false);
   const [userRating, setUserRating] = useState<number | undefined>(undefined);
 
   useEffect(() => {
     try {
-      const w = localStorage.getItem(`watched-${movie.id}`);
-      if (w === 'true') setWatched(true);
+      if (localStorage.getItem(`watched-${movie.id}`) === 'true') setWatched(true);
       const r = localStorage.getItem(`movie-rating-${movie.id}`);
       if (r) setUserRating(parseInt(r, 10));
     } catch { /* ignore */ }
@@ -51,6 +49,7 @@ export const MovieCard: React.FC<MovieCardProps> = ({ movie, className, horizont
               fill
               className="object-cover"
               sizes="(max-width: 768px) 160px, 200px"
+              loading="lazy"
             />
           ) : (
             <div className="w-full h-full flex items-center justify-center">
@@ -87,4 +86,4 @@ export const MovieCard: React.FC<MovieCardProps> = ({ movie, className, horizont
       </div>
     </Link>
   );
-};
+});

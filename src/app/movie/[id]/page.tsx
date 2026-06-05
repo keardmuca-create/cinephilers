@@ -1043,15 +1043,9 @@ export default function MovieDetailPage() {
       const rev = localStorage.getItem(`review-${id}`);
       if (rev) setMyReview(JSON.parse(rev));
       if (saved) setUserRating(parseInt(saved, 10));
-      // Load watched episodes for TV shows
-      const prefix = `watched-ep-${id}-`;
-      const watched = new Set<string>();
-      for (let i = 0; i < localStorage.length; i++) {
-        const k = localStorage.key(i);
-        if (k?.startsWith(prefix) && localStorage.getItem(k) === 'true') {
-          watched.add(k.slice(prefix.length));
-        }
-      }
+      // Load watched episodes — use index key for O(1) lookup instead of full scan
+      const indexRaw = localStorage.getItem(`watched-eps-index-${id}`);
+      const watched = new Set<string>(indexRaw ? JSON.parse(indexRaw) : []);
       setWatchedEpisodes(watched);
     } catch { /* ignore */ }
     fetch(`/api/movies/${id}`)
@@ -1107,11 +1101,21 @@ export default function MovieDetailPage() {
     });
 
     if (nowWatched) {
-      try { localStorage.setItem(lsKey, 'true'); } catch { /* ignore */ }
+      try {
+        localStorage.setItem(lsKey, 'true');
+        const indexRaw = localStorage.getItem(`watched-eps-index-${id}`);
+        const index: string[] = indexRaw ? JSON.parse(indexRaw) : [];
+        if (!index.includes(key)) localStorage.setItem(`watched-eps-index-${id}`, JSON.stringify([...index, key]));
+      } catch { /* ignore */ }
       appendWatchLog({ id: logId, type: 'episode', genre: movie?.genre ?? '', language: movie?.originalLanguage ?? '' });
       toast({ title: `${ep.name} marked as watched` });
     } else {
-      try { localStorage.removeItem(lsKey); } catch { /* ignore */ }
+      try {
+        localStorage.removeItem(lsKey);
+        const indexRaw = localStorage.getItem(`watched-eps-index-${id}`);
+        const index: string[] = indexRaw ? JSON.parse(indexRaw) : [];
+        localStorage.setItem(`watched-eps-index-${id}`, JSON.stringify(index.filter(k => k !== key)));
+      } catch { /* ignore */ }
       removeFromWatchLog(logId, 'episode');
       toast({ title: `${ep.name} removed from watched` });
     }

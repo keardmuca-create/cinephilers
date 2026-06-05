@@ -1,7 +1,7 @@
 
 "use client"
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { Play, Star, ChevronRight, Info } from 'lucide-react';
@@ -63,29 +63,26 @@ export default function HomePage() {
       .catch(() => {});
   }, []);
 
-  const allMovies = stablePool;
+  const { heroMovie, featured, top10 } = useMemo(() => {
+    if (!stablePool.length) return { heroMovie: null, featured: [] as Movie[], top10: [] as Movie[] };
 
-  // Changes at local midnight every day
-  const now = new Date();
-  const daySeed = now.getFullYear() * 10000 + (now.getMonth() + 1) * 100 + now.getDate();
-  // Changes every Monday at local midnight — find how many weeks since a known Monday
-  const dayOfWeek = now.getDay(); // 0=Sun,1=Mon,...,6=Sat
-  const daysSinceMonday = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
-  const localMonday = new Date(now.getFullYear(), now.getMonth(), now.getDate() - daysSinceMonday);
-  const weekSeed = Math.floor(localMonday.getTime() / WEEK_MS) + 99_999;
+    const now = new Date();
+    const daySeed = now.getFullYear() * 10000 + (now.getMonth() + 1) * 100 + now.getDate();
+    const dayOfWeek = now.getDay();
+    const daysSinceMonday = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
+    const localMonday = new Date(now.getFullYear(), now.getMonth(), now.getDate() - daysSinceMonday);
+    const weekSeed = Math.floor(localMonday.getTime() / WEEK_MS) + 99_999;
 
-  const dailyPool  = seededShuffle(allMovies, daySeed);
-  const weeklyPool = seededShuffle(allMovies, weekSeed);
+    const dailyPool  = seededShuffle(stablePool, daySeed);
+    const weeklyPool = seededShuffle(stablePool, weekSeed);
 
-  // Today's Pick hero — first movie (not show) in daily pool
-  const heroMovie = dailyPool.find(m => m.type === 'movie') ?? null;
+    const hero = dailyPool.find(m => m.type === 'movie') ?? null;
+    const feat = dailyPool.slice(1, 16);
+    const featuredIds = new Set([hero?.id, ...feat.map(m => m.id)]);
+    const t10 = weeklyPool.filter(m => !featuredIds.has(m.id)).slice(0, 10);
 
-  // Featured Today — next 15 from daily pool (skip hero)
-  const featured = dailyPool.slice(1, 16);
-
-  // Top 10 This Week — weekly pool, skip any already in featured or hero
-  const featuredIds = new Set([heroMovie?.id, ...featured.map(m => m.id)]);
-  const top10 = weeklyPool.filter(m => !featuredIds.has(m.id)).slice(0, 10);
+    return { heroMovie: hero, featured: feat, top10: t10 };
+  }, [stablePool]);
 
   // Popular sections: all 25 items each
   const popularMovies = data.movies;
