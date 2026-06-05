@@ -19,6 +19,12 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const { tmdbId, mediaType, note } = body as { tmdbId: string; mediaType: string; note?: string };
   if (!tmdbId || !mediaType) return err('tmdbId and mediaType are required');
   if (!['MOVIE', 'SHOW'].includes(mediaType)) return err('mediaType must be MOVIE or SHOW');
+  if (note && note.length > 500) return err('Note must be under 500 characters');
+
+  const existingItem = await prisma.customListItem.findUnique({
+    where: { listId_tmdbId_mediaType: { listId, tmdbId, mediaType: mediaType as MediaType } },
+    select: { listId: true },
+  });
 
   const item = await prisma.customListItem.upsert({
     where: { listId_tmdbId_mediaType: { listId, tmdbId, mediaType: mediaType as MediaType } },
@@ -26,7 +32,10 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     update: { note: note?.trim() || null },
   });
 
-  await prisma.customList.update({ where: { id: listId }, data: { itemsCount: { increment: 1 } } });
+  // Only increment count when adding a new item, not updating
+  if (!existingItem) {
+    await prisma.customList.update({ where: { id: listId }, data: { itemsCount: { increment: 1 } } });
+  }
 
   return ok(item, 'Item added', { status: 201 });
 }

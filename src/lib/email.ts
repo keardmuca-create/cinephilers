@@ -6,6 +6,15 @@ function getResend() {
 const FROM = process.env.EMAIL_FROM ?? 'Cinephilers <onboarding@resend.dev>';
 const BASE_URL = process.env.APP_URL ?? 'https://cinephilers.app';
 
+function escapeHtml(str: string): string {
+  return str
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#x27;');
+}
+
 export async function sendPasswordResetEmail(to: string, token: string) {
   const link = `${BASE_URL}/reset-password?token=${token}`;
   await getResend().emails.send({
@@ -45,22 +54,27 @@ export async function sendVerificationEmail(to: string, token: string) {
 
 export async function sendSupportEmail(opts: { name: string; email: string; subject: string; message: string }) {
   const supportInbox = process.env.SUPPORT_EMAIL ?? 'onboarding@resend.dev';
+  const name = escapeHtml(opts.name);
+  const email = escapeHtml(opts.email);
+  const subject = escapeHtml(opts.subject);
+  const message = escapeHtml(opts.message);
+
   await getResend().emails.send({
     from: FROM,
     to: supportInbox,
     replyTo: opts.email,
-    subject: `[Support] ${opts.subject}`,
+    subject: `[Support] ${subject}`,
     html: `
       <div style="font-family:sans-serif;max-width:480px;margin:0 auto;padding:32px 24px;background:#0a0a0a;color:#f5f5f5;border-radius:16px;">
         <h2 style="margin:0 0 16px;font-size:20px;">New Support Request</h2>
         <p style="margin:0 0 4px;color:#aaa;font-size:13px;">From</p>
-        <p style="margin:0 0 16px;font-weight:700;">${opts.name} &lt;${opts.email}&gt;</p>
+        <p style="margin:0 0 16px;font-weight:700;">${name} &lt;${email}&gt;</p>
         <p style="margin:0 0 4px;color:#aaa;font-size:13px;">Subject</p>
-        <p style="margin:0 0 16px;font-weight:700;">${opts.subject}</p>
+        <p style="margin:0 0 16px;font-weight:700;">${subject}</p>
         <p style="margin:0 0 4px;color:#aaa;font-size:13px;">Message</p>
-        <p style="margin:0;white-space:pre-wrap;line-height:1.6;">${opts.message}</p>
+        <p style="margin:0;white-space:pre-wrap;line-height:1.6;">${message}</p>
         <hr style="border:none;border-top:1px solid #222;margin:24px 0;" />
-        <p style="color:#444;font-size:12px;margin:0;">Reply directly to this email to respond to ${opts.name}.</p>
+        <p style="color:#444;font-size:12px;margin:0;">Reply directly to this email to respond to ${name}.</p>
       </div>
     `,
   });

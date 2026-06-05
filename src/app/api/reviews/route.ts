@@ -17,6 +17,12 @@ export async function POST(req: NextRequest) {
   if (!tmdbId || !mediaType || !reviewBody) return err('tmdbId, mediaType, and body are required');
   if (!['MOVIE', 'SHOW'].includes(mediaType)) return err('mediaType must be MOVIE or SHOW');
   if (reviewBody.trim().length < 10) return err('Review must be at least 10 characters');
+  if (reviewBody.trim().length > 5000) return err('Review must be under 5000 characters');
+
+  const existing = await prisma.review.findUnique({
+    where: { userId_tmdbId_mediaType: { userId: auth.sub, tmdbId, mediaType: mediaType as MediaType } },
+    select: { id: true },
+  });
 
   const review = await prisma.review.upsert({
     where: { userId_tmdbId_mediaType: { userId: auth.sub, tmdbId, mediaType: mediaType as MediaType } },
@@ -27,10 +33,13 @@ export async function POST(req: NextRequest) {
     update: { body: reviewBody.trim(), containsSpoiler: containsSpoiler ?? false },
   });
 
-  await prisma.user.update({
-    where: { id: auth.sub },
-    data: { reviewsCount: { increment: 1 } },
-  });
+  // Only increment count when creating a new review, not updating
+  if (!existing) {
+    await prisma.user.update({
+      where: { id: auth.sub },
+      data: { reviewsCount: { increment: 1 } },
+    });
+  }
 
   return ok(review, 'Review saved', { status: 201 });
 }

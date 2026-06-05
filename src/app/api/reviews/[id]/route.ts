@@ -40,7 +40,7 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
 
   await prisma.review.delete({ where: { id } });
   await prisma.user.update({
-    where: { id: auth.sub },
+    where: { id: review.userId },
     data: { reviewsCount: { decrement: 1 } },
   });
 
