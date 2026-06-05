@@ -39,12 +39,13 @@ async function restoreFromDb() {
     const res = await fetch('/api/sync', { credentials: 'include' });
     if (!res.ok) return;
     const { data } = await res.json();
-    const { ratings, watchlist, watched, reviews, favorites } = data as {
+    const { ratings, watchlist, watched, reviews, favorites, lists } = data as {
       ratings: { tmdbId: string; mediaType: string; score: number }[];
       watchlist: { tmdbId: string; mediaType: string }[];
       watched: { tmdbId: string; mediaType: string; watchedAt: string }[];
       reviews: { tmdbId: string; mediaType: string; body: string; containsSpoiler: boolean; createdAt: string }[];
       favorites: { tmdbId: string; mediaType: string }[];
+      lists: { id: string; name: string; isPublic: boolean; createdAt: string; items: { tmdbId: string; mediaType: string; title: string | null; poster: string | null; year: string | null }[] }[];
     };
 
     for (const r of ratings) {
@@ -73,35 +74,26 @@ async function restoreFromDb() {
       }
     }
 
-    // Rebuild watch-log from watched items using real watchedAt timestamps from DB
-    if (!localStorage.getItem('watch-log') || localStorage.getItem('watch-log') === '[]') {
-      try {
-        const log: { id: string; type: string; genre: string; language: string; hour: number; loggedAt: string }[] = [];
-        for (const w of watched) {
-          const watchedDate = new Date(w.watchedAt);
-          const hour = watchedDate.getHours();
-          let genre = '';
-          let language = '';
-          try {
-            const cached = localStorage.getItem(`meta-${w.tmdbId}`);
-            if (cached) {
-              const m = JSON.parse(cached);
-              genre = m.genre ?? '';
-              language = m.language ?? '';
-            }
-          } catch { /* ignore */ }
-          log.push({
-            id: w.tmdbId,
-            type: 'movie',
-            genre,
-            language,
-            hour,
-            loggedAt: w.watchedAt,
-          });
-        }
-        if (log.length > 0) localStorage.setItem('watch-log', JSON.stringify(log));
-      } catch { /* ignore */ }
-    }
+    // Merge DB watched items into watch-log — add any items not already tracked locally
+    try {
+      const existing: { id: string; type: string; genre: string; language: string; hour: number; loggedAt: string }[] =
+        JSON.parse(localStorage.getItem('watch-log') ?? '[]');
+      const existingIds = new Set(existing.map(e => e.id));
+      const newEntries: typeof existing = [];
+      for (const w of watched) {
+        if (existingIds.has(w.tmdbId)) continue;
+        const watchedDate = new Date(w.watchedAt);
+        let genre = '', language = '';
+        try {
+          const cached = localStorage.getItem(`meta-${w.tmdbId}`);
+          if (cached) { const m = JSON.parse(cached); genre = m.genre ?? ''; language = m.language ?? ''; }
+        } catch { /* ignore */ }
+        newEntries.push({ id: w.tmdbId, type: 'movie', genre, language, hour: watchedDate.getHours(), loggedAt: w.watchedAt });
+      }
+      if (newEntries.length > 0) {
+        localStorage.setItem('watch-log', JSON.stringify([...existing, ...newEntries]));
+      }
+    } catch { /* ignore */ }
 
     // Always sync signup-date from DB so it's never wrong on new devices
     try {
@@ -142,6 +134,26 @@ async function restoreFromDb() {
       if (resolved.length > 0) {
         try { localStorage.setItem('user-favorites', JSON.stringify(resolved)); } catch { /* ignore */ }
       }
+    }
+
+    // Restore custom lists from DB — always overwrite to stay in sync
+    if (lists && lists.length > 0) {
+      try {
+        const lsLists = lists.map(l => ({
+          id: l.id,
+          title: l.name,
+          isPrivate: !l.isPublic,
+          createdAt: l.createdAt,
+          items: l.items.map(i => ({
+            movieId: i.tmdbId,
+            title: i.title ?? '',
+            poster: i.poster ?? '',
+            year: i.year ?? '',
+            type: i.mediaType === 'SHOW' ? 'show' : 'movie',
+          })),
+        }));
+        localStorage.setItem('user-lists', JSON.stringify(lsLists));
+      } catch { /* ignore */ }
     }
 
     // Signal to any mounted pages that localStorage is now populated from DB

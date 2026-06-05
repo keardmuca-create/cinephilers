@@ -113,7 +113,7 @@ const EmptyRow = ({ message }: { message: string }) => (
   </div>
 );
 
-interface RecentItem { id: string; title: string; poster: string; year: string; loggedAt: string; rating?: number; tmdbRating?: number; linkId?: string; }
+interface RecentItem { id: string; title: string; poster: string; year: string; loggedAt: string; rating?: number; tmdbRating?: number; linkId?: string; episodeCount?: number; }
 interface UserReview { movieId: string; movieTitle: string; moviePoster: string; movieYear: string; content: string; rating: number; date: string; }
 interface UserList { id: string; title: string; isPrivate: boolean; createdAt: string; items: { movieId: string; title: string; poster: string; year: string; type: string }[]; }
 
@@ -131,17 +131,55 @@ function ListsSection() {
   const [newPrivate, setNewPrivate] = useState(false);
   const [viewList, setViewList] = useState<UserList | null>(null);
 
-  useEffect(() => { setLists(loadLists()); }, []);
+  useEffect(() => {
+    setLists(loadLists());
+    // Sync from DB in background
+    fetch('/api/lists', { credentials: 'include' })
+      .then(r => r.ok ? r.json() : null)
+      .then(json => {
+        if (!json?.data?.length) return;
+        const dbLists: UserList[] = json.data.map((l: { id: string; name: string; isPublic: boolean; createdAt: string; items: { tmdbId: string; mediaType: string; title: string | null; poster: string | null; year: string | null }[] }) => ({
+          id: l.id,
+          title: l.name,
+          isPrivate: !l.isPublic,
+          createdAt: l.createdAt,
+          items: l.items.map((i) => ({ movieId: i.tmdbId, title: i.title ?? '', poster: i.poster ?? '', year: i.year ?? '', type: i.mediaType === 'SHOW' ? 'show' : 'movie' })),
+        }));
+        saveLists(dbLists);
+        setLists(dbLists);
+      })
+      .catch(() => { /* ignore */ });
+  }, []);
 
-  const createList = () => {
+  const createList = async () => {
     if (!newTitle.trim()) return;
-    const nl: UserList = { id: Date.now().toString(), title: newTitle.trim(), isPrivate: newPrivate, createdAt: new Date().toISOString(), items: [] };
-    const updated = [...lists, nl];
+    setCreateOpen(false);
+    const optimistic: UserList = { id: Date.now().toString(), title: newTitle.trim(), isPrivate: newPrivate, createdAt: new Date().toISOString(), items: [] };
+    const updated = [...lists, optimistic];
     saveLists(updated);
     setLists(updated);
-    setCreateOpen(false);
     setNewTitle('');
     setNewPrivate(false);
+    // Persist to DB and update ID with the real UUID
+    try {
+      const res = await fetch('/api/lists', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ name: optimistic.title, isPublic: !optimistic.isPrivate }),
+      });
+      if (res.ok) {
+        const json = await res.json();
+        const realId: string = json.data?.id;
+        if (realId) {
+          setLists(prev => {
+            const next = prev.map(l => l.id === optimistic.id ? { ...l, id: realId } : l);
+            saveLists(next);
+            return next;
+          });
+        }
+      }
+    } catch { /* ignore */ }
   };
 
   return (
@@ -627,22 +665,7 @@ export default function ProfilePage() {
     }
   }
 
-  const recomputeStats = useCallback(() => {
-    ensureSignupDate();
-    setBadges(computeAllBadges(readUserStats()));
-    setComingSoon(getComingSoonBadges());
-  }, []);
-
-  // Refresh follower/following counts from DB on mount
-  useEffect(() => { refetch(); }, [refetch]);
-
-  // Re-run stats when DB restore finishes (data arrives after initial mount)
-  useEffect(() => {
-    window.addEventListener('cinephilers-db-restored', recomputeStats);
-    return () => window.removeEventListener('cinephilers-db-restored', recomputeStats);
-  }, [recomputeStats]);
-
-  useEffect(() => {
+  const loadFromStorage = useCallback(() => {
     ensureSignupDate();
     setBadges(computeAllBadges(readUserStats()));
     setComingSoon(getComingSoonBadges());
@@ -660,7 +683,7 @@ export default function ProfilePage() {
       setWatchedCount(allWatchedIds.size);
     } catch { /* ignore */ }
 
-    // Build recent watch preview from all watched-* keys
+    // Build recent watch preview — movies as individual cards, episodes grouped by show
     const buildWatchHistory = async () => {
       try {
         const rvMap = new Map<string, { title: string; poster: string; year: string; type: string; tmdbRating?: number }>();
@@ -672,67 +695,86 @@ export default function ProfilePage() {
           }
         } catch { /* ignore */ }
 
-        // Read watch log for date ordering
         let watchLog: { id: string; loggedAt: string }[] = [];
         try { watchLog = JSON.parse(localStorage.getItem('watch-log') ?? '[]'); } catch { /* ignore */ }
         const logMap = new Map<string, string>();
         for (const entry of watchLog) logMap.set(entry.id, entry.loggedAt);
 
-        // Collect all watched IDs — episodes kept as full IDs (e.g. tmdb-tv-299167-S1E2)
-        const allWatchedIds = new Set<string>();
+        // Separate movies/whole-shows from individual episodes
+        const movieIds = new Set<string>();
+        const episodesByShow = new Map<string, { keys: string[]; latestLoggedAt: string }>();
+
         for (let i = 0; i < localStorage.length; i++) {
           const k = localStorage.key(i)!;
-          if (k.startsWith('watched-') && !k.startsWith('watched-ep-') && localStorage.getItem(k) === 'true')
-            allWatchedIds.add(k.slice('watched-'.length));
-          if (k.startsWith('watched-ep-'))
-            allWatchedIds.add(k.slice('watched-ep-'.length));
+          if (k.startsWith('watched-') && !k.startsWith('watched-ep-') && !k.startsWith('watched-show-eps-') && localStorage.getItem(k) === 'true') {
+            movieIds.add(k.slice('watched-'.length));
+          }
+          if (k.startsWith('watched-ep-') && localStorage.getItem(k) === 'true') {
+            const epId = k.slice('watched-ep-'.length); // e.g. tmdb-tv-12345-S1E5
+            const m = epId.match(/^(.+)-S\d+E\d+$/);
+            if (!m) continue;
+            const showId = m[1];
+            const epLoggedAt = logMap.get(epId) ?? new Date(0).toISOString();
+            const existing = episodesByShow.get(showId);
+            if (!existing) {
+              episodesByShow.set(showId, { keys: [epId], latestLoggedAt: epLoggedAt });
+            } else {
+              existing.keys.push(epId);
+              if (epLoggedAt > existing.latestLoggedAt) existing.latestLoggedAt = epLoggedAt;
+            }
+          }
         }
+
+        // Shows with individual episodes tracked take precedence — remove them from movieIds
+        // so we don't show the show twice (once as whole-watched, once as grouped episodes)
+        for (const showId of episodesByShow.keys()) movieIds.delete(showId);
 
         const items: RecentItem[] = [];
         const fetchPromises: Promise<void>[] = [];
 
-        for (const id of allWatchedIds) {
-          const isEpisode = /^tmdb-tv-.+-S\d+E\d+$/.test(id);
-          const showId = isEpisode ? id.replace(/-S\d+E\d+$/, '') : undefined;
+        const resolveItem = (id: string, loggedAt: string, episodeCount?: number) => {
           const raw = localStorage.getItem(`meta-${id}`);
           const meta = raw ? JSON.parse(raw) : null;
-          const rv = !isEpisode ? rvMap.get(id) : undefined;
-          const loggedAt = logMap.get(id) ?? new Date(0).toISOString();
-
-          if (!meta && !rv) {
-            const apiUrl = isEpisode ? `/api/meta/${id}` : `/api/movies/${id}`;
+          const rv = rvMap.get(id);
+          const rating = localStorage.getItem(`movie-rating-${id}`);
+          if (meta || rv) {
+            items.push({
+              id,
+              title: meta?.title ?? rv?.title ?? '',
+              poster: meta?.poster ?? rv?.poster ?? '',
+              year: meta?.year ?? rv?.year ?? '',
+              loggedAt,
+              rating: rating ? Number(rating) : undefined,
+              tmdbRating: typeof meta?.tmdbRating === 'number' ? meta.tmdbRating : rv?.tmdbRating,
+              episodeCount,
+            });
+          } else {
             fetchPromises.push(
-              fetch(apiUrl)
+              fetch(`/api/movies/${id}`)
                 .then(r => r.json())
                 .then((data: { title?: string; poster?: string; year?: string; type?: string; rating?: number; tmdbRating?: number; error?: string }) => {
                   if (data.error || !data.title) return;
                   const cached = { title: data.title, poster: data.poster ?? '', year: data.year ?? '', type: data.type ?? 'movie', tmdbRating: data.rating ?? data.tmdbRating };
                   try { localStorage.setItem(`meta-${id}`, JSON.stringify(cached)); } catch { /* ignore */ }
-                  const rating = localStorage.getItem(`movie-rating-${showId ?? id}`);
-                  items.push({ id, title: cached.title, poster: cached.poster, year: cached.year, loggedAt, rating: rating ? Number(rating) : undefined, tmdbRating: cached.tmdbRating, linkId: showId });
+                  items.push({ id, title: cached.title, poster: cached.poster, year: cached.year, loggedAt, rating: rating ? Number(rating) : undefined, tmdbRating: cached.tmdbRating, episodeCount });
                 })
                 .catch(() => { /* ignore */ })
             );
-            continue;
           }
+        };
 
-          const rating = localStorage.getItem(`movie-rating-${showId ?? id}`);
-          items.push({
-            id,
-            title: meta?.title ?? rv?.title ?? '',
-            poster: meta?.poster ?? rv?.poster ?? '',
-            year: meta?.year ?? rv?.year ?? '',
-            loggedAt,
-            rating: rating ? Number(rating) : undefined,
-            tmdbRating: typeof meta?.tmdbRating === 'number' ? meta.tmdbRating : rv?.tmdbRating,
-            linkId: showId,
-          });
+        // Movies and whole-show watched entries
+        for (const id of movieIds) {
+          resolveItem(id, logMap.get(id) ?? new Date(0).toISOString());
         }
 
-        if (fetchPromises.length > 0) {
-          await Promise.allSettled(fetchPromises);
+        // Episode-grouped show entries — one card per show with episode count
+        for (const [showId, { keys, latestLoggedAt }] of episodesByShow) {
+          resolveItem(showId, latestLoggedAt, keys.length);
         }
-        // Sort by most recent first to match the history page
+
+        if (fetchPromises.length > 0) await Promise.allSettled(fetchPromises);
+
         items.sort((a, b) => new Date(b.loggedAt).getTime() - new Date(a.loggedAt).getTime());
         setRecentWatched(items.slice(0, 50));
       } catch { /* ignore */ }
@@ -814,6 +856,27 @@ export default function ProfilePage() {
       setRatedItems(rated);
     } catch { /* ignore */ }
   }, []);
+
+  useEffect(() => { loadFromStorage(); }, [loadFromStorage]);
+
+  const recomputeStats = useCallback(() => {
+    ensureSignupDate();
+    setBadges(computeAllBadges(readUserStats()));
+    setComingSoon(getComingSoonBadges());
+  }, []);
+
+  // Refresh follower/following counts from DB on mount
+  useEffect(() => { refetch(); }, [refetch]);
+
+  // Re-run stats AND watch history when DB restore finishes (new cross-device data just landed)
+  useEffect(() => {
+    const handler = () => {
+      recomputeStats();
+      loadFromStorage();
+    };
+    window.addEventListener('cinephilers-db-restored', handler);
+    return () => window.removeEventListener('cinephilers-db-restored', handler);
+  }, [recomputeStats, loadFromStorage]);
 
   const ratingData = [1,2,3,4,5,6,7,8,9,10].map(n => ({
     rating: String(n),
@@ -1063,9 +1126,14 @@ export default function ProfilePage() {
         {recentWatched.length > 0 ? (
           <div className="flex overflow-x-auto gap-4 pb-4 no-scrollbar -mx-6 px-6">
             {recentWatched.map(item => (
-              <Link key={item.id} href={`/movie/${item.linkId ?? item.id}`} className="group shrink-0 w-36">
+              <Link key={item.id} href={`/movie/${item.id}`} className="group shrink-0 w-36">
                 <div className="relative aspect-[2/3] overflow-hidden rounded-xl bg-muted shadow-lg movie-card-hover mb-2">
                   <img src={item.poster} alt={item.title} className="w-full h-full object-cover transition-transform group-hover:scale-110" />
+                  {item.episodeCount !== undefined && (
+                    <div className="absolute bottom-1.5 right-1.5 bg-black/70 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full">
+                      {item.episodeCount} ep{item.episodeCount !== 1 ? 's' : ''}
+                    </div>
+                  )}
                 </div>
                 <div className="flex items-center gap-1.5 mb-0.5 flex-wrap">
                   {item.tmdbRating !== undefined && (
