@@ -37,7 +37,11 @@ function loadUserFromStorage(): AuthUser | null {
 
 async function restoreFromDb() {
   try {
-    const res = await fetch('/api/sync', { credentials: 'include' });
+    // Fire both requests in parallel to save one round-trip (~300-500ms)
+    const [res, meResEarly] = await Promise.all([
+      fetch('/api/sync', { credentials: 'include' }),
+      fetch('/api/users/me', { credentials: 'include' }),
+    ]);
     if (!res.ok) return;
     const { data } = await res.json();
     const { ratings, watchlist, watched, reviews, favorites, lists } = data as {
@@ -157,9 +161,8 @@ async function restoreFromDb() {
 
     // Always sync signup-date from DB so it's never wrong on new devices
     try {
-      const meRes = await fetch('/api/users/me', { credentials: 'include' });
-      if (meRes.ok) {
-        const meData = await meRes.json();
+      if (meResEarly.ok) {
+        const meData = await meResEarly.json();
         if (meData.data?.createdAt) {
           localStorage.setItem('signup-date', meData.data.createdAt);
         }

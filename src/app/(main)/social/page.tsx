@@ -244,6 +244,8 @@ function NotificationCard({ notif, onFollowBack }: { notif: NotificationItem; on
 
 type Tab = 'activity' | 'notifications';
 
+const FEED_CACHE_KEY = 'friend-feed-cache';
+
 export default function SocialPage() {
   const { user, loading: authLoading } = useAuth();
   const [tab, setTab] = useState<Tab>('activity');
@@ -272,12 +274,19 @@ export default function SocialPage() {
 
   const loadActivity = useCallback(async () => {
     if (!user) return;
+    // Show cached feed immediately so the page isn't blank while the request is in-flight
+    try {
+      const cached = localStorage.getItem(FEED_CACHE_KEY);
+      if (cached) setFriendFeed(JSON.parse(cached));
+    } catch { /* ignore */ }
     setActivityLoading(true);
     try {
       const res = await fetchWithAuth('/api/feed?limit=30');
       if (res.ok) {
         const json = await res.json();
-        setFriendFeed(json.data ?? []);
+        const feed = json.data ?? [];
+        setFriendFeed(feed);
+        try { localStorage.setItem(FEED_CACHE_KEY, JSON.stringify(feed)); } catch { /* ignore */ }
       }
     } finally {
       setActivityLoading(false);
@@ -430,7 +439,7 @@ export default function SocialPage() {
       {/* Activity tab */}
       {tab === 'activity' && (
         <>
-          {activityLoading && mergedActivity.length === 0 && (
+          {activityLoading && friendFeed.length === 0 && myLocalFeed.length === 0 && (
             <div className="space-y-4">
               {[1, 2, 3].map(i => (
                 <div key={i} className="bg-card rounded-3xl border border-white/5 p-5 space-y-4">
