@@ -1,6 +1,7 @@
 "use client"
 
 import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
+import { fetchWithAuth } from '@/lib/fetch-with-auth';
 
 const STORAGE_KEY = 'cinephilers_user';
 
@@ -48,49 +49,62 @@ async function restoreFromDb() {
       lists: { id: string; name: string; isPublic: boolean; createdAt: string; items: { tmdbId: string; mediaType: string; title: string | null; poster: string | null; year: string | null }[] }[];
     };
 
-    // ── Ratings: overwrite from DB, remove local ratings not in DB ──────────────
+    // ── Ratings: write DB scores to local; upload any local-only ratings to DB ──
     const dbRatingIds = new Set(ratings.map(r => r.tmdbId));
     for (const r of ratings) {
       try { localStorage.setItem(`movie-rating-${r.tmdbId}`, String(r.score)); } catch { /* ignore */ }
     }
     try {
-      const ratingKeysToRemove: string[] = [];
       for (let i = 0; i < localStorage.length; i++) {
         const k = localStorage.key(i);
-        if (k?.startsWith('movie-rating-') && !dbRatingIds.has(k.slice('movie-rating-'.length))) ratingKeysToRemove.push(k);
+        if (!k?.startsWith('movie-rating-')) continue;
+        const tmdbId = k.slice('movie-rating-'.length);
+        if (dbRatingIds.has(tmdbId)) continue;
+        const score = parseInt(localStorage.getItem(k) ?? '0', 10);
+        if (score >= 1 && score <= 10) {
+          const mediaType = tmdbId.startsWith('tmdb-tv-') ? 'SHOW' : 'MOVIE';
+          fetchWithAuth('/api/ratings', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ tmdbId, mediaType, score }) }).catch(() => {});
+        }
       }
-      ratingKeysToRemove.forEach(k => localStorage.removeItem(k));
     } catch { /* ignore */ }
 
-    // ── Watchlist: full sync from DB ──────────────────────────────────────────
+    // ── Watchlist: write DB items to local; upload any local-only items to DB ──
     const dbWatchlistIds = new Set(watchlist.map(w => w.tmdbId));
     for (const w of watchlist) {
       try { localStorage.setItem(`watchlist-${w.tmdbId}`, JSON.stringify({ id: w.tmdbId, type: w.mediaType === 'SHOW' ? 'show' : 'movie' })); } catch { /* ignore */ }
     }
     try {
-      const watchlistKeysToRemove: string[] = [];
       for (let i = 0; i < localStorage.length; i++) {
         const k = localStorage.key(i);
-        if (k?.startsWith('watchlist-') && !dbWatchlistIds.has(k.slice('watchlist-'.length))) watchlistKeysToRemove.push(k);
+        if (!k?.startsWith('watchlist-')) continue;
+        const tmdbId = k.slice('watchlist-'.length);
+        if (dbWatchlistIds.has(tmdbId)) continue;
+        const mediaType = tmdbId.startsWith('tmdb-tv-') ? 'SHOW' : 'MOVIE';
+        fetchWithAuth('/api/watchlist', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ tmdbId, mediaType }) }).catch(() => {});
       }
-      watchlistKeysToRemove.forEach(k => localStorage.removeItem(k));
     } catch { /* ignore */ }
 
-    // ── Watched: full sync from DB ────────────────────────────────────────────
+    // ── Watched: write DB items to local; recover from watch-log + upload ────
     const dbWatchedIds = new Set(watched.map(w => w.tmdbId));
     for (const w of watched) {
       try { localStorage.setItem(`watched-${w.tmdbId}`, 'true'); } catch { /* ignore */ }
     }
+    // Recover watched state from watch-log (survives even if watched-* keys were wiped)
+    // and upload any items not yet in DB so they're safe on every device going forward
     try {
-      const watchedKeysToRemove: string[] = [];
-      for (let i = 0; i < localStorage.length; i++) {
-        const k = localStorage.key(i);
-        if (k?.startsWith('watched-') && !dbWatchedIds.has(k.slice('watched-'.length))) watchedKeysToRemove.push(k);
+      const watchLog: { id: string }[] = JSON.parse(localStorage.getItem('watch-log') ?? '[]');
+      for (const entry of watchLog) {
+        if (!entry.id) continue;
+        try { localStorage.setItem(`watched-${entry.id}`, 'true'); } catch { /* ignore */ }
+        if (!dbWatchedIds.has(entry.id)) {
+          const mediaType = entry.id.startsWith('tmdb-tv-') ? 'SHOW' : 'MOVIE';
+          fetchWithAuth('/api/watched', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ tmdbId: entry.id, mediaType }) }).catch(() => {});
+          dbWatchedIds.add(entry.id); // prevent duplicate uploads within this loop
+        }
       }
-      watchedKeysToRemove.forEach(k => localStorage.removeItem(k));
     } catch { /* ignore */ }
 
-    // ── Reviews: overwrite from DB, remove local reviews not in DB ────────────
+    // ── Reviews: write DB reviews to local; upload any local-only reviews to DB
     const dbReviewIds = new Set(reviews.map(r => r.tmdbId));
     for (const r of reviews) {
       try {
@@ -103,12 +117,21 @@ async function restoreFromDb() {
       } catch { /* ignore */ }
     }
     try {
-      const reviewKeysToRemove: string[] = [];
       for (let i = 0; i < localStorage.length; i++) {
         const k = localStorage.key(i);
-        if (k?.startsWith('review-') && !dbReviewIds.has(k.slice('review-'.length))) reviewKeysToRemove.push(k);
+        if (!k?.startsWith('review-')) continue;
+        const tmdbId = k.slice('review-'.length);
+        if (dbReviewIds.has(tmdbId)) continue;
+        const raw = localStorage.getItem(k);
+        if (!raw) continue;
+        try {
+          const rev = JSON.parse(raw) as { content?: string; containsSpoiler?: boolean };
+          if (rev.content) {
+            const mediaType = tmdbId.startsWith('tmdb-tv-') ? 'SHOW' : 'MOVIE';
+            fetchWithAuth('/api/reviews', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ tmdbId, mediaType, body: rev.content, containsSpoiler: rev.containsSpoiler ?? false }) }).catch(() => {});
+          }
+        } catch { /* ignore */ }
       }
-      reviewKeysToRemove.forEach(k => localStorage.removeItem(k));
     } catch { /* ignore */ }
 
     // Merge DB watched items into watch-log — add any items not already tracked locally
