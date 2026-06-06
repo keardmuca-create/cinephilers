@@ -124,7 +124,7 @@ function FollowListModal({ username, type, count }: { username: string; type: 'f
 function RecentCard({ item }: { item: RecentItem }) {
   const [meta, setMeta] = useState(item.meta ?? null);
   useEffect(() => { if (!meta) getMeta(item.tmdbId).then(m => { if (m) setMeta(m); }); }, [item.tmdbId, meta]);
-  const href = item.mediaType === 'MOVIE' ? `/movie/${item.tmdbId}` : `/tv/${item.tmdbId}`;
+  const href = `/movie/${item.tmdbId}`;
 
   return (
     <Link href={href} className="flex items-center gap-3 py-3 border-b border-white/5 last:border-0 group">

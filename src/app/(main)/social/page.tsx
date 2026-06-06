@@ -112,8 +112,7 @@ function ActivityCard({ item, onLike, onRemove }: {
     return () => document.removeEventListener('mousedown', close);
   }, [menuOpen]);
 
-  const isMovie = item.tmdbId && !item.tmdbId.startsWith('tmdb-tv-');
-  const href = isMovie ? `/movie/${item.tmdbId}` : `/tv/${item.tmdbId}`;
+  const href = `/movie/${item.tmdbId}`;
   const liked = item.likes?.includes('me') ?? false;
 
   const handleShare = () => {
