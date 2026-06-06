@@ -48,31 +48,68 @@ async function restoreFromDb() {
       lists: { id: string; name: string; isPublic: boolean; createdAt: string; items: { tmdbId: string; mediaType: string; title: string | null; poster: string | null; year: string | null }[] }[];
     };
 
+    // ── Ratings: overwrite from DB, remove local ratings not in DB ──────────────
+    const dbRatingIds = new Set(ratings.map(r => r.tmdbId));
     for (const r of ratings) {
       try { localStorage.setItem(`movie-rating-${r.tmdbId}`, String(r.score)); } catch { /* ignore */ }
     }
-    for (const w of watchlist) {
-      const existing = localStorage.getItem(`watchlist-${w.tmdbId}`);
-      if (!existing) {
-        try { localStorage.setItem(`watchlist-${w.tmdbId}`, JSON.stringify({ id: w.tmdbId, type: w.mediaType === 'SHOW' ? 'show' : 'movie' })); } catch { /* ignore */ }
+    try {
+      const ratingKeysToRemove: string[] = [];
+      for (let i = 0; i < localStorage.length; i++) {
+        const k = localStorage.key(i);
+        if (k?.startsWith('movie-rating-') && !dbRatingIds.has(k.slice('movie-rating-'.length))) ratingKeysToRemove.push(k);
       }
+      ratingKeysToRemove.forEach(k => localStorage.removeItem(k));
+    } catch { /* ignore */ }
+
+    // ── Watchlist: full sync from DB ──────────────────────────────────────────
+    const dbWatchlistIds = new Set(watchlist.map(w => w.tmdbId));
+    for (const w of watchlist) {
+      try { localStorage.setItem(`watchlist-${w.tmdbId}`, JSON.stringify({ id: w.tmdbId, type: w.mediaType === 'SHOW' ? 'show' : 'movie' })); } catch { /* ignore */ }
     }
+    try {
+      const watchlistKeysToRemove: string[] = [];
+      for (let i = 0; i < localStorage.length; i++) {
+        const k = localStorage.key(i);
+        if (k?.startsWith('watchlist-') && !dbWatchlistIds.has(k.slice('watchlist-'.length))) watchlistKeysToRemove.push(k);
+      }
+      watchlistKeysToRemove.forEach(k => localStorage.removeItem(k));
+    } catch { /* ignore */ }
+
+    // ── Watched: full sync from DB ────────────────────────────────────────────
+    const dbWatchedIds = new Set(watched.map(w => w.tmdbId));
     for (const w of watched) {
       try { localStorage.setItem(`watched-${w.tmdbId}`, 'true'); } catch { /* ignore */ }
     }
-    for (const r of reviews) {
-      const existing = localStorage.getItem(`review-${r.tmdbId}`);
-      if (!existing) {
-        try {
-          localStorage.setItem(`review-${r.tmdbId}`, JSON.stringify({
-            movieId: r.tmdbId,
-            content: r.body,
-            containsSpoiler: r.containsSpoiler,
-            date: new Date(r.createdAt).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }),
-          }));
-        } catch { /* ignore */ }
+    try {
+      const watchedKeysToRemove: string[] = [];
+      for (let i = 0; i < localStorage.length; i++) {
+        const k = localStorage.key(i);
+        if (k?.startsWith('watched-') && !dbWatchedIds.has(k.slice('watched-'.length))) watchedKeysToRemove.push(k);
       }
+      watchedKeysToRemove.forEach(k => localStorage.removeItem(k));
+    } catch { /* ignore */ }
+
+    // ── Reviews: overwrite from DB, remove local reviews not in DB ────────────
+    const dbReviewIds = new Set(reviews.map(r => r.tmdbId));
+    for (const r of reviews) {
+      try {
+        localStorage.setItem(`review-${r.tmdbId}`, JSON.stringify({
+          movieId: r.tmdbId,
+          content: r.body,
+          containsSpoiler: r.containsSpoiler,
+          date: new Date(r.createdAt).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }),
+        }));
+      } catch { /* ignore */ }
     }
+    try {
+      const reviewKeysToRemove: string[] = [];
+      for (let i = 0; i < localStorage.length; i++) {
+        const k = localStorage.key(i);
+        if (k?.startsWith('review-') && !dbReviewIds.has(k.slice('review-'.length))) reviewKeysToRemove.push(k);
+      }
+      reviewKeysToRemove.forEach(k => localStorage.removeItem(k));
+    } catch { /* ignore */ }
 
     // Merge DB watched items into watch-log — add any items not already tracked locally
     try {
@@ -106,9 +143,8 @@ async function restoreFromDb() {
       }
     } catch { /* ignore */ }
 
-    // Restore favorites — only if localStorage is empty to preserve ordering
-    const existingFavs = localStorage.getItem('user-favorites');
-    if ((!existingFavs || existingFavs === '[]') && favorites.length > 0) {
+    // ── Favorites: always overwrite from DB — DB is the source of truth ─────────
+    if (favorites.length > 0) {
       const favsWithMeta = await Promise.all(
         favorites.map(async (f) => {
           // Try meta cache first
@@ -134,27 +170,28 @@ async function restoreFromDb() {
       if (resolved.length > 0) {
         try { localStorage.setItem('user-favorites', JSON.stringify(resolved)); } catch { /* ignore */ }
       }
+    } else {
+      // No favorites in DB — clear local so the device matches
+      try { localStorage.removeItem('user-favorites'); } catch { /* ignore */ }
     }
 
-    // Restore custom lists from DB — always overwrite to stay in sync
-    if (lists && lists.length > 0) {
-      try {
-        const lsLists = lists.map(l => ({
-          id: l.id,
-          title: l.name,
-          isPrivate: !l.isPublic,
-          createdAt: l.createdAt,
-          items: l.items.map(i => ({
-            movieId: i.tmdbId,
-            title: i.title ?? '',
-            poster: i.poster ?? '',
-            year: i.year ?? '',
-            type: i.mediaType === 'SHOW' ? 'show' : 'movie',
-          })),
-        }));
-        localStorage.setItem('user-lists', JSON.stringify(lsLists));
-      } catch { /* ignore */ }
-    }
+    // ── Lists: always overwrite from DB ──────────────────────────────────────
+    try {
+      const lsLists = (lists ?? []).map(l => ({
+        id: l.id,
+        title: l.name,
+        isPrivate: !l.isPublic,
+        createdAt: l.createdAt,
+        items: l.items.map(i => ({
+          movieId: i.tmdbId,
+          title: i.title ?? '',
+          poster: i.poster ?? '',
+          year: i.year ?? '',
+          type: i.mediaType === 'SHOW' ? 'show' : 'movie',
+        })),
+      }));
+      localStorage.setItem('user-lists', JSON.stringify(lsLists));
+    } catch { /* ignore */ }
 
     // Merge activity-feed from DB so cross-device watched/rated entries appear in the social feed
     try {
