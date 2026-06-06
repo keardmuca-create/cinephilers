@@ -22,6 +22,7 @@ import { toast } from '@/hooks/use-toast';
 import { appendWatchLog, removeFromWatchLog, saveMovieRating, ensureSignupDate } from '@/lib/badges';
 import { logActivity, removeActivity } from '@/lib/activity';
 import { useAuth } from '@/contexts/auth-context';
+import { fetchWithAuth } from '@/lib/fetch-with-auth';
 import { AuthGateModal } from '@/components/auth-gate-modal';
 
 // ─── Skeleton ─────────────────────────────────────────────────────────────────
@@ -1078,9 +1079,8 @@ export default function MovieDetailPage() {
   const { user: authUser } = useAuth();
 
   const syncDb = useCallback((method: string, path: string, body?: object) => {
-    fetch(path, {
+    fetchWithAuth(path, {
       method,
-      credentials: 'include',
       headers: body ? { 'Content-Type': 'application/json' } : undefined,
       body: body ? JSON.stringify(body) : undefined,
     }).catch(() => { /* background sync — ignore errors */ });
@@ -1191,7 +1191,7 @@ export default function MovieDetailPage() {
       toast({ title: `${ep.name} removed from watched` });
     }
     // Sync to DB in background
-    syncDb(`/api/watched/episodes`, 'POST', { showTmdbId: id, season: sn, episode: ep.episode_number, watched: nowWatched });
+    syncDb('POST', '/api/watched/episodes', { showTmdbId: id, season: sn, episode: ep.episode_number, watched: nowWatched });
   }, [id, watchedEpisodes, movie, syncDb]);
 
   const markSeasonWatched = useCallback(async (season: TvSeason, cached?: TvEpisode[]) => {
@@ -1213,7 +1213,7 @@ export default function MovieDetailPage() {
           try { localStorage.setItem(lsKey, 'true'); } catch { /* ignore */ }
           appendWatchLog({ id: `${id}-${key}`, type: 'episode', genre: movie?.genre ?? '', language: movie?.originalLanguage ?? '' });
           // Sync each episode to DB
-          syncDb(`/api/watched/episodes`, 'POST', { showTmdbId: id, season: season.season_number, episode: ep.episode_number, watched: true });
+          syncDb('POST', '/api/watched/episodes', { showTmdbId: id, season: season.season_number, episode: ep.episode_number, watched: true });
         }
       });
       return next;
@@ -1246,7 +1246,7 @@ export default function MovieDetailPage() {
     });
     // Sync removals to DB in background
     removedEpisodes.forEach(ep => {
-      syncDb(`/api/watched/episodes`, 'POST', { showTmdbId: id, season: season.season_number, episode: ep, watched: false });
+      syncDb('POST', '/api/watched/episodes', { showTmdbId: id, season: season.season_number, episode: ep, watched: false });
     });
     toast({ title: `Season ${season.season_number} unmarked` });
   }, [id, syncDb]);

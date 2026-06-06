@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Plus, X, Search, Heart } from 'lucide-react';
+import { fetchWithAuth } from '@/lib/fetch-with-auth';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 
@@ -86,14 +87,13 @@ export function FavoritesSection() {
   const syncFavoriteDb = (method: string, item: FavoriteItem) => {
     const mediaType = item.type === 'show' ? 'SHOW' : 'MOVIE';
     if (method === 'POST') {
-      fetch('/api/favorites', {
+      fetchWithAuth('/api/favorites', {
         method: 'POST',
-        credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ tmdbId: item.id, mediaType }),
       }).catch(() => {});
     } else {
-      fetch(`/api/favorites/${item.id}?mediaType=${mediaType}`, { method: 'DELETE', credentials: 'include' }).catch(() => {});
+      fetchWithAuth(`/api/favorites/${item.id}?mediaType=${mediaType}`, { method: 'DELETE' }).catch(() => {});
     }
   };
 
