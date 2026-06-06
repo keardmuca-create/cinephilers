@@ -1111,7 +1111,6 @@ function FriendsRatings({ tmdbId }: { tmdbId: string }) {
   if (!authUser || entries.length === 0) return null;
 
   const visible = entries.slice(0, FRIENDS_VISIBLE);
-  const hasMore = entries.length > FRIENDS_VISIBLE;
 
   return (
     <section className="space-y-4">
@@ -1119,19 +1118,17 @@ function FriendsRatings({ tmdbId }: { tmdbId: string }) {
         <h3 className="text-xl font-headline font-bold flex items-center gap-2">
           <Users className="h-5 w-5 text-primary" /> Friends
         </h3>
-        {hasMore && (
-          <button
-            onClick={() => setDialogOpen(true)}
-            className="text-xs text-primary border border-primary/30 rounded-full px-3 py-1 hover:bg-primary/10 transition-colors font-semibold"
-          >
-            See All {entries.length}
-          </button>
-        )}
+        <button
+          onClick={() => setDialogOpen(true)}
+          className="text-xs text-primary border border-primary/30 rounded-full px-3 py-1 hover:bg-primary/10 transition-colors font-semibold"
+        >
+          See All {entries.length}
+        </button>
       </div>
 
       <div className="flex gap-4">
         {visible.map(e => <FriendAvatar key={e.user.id} e={e} />)}
-        {hasMore && (
+        {entries.length > FRIENDS_VISIBLE && (
           <button
             onClick={() => setDialogOpen(true)}
             className="flex flex-col items-center gap-1.5 shrink-0"
