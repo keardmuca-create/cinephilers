@@ -10,7 +10,7 @@ import { Button } from '@/components/ui/button';
 import {
   Play, Check, Plus, Star, ChevronLeft, Share2, ListPlus, Quote,
   Info, Film, Calendar, Clock, Globe, Building2, Tv, ChevronDown, ChevronUp,
-  DollarSign, Images, Clapperboard, PenLine, Eye, ChevronRight, User,
+  DollarSign, Images, Clapperboard, PenLine, Eye, ChevronRight, User, Users,
 } from 'lucide-react';
 import { Avatar, AvatarImage } from '@/components/ui/avatar';
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
@@ -1058,6 +1058,65 @@ function ReviewsSection({ movie, writeOpen, setWriteOpen, myReview, setMyReview 
   );
 }
 
+// ─── Friends' Ratings ─────────────────────────────────────────────────────────
+
+interface FriendRatingEntry {
+  user: { id: string; username: string; displayName: string | null; avatarUrl: string | null };
+  rating: number | null;
+  watched: boolean;
+}
+
+function FriendsRatings({ tmdbId }: { tmdbId: string }) {
+  const { user: authUser } = useAuth();
+  const [entries, setEntries] = useState<FriendRatingEntry[]>([]);
+
+  useEffect(() => {
+    if (!authUser) return;
+    fetchWithAuth(`/api/movies/friends-ratings?tmdbId=${encodeURIComponent(tmdbId)}`)
+      .then(r => r.ok ? r.json() : null)
+      .then(json => { if (json?.data?.length) setEntries(json.data); })
+      .catch(() => {});
+  }, [tmdbId, authUser]);
+
+  if (!authUser || entries.length === 0) return null;
+
+  return (
+    <section className="space-y-4">
+      <h3 className="text-xl font-headline font-bold flex items-center gap-2">
+        <Users className="h-5 w-5 text-primary" /> Friends
+      </h3>
+      <div className="flex gap-3 overflow-x-auto pb-2 no-scrollbar">
+        {entries.map(e => (
+          <Link
+            key={e.user.id}
+            href={`/profile/${e.user.username}`}
+            className="flex flex-col items-center gap-2 shrink-0 group"
+          >
+            <div className="relative h-12 w-12 rounded-2xl bg-primary/20 overflow-hidden flex items-center justify-center">
+              {e.user.avatarUrl
+                ? <img src={e.user.avatarUrl} alt={e.user.username} className="w-full h-full object-cover" />
+                : <span className="text-primary font-bold text-sm">{(e.user.displayName ?? e.user.username).slice(0, 2).toUpperCase()}</span>
+              }
+              {e.watched && (
+                <div className="absolute bottom-0 right-0 h-4 w-4 bg-blue-500 rounded-full flex items-center justify-center">
+                  <Eye className="h-2.5 w-2.5 text-white" />
+                </div>
+              )}
+            </div>
+            <p className="text-[10px] font-semibold text-muted-foreground group-hover:text-foreground transition-colors truncate max-w-[52px]">
+              {e.user.displayName ?? e.user.username}
+            </p>
+            {e.rating !== null
+              ? <span className="text-xs font-black text-yellow-400 -mt-1">{e.rating}/10</span>
+              : <span className="text-[10px] text-muted-foreground/50 -mt-1">—</span>
+            }
+          </Link>
+        ))}
+      </div>
+    </section>
+  );
+}
+
 // ─── Main page ────────────────────────────────────────────────────────────────
 
 export default function MovieDetailPage() {
@@ -1498,6 +1557,9 @@ export default function MovieDetailPage() {
             </div>
           </div>
         </section>
+
+        {/* Friends' ratings */}
+        <FriendsRatings tmdbId={id} />
 
         {/* Trailers */}
         {movie.trailers && movie.trailers.length > 0 && (
