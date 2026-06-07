@@ -213,6 +213,14 @@ function NotificationCard({ notif, onFollowBack, onRequestHandled }: {
 }) {
   const [followState, setFollowState] = useState<'idle' | 'loading' | 'following'>(notif.from.isFollowingBack ? 'following' : 'idle');
   const [requestState, setRequestState] = useState<'pending' | 'loading' | 'accepted' | 'denied'>('pending');
+  const [movieMeta, setMovieMeta] = useState<{ title: string; poster: string } | null>(null);
+
+  const isReviewNotif = notif.type === 'review_like' || notif.type === 'review_comment';
+
+  useEffect(() => {
+    if (!isReviewNotif || !notif.refId) return;
+    fetchMeta(notif.refId).then(m => { if (m) setMovieMeta(m); });
+  }, [isReviewNotif, notif.refId]);
 
   const handleFollowBack = async () => {
     setFollowState('loading');
@@ -254,6 +262,19 @@ function NotificationCard({ notif, onFollowBack, onRequestHandled }: {
           <span className="text-muted-foreground">{text}</span>
         </p>
         <p className="text-xs text-muted-foreground mt-0.5">{relativeTime(notif.createdAt)}</p>
+
+        {/* Movie poster for review notifications */}
+        {isReviewNotif && notif.refId && (
+          <Link href={`/movie/${notif.refId}/reviews`} className="flex items-center gap-2.5 mt-2.5 bg-muted/40 hover:bg-muted/70 transition-colors rounded-xl p-2 group">
+            {movieMeta?.poster
+              ? <img src={movieMeta.poster} alt={movieMeta.title} className="w-8 rounded-lg object-cover shrink-0" style={{ aspectRatio: '2/3' }} />
+              : <div className="w-8 rounded-lg bg-muted shrink-0" style={{ aspectRatio: '2/3' }} />
+            }
+            <span className="text-xs font-bold text-foreground/80 group-hover:text-primary transition-colors truncate">
+              {movieMeta?.title ?? 'View review'}
+            </span>
+          </Link>
+        )}
 
         {/* Follow request accept/deny */}
         {notif.type === 'follow_request' && (requestState === 'pending' || requestState === 'loading') && (
