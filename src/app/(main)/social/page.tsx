@@ -26,6 +26,7 @@ interface FeedItem {
 interface NotificationItem {
   id: string;
   type: string;
+  refId: string | null;
   read: boolean;
   createdAt: string;
   from: { username: string; displayName: string | null; avatarUrl: string | null; isFollowingBack: boolean };
@@ -205,8 +206,13 @@ function ActivityCard({ item, onLike, onRemove }: {
 
 // ─── Notification Card ─────────────────────────────────────────────────────────
 
-function NotificationCard({ notif, onFollowBack }: { notif: NotificationItem; onFollowBack: (username: string) => void }) {
+function NotificationCard({ notif, onFollowBack, onRequestHandled }: {
+  notif: NotificationItem;
+  onFollowBack: (username: string) => void;
+  onRequestHandled: (notifId: string) => void;
+}) {
   const [followState, setFollowState] = useState<'idle' | 'loading' | 'following'>(notif.from.isFollowingBack ? 'following' : 'idle');
+  const [requestState, setRequestState] = useState<'pending' | 'loading' | 'accepted' | 'denied'>('pending');
 
   const handleFollowBack = async () => {
     setFollowState('loading');
@@ -215,8 +221,27 @@ function NotificationCard({ notif, onFollowBack }: { notif: NotificationItem; on
     else setFollowState('idle');
   };
 
+  const handleRequest = async (action: 'accept' | 'deny') => {
+    if (!notif.refId) return;
+    setRequestState('loading');
+    const method = action === 'accept' ? 'POST' : 'DELETE';
+    const res = await fetch(`/api/follow-requests/${notif.refId}`, { method, credentials: 'include' });
+    if (res.ok) {
+      setRequestState(action === 'accept' ? 'accepted' : 'denied');
+      onRequestHandled(notif.id);
+    } else setRequestState('pending');
+  };
+
+  const text = {
+    follow: 'followed you',
+    follow_accept: 'accepted your follow request',
+    follow_request: 'wants to follow you',
+    review_like: 'liked your review',
+    review_comment: 'commented on your review',
+  }[notif.type] ?? notif.type;
+
   return (
-    <div className={`flex items-center gap-3 p-4 rounded-2xl border transition-colors ${notif.read ? 'border-white/5 bg-card' : 'border-primary/20 bg-primary/5'}`}>
+    <div className={`flex items-start gap-3 p-4 rounded-2xl border transition-colors ${notif.read ? 'border-white/5 bg-card' : 'border-primary/20 bg-primary/5'}`}>
       <Link href={`/profile/${notif.from.username}`}>
         <UserAvatar user={notif.from} size={44} />
       </Link>
@@ -226,16 +251,37 @@ function NotificationCard({ notif, onFollowBack }: { notif: NotificationItem; on
             {notif.from.displayName ?? notif.from.username}
           </Link>
           {' '}
-          <span className="text-muted-foreground">followed you</span>
+          <span className="text-muted-foreground">{text}</span>
         </p>
         <p className="text-xs text-muted-foreground mt-0.5">{relativeTime(notif.createdAt)}</p>
+
+        {/* Follow request accept/deny */}
+        {notif.type === 'follow_request' && (requestState === 'pending' || requestState === 'loading') && (
+          <div className="flex gap-2 mt-2.5">
+            <Button size="sm" className="rounded-xl font-bold text-xs h-8 px-3" onClick={() => handleRequest('accept')} disabled={requestState === 'loading'}>
+              Accept
+            </Button>
+            <Button size="sm" variant="outline" className="rounded-xl font-bold text-xs h-8 px-3" onClick={() => handleRequest('deny')} disabled={requestState === 'loading'}>
+              Deny
+            </Button>
+          </div>
+        )}
+        {notif.type === 'follow_request' && requestState === 'accepted' && (
+          <p className="text-xs text-green-400 font-bold mt-1.5">Accepted</p>
+        )}
+        {notif.type === 'follow_request' && requestState === 'denied' && (
+          <p className="text-xs text-muted-foreground font-bold mt-1.5">Denied</p>
+        )}
       </div>
-      {followState === 'following'
-        ? <span className="text-xs text-muted-foreground font-bold px-3 py-1.5 rounded-xl border border-white/10">Following</span>
-        : <Button size="sm" variant="outline" className="rounded-xl font-bold text-xs gap-1.5 shrink-0" onClick={handleFollowBack} disabled={followState === 'loading'}>
-            {followState === 'loading' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <><UserPlus className="h-3.5 w-3.5" />Follow back</>}
-          </Button>
-      }
+
+      {/* Follow back button for regular follows */}
+      {notif.type === 'follow' && (
+        followState === 'following'
+          ? <span className="text-xs text-muted-foreground font-bold px-3 py-1.5 rounded-xl border border-white/10 shrink-0">Following</span>
+          : <Button size="sm" variant="outline" className="rounded-xl font-bold text-xs gap-1.5 shrink-0" onClick={handleFollowBack} disabled={followState === 'loading'}>
+              {followState === 'loading' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <><UserPlus className="h-3.5 w-3.5" />Follow back</>}
+            </Button>
+      )}
     </div>
   );
 }
@@ -509,7 +555,12 @@ export default function SocialPage() {
           {!notifLoading && notifications.length > 0 && (
             <div className="space-y-3">
               {notifications.map(n => (
-                <NotificationCard key={n.id} notif={n} onFollowBack={() => {}} />
+                <NotificationCard
+                  key={n.id}
+                  notif={n}
+                  onFollowBack={() => {}}
+                  onRequestHandled={(id) => setNotifications(prev => prev.map(x => x.id === id ? { ...x, read: true } : x))}
+                />
               ))}
             </div>
           )}

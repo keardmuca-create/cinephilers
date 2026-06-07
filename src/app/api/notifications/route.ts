@@ -29,7 +29,11 @@ export async function GET(req: NextRequest) {
   const unreadCount = notifications.filter(n => !n.read).length;
 
   const result = notifications.map(n => ({
-    ...n,
+    id: n.id,
+    type: n.type,
+    refId: n.refId,
+    read: n.read,
+    createdAt: n.createdAt,
     from: {
       username: n.from.username,
       displayName: n.from.displayName,

@@ -37,7 +37,8 @@ export default function LoginPage() {
     // Persist basic user info so profile shows immediately even after cold starts
     try { localStorage.setItem('cinephilers_user', JSON.stringify(data.data)); } catch { /* ignore */ }
 
-    router.push('/profile');
+    const onboardingDone = (() => { try { return localStorage.getItem('onboarding_complete') === 'true'; } catch { return false; } })();
+    router.push(onboardingDone ? '/profile' : '/onboarding');
     router.refresh();
   };
 

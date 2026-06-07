@@ -4,7 +4,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { useParams, useRouter } from 'next/navigation';
-import { Star, Film, Eye, UserPlus, UserCheck, Loader2, Lock, User, MessageSquare, Users, List, ChevronRight } from 'lucide-react';
+import { Star, Film, Eye, UserPlus, UserCheck, Loader2, Lock, User, MessageSquare, Users, List, ChevronRight, Clock } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/contexts/auth-context';
 import { relativeTime } from '@/lib/activity';
@@ -25,6 +25,7 @@ interface ProfileUser {
   followersCount: number;
   followingCount: number;
   isFollowing: boolean;
+  isPendingRequest: boolean;
   isOwner: boolean;
 }
 
@@ -216,14 +217,17 @@ export default function PublicProfilePage() {
   const toggleFollow = async () => {
     if (!profile) return;
     setFollowLoading(true);
-    const method = profile.isFollowing ? 'DELETE' : 'POST';
+    const isUnfollow = profile.isFollowing || profile.isPendingRequest;
+    const method = isUnfollow ? 'DELETE' : 'POST';
     const res = await fetch(`/api/users/${profile.username}/follow`, { method, credentials: 'include' });
     if (res.ok) {
-      const nowFollowing = !profile.isFollowing;
+      const json = await res.json();
+      const requested = json.data?.requested ?? false;
       setProfile(p => p ? ({
         ...p,
-        isFollowing: nowFollowing,
-        followersCount: p.followersCount + (nowFollowing ? 1 : -1),
+        isFollowing: !isUnfollow && !requested,
+        isPendingRequest: requested,
+        followersCount: p.followersCount + (!isUnfollow && !requested ? 1 : isUnfollow && p.isFollowing ? -1 : 0),
       }) : p);
     }
     setFollowLoading(false);
@@ -275,7 +279,7 @@ export default function PublicProfilePage() {
           {me && (
             <Button
               size="sm"
-              variant={profile.isFollowing ? 'outline' : 'default'}
+              variant={profile.isFollowing || profile.isPendingRequest ? 'outline' : 'default'}
               className="rounded-xl font-bold gap-1.5"
               onClick={toggleFollow}
               disabled={followLoading}
@@ -284,7 +288,9 @@ export default function PublicProfilePage() {
                 ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
                 : profile.isFollowing
                   ? <><UserCheck className="h-3.5 w-3.5" />Following</>
-                  : <><UserPlus className="h-3.5 w-3.5" />Follow</>
+                  : profile.isPendingRequest
+                    ? <><Clock className="h-3.5 w-3.5" />Requested</>
+                    : <><UserPlus className="h-3.5 w-3.5" />Follow</>
               }
             </Button>
           )}

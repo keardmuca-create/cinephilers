@@ -58,10 +58,13 @@ model User {
   badges           Badge[]
   reviewLikes      ReviewLike[]
   watchedEpisodes  WatchedEpisode[]
-  followers        Follow[]         @relation("Following")
-  following        Follow[]         @relation("Follower")
-  notifications    Notification[]   @relation("NotificationRecipient")
-  sentNotifications Notification[]  @relation("NotificationSender")
+  followers         Follow[]          @relation("Following")
+  following         Follow[]          @relation("Follower")
+  notifications     Notification[]    @relation("NotificationRecipient")
+  sentNotifications Notification[]    @relation("NotificationSender")
+  sentRequests      FollowRequest[]   @relation("SentRequests")
+  receivedRequests  FollowRequest[]   @relation("ReceivedRequests")
+  reviewComments    ReviewComment[]
 }
 
 model Rating {
@@ -89,8 +92,9 @@ model Review {
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
 
-  user  User         @relation(fields: [userId], references: [id], onDelete: Cascade)
-  likes ReviewLike[]
+  user     User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  likes    ReviewLike[]
+  comments ReviewComment[]
 
   @@unique([userId, tmdbId, mediaType])
 }
@@ -210,9 +214,33 @@ model Notification {
   userId    String
   fromId    String
   type      String
+  refId     String?
   read      Boolean  @default(false)
   createdAt DateTime @default(now())
 
   user User @relation("NotificationRecipient", fields: [userId], references: [id], onDelete: Cascade)
   from User @relation("NotificationSender", fields: [fromId], references: [id], onDelete: Cascade)
+}
+
+model FollowRequest {
+  id          String   @id @default(uuid())
+  requesterId String
+  targetId    String
+  createdAt   DateTime @default(now())
+
+  requester User @relation("SentRequests", fields: [requesterId], references: [id], onDelete: Cascade)
+  target    User @relation("ReceivedRequests", fields: [targetId], references: [id], onDelete: Cascade)
+
+  @@unique([requesterId, targetId])
+}
+
+model ReviewComment {
+  id        String   @id @default(uuid())
+  reviewId  String
+  userId    String
+  body      String   @db.VarChar(500)
+  createdAt DateTime @default(now())
+
+  review Review @relation(fields: [reviewId], references: [id], onDelete: Cascade)
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 }

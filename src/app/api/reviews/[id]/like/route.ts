@@ -8,7 +8,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   if (!auth) return err('Unauthorized', 401);
 
   const { id: reviewId } = await params;
-  const review = await prisma.review.findUnique({ where: { id: reviewId }, select: { id: true } });
+  const review = await prisma.review.findUnique({ where: { id: reviewId }, select: { id: true, userId: true, tmdbId: true } });
   if (!review) return err('Review not found', 404);
 
   const existing = await prisma.reviewLike.findUnique({
@@ -20,6 +20,12 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     prisma.reviewLike.create({ data: { userId: auth.sub, reviewId } }),
     prisma.review.update({ where: { id: reviewId }, data: { likesCount: { increment: 1 } } }),
   ]);
+
+  if (review.userId !== auth.sub) {
+    await prisma.notification.create({
+      data: { userId: review.userId, fromId: auth.sub, type: 'review_like', refId: review.tmdbId },
+    }).catch(() => {});
+  }
 
   return ok(null, 'Liked');
 }

@@ -19,14 +19,21 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ user
   if (!user) return err('User not found', 404);
 
   const isOwner = auth?.sub === user.id;
-  const isFollowing = !isOwner && auth
-    ? !!(await prisma.follow.findUnique({ where: { followerId_followingId: { followerId: auth.sub, followingId: user.id } } }))
-    : false;
 
-  if (user.isPrivate && !isOwner && !isFollowing) {
+  const [isFollowing, pendingRequest] = !isOwner && auth
+    ? await Promise.all([
+        prisma.follow.findUnique({ where: { followerId_followingId: { followerId: auth.sub, followingId: user.id } } }),
+        prisma.followRequest.findUnique({ where: { requesterId_targetId: { requesterId: auth.sub, targetId: user.id } } }),
+      ])
+    : [null, null];
+
+  const isFollowingBool = !!isFollowing;
+  const isPendingRequest = !!pendingRequest;
+
+  if (user.isPrivate && !isOwner && !isFollowingBool) {
     return ok({
       id: user.id, username: user.username, displayName: user.displayName,
-      avatarUrl: user.avatarUrl, isPrivate: true,
+      avatarUrl: user.avatarUrl, isPrivate: true, isPendingRequest,
     });
   }
 
@@ -34,7 +41,8 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ user
     ...user,
     followersCount: user._count.followers,
     followingCount: user._count.following,
-    isFollowing,
+    isFollowing: isFollowingBool,
+    isPendingRequest,
     isOwner,
   });
 }
