@@ -350,7 +350,7 @@ export default function PublicProfilePage() {
           </h2>
           <div className="space-y-3">
             {lists.map(l => (
-              <div key={l.id} className="bg-card rounded-3xl border border-white/5 px-5 py-4 flex items-center gap-4">
+              <Link key={l.id} href={`/lists/${l.id}`} className="bg-card rounded-3xl border border-white/5 px-5 py-4 flex items-center gap-4 hover:bg-white/5 transition-colors">
                 {/* Mini poster strip */}
                 <div className="flex gap-1 shrink-0">
                   {l.items.slice(0, 3).map(item => (
@@ -373,7 +373,7 @@ export default function PublicProfilePage() {
                   <p className="text-xs text-muted-foreground">{l.items.length} {l.items.length === 1 ? 'title' : 'titles'}</p>
                 </div>
                 <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
-              </div>
+              </Link>
             ))}
           </div>
         </section>

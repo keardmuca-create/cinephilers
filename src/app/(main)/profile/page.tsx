@@ -211,10 +211,10 @@ function ListsSection() {
       ) : (
         <div className="space-y-3">
           {lists.map(l => (
-            <button
+            <Link
               key={l.id}
-              onClick={() => setViewList(l)}
-              className="w-full flex items-center gap-4 p-4 rounded-2xl border border-border hover:bg-muted/40 transition-colors text-left"
+              href={`/lists/${l.id}`}
+              className="flex items-center gap-4 p-4 rounded-2xl border border-border hover:bg-muted/40 transition-colors text-left"
             >
               {/* Mini poster strip */}
               <div className="flex gap-1 shrink-0">
@@ -234,7 +234,7 @@ function ListsSection() {
                 <p className="text-xs text-muted-foreground">{l.items.length} {l.items.length === 1 ? 'title' : 'titles'} · {l.isPrivate ? 'Private' : 'Public'}</p>
               </div>
               <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
-            </button>
+            </Link>
           ))}
         </div>
       )}
