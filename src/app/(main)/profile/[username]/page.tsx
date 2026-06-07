@@ -4,7 +4,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { useParams, useRouter } from 'next/navigation';
-import { Star, Film, Eye, UserPlus, UserCheck, Loader2, Lock, User, MessageSquare, Users } from 'lucide-react';
+import { Star, Film, Eye, UserPlus, UserCheck, Loader2, Lock, User, MessageSquare, Users, List, ChevronRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/contexts/auth-context';
 import { relativeTime } from '@/lib/activity';
@@ -40,6 +40,14 @@ interface RecentItem {
 }
 
 interface FollowUser { username: string; displayName: string | null; avatarUrl: string | null }
+
+interface PublicList {
+  id: string;
+  name: string;
+  isPublic: boolean;
+  itemsCount: number;
+  items: { tmdbId: string; title: string | null; poster: string | null; year: string | null; mediaType: string }[];
+}
 
 const metaCache: Record<string, { title: string; year: string; poster: string }> = {};
 
@@ -153,6 +161,7 @@ export default function PublicProfilePage() {
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
   const [recentActivity, setRecentActivity] = useState<RecentItem[]>([]);
+  const [lists, setLists] = useState<PublicList[]>([]);
   const [followLoading, setFollowLoading] = useState(false);
 
   const loadProfile = useCallback(async () => {
@@ -168,9 +177,13 @@ export default function PublicProfilePage() {
     setProfile(p);
     setLoading(false);
 
-    // Load recent activity if profile is visible
+    // Load recent activity and lists if profile is visible
     if (!p.isPrivate || p.isFollowing) {
       loadActivity(p.id, p.username);
+      fetch(`/api/users/${p.username}/lists`, { credentials: 'include' })
+        .then(r => r.ok ? r.json() : null)
+        .then(json => { if (json?.data) setLists(json.data); })
+        .catch(() => {});
     }
   }, [username, router]);
 
@@ -321,6 +334,43 @@ export default function PublicProfilePage() {
           <Film className="h-8 w-8 text-muted-foreground/40" />
           <p className="text-sm text-muted-foreground">No activity yet</p>
         </div>
+      )}
+
+      {/* Lists */}
+      {isVisible && lists.length > 0 && (
+        <section className="space-y-3">
+          <h2 className="text-lg font-headline font-bold flex items-center gap-2">
+            <List className="h-5 w-5 text-primary" /> Lists
+          </h2>
+          <div className="space-y-3">
+            {lists.map(l => (
+              <div key={l.id} className="bg-card rounded-3xl border border-white/5 px-5 py-4 flex items-center gap-4">
+                {/* Mini poster strip */}
+                <div className="flex gap-1 shrink-0">
+                  {l.items.slice(0, 3).map(item => (
+                    <div key={item.tmdbId} className="w-10 aspect-[2/3] rounded-lg overflow-hidden bg-muted shrink-0">
+                      {item.poster
+                        ? <img src={item.poster} alt={item.title ?? ''} className="w-full h-full object-cover" />
+                        : <div className="w-full h-full flex items-center justify-center"><Film className="h-3 w-3 text-muted-foreground/40" /></div>
+                      }
+                    </div>
+                  ))}
+                  {l.items.length === 0 && (
+                    <div className="w-10 aspect-[2/3] rounded-lg bg-muted flex items-center justify-center">
+                      <Film className="h-3 w-3 text-muted-foreground/40" />
+                    </div>
+                  )}
+                </div>
+                {/* Info */}
+                <div className="flex-1 min-w-0">
+                  <p className="font-bold text-sm truncate">{l.name}</p>
+                  <p className="text-xs text-muted-foreground">{l.items.length} {l.items.length === 1 ? 'title' : 'titles'}</p>
+                </div>
+                <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
+              </div>
+            ))}
+          </div>
+        </section>
       )}
     </main>
   );

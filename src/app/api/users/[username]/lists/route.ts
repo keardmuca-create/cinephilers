@@ -14,6 +14,12 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ user
   const lists = await prisma.customList.findMany({
     where: { userId: user.id, ...(isOwner ? {} : { isPublic: true }) },
     orderBy: { createdAt: 'desc' },
+    include: {
+      items: {
+        orderBy: { addedAt: 'asc' },
+        select: { tmdbId: true, title: true, poster: true, year: true, mediaType: true },
+      },
+    },
   });
 
   return ok(lists);
