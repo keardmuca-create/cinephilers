@@ -101,25 +101,20 @@ export default function StatsPage() {
 
       {!loading && stats && (
         <div className="space-y-6">
-          {/* This year highlight */}
-          <div className="bg-primary/10 border border-primary/20 rounded-3xl p-6 flex items-center gap-5">
-            <div className="h-14 w-14 rounded-2xl bg-primary/20 flex items-center justify-center shrink-0">
-              <Calendar className="h-7 w-7 text-primary" />
-            </div>
-            <div>
-              <p className="text-4xl font-black font-headline text-primary">{stats.watchedThisYear}</p>
-              <p className="text-sm font-bold text-foreground/80">titles watched in {year}</p>
-              <p className="text-xs text-muted-foreground mt-0.5">{stats.totalWatched} all time</p>
-            </div>
-          </div>
-
           {/* Stat grid */}
           <div className="grid grid-cols-2 gap-3">
             <StatCard
-              icon={Film}
-              label="Movies watched"
-              value={stats.totalMovies}
-              sub={`${stats.totalShows} shows`}
+              icon={Calendar}
+              label={`Watched in ${year}`}
+              value={stats.watchedThisYear}
+              sub={`${stats.totalWatched} all time`}
+            />
+            <StatCard
+              icon={Eye}
+              label="Total watched"
+              value={stats.totalWatched}
+              sub="movies & shows"
+              color="text-blue-400"
             />
             <StatCard
               icon={Star}
@@ -133,13 +128,6 @@ export default function StatsPage() {
               label="Reviews written"
               value={stats.reviewsCount}
               color="text-green-400"
-            />
-            <StatCard
-              icon={Eye}
-              label="Total watched"
-              value={stats.totalWatched}
-              sub="movies & shows"
-              color="text-blue-400"
             />
           </div>
 
@@ -166,8 +154,8 @@ export default function StatsPage() {
                     />
                     <YAxis hide domain={[0, Math.ceil(maxMonth / 0.7)]} />
                     <ChartTooltip
-                      cursor={{ fill: 'rgba(255,255,255,0.04)' }}
-                      contentStyle={{ backgroundColor: '#1a1a1a', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '12px', color: '#fff', fontSize: 12 }}
+                      cursor={{ fill: 'rgba(0,0,0,0.04)' }}
+                      contentStyle={{ backgroundColor: '#fff', border: '1px solid rgba(0,0,0,0.1)', borderRadius: '12px', color: '#111', fontSize: 12 }}
                       formatter={(value: number) => [`${value} title${value !== 1 ? 's' : ''}`, '']}
                     />
                     <Bar dataKey="count" radius={[6, 6, 0, 0]}>
