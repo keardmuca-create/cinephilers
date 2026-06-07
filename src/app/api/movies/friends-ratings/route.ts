@@ -10,7 +10,6 @@ export async function GET(req: NextRequest) {
   const tmdbId = req.nextUrl.searchParams.get('tmdbId');
   if (!tmdbId) return err('tmdbId required', 400);
 
-  // Get IDs of everyone the current user follows
   const following = await prisma.follow.findMany({
     where: { followerId: auth.sub },
     select: { followingId: true },
@@ -23,7 +22,7 @@ export async function GET(req: NextRequest) {
     select: { id: true, username: true, displayName: true, avatarUrl: true },
   };
 
-  const [ratings, watched] = await Promise.all([
+  const [ratings, watched, reviews] = await Promise.all([
     prisma.rating.findMany({
       where: { userId: { in: followingIds }, tmdbId },
       include: { user: userSelect },
@@ -32,28 +31,38 @@ export async function GET(req: NextRequest) {
       where: { userId: { in: followingIds }, tmdbId },
       include: { user: userSelect },
     }),
+    prisma.review.findMany({
+      where: { userId: { in: followingIds }, tmdbId },
+      include: { user: userSelect },
+    }),
   ]);
 
-  // Build a map: userId -> { user, rating, watched }
   const map = new Map<string, {
     user: { id: string; username: string; displayName: string | null; avatarUrl: string | null };
     rating: number | null;
     watched: boolean;
+    reviewed: boolean;
   }>();
 
   for (const w of watched) {
-    map.set(w.userId, { user: w.user, rating: null, watched: true });
+    map.set(w.userId, { user: w.user, rating: null, watched: true, reviewed: false });
   }
   for (const r of ratings) {
     const existing = map.get(r.userId);
     if (existing) {
       existing.rating = r.score;
     } else {
-      map.set(r.userId, { user: r.user, rating: r.score, watched: false });
+      map.set(r.userId, { user: r.user, rating: r.score, watched: false, reviewed: false });
+    }
+  }
+  for (const r of reviews) {
+    const existing = map.get(r.userId);
+    if (existing) {
+      existing.reviewed = true;
+    } else {
+      map.set(r.userId, { user: r.user, rating: null, watched: false, reviewed: true });
     }
   }
 
-  const result = Array.from(map.values()).filter(e => e.rating !== null || e.watched);
-
-  return ok(result);
+  return ok(Array.from(map.values()));
 }

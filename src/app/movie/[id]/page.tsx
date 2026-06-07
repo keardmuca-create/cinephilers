@@ -10,7 +10,7 @@ import { Button } from '@/components/ui/button';
 import {
   Play, Check, Plus, Star, ChevronLeft, Share2, ListPlus, Quote,
   Info, Film, Calendar, Clock, Globe, Building2, Tv, ChevronDown, ChevronUp,
-  DollarSign, Images, Clapperboard, PenLine, Eye, ChevronRight, User, Users,
+  DollarSign, Images, Clapperboard, PenLine, Eye, ChevronRight, User, Users, MessageSquare,
 } from 'lucide-react';
 import { Avatar, AvatarImage } from '@/components/ui/avatar';
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
@@ -1064,36 +1064,10 @@ interface FriendRatingEntry {
   user: { id: string; username: string; displayName: string | null; avatarUrl: string | null };
   rating: number | null;
   watched: boolean;
+  reviewed: boolean;
 }
 
 const FRIENDS_VISIBLE = 6;
-
-function FriendAvatar({ e, onClick }: { e: FriendRatingEntry; onClick?: () => void }) {
-  const inner = (
-    <div className="flex flex-col items-center gap-1.5 shrink-0 group cursor-pointer">
-      <div className="relative h-12 w-12 rounded-2xl bg-primary/20 overflow-hidden flex items-center justify-center">
-        {e.user.avatarUrl
-          ? <img src={e.user.avatarUrl} alt={e.user.username} className="w-full h-full object-cover" />
-          : <span className="text-primary font-bold text-sm">{(e.user.displayName ?? e.user.username).slice(0, 2).toUpperCase()}</span>
-        }
-        {e.watched && (
-          <div className="absolute bottom-0 right-0 h-4 w-4 bg-blue-500 rounded-full flex items-center justify-center">
-            <Eye className="h-2.5 w-2.5 text-white" />
-          </div>
-        )}
-      </div>
-      <p className="text-[10px] font-semibold text-muted-foreground group-hover:text-foreground transition-colors truncate max-w-[52px]">
-        {e.user.displayName ?? e.user.username}
-      </p>
-      {e.rating !== null
-        ? <span className="text-xs font-black text-yellow-400 -mt-0.5">{e.rating}/10</span>
-        : <span className="text-[10px] text-muted-foreground/50 -mt-0.5">—</span>
-      }
-    </div>
-  );
-  if (onClick) return <button onClick={onClick}>{inner}</button>;
-  return <Link href={`/profile/${e.user.username}`}>{inner}</Link>;
-}
 
 function FriendsRatings({ tmdbId }: { tmdbId: string }) {
   const { user: authUser } = useAuth();
@@ -1122,17 +1096,36 @@ function FriendsRatings({ tmdbId }: { tmdbId: string }) {
           onClick={() => setDialogOpen(true)}
           className="text-xs text-primary border border-primary/30 rounded-full px-3 py-1 hover:bg-primary/10 transition-colors font-semibold"
         >
-          See All {entries.length}
+          See All
         </button>
       </div>
 
+      {/* Avatar strip preview */}
       <div className="flex gap-4">
-        {visible.map(e => <FriendAvatar key={e.user.id} e={e} />)}
+        {visible.map(e => (
+          <Link key={e.user.id} href={`/profile/${e.user.username}`} className="flex flex-col items-center gap-1.5 shrink-0 group">
+            <div className="relative h-12 w-12 rounded-2xl bg-primary/20 overflow-hidden flex items-center justify-center">
+              {e.user.avatarUrl
+                ? <img src={e.user.avatarUrl} alt={e.user.username} className="w-full h-full object-cover" />
+                : <span className="text-primary font-bold text-sm">{(e.user.displayName ?? e.user.username).slice(0, 2).toUpperCase()}</span>
+              }
+              {e.watched && (
+                <div className="absolute bottom-0 right-0 h-4 w-4 bg-blue-500 rounded-full flex items-center justify-center">
+                  <Eye className="h-2.5 w-2.5 text-white" />
+                </div>
+              )}
+            </div>
+            <p className="text-[10px] font-semibold text-muted-foreground group-hover:text-foreground transition-colors truncate max-w-[52px]">
+              {e.user.displayName ?? e.user.username}
+            </p>
+            {e.rating !== null
+              ? <span className="text-xs font-black text-yellow-400 -mt-0.5">{e.rating}/10</span>
+              : <span className="text-[10px] text-muted-foreground/50 -mt-0.5">—</span>
+            }
+          </Link>
+        ))}
         {entries.length > FRIENDS_VISIBLE && (
-          <button
-            onClick={() => setDialogOpen(true)}
-            className="flex flex-col items-center gap-1.5 shrink-0"
-          >
+          <button onClick={() => setDialogOpen(true)} className="flex flex-col items-center gap-1.5 shrink-0">
             <div className="h-12 w-12 rounded-2xl bg-muted border border-border flex items-center justify-center">
               <span className="text-xs font-bold text-muted-foreground">+{entries.length - FRIENDS_VISIBLE}</span>
             </div>
@@ -1141,10 +1134,11 @@ function FriendsRatings({ tmdbId }: { tmdbId: string }) {
         )}
       </div>
 
+      {/* Full list dialog */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent className="max-w-sm rounded-3xl p-0 overflow-hidden">
           <DialogHeader className="px-6 pt-6 pb-4 border-b border-white/5">
-            <DialogTitle className="font-headline">Friends ({entries.length})</DialogTitle>
+            <DialogTitle className="font-headline">Friends</DialogTitle>
           </DialogHeader>
           <ScrollArea className="max-h-[60vh]">
             <div className="divide-y divide-white/5">
@@ -1155,25 +1149,29 @@ function FriendsRatings({ tmdbId }: { tmdbId: string }) {
                   onClick={() => setDialogOpen(false)}
                   className="flex items-center gap-3 px-6 py-4 hover:bg-white/5 transition-colors"
                 >
-                  <div className="relative h-10 w-10 rounded-2xl bg-primary/20 overflow-hidden flex items-center justify-center shrink-0">
+                  {/* Avatar */}
+                  <div className="h-10 w-10 rounded-2xl bg-primary/20 overflow-hidden flex items-center justify-center shrink-0">
                     {e.user.avatarUrl
                       ? <img src={e.user.avatarUrl} alt={e.user.username} className="w-full h-full object-cover" />
                       : <span className="text-primary font-bold text-sm">{(e.user.displayName ?? e.user.username).slice(0, 2).toUpperCase()}</span>
                     }
-                    {e.watched && (
-                      <div className="absolute bottom-0 right-0 h-3.5 w-3.5 bg-blue-500 rounded-full flex items-center justify-center">
-                        <Eye className="h-2 w-2 text-white" />
-                      </div>
-                    )}
                   </div>
+
+                  {/* Name + username */}
                   <div className="flex-1 min-w-0">
                     <p className="font-bold text-sm truncate">{e.user.displayName ?? e.user.username}</p>
-                    <p className="text-xs text-muted-foreground">@{e.user.username}</p>
+                    <p className="text-xs text-muted-foreground truncate">@{e.user.username}</p>
                   </div>
-                  {e.rating !== null
-                    ? <span className="text-sm font-black text-yellow-400 shrink-0">{e.rating}/10</span>
-                    : <span className="text-xs text-muted-foreground shrink-0">Not rated</span>
-                  }
+
+                  {/* Icons + rating */}
+                  <div className="flex items-center gap-2 shrink-0">
+                    {e.watched && <Eye className="h-4 w-4 text-blue-400" />}
+                    {e.reviewed && <MessageSquare className="h-4 w-4 text-green-400" />}
+                    {e.rating !== null
+                      ? <span className="text-sm font-black text-yellow-400 min-w-[36px] text-right">{e.rating}/10</span>
+                      : <span className="text-xs text-muted-foreground/50 min-w-[36px] text-right">—</span>
+                    }
+                  </div>
                 </Link>
               ))}
             </div>
