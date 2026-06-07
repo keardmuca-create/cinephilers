@@ -16,8 +16,9 @@ export async function POST(req: NextRequest) {
   };
   if (!tmdbId || !mediaType || !reviewBody) return err('tmdbId, mediaType, and body are required');
   if (!['MOVIE', 'SHOW'].includes(mediaType)) return err('mediaType must be MOVIE or SHOW');
-  if (reviewBody.trim().length < 10) return err('Review must be at least 10 characters');
-  if (reviewBody.trim().length > 5000) return err('Review must be under 5000 characters');
+  const cleanBody = reviewBody.replace(/<[^>]*>/g, '').trim();
+  if (cleanBody.length < 10) return err('Review must be at least 10 characters');
+  if (cleanBody.length > 5000) return err('Review must be under 5000 characters');
 
   const existing = await prisma.review.findUnique({
     where: { userId_tmdbId_mediaType: { userId: auth.sub, tmdbId, mediaType: mediaType as MediaType } },
@@ -28,9 +29,9 @@ export async function POST(req: NextRequest) {
     where: { userId_tmdbId_mediaType: { userId: auth.sub, tmdbId, mediaType: mediaType as MediaType } },
     create: {
       userId: auth.sub, tmdbId, mediaType: mediaType as MediaType,
-      body: reviewBody.trim(), containsSpoiler: containsSpoiler ?? false,
+      body: cleanBody, containsSpoiler: containsSpoiler ?? false,
     },
-    update: { body: reviewBody.trim(), containsSpoiler: containsSpoiler ?? false },
+    update: { body: cleanBody, containsSpoiler: containsSpoiler ?? false },
   });
 
   // Only increment count when creating a new review, not updating

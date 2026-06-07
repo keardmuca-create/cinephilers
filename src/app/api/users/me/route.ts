@@ -31,14 +31,18 @@ export async function PUT(req: NextRequest) {
 
   const { displayName, bio, avatarUrl, favoriteGenres, country, isPrivate } = body as Record<string, unknown>;
 
+  if (displayName && typeof displayName === 'string' && displayName.length > 50)
+    return err('Display name must be 50 characters or less');
   if (bio && typeof bio === 'string' && bio.length > 300)
     return err('Bio must be 300 characters or less');
+
+  const stripHtml = (s: string) => s.replace(/<[^>]*>/g, '').trim();
 
   const updated = await prisma.user.update({
     where: { id: auth.sub },
     data: {
-      ...(displayName !== undefined && { displayName: displayName as string | null }),
-      ...(bio !== undefined && { bio: bio as string | null }),
+      ...(displayName !== undefined && { displayName: displayName ? stripHtml(displayName as string) : null }),
+      ...(bio !== undefined && { bio: bio ? stripHtml(bio as string) : null }),
       ...(avatarUrl !== undefined && { avatarUrl: avatarUrl as string | null }),
       ...(favoriteGenres !== undefined && { favoriteGenres: favoriteGenres as string[] }),
       ...(country !== undefined && { country: country as string | null }),

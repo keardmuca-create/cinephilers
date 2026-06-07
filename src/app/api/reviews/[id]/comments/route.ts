@@ -26,14 +26,15 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
   const { id: reviewId } = await params;
   const { body } = await req.json();
-  if (!body?.trim()) return err('Comment cannot be empty', 400);
-  if (body.length > 500) return err('Comment too long', 400);
+  const cleanBody = typeof body === 'string' ? body.replace(/<[^>]*>/g, '').trim() : '';
+  if (!cleanBody) return err('Comment cannot be empty', 400);
+  if (cleanBody.length > 500) return err('Comment too long', 400);
 
   const review = await prisma.review.findUnique({ where: { id: reviewId }, select: { id: true, userId: true, tmdbId: true } });
   if (!review) return err('Review not found', 404);
 
   const comment = await prisma.reviewComment.create({
-    data: { reviewId, userId: auth.sub, body: body.trim() },
+    data: { reviewId, userId: auth.sub, body: cleanBody },
     include: { user: { select: { id: true, username: true, displayName: true, avatarUrl: true } } },
   });
 
