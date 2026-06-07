@@ -20,7 +20,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Badge } from '@/components/ui/badge';
 import { toast } from '@/hooks/use-toast';
 import { appendWatchLog, removeFromWatchLog, saveMovieRating, ensureSignupDate } from '@/lib/badges';
-import { logActivity, removeActivity } from '@/lib/activity';
+import { logActivity, removeActivity, relativeTime } from '@/lib/activity';
 import { useAuth } from '@/contexts/auth-context';
 import { fetchWithAuth } from '@/lib/fetch-with-auth';
 import { AuthGateModal } from '@/components/auth-gate-modal';
@@ -908,6 +908,16 @@ function AddToListButton({ movie }: { movie: Movie }) {
 
 interface UserReview { movieId: string; movieTitle: string; moviePoster: string; movieYear: string; content: string; rating: number; date: string; }
 
+interface CinephilersReview {
+  id: string;
+  user: { id: string; username: string; displayName: string | null; avatarUrl: string | null };
+  body: string;
+  containsSpoiler: boolean;
+  rating: number | null;
+  createdAt: string;
+  isOwn: boolean;
+}
+
 function ReviewsSection({ movie, writeOpen, setWriteOpen, myReview, setMyReview }: {
   movie: Movie;
   writeOpen: boolean;
@@ -918,6 +928,15 @@ function ReviewsSection({ movie, writeOpen, setWriteOpen, myReview, setMyReview 
   const [draftContent, setDraftContent] = useState('');
   const [draftRating, setDraftRating] = useState(0);
   const [hoverRating, setHoverRating] = useState(0);
+  const [cinephilersReviews, setCinephilersReviews] = useState<CinephilersReview[]>([]);
+
+  // Load Cinephilers reviews
+  useEffect(() => {
+    fetch(`/api/movies/reviews?tmdbId=${encodeURIComponent(movie.id)}`, { credentials: 'include' })
+      .then(r => r.ok ? r.json() : null)
+      .then(json => { if (json?.data?.length) setCinephilersReviews(json.data); })
+      .catch(() => {});
+  }, [movie.id]);
 
   // Sync draft when dialog opens
   useEffect(() => {
@@ -951,9 +970,61 @@ function ReviewsSection({ movie, writeOpen, setWriteOpen, myReview, setMyReview 
   };
 
   const allReviews = movie.reviews ?? [];
+  const previewReviews = cinephilersReviews.slice(0, 3);
 
   return (
     <section className="space-y-6">
+      {/* ── Cinephilers Reviews ── */}
+      {cinephilersReviews.length > 0 && (
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <h3 className="text-2xl font-headline font-bold">Cinephilers Reviews</h3>
+            <Link
+              href={`/movie/${movie.id}/reviews`}
+              className="text-xs text-primary border border-primary/30 rounded-full px-3 py-1 hover:bg-primary/10 transition-colors font-semibold"
+            >
+              See All
+            </Link>
+          </div>
+          <div className="space-y-4">
+            {previewReviews.map(r => (
+              <div key={r.id} className="bg-card rounded-3xl border border-white/5 p-5 space-y-3">
+                <div className="flex items-center justify-between gap-3">
+                  <Link
+                    href={r.isOwn ? '/profile' : `/profile/${r.user.username}`}
+                    className="flex items-center gap-3 min-w-0 group"
+                  >
+                    <div className="h-9 w-9 rounded-2xl bg-primary/20 overflow-hidden flex items-center justify-center shrink-0">
+                      {r.user.avatarUrl
+                        ? <img src={r.user.avatarUrl} alt={r.user.username} className="w-full h-full object-cover" />
+                        : <span className="text-primary font-bold text-xs">{(r.user.displayName ?? r.user.username).slice(0, 2).toUpperCase()}</span>
+                      }
+                    </div>
+                    <div className="min-w-0">
+                      <p className="font-bold text-sm truncate group-hover:text-primary transition-colors">
+                        {r.user.displayName ?? r.user.username}
+                        {r.isOwn && <span className="ml-1.5 text-[10px] text-primary font-bold uppercase tracking-wider">You</span>}
+                      </p>
+                      <p className="text-xs text-muted-foreground">{relativeTime(r.createdAt)}</p>
+                    </div>
+                  </Link>
+                  {r.rating !== null && (
+                    <div className="flex items-center gap-1 bg-yellow-400/10 px-2.5 py-1 rounded-full shrink-0">
+                      <Star className="h-3.5 w-3.5 fill-yellow-400 text-yellow-400" />
+                      <span className="text-sm font-black text-yellow-400">{r.rating}/10</span>
+                    </div>
+                  )}
+                </div>
+                <p className="text-sm text-foreground/90 leading-relaxed italic">
+                  {r.containsSpoiler && <span className="not-italic font-bold text-yellow-500/80 mr-1.5">[Spoiler]</span>}
+                  &ldquo;{r.body}&rdquo;
+                </p>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       <div className="flex items-center justify-between">
         <h3 className="text-2xl font-headline font-bold">Community Reviews</h3>
         {allReviews.length > 0 && (
