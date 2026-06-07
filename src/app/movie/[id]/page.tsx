@@ -1072,7 +1072,6 @@ const FRIENDS_VISIBLE = 6;
 function FriendsRatings({ tmdbId }: { tmdbId: string }) {
   const { user: authUser } = useAuth();
   const [entries, setEntries] = useState<FriendRatingEntry[]>([]);
-  const [dialogOpen, setDialogOpen] = useState(false);
 
   useEffect(() => {
     if (!authUser) return;
@@ -1092,15 +1091,14 @@ function FriendsRatings({ tmdbId }: { tmdbId: string }) {
         <h3 className="text-xl font-headline font-bold flex items-center gap-2">
           <Users className="h-5 w-5 text-primary" /> Friends
         </h3>
-        <button
-          onClick={() => setDialogOpen(true)}
+        <Link
+          href={`/movie/${tmdbId}/friends`}
           className="text-xs text-primary border border-primary/30 rounded-full px-3 py-1 hover:bg-primary/10 transition-colors font-semibold"
         >
           See All
-        </button>
+        </Link>
       </div>
 
-      {/* Avatar strip preview */}
       <div className="flex gap-4">
         {visible.map(e => (
           <Link key={e.user.id} href={`/profile/${e.user.username}`} className="flex flex-col items-center gap-1.5 shrink-0 group">
@@ -1125,59 +1123,14 @@ function FriendsRatings({ tmdbId }: { tmdbId: string }) {
           </Link>
         ))}
         {entries.length > FRIENDS_VISIBLE && (
-          <button onClick={() => setDialogOpen(true)} className="flex flex-col items-center gap-1.5 shrink-0">
+          <Link href={`/movie/${tmdbId}/friends`} className="flex flex-col items-center gap-1.5 shrink-0">
             <div className="h-12 w-12 rounded-2xl bg-muted border border-border flex items-center justify-center">
               <span className="text-xs font-bold text-muted-foreground">+{entries.length - FRIENDS_VISIBLE}</span>
             </div>
             <p className="text-[10px] text-muted-foreground">more</p>
-          </button>
+          </Link>
         )}
       </div>
-
-      {/* Full list dialog */}
-      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="max-w-sm rounded-3xl p-0 overflow-hidden">
-          <DialogHeader className="px-6 pt-6 pb-4 border-b border-white/5">
-            <DialogTitle className="font-headline">Friends</DialogTitle>
-          </DialogHeader>
-          <ScrollArea className="max-h-[60vh]">
-            <div className="divide-y divide-white/5">
-              {entries.map(e => (
-                <Link
-                  key={e.user.id}
-                  href={`/profile/${e.user.username}`}
-                  onClick={() => setDialogOpen(false)}
-                  className="flex items-center gap-3 px-6 py-4 hover:bg-white/5 transition-colors"
-                >
-                  {/* Avatar */}
-                  <div className="h-10 w-10 rounded-2xl bg-primary/20 overflow-hidden flex items-center justify-center shrink-0">
-                    {e.user.avatarUrl
-                      ? <img src={e.user.avatarUrl} alt={e.user.username} className="w-full h-full object-cover" />
-                      : <span className="text-primary font-bold text-sm">{(e.user.displayName ?? e.user.username).slice(0, 2).toUpperCase()}</span>
-                    }
-                  </div>
-
-                  {/* Name + username */}
-                  <div className="flex-1 min-w-0">
-                    <p className="font-bold text-sm truncate">{e.user.displayName ?? e.user.username}</p>
-                    <p className="text-xs text-muted-foreground truncate">@{e.user.username}</p>
-                  </div>
-
-                  {/* Icons + rating */}
-                  <div className="flex items-center gap-2 shrink-0">
-                    {e.watched && <Eye className="h-4 w-4 text-blue-400" />}
-                    {e.reviewed && <MessageSquare className="h-4 w-4 text-green-400" />}
-                    {e.rating !== null
-                      ? <span className="text-sm font-black text-yellow-400 min-w-[36px] text-right">{e.rating}/10</span>
-                      : <span className="text-xs text-muted-foreground/50 min-w-[36px] text-right">—</span>
-                    }
-                  </div>
-                </Link>
-              ))}
-            </div>
-          </ScrollArea>
-        </DialogContent>
-      </Dialog>
     </section>
   );
 }
