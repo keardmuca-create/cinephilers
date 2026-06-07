@@ -29,6 +29,14 @@ export async function GET(req: NextRequest) {
     : [];
   const ratingMap = new Map(ratings.map(r => [r.userId, r.score]));
 
+  const myLikes = auth
+    ? await prisma.reviewLike.findMany({
+        where: { userId: auth.sub, reviewId: { in: reviews.map(r => r.id) } },
+        select: { reviewId: true },
+      })
+    : [];
+  const myLikedIds = new Set(myLikes.map(l => l.reviewId));
+
   const result = reviews.map(r => ({
     id: r.id,
     user: r.user,
@@ -37,6 +45,8 @@ export async function GET(req: NextRequest) {
     rating: ratingMap.get(r.userId) ?? null,
     createdAt: r.createdAt.toISOString(),
     isOwn: auth ? r.userId === auth.sub : false,
+    likesCount: r.likesCount,
+    likedByMe: myLikedIds.has(r.id),
   }));
 
   return ok(result);

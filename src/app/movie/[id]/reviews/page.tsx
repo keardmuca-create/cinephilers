@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { ChevronLeft, MessageSquare, Star, Loader2 } from 'lucide-react';
+import { ChevronLeft, MessageSquare, Star, Loader2, Heart } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { relativeTime } from '@/lib/activity';
 
@@ -15,6 +15,8 @@ interface CinephilersReview {
   rating: number | null;
   createdAt: string;
   isOwn: boolean;
+  likesCount: number;
+  likedByMe: boolean;
 }
 
 export default function MovieReviewsPage() {
@@ -24,6 +26,20 @@ export default function MovieReviewsPage() {
   const [reviews, setReviews] = useState<CinephilersReview[]>([]);
   const [loading, setLoading] = useState(true);
   const [movieTitle, setMovieTitle] = useState('');
+
+  const toggleLike = async (reviewId: string, likedByMe: boolean) => {
+    setReviews(prev => prev.map(r => r.id !== reviewId ? r : {
+      ...r,
+      likedByMe: !likedByMe,
+      likesCount: r.likesCount + (likedByMe ? -1 : 1),
+    }));
+    try {
+      await fetch(`/api/reviews/${reviewId}/like`, {
+        method: likedByMe ? 'DELETE' : 'POST',
+        credentials: 'include',
+      });
+    } catch { /* ignore */ }
+  };
 
   useEffect(() => {
     try {
@@ -108,6 +124,17 @@ export default function MovieReviewsPage() {
                 )}
                 <p className="text-sm text-foreground/90 leading-relaxed italic">&ldquo;{r.body}&rdquo;</p>
               </div>
+
+              {/* Like button */}
+              {!r.isOwn && (
+                <button
+                  onClick={() => toggleLike(r.id, r.likedByMe)}
+                  className="flex items-center gap-1.5 text-xs font-bold text-muted-foreground hover:text-primary transition-colors"
+                >
+                  <Heart className={`h-4 w-4 transition-colors ${r.likedByMe ? 'fill-primary text-primary' : ''}`} />
+                  {r.likesCount > 0 && <span>{r.likesCount}</span>}
+                </button>
+              )}
             </div>
           ))}
         </div>
