@@ -1,6 +1,6 @@
 export interface ActivityEntry {
   id: string;
-  action: 'watched' | 'rated' | 'watchlist';
+  action: 'watched' | 'rated' | 'watchlist' | 'reviewed';
   contentId: string;
   contentTitle: string;
   contentPoster: string;

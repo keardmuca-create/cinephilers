@@ -112,8 +112,27 @@ async function restoreFromDb() {
     const dbReviewIds = new Set(reviews.map(r => r.tmdbId));
     for (const r of reviews) {
       try {
+        // Preserve title/poster/year from existing local entry or meta cache
+        // so the profile reviews section can always show the poster
+        let movieTitle = '', moviePoster = '', movieYear = '';
+        try {
+          const existing = localStorage.getItem(`review-${r.tmdbId}`);
+          if (existing) {
+            const e = JSON.parse(existing);
+            movieTitle = e.movieTitle ?? '';
+            moviePoster = e.moviePoster ?? '';
+            movieYear = e.movieYear ?? '';
+          }
+          if (!moviePoster) {
+            const meta = localStorage.getItem(`meta-${r.tmdbId}`);
+            if (meta) { const m = JSON.parse(meta); movieTitle = m.title ?? ''; moviePoster = m.poster ?? ''; movieYear = m.year ?? ''; }
+          }
+        } catch { /* ignore */ }
         localStorage.setItem(`review-${r.tmdbId}`, JSON.stringify({
           movieId: r.tmdbId,
+          movieTitle,
+          moviePoster,
+          movieYear,
           content: r.body,
           containsSpoiler: r.containsSpoiler,
           date: new Date(r.createdAt).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }),

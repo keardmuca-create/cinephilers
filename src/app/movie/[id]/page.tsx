@@ -966,6 +966,7 @@ function ReviewsSection({ movie, writeOpen, setWriteOpen, myReview, setMyReview 
     }).catch(() => { /* background sync */ });
     setMyReview(review);
     setWriteOpen(false);
+    logActivity({ action: 'reviewed', contentId: movie.id, contentTitle: movie.title, contentPoster: movie.poster, contentYear: movie.year });
     toast({ title: 'Review saved' });
   };
 
