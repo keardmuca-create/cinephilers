@@ -1,9 +1,9 @@
 "use client"
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { ChevronLeft, Eye, MessageSquare, Star, Users, Loader2 } from 'lucide-react';
+import { ChevronLeft, Eye, MessageSquare, Star, Users, Loader2, Search, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/contexts/auth-context';
 import { fetchWithAuth } from '@/lib/fetch-with-auth';
@@ -23,6 +23,7 @@ export default function MovieFriendsPage() {
   const [entries, setEntries] = useState<FriendRatingEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [movieTitle, setMovieTitle] = useState<string>('');
+  const [search, setSearch] = useState('');
 
   useEffect(() => {
     if (!authUser) return;
@@ -39,6 +40,15 @@ export default function MovieFriendsPage() {
       .catch(() => {})
       .finally(() => setLoading(false));
   }, [id, authUser]);
+
+  const filtered = useMemo(() => {
+    if (!search.trim()) return entries;
+    const q = search.trim().toLowerCase();
+    return entries.filter(e =>
+      (e.user.displayName ?? e.user.username).toLowerCase().includes(q) ||
+      e.user.username.toLowerCase().includes(q)
+    );
+  }, [entries, search]);
 
   if (!authLoading && !authUser) {
     router.replace('/login');
@@ -63,6 +73,25 @@ export default function MovieFriendsPage() {
         </div>
       </div>
 
+      {/* Search */}
+      {!loading && entries.length > 4 && (
+        <div className="relative">
+          <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <input
+            type="text"
+            placeholder="Search friends"
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            className="w-full bg-white/5 border-2 border-primary/80 rounded-2xl pl-10 pr-10 py-3 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary transition-colors"
+          />
+          {search && (
+            <button onClick={() => setSearch('')} className="absolute right-3.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
+              <X className="h-4 w-4" />
+            </button>
+          )}
+        </div>
+      )}
+
       {/* Loading */}
       {loading && (
         <div className="flex items-center justify-center py-20">
@@ -83,10 +112,18 @@ export default function MovieFriendsPage() {
         </div>
       )}
 
+      {/* No search results */}
+      {!loading && entries.length > 0 && filtered.length === 0 && (
+        <div className="flex flex-col items-center justify-center py-16 gap-2 text-center">
+          <p className="text-sm text-muted-foreground">No friends match &ldquo;{search}&rdquo;</p>
+          <button onClick={() => setSearch('')} className="text-xs text-primary font-bold">Clear search</button>
+        </div>
+      )}
+
       {/* List */}
-      {!loading && entries.length > 0 && (
+      {!loading && filtered.length > 0 && (
         <div className="bg-card rounded-3xl border border-white/5 divide-y divide-white/5 overflow-hidden">
-          {entries.map(e => (
+          {filtered.map(e => (
             <Link
               key={e.user.id}
               href={`/profile/${e.user.username}`}

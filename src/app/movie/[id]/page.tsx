@@ -1171,9 +1171,9 @@ function FriendsRatings({ tmdbId }: { tmdbId: string }) {
         </Link>
       </div>
 
-      <div className="flex gap-4">
+      <div className="flex gap-3">
         {visible.map(e => (
-          <Link key={e.user.id} href={`/profile/${e.user.username}`} className="flex flex-col items-center gap-1.5 shrink-0 group">
+          <Link key={e.user.id} href={`/profile/${e.user.username}`} className="shrink-0 group">
             <div className="relative h-12 w-12 rounded-2xl bg-primary/20 overflow-hidden flex items-center justify-center">
               {e.user.avatarUrl
                 ? <img src={e.user.avatarUrl} alt={e.user.username} className="w-full h-full object-cover" />
@@ -1185,21 +1185,13 @@ function FriendsRatings({ tmdbId }: { tmdbId: string }) {
                 </div>
               )}
             </div>
-            <p className="text-[10px] font-semibold text-muted-foreground group-hover:text-foreground transition-colors truncate max-w-[52px]">
-              {e.user.displayName ?? e.user.username}
-            </p>
-            {e.rating !== null
-              ? <span className="text-xs font-black text-yellow-400 -mt-0.5">{e.rating}/10</span>
-              : <span className="text-[10px] text-muted-foreground/50 -mt-0.5">—</span>
-            }
           </Link>
         ))}
         {entries.length > FRIENDS_VISIBLE && (
-          <Link href={`/movie/${tmdbId}/friends`} className="flex flex-col items-center gap-1.5 shrink-0">
+          <Link href={`/movie/${tmdbId}/friends`} className="shrink-0">
             <div className="h-12 w-12 rounded-2xl bg-muted border border-border flex items-center justify-center">
               <span className="text-xs font-bold text-muted-foreground">+{entries.length - FRIENDS_VISIBLE}</span>
             </div>
-            <p className="text-[10px] text-muted-foreground">more</p>
           </Link>
         )}
       </div>
