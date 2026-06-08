@@ -5,8 +5,21 @@ import { Toaster } from '@/components/ui/toaster';
 import { AuthProvider } from '@/contexts/auth-context';
 
 export const metadata: Metadata = {
-  title: 'Cinephilers',
-  description: 'Track, rate, and discuss movies with friends.',
+  title: 'Cinephilers — Track, Rate & Discuss Movies with Friends',
+  description: 'Log every movie and show you watch. Rate them, write reviews, build lists, and see what your friends are watching.',
+  metadataBase: new URL('https://cinephilers.app'),
+  openGraph: {
+    type: 'website',
+    siteName: 'Cinephilers',
+    title: 'Cinephilers — Track, Rate & Discuss Movies with Friends',
+    description: 'Log every movie and show you watch. Rate them, write reviews, build lists, and see what your friends are watching.',
+    url: 'https://cinephilers.app',
+  },
+  twitter: {
+    card: 'summary',
+    title: 'Cinephilers — Track, Rate & Discuss Movies with Friends',
+    description: 'Log every movie and show you watch. Rate them, write reviews, build lists, and see what your friends are watching.',
+  },
   icons: {
     icon: '/favicon.svg',
     shortcut: '/favicon.svg',
