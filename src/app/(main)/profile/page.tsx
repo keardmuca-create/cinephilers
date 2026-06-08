@@ -952,6 +952,24 @@ export default function ProfilePage() {
                       </Link>
                     </Button>
                   </div>
+                  <div className="space-y-2">
+                    <h4 className="text-sm font-bold">About</h4>
+                    <Button variant="ghost" className="w-full justify-start text-sm h-12 rounded-xl" asChild>
+                      <Link href="/about" onClick={() => setShowSettings(false)}>
+                        About Cinephilers <ChevronRight className="h-4 w-4 ml-auto" />
+                      </Link>
+                    </Button>
+                    <Button variant="ghost" className="w-full justify-start text-sm h-12 rounded-xl" asChild>
+                      <Link href="/privacy" onClick={() => setShowSettings(false)}>
+                        Privacy Policy <ChevronRight className="h-4 w-4 ml-auto" />
+                      </Link>
+                    </Button>
+                    <Button variant="ghost" className="w-full justify-start text-sm h-12 rounded-xl" asChild>
+                      <Link href="/terms" onClick={() => setShowSettings(false)}>
+                        Terms of Service <ChevronRight className="h-4 w-4 ml-auto" />
+                      </Link>
+                    </Button>
+                  </div>
                   <Separator className="bg-white/5" />
                   <Button variant="destructive" className="w-full rounded-xl h-12" onClick={logout}>Logout</Button>
                   <Button
