@@ -20,6 +20,9 @@ export const metadata: Metadata = {
     title: 'Cinephilers — Track, Rate & Discuss with Friends',
     description: 'Log every movie and show you watch. Rate them, write reviews, build lists, and see what your friends are watching.',
   },
+  verification: {
+    google: 'iXOrHwM2YB_g3HVEb6FnHIISh0He81e5DUdazpKHsvk',
+  },
   icons: {
     icon: '/favicon.svg',
     shortcut: '/favicon.svg',
