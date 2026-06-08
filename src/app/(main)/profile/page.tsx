@@ -924,14 +924,14 @@ export default function ProfilePage() {
         </Button>
 
         <Dialog open={showSettings} onOpenChange={v => { setShowSettings(v); if (!v) setSettingsView('main'); }}>
-          <DialogContent className="sm:max-w-md rounded-3xl">
+          <DialogContent className="sm:max-w-md rounded-3xl max-h-[85vh] flex flex-col">
             {/* ── Main settings view ── */}
             {settingsView === 'main' && (
               <>
                 <DialogHeader>
                   <DialogTitle className="font-headline">Settings</DialogTitle>
                 </DialogHeader>
-                <div className="space-y-6 py-4">
+                <div className="space-y-6 py-4 overflow-y-auto flex-1 pr-1">
                   <div className="space-y-2">
                     <h4 className="text-sm font-bold">Account</h4>
                     <Button variant="ghost" className="w-full justify-start text-sm h-12 rounded-xl" onClick={() => setSettingsView('edit-profile')}>
@@ -971,7 +971,6 @@ export default function ProfilePage() {
                     </Button>
                   </div>
                   <Separator className="bg-white/5" />
-                  <Button variant="destructive" className="w-full rounded-xl h-12" onClick={logout}>Logout</Button>
                   <Button
                     variant="ghost"
                     className="w-full rounded-xl h-12 text-red-500 hover:text-red-600 hover:bg-red-500/10 text-sm"
@@ -979,6 +978,7 @@ export default function ProfilePage() {
                   >
                     Delete Account
                   </Button>
+                  <Button variant="destructive" className="w-full rounded-xl h-12" onClick={logout}>Logout</Button>
                 </div>
               </>
             )}
