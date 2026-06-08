@@ -65,6 +65,7 @@ model User {
   sentRequests      FollowRequest[]   @relation("SentRequests")
   receivedRequests  FollowRequest[]   @relation("ReceivedRequests")
   reviewComments    ReviewComment[]
+  reports           Report[]
 }
 
 model Rating {
@@ -243,4 +244,16 @@ model ReviewComment {
 
   review Review @relation(fields: [reviewId], references: [id], onDelete: Cascade)
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Report {
+  id         String   @id @default(uuid())
+  reporterId String
+  targetType String
+  targetId   String
+  reason     String
+  status     String   @default("pending")
+  createdAt  DateTime @default(now())
+
+  reporter User @relation(fields: [reporterId], references: [id], onDelete: Cascade)
 }

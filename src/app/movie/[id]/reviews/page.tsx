@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { ChevronLeft, MessageSquare, Star, Loader2, Heart, Send, Trash2 } from 'lucide-react';
+import { ChevronLeft, MessageSquare, Star, Loader2, Heart, Send, Trash2, Flag } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { relativeTime } from '@/lib/activity';
 import { useAuth } from '@/contexts/auth-context';
@@ -28,11 +28,84 @@ interface CinephilersReview {
   likedByMe: boolean;
 }
 
+const REPORT_REASONS = [
+  'Spam or advertising',
+  'Inappropriate or offensive content',
+  'Spoilers without warning',
+  'Harassment or bullying',
+];
+
+function ReportDialog({ targetType, targetId, onClose }: { targetType: 'review' | 'comment'; targetId: string; onClose: () => void }) {
+  const [reason, setReason] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [done, setDone] = useState(false);
+
+  const submit = async () => {
+    if (!reason || submitting) return;
+    setSubmitting(true);
+    try {
+      await fetchWithAuth('/api/reports', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ targetType, targetId, reason }),
+      });
+      setDone(true);
+      setTimeout(onClose, 1500);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={onClose}>
+      <div className="bg-card border border-white/10 rounded-3xl p-6 w-full max-w-sm space-y-4" onClick={e => e.stopPropagation()}>
+        {done ? (
+          <div className="text-center py-4">
+            <p className="font-bold font-headline text-lg">Thanks for reporting</p>
+            <p className="text-sm text-muted-foreground mt-1">We&apos;ll review this shortly.</p>
+          </div>
+        ) : (
+          <>
+            <div>
+              <h3 className="font-headline font-bold text-lg">Report {targetType}</h3>
+              <p className="text-sm text-muted-foreground mt-1">Why are you reporting this?</p>
+            </div>
+            <div className="space-y-2">
+              {REPORT_REASONS.map(r => (
+                <button
+                  key={r}
+                  onClick={() => setReason(r)}
+                  className={`w-full text-left px-4 py-3 rounded-2xl text-sm font-medium transition-colors border ${reason === r ? 'border-primary bg-primary/10 text-foreground' : 'border-white/10 bg-white/5 text-muted-foreground hover:bg-white/10'}`}
+                >
+                  {r}
+                </button>
+              ))}
+            </div>
+            <div className="flex gap-3 pt-1">
+              <button onClick={onClose} className="flex-1 py-3 rounded-2xl border border-white/10 text-sm font-bold text-muted-foreground hover:bg-white/5 transition-colors">
+                Cancel
+              </button>
+              <button
+                onClick={submit}
+                disabled={!reason || submitting}
+                className="flex-1 py-3 rounded-2xl bg-primary text-white text-sm font-bold disabled:opacity-40 hover:bg-primary/90 transition-colors"
+              >
+                {submitting ? <Loader2 className="h-4 w-4 animate-spin mx-auto" /> : 'Submit'}
+              </button>
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function CommentSection({ reviewId, currentUser }: { reviewId: string; currentUser: { id: string; username: string; displayName: string | null; avatarUrl: string | null } | null }) {
   const [comments, setComments] = useState<ReviewComment[]>([]);
   const [loading, setLoading] = useState(true);
   const [text, setText] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [reportTarget, setReportTarget] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -92,9 +165,13 @@ function CommentSection({ reviewId, currentUser }: { reviewId: string; currentUs
                     <span className="text-xs text-muted-foreground ml-1.5">{relativeTime(c.createdAt)}</span>
                     <p className="text-xs text-foreground/90 mt-0.5 leading-relaxed">{c.body}</p>
                   </div>
-                  {currentUser?.id === c.user.id && (
+                  {currentUser?.id === c.user.id ? (
                     <button onClick={() => deleteComment(c.id)} className="opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-destructive shrink-0">
                       <Trash2 className="h-3.5 w-3.5" />
+                    </button>
+                  ) : currentUser && (
+                    <button onClick={() => setReportTarget(c.id)} className="opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-yellow-500 shrink-0">
+                      <Flag className="h-3.5 w-3.5" />
                     </button>
                   )}
                 </div>
@@ -130,6 +207,9 @@ function CommentSection({ reviewId, currentUser }: { reviewId: string; currentUs
           </div>
         </div>
       )}
+      {reportTarget && (
+        <ReportDialog targetType="comment" targetId={reportTarget} onClose={() => setReportTarget(null)} />
+      )}
     </div>
   );
 }
@@ -142,6 +222,7 @@ export default function MovieReviewsPage() {
   const [reviews, setReviews] = useState<CinephilersReview[]>([]);
   const [loading, setLoading] = useState(true);
   const [movieTitle, setMovieTitle] = useState('');
+  const [reportReviewId, setReportReviewId] = useState<string | null>(null);
 
   useEffect(() => {
     try {
@@ -248,15 +329,24 @@ export default function MovieReviewsPage() {
                 <p className="text-sm text-foreground/90 leading-relaxed italic">&ldquo;{r.body}&rdquo;</p>
               </div>
 
-              {/* Like button */}
+              {/* Like + Report buttons */}
               {!r.isOwn && user && (
-                <button
-                  onClick={() => toggleLike(r.id, r.likedByMe)}
-                  className="flex items-center gap-1.5 text-xs font-bold text-muted-foreground hover:text-primary transition-colors"
-                >
-                  <Heart className={`h-4 w-4 transition-colors ${r.likedByMe ? 'fill-primary text-primary' : ''}`} />
-                  {r.likesCount > 0 && <span>{r.likesCount}</span>}
-                </button>
+                <div className="flex items-center justify-between">
+                  <button
+                    onClick={() => toggleLike(r.id, r.likedByMe)}
+                    className="flex items-center gap-1.5 text-xs font-bold text-muted-foreground hover:text-primary transition-colors"
+                  >
+                    <Heart className={`h-4 w-4 transition-colors ${r.likedByMe ? 'fill-primary text-primary' : ''}`} />
+                    {r.likesCount > 0 && <span>{r.likesCount}</span>}
+                  </button>
+                  <button
+                    onClick={() => setReportReviewId(r.id)}
+                    className="text-muted-foreground/40 hover:text-yellow-500 transition-colors"
+                    title="Report review"
+                  >
+                    <Flag className="h-3.5 w-3.5" />
+                  </button>
+                </div>
               )}
 
               {/* Comments */}
@@ -264,6 +354,10 @@ export default function MovieReviewsPage() {
             </div>
           ))}
         </div>
+      )}
+
+      {reportReviewId && (
+        <ReportDialog targetType="review" targetId={reportReviewId} onClose={() => setReportReviewId(null)} />
       )}
     </main>
   );
