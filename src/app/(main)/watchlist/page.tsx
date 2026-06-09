@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { Bookmark, ChevronLeft, Search, SlidersHorizontal, Check, X } from 'lucide-react';
+import { Bookmark, ChevronLeft, Search, SlidersHorizontal, Check, X, Film } from 'lucide-react';
 
 type SortOption = 'title-asc' | 'title-desc';
 
@@ -27,9 +27,8 @@ function ItemCard({ item }: { item: WatchlistItem }) {
         {item.poster ? (
           <img src={item.poster} alt={item.title} className="w-full h-full object-cover transition-transform group-hover:scale-105" loading="lazy" />
         ) : (
-          <div className="w-full h-full flex flex-col items-center justify-center gap-1 bg-gradient-to-b from-muted to-muted/60 p-1">
-            <span className="text-2xl">🎬</span>
-            <p className="text-[8px] text-muted-foreground/60 font-medium text-center line-clamp-2 leading-tight">{item.title}</p>
+          <div className="w-full h-full flex items-center justify-center bg-white/10">
+            <Film className="h-7 w-7 text-white/40" />
           </div>
         )}
       </div>
