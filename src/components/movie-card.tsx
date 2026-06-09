@@ -52,8 +52,9 @@ export const MovieCard = React.memo(function MovieCard({ movie, className, horiz
               loading="lazy"
             />
           ) : (
-            <div className="w-full h-full flex items-center justify-center">
-              <Film className="h-12 w-12 text-muted-foreground/30" />
+            <div className="w-full h-full flex flex-col items-center justify-center gap-2 bg-muted/50">
+              <Film className="h-10 w-10 text-muted-foreground/40" />
+              <p className="text-[10px] text-muted-foreground/50 font-medium text-center px-2 line-clamp-2">{movie.title}</p>
             </div>
           )}
         </div>
@@ -64,10 +65,12 @@ export const MovieCard = React.memo(function MovieCard({ movie, className, horiz
               {movie.title}
             </h3>
             <div className="flex flex-col items-end gap-0.5 shrink-0">
-              <div className="flex items-center gap-0.5">
-                <Star className="h-3 w-3 fill-yellow-400 text-yellow-400" />
-                <span className="text-xs font-bold text-foreground">{movie.rating.toFixed(1)}</span>
-              </div>
+              {movie.rating > 0 && (
+                <div className="flex items-center gap-0.5">
+                  <Star className="h-3 w-3 fill-yellow-400 text-yellow-400" />
+                  <span className="text-xs font-bold text-foreground">{movie.rating.toFixed(1)}</span>
+                </div>
+              )}
               {userRating !== undefined && (
                 <div className="flex items-center gap-0.5">
                   <Star className="h-3 w-3 fill-blue-400 text-blue-400" />
