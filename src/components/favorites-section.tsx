@@ -1,7 +1,8 @@
 "use client"
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Plus, X, Search, Heart } from 'lucide-react';
+import { Plus, X, Search, Heart, RefreshCw } from 'lucide-react';
+import Link from 'next/link';
 import { fetchWithAuth } from '@/lib/fetch-with-auth';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
@@ -187,19 +188,28 @@ export function FavoritesSection() {
             {/* Hover dim */}
             <div className="absolute inset-0 bg-black/0 group-hover:bg-black/40 transition-colors pointer-events-none" />
 
-            {/* Remove X */}
-            <button
-              onClick={e => removeFavorite(i, e)}
-              className="absolute top-1.5 right-1.5 z-20 p-1 rounded-full bg-black/70 text-white opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-500/90"
-            >
-              <X className="h-3 w-3" />
-            </button>
+            {/* Hover actions */}
+            <div className="absolute top-1.5 right-1.5 z-20 flex flex-col gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+              <button
+                onClick={e => removeFavorite(i, e)}
+                className="p-1 rounded-full bg-black/70 text-white hover:bg-red-500/90"
+              >
+                <X className="h-3 w-3" />
+              </button>
+              <button
+                onClick={e => { e.preventDefault(); e.stopPropagation(); openSearch(i); }}
+                className="p-1 rounded-full bg-black/70 text-white hover:bg-primary/90"
+                aria-label={`Swap ${fav.title}`}
+              >
+                <RefreshCw className="h-3 w-3" />
+              </button>
+            </div>
 
-            {/* Click to swap (whole card, behind X) */}
-            <button
-              onClick={() => openSearch(i)}
+            {/* Click navigates to movie */}
+            <Link
+              href={`/movie/${fav.id}`}
               className="absolute inset-0 z-10"
-              aria-label={`Swap ${fav.title}`}
+              aria-label={fav.title}
             />
           </div>
         ))}
