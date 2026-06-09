@@ -9,7 +9,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { MovieCard } from '@/components/movie-card';
 import Link from 'next/link';
-import { Settings, Star, Film, List, MessageSquare, ChevronRight, Award, History, Bookmark, User, Eye, Plus, Heart, Loader2, TrendingUp, Download } from 'lucide-react';
+import { Settings, Star, Film, List, MessageSquare, ChevronRight, Award, History, Bookmark, User, Eye, Plus, Heart, Loader2, TrendingUp, Download, Trash2 } from 'lucide-react';
 import { ImportDialog } from '@/components/import-dialog';
 import { FavoritesSection } from '@/components/favorites-section';
 import { BarChart, Bar, XAxis, ResponsiveContainer, Cell, YAxis, Tooltip as ChartTooltip } from 'recharts';
@@ -18,6 +18,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
 import { Progress } from '@/components/ui/progress';
 import { toast } from '@/hooks/use-toast';
+import { fetchWithAuth } from '@/lib/fetch-with-auth';
 import { useAuth } from '@/contexts/auth-context';
 
 interface RatedItem { id: string; title: string; poster: string; year: string; tmdbRating?: number; userRating: number; }
@@ -407,6 +408,8 @@ export default function ProfilePage() {
   const [deleteConfirmText, setDeleteConfirmText] = useState('');
   const [deleting, setDeleting] = useState(false);
   const [showImport, setShowImport] = useState(false);
+  const [showClearHistory, setShowClearHistory] = useState(false);
+  const [clearingHistory, setClearingHistory] = useState(false);
 
   // Captured before hooks — rendered after all hooks to respect Rules of Hooks
   const guestView = !authLoading && !authUser ? (
@@ -653,6 +656,29 @@ export default function ProfilePage() {
       credentials: 'include',
       body: JSON.stringify({ isPrivate: newValue }),
     }).catch(() => { /* fire-and-forget */ });
+  }
+
+  async function clearWatchHistory() {
+    setClearingHistory(true);
+    try {
+      const res = await fetchWithAuth('/api/watched', { method: 'DELETE' });
+      if (!res.ok) { toast({ title: 'Something went wrong. Please try again.', variant: 'destructive' }); return; }
+      // Clear localStorage watched keys
+      try {
+        const toRemove: string[] = [];
+        for (let i = 0; i < localStorage.length; i++) {
+          const k = localStorage.key(i)!;
+          if (k.startsWith('watched-') || k.startsWith('watch-log')) toRemove.push(k);
+        }
+        toRemove.forEach(k => localStorage.removeItem(k));
+      } catch { /* ignore */ }
+      setShowClearHistory(false);
+      setRecentWatched([]);
+      setWatchedCount(0);
+      toast({ title: 'Watch history cleared' });
+    } finally {
+      setClearingHistory(false);
+    }
   }
 
   async function deleteAccount() {
@@ -927,6 +953,26 @@ export default function ProfilePage() {
 
         {showImport && <ImportDialog onClose={() => setShowImport(false)} />}
 
+        {/* Clear watch history confirm */}
+        <Dialog open={showClearHistory} onOpenChange={setShowClearHistory}>
+          <DialogContent className="sm:max-w-sm rounded-3xl">
+            <DialogHeader>
+              <DialogTitle className="font-headline">Clear watch history?</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4 pt-1">
+              <p className="text-sm text-muted-foreground">This will permanently remove all titles from your watch history. Your ratings, reviews, and watchlist will not be affected.</p>
+              <div className="flex gap-3">
+                <Button variant="outline" className="flex-1 rounded-xl" onClick={() => setShowClearHistory(false)} disabled={clearingHistory}>
+                  Cancel
+                </Button>
+                <Button variant="destructive" className="flex-1 rounded-xl" onClick={clearWatchHistory} disabled={clearingHistory}>
+                  {clearingHistory ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Clear history'}
+                </Button>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
+
         <Dialog open={showSettings} onOpenChange={v => { setShowSettings(v); if (!v) setSettingsView('main'); }}>
           <DialogContent className="sm:max-w-md rounded-3xl max-h-[85vh] flex flex-col">
             {/* ── Main settings view ── */}
@@ -961,6 +1007,10 @@ export default function ProfilePage() {
                     <Button variant="ghost" className="w-full justify-start text-sm h-12 rounded-xl" onClick={() => { setShowSettings(false); setShowImport(true); }}>
                       <Download className="h-4 w-4 mr-2 text-muted-foreground" />
                       Import from Letterboxd / IMDb <ChevronRight className="h-4 w-4 ml-auto" />
+                    </Button>
+                    <Button variant="ghost" className="w-full justify-start text-sm h-12 rounded-xl text-red-400 hover:text-red-400 hover:bg-red-500/10" onClick={() => { setShowSettings(false); setShowClearHistory(true); }}>
+                      <Trash2 className="h-4 w-4 mr-2" />
+                      Clear watch history
                     </Button>
                   </div>
                   <div className="space-y-2">
