@@ -205,6 +205,10 @@ export default function HistoryPage() {
   // pending values inside refine sheet (applied on "Refine")
   const [pendingSort, setPendingSort]   = useState<SortOption>('date-desc');
   const [pendingType, setPendingType]   = useState<TypeFilter>('any');
+  const [yearFrom, setYearFrom] = useState('');
+  const [yearTo, setYearTo]     = useState('');
+  const [pendingYearFrom, setPendingYearFrom] = useState('');
+  const [pendingYearTo, setPendingYearTo]     = useState('');
 
   const fetchingRef = useRef(new Set<string>());
   const dateMapRef  = useRef(new Map<string, string>());
@@ -321,6 +325,11 @@ export default function HistoryPage() {
       ids = ids.filter(id => (metaMap.get(id)?.title ?? '').toLowerCase().includes(q));
     }
 
+    const yFrom = yearFrom ? parseInt(yearFrom, 10) : null;
+    const yTo   = yearTo   ? parseInt(yearTo,   10) : null;
+    if (yFrom) ids = ids.filter(id => parseInt(metaMap.get(id)?.year ?? '0', 10) >= yFrom);
+    if (yTo)   ids = ids.filter(id => parseInt(metaMap.get(id)?.year ?? '9999', 10) <= yTo);
+
     if (sort === 'title-asc') {
       ids.sort((a, b) => (metaMap.get(a)?.title ?? '').localeCompare(metaMap.get(b)?.title ?? ''));
     } else if (sort === 'title-desc') {
@@ -331,23 +340,29 @@ export default function HistoryPage() {
     // date-desc: allIds is already sorted newest-first
 
     return ids;
-  }, [allIds, sort, typeFilter, search, metaMap]);
+  }, [allIds, sort, typeFilter, search, metaMap, yearFrom, yearTo]);
 
   const openRefine = () => {
     setPendingSort(sort);
     setPendingType(typeFilter);
+    setPendingYearFrom(yearFrom);
+    setPendingYearTo(yearTo);
     setRefineOpen(true);
   };
 
   const applyRefine = () => {
     setSort(pendingSort);
     setTypeFilter(pendingType);
+    setYearFrom(pendingYearFrom);
+    setYearTo(pendingYearTo);
     setRefineOpen(false);
   };
 
   const clearRefine = () => {
     setPendingSort('date-desc');
     setPendingType('any');
+    setPendingYearFrom('');
+    setPendingYearTo('');
   };
 
   // ─── Render ────────────────────────────────────────────────────────────────
@@ -387,6 +402,7 @@ export default function HistoryPage() {
         <p className="text-xs text-muted-foreground">
           {sortedFilteredIds.length} title{sortedFilteredIds.length !== 1 ? 's' : ''} · Sorted by {SORT_LABELS[sort]}
           {typeFilter !== 'any' && ` · ${TYPE_LABELS[typeFilter]}`}
+          {(yearFrom || yearTo) && ` · ${yearFrom || '…'}–${yearTo || '…'}`}
         </p>
         <button
           onClick={openRefine}
@@ -495,6 +511,18 @@ export default function HistoryPage() {
                       </button>
                     );
                   })}
+                </div>
+              </div>
+
+              {/* Release Year */}
+              <div className="px-6 py-4">
+                <p className="text-sm font-bold mb-3 text-gray-900">Release Year</p>
+                <div className="flex items-center gap-2">
+                  <input type="number" placeholder="From" min="1900" max="2099" value={pendingYearFrom} onChange={e => setPendingYearFrom(e.target.value)}
+                    className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm text-gray-900 focus:outline-none focus:border-primary" />
+                  <span className="text-gray-400 shrink-0">–</span>
+                  <input type="number" placeholder="To" min="1900" max="2099" value={pendingYearTo} onChange={e => setPendingYearTo(e.target.value)}
+                    className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm text-gray-900 focus:outline-none focus:border-primary" />
                 </div>
               </div>
             </div>

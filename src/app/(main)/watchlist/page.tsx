@@ -55,6 +55,10 @@ export default function WatchlistPage() {
   const [search, setSearch]         = useState('');
   const [refineOpen, setRefineOpen] = useState(false);
   const [pendingSort, setPendingSort] = useState<SortOption>('title-asc');
+  const [yearFrom, setYearFrom] = useState('');
+  const [yearTo, setYearTo]     = useState('');
+  const [pendingYearFrom, setPendingYearFrom] = useState('');
+  const [pendingYearTo, setPendingYearTo]     = useState('');
 
   useEffect(() => {
     const loaded: WatchlistItem[] = [];
@@ -85,10 +89,14 @@ export default function WatchlistPage() {
       const q = search.trim().toLowerCase();
       result = result.filter(i => i.title.toLowerCase().includes(q));
     }
+    const yFrom = yearFrom ? parseInt(yearFrom, 10) : null;
+    const yTo   = yearTo   ? parseInt(yearTo,   10) : null;
+    if (yFrom) result = result.filter(i => parseInt(i.year, 10) >= yFrom);
+    if (yTo)   result = result.filter(i => parseInt(i.year, 10) <= yTo);
     if (sort === 'title-asc')  result.sort((a, b) => a.title.localeCompare(b.title));
     else                       result.sort((a, b) => b.title.localeCompare(a.title));
     return result;
-  }, [items, sort, search]);
+  }, [items, sort, search, yearFrom, yearTo]);
 
   return (
     <main className="pb-32">
@@ -118,8 +126,9 @@ export default function WatchlistPage() {
       <div className="px-6 pb-4 flex items-center justify-between">
         <p className="text-xs text-muted-foreground">
           {sortedFiltered.length} title{sortedFiltered.length !== 1 ? 's' : ''} · Sorted by {SORT_LABELS[sort]}
+          {(yearFrom || yearTo) && ` · ${yearFrom || '…'}–${yearTo || '…'}`}
         </p>
-        <button onClick={() => { setPendingSort(sort); setRefineOpen(true); }}
+        <button onClick={() => { setPendingSort(sort); setPendingYearFrom(yearFrom); setPendingYearTo(yearTo); setRefineOpen(true); }}
           className="flex items-center gap-1.5 text-xs font-semibold text-primary hover:opacity-80 transition-opacity">
           <SlidersHorizontal className="h-3.5 w-3.5" /> Refine
         </button>
@@ -145,7 +154,7 @@ export default function WatchlistPage() {
             <div className="flex items-center justify-between px-6 pt-5 pb-4 border-b border-gray-100 shrink-0">
               <button onClick={() => setRefineOpen(false)} className="text-sm text-gray-500 hover:text-gray-800 transition-colors">Cancel</button>
               <span className="text-sm font-bold text-gray-900">{items.length} Titles</span>
-              <button onClick={() => { setSort(pendingSort); setRefineOpen(false); }} className="text-sm font-bold text-primary hover:opacity-80 transition-opacity">Refine</button>
+              <button onClick={() => { setSort(pendingSort); setYearFrom(pendingYearFrom); setYearTo(pendingYearTo); setRefineOpen(false); }} className="text-sm font-bold text-primary hover:opacity-80 transition-opacity">Refine</button>
             </div>
             <div className="overflow-y-auto flex-1 px-6 py-4">
               <div className="flex items-center justify-between mb-3">
@@ -159,6 +168,16 @@ export default function WatchlistPage() {
                     {pendingSort === s && <Check className="h-4 w-4 text-primary" />}
                   </button>
                 ))}
+              </div>
+              <div className="mt-5">
+                <p className="text-sm font-bold text-gray-900 mb-3">Release Year</p>
+                <div className="flex items-center gap-2">
+                  <input type="number" placeholder="From" min="1900" max="2099" value={pendingYearFrom} onChange={e => setPendingYearFrom(e.target.value)}
+                    className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm text-gray-900 focus:outline-none focus:border-primary" />
+                  <span className="text-gray-400 shrink-0">–</span>
+                  <input type="number" placeholder="To" min="1900" max="2099" value={pendingYearTo} onChange={e => setPendingYearTo(e.target.value)}
+                    className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm text-gray-900 focus:outline-none focus:border-primary" />
+                </div>
               </div>
             </div>
           </div>
