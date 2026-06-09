@@ -3,6 +3,8 @@ import { prisma } from '@/lib/db';
 import { ok, err } from '@/lib/api-response';
 import { getCurrentUser } from '@/lib/auth-utils';
 
+export const dynamic = 'force-dynamic';
+
 const ADMIN_IDS = new Set(['0e4f66de-b8f9-4d0b-b176-ad31a788fd1e']);
 
 async function requireAdmin(req: NextRequest) {
