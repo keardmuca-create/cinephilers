@@ -27,8 +27,8 @@ function ItemCard({ item }: { item: WatchlistItem }) {
         {item.poster ? (
           <img src={item.poster} alt={item.title} className="w-full h-full object-cover transition-transform group-hover:scale-105" loading="lazy" />
         ) : (
-          <div className="w-full h-full flex items-center justify-center bg-white/10">
-            <Film className="h-7 w-7 text-white/40" />
+          <div className="w-full h-full flex items-center justify-center bg-muted">
+            <Film className="h-7 w-7 text-primary/60" />
           </div>
         )}
       </div>
