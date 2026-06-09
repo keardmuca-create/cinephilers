@@ -191,14 +191,13 @@ function HistoryCard({ id, meta, userRating, addedAt, onRemove }: {
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
-const BATCH = 50;
+const FETCH_BATCH = 50; // how many metadata requests to fire at once
 
 export default function HistoryPage() {
-  const [allIds, setAllIds]             = useState<string[]>([]);
-  const [metaMap, setMetaMap]           = useState<Map<string, ItemMeta>>(new Map());
-  const [userRatings, setUserRatings]   = useState<Map<string, number>>(new Map());
-  const [displayCount, setDisplayCount] = useState(BATCH);
-  const [fetching, setFetching]         = useState(false);
+  const [allIds, setAllIds]           = useState<string[]>([]);
+  const [metaMap, setMetaMap]         = useState<Map<string, ItemMeta>>(new Map());
+  const [userRatings, setUserRatings] = useState<Map<string, number>>(new Map());
+  const [fetching, setFetching]       = useState(false);
   const [sort, setSort]                 = useState<SortOption>('date-desc');
   const [typeFilter, setTypeFilter]     = useState<TypeFilter>('any');
   const [search, setSearch]             = useState('');
@@ -207,7 +206,6 @@ export default function HistoryPage() {
   const [pendingSort, setPendingSort]   = useState<SortOption>('date-desc');
   const [pendingType, setPendingType]   = useState<TypeFilter>('any');
 
-  const sentinelRef = useRef<HTMLDivElement>(null);
   const fetchingRef = useRef(new Set<string>());
   const dateMapRef  = useRef(new Map<string, string>());
 
@@ -252,37 +250,30 @@ export default function HistoryPage() {
     setAllIds(sorted);
   }, []);
 
-  // ─── Fetch metadata ────────────────────────────────────────────────────────
+  // ─── Fetch metadata for all IDs in batches ────────────────────────────────
 
   useEffect(() => {
     if (allIds.length === 0) return;
-    const limit = Math.min(allIds.length, displayCount + BATCH);
-    const toFetch = allIds.slice(0, limit).filter(id => !fetchingRef.current.has(id));
+    const toFetch = allIds.filter(id => !fetchingRef.current.has(id));
     if (toFetch.length === 0) return;
     toFetch.forEach(id => fetchingRef.current.add(id));
     setFetching(true);
-    Promise.all(toFetch.map(fetchAndCacheMeta)).then(results => {
-      setMetaMap(prev => {
-        const next = new Map(prev);
-        toFetch.forEach((id, i) => { if (results[i]) next.set(id, results[i]!); });
-        return next;
-      });
+
+    const runBatches = async () => {
+      for (let i = 0; i < toFetch.length; i += FETCH_BATCH) {
+        const batch = toFetch.slice(i, i + FETCH_BATCH);
+        const results = await Promise.all(batch.map(fetchAndCacheMeta));
+        setMetaMap(prev => {
+          const next = new Map(prev);
+          batch.forEach((id, j) => { if (results[j]) next.set(id, results[j]!); });
+          return next;
+        });
+      }
       setFetching(false);
-    });
-  }, [allIds, displayCount]); // eslint-disable-line react-hooks/exhaustive-deps
+    };
 
-  // ─── Infinite scroll ───────────────────────────────────────────────────────
-
-  useEffect(() => {
-    const sentinel = sentinelRef.current;
-    if (!sentinel) return;
-    const obs = new IntersectionObserver(
-      entries => { if (entries[0].isIntersecting) setDisplayCount(p => p + BATCH); },
-      { rootMargin: '300px' }
-    );
-    obs.observe(sentinel);
-    return () => obs.disconnect();
-  }, []);
+    runBatches();
+  }, [allIds]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ─── Rating listener ───────────────────────────────────────────────────────
 
@@ -341,9 +332,6 @@ export default function HistoryPage() {
 
     return ids;
   }, [allIds, sort, typeFilter, search, metaMap]);
-
-  const visibleIds = sortedFilteredIds.slice(0, displayCount);
-  const hasMore    = displayCount < sortedFilteredIds.length;
 
   const openRefine = () => {
     setPendingSort(sort);
@@ -418,7 +406,7 @@ export default function HistoryPage() {
       ) : (
         <div className="px-6">
           <div className="divide-y divide-white/[0.06]">
-            {visibleIds.map(id => (
+            {sortedFilteredIds.map(id => (
               <HistoryCard
                 key={id}
                 id={id}
@@ -429,12 +417,6 @@ export default function HistoryPage() {
               />
             ))}
           </div>
-          {hasMore && <div ref={sentinelRef} className="h-4" />}
-          {!hasMore && allIds.length > 0 && (
-            <p className="text-center text-xs text-muted-foreground py-4">
-              All {allIds.length} title{allIds.length !== 1 ? 's' : ''} loaded
-            </p>
-          )}
         </div>
       )}
 
