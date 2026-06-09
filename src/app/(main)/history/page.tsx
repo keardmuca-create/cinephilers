@@ -490,6 +490,18 @@ export default function HistoryPage() {
                 </div>
               </div>
 
+              {/* Release Year */}
+              <div className="px-6 py-4 border-b border-gray-100">
+                <p className="text-sm font-bold mb-3 text-gray-900">Release Year</p>
+                <div className="flex items-center gap-2">
+                  <input type="number" placeholder="From" min="1900" max="2099" value={pendingYearFrom} onChange={e => setPendingYearFrom(e.target.value)}
+                    className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm text-gray-900 focus:outline-none focus:border-primary" />
+                  <span className="text-gray-400 shrink-0">–</span>
+                  <input type="number" placeholder="To" min="1900" max="2099" value={pendingYearTo} onChange={e => setPendingYearTo(e.target.value)}
+                    className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm text-gray-900 focus:outline-none focus:border-primary" />
+                </div>
+              </div>
+
               {/* Type */}
               <div className="px-6 py-4">
                 <p className="text-sm font-bold mb-3 text-gray-900">Type (Movie, TV, etc.)</p>
@@ -516,18 +528,6 @@ export default function HistoryPage() {
                       </button>
                     );
                   })}
-                </div>
-              </div>
-
-              {/* Release Year */}
-              <div className="px-6 py-4">
-                <p className="text-sm font-bold mb-3 text-gray-900">Release Year</p>
-                <div className="flex items-center gap-2">
-                  <input type="number" placeholder="From" min="1900" max="2099" value={pendingYearFrom} onChange={e => setPendingYearFrom(e.target.value)}
-                    className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm text-gray-900 focus:outline-none focus:border-primary" />
-                  <span className="text-gray-400 shrink-0">–</span>
-                  <input type="number" placeholder="To" min="1900" max="2099" value={pendingYearTo} onChange={e => setPendingYearTo(e.target.value)}
-                    className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm text-gray-900 focus:outline-none focus:border-primary" />
                 </div>
               </div>
             </div>
