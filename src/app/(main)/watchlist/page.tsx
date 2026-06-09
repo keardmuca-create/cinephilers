@@ -24,7 +24,14 @@ function ItemCard({ item }: { item: WatchlistItem }) {
   return (
     <Link href={`/movie/${item.id}`} className="group flex items-center gap-4 py-3.5">
       <div className="relative w-16 aspect-[2/3] overflow-hidden rounded-lg bg-muted shadow-md shrink-0">
-        <img src={item.poster} alt={item.title} className="w-full h-full object-cover transition-transform group-hover:scale-105" loading="lazy" />
+        {item.poster ? (
+          <img src={item.poster} alt={item.title} className="w-full h-full object-cover transition-transform group-hover:scale-105" loading="lazy" />
+        ) : (
+          <div className="w-full h-full flex flex-col items-center justify-center gap-1 bg-gradient-to-b from-muted to-muted/60 p-1">
+            <span className="text-2xl">🎬</span>
+            <p className="text-[8px] text-muted-foreground/60 font-medium text-center line-clamp-2 leading-tight">{item.title}</p>
+          </div>
+        )}
       </div>
       <div className="flex-1 min-w-0">
         <h3 className="text-sm font-semibold font-headline line-clamp-2 group-hover:text-primary transition-colors leading-snug mb-0.5">
