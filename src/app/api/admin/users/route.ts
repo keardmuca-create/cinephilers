@@ -19,16 +19,15 @@ export async function GET(req: NextRequest) {
   if (!auth) return err('Forbidden', 403);
 
   const q = req.nextUrl.searchParams.get('q')?.trim() ?? '';
-  if (!q) return ok([]);
 
   const users = await prisma.user.findMany({
-    where: {
+    where: q ? {
       OR: [
         { username: { contains: q, mode: 'insensitive' } },
         { displayName: { contains: q, mode: 'insensitive' } },
         { email: { contains: q, mode: 'insensitive' } },
       ],
-    },
+    } : undefined,
     select: {
       id: true,
       username: true,

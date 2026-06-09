@@ -45,7 +45,7 @@ export default function AdminPage() {
   // Reports state
   const [reports, setReports] = useState<Report[]>([]);
   const [loadingReports, setLoadingReports] = useState(true);
-  const [filter, setFilter] = useState<'all' | 'pending' | 'reviewed' | 'dismissed'>('pending');
+  const [filter, setFilter] = useState<'all' | 'pending' | 'reviewed' | 'dismissed'>('all');
 
   // Users state
   const [userQuery, setUserQuery] = useState('');
@@ -68,21 +68,23 @@ export default function AdminPage() {
       .finally(() => setLoadingReports(false));
   }, [user, authLoading, router]);
 
-  // Debounced user search
+  // Load users when tab opens, then debounce search on query change
   useEffect(() => {
+    if (tab !== 'users') return;
     if (searchTimeout.current) clearTimeout(searchTimeout.current);
-    if (!userQuery.trim()) { setUserResults([]); return; }
+    const delay = userQuery.trim() ? 400 : 0;
     searchTimeout.current = setTimeout(async () => {
       setSearchingUsers(true);
       try {
-        const res = await fetchWithAuth(`/api/admin/users?q=${encodeURIComponent(userQuery)}`);
+        const url = userQuery.trim() ? `/api/admin/users?q=${encodeURIComponent(userQuery)}` : '/api/admin/users';
+        const res = await fetchWithAuth(url);
         const json = res.ok ? await res.json() : null;
         setUserResults(json?.data ?? []);
       } finally {
         setSearchingUsers(false);
       }
-    }, 400);
-  }, [userQuery]);
+    }, delay);
+  }, [userQuery, tab]);
 
   const dismiss = async (id: string) => {
     await fetchWithAuth('/api/admin/reports', {
@@ -249,15 +251,11 @@ export default function AdminPage() {
             )}
           </div>
 
-          {!userQuery && (
+          {!searchingUsers && userResults.length === 0 && (
             <div className="flex flex-col items-center justify-center py-16 gap-3 text-center">
               <Users className="h-10 w-10 text-muted-foreground/20" />
-              <p className="text-muted-foreground text-sm">Search for a user to manage them</p>
+              <p className="text-muted-foreground text-sm">{userQuery ? 'No users found' : 'No users yet'}</p>
             </div>
-          )}
-
-          {userQuery && !searchingUsers && userResults.length === 0 && (
-            <p className="text-center text-muted-foreground text-sm py-10">No users found</p>
           )}
 
           <div className="space-y-3">
