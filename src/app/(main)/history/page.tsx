@@ -8,7 +8,7 @@ import { fetchWithAuth } from '@/lib/fetch-with-auth';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-type SortOption = 'date-desc' | 'date-asc' | 'title-asc' | 'title-desc';
+type SortOption = 'date-desc' | 'date-asc' | 'title-asc' | 'title-desc' | 'release-desc' | 'release-asc';
 type TypeFilter = 'any' | 'movie' | 'tv-series' | 'tv-mini-series' | 'tv-movie' | 'tv-episode' | 'short';
 
 const TYPE_LABELS: Record<TypeFilter, string> = {
@@ -20,6 +20,7 @@ const TYPE_LABELS: Record<TypeFilter, string> = {
 const SORT_LABELS: Record<SortOption, string> = {
   'date-desc': 'Newest First', 'date-asc': 'Oldest First',
   'title-asc': 'Title A–Z', 'title-desc': 'Title Z–A',
+  'release-desc': 'Release Date: Newest', 'release-asc': 'Release Date: Oldest',
 };
 
 const TYPE_ORDER: TypeFilter[] = ['any', 'movie', 'tv-series', 'tv-mini-series', 'tv-movie', 'tv-episode', 'short'];
@@ -336,6 +337,10 @@ export default function HistoryPage() {
       ids.sort((a, b) => (metaMap.get(b)?.title ?? '').localeCompare(metaMap.get(a)?.title ?? ''));
     } else if (sort === 'date-asc') {
       ids.sort((a, b) => new Date(dateMapRef.current.get(a) ?? 0).getTime() - new Date(dateMapRef.current.get(b) ?? 0).getTime());
+    } else if (sort === 'release-desc') {
+      ids.sort((a, b) => parseInt(metaMap.get(b)?.year ?? '0', 10) - parseInt(metaMap.get(a)?.year ?? '0', 10));
+    } else if (sort === 'release-asc') {
+      ids.sort((a, b) => parseInt(metaMap.get(a)?.year ?? '9999', 10) - parseInt(metaMap.get(b)?.year ?? '9999', 10));
     }
     // date-desc: allIds is already sorted newest-first
 
@@ -470,7 +475,7 @@ export default function HistoryPage() {
                   <span className="text-sm text-gray-500">{SORT_LABELS[pendingSort]}</span>
                 </div>
                 <div className="space-y-1">
-                  {(['date-desc', 'date-asc', 'title-asc', 'title-desc'] as SortOption[]).map(s => (
+                  {(['date-desc', 'date-asc', 'release-desc', 'release-asc', 'title-asc', 'title-desc'] as SortOption[]).map(s => (
                     <button
                       key={s}
                       onClick={() => setPendingSort(s)}

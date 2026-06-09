@@ -5,11 +5,13 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Bookmark, ChevronLeft, Search, SlidersHorizontal, Check, X, Film } from 'lucide-react';
 
-type SortOption = 'title-asc' | 'title-desc';
+type SortOption = 'title-asc' | 'title-desc' | 'release-desc' | 'release-asc';
 
 const SORT_LABELS: Record<SortOption, string> = {
-  'title-asc':  'Title A–Z',
-  'title-desc': 'Title Z–A',
+  'title-asc':    'Title A–Z',
+  'title-desc':   'Title Z–A',
+  'release-desc': 'Release Date: Newest',
+  'release-asc':  'Release Date: Oldest',
 };
 
 interface WatchlistItem {
@@ -93,8 +95,10 @@ export default function WatchlistPage() {
     const yTo   = yearTo   ? parseInt(yearTo,   10) : null;
     if (yFrom) result = result.filter(i => parseInt(i.year, 10) >= yFrom);
     if (yTo)   result = result.filter(i => parseInt(i.year, 10) <= yTo);
-    if (sort === 'title-asc')  result.sort((a, b) => a.title.localeCompare(b.title));
-    else                       result.sort((a, b) => b.title.localeCompare(a.title));
+    if (sort === 'title-asc')         result.sort((a, b) => a.title.localeCompare(b.title));
+    else if (sort === 'title-desc')   result.sort((a, b) => b.title.localeCompare(a.title));
+    else if (sort === 'release-desc') result.sort((a, b) => parseInt(b.year, 10) - parseInt(a.year, 10));
+    else if (sort === 'release-asc')  result.sort((a, b) => parseInt(a.year, 10) - parseInt(b.year, 10));
     return result;
   }, [items, sort, search, yearFrom, yearTo]);
 
@@ -162,7 +166,7 @@ export default function WatchlistPage() {
                 <span className="text-sm text-gray-500">{SORT_LABELS[pendingSort]}</span>
               </div>
               <div className="space-y-1">
-                {(['title-asc', 'title-desc'] as SortOption[]).map(s => (
+                {(['release-desc', 'release-asc', 'title-asc', 'title-desc'] as SortOption[]).map(s => (
                   <button key={s} onClick={() => setPendingSort(s)} className="w-full flex items-center justify-between py-2.5 text-sm">
                     <span className={pendingSort === s ? 'font-semibold text-gray-900' : 'text-gray-500'}>{SORT_LABELS[s]}</span>
                     {pendingSort === s && <Check className="h-4 w-4 text-primary" />}
