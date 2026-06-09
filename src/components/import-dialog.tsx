@@ -174,6 +174,8 @@ export function ImportDialog({ onClose }: { onClose: () => void }) {
       if (items.length === 0) { setError('No films found in this file. Make sure you uploaded the right file.'); return; }
       setParsed(items);
       setStep('matching');
+      // Refresh token before the slow TMDB matching phase
+      await fetch('/api/auth/refresh', { method: 'POST', credentials: 'include' }).catch(() => {});
 
       // Match to TMDB — 5 concurrent
       const matchedList: MatchedItem[] = [];
@@ -200,6 +202,8 @@ export function ImportDialog({ onClose }: { onClose: () => void }) {
 
   const runImport = async () => {
     setStep('importing');
+    // Refresh token first so a long matching step can't cause a mid-import logout
+    await fetch('/api/auth/refresh', { method: 'POST', credentials: 'include' }).catch(() => {});
     try {
       const res = await fetchWithAuth('/api/import', {
         method: 'POST',
@@ -208,6 +212,18 @@ export function ImportDialog({ onClose }: { onClose: () => void }) {
       });
       const json = await res.json();
       if (!res.ok) { setError(json?.message ?? 'Import failed'); setStep('confirm'); return; }
+
+      // Write metadata to localStorage so pages can render imported items immediately
+      try {
+        for (const item of matched) {
+          const meta = { id: item.tmdbId, title: item.matchedTitle, poster: item.poster ?? '', year: item.year, type: item.mediaType === 'SHOW' ? 'show' : 'movie' };
+          localStorage.setItem(`meta-${item.tmdbId}`, JSON.stringify(meta));
+          if (item.watchedAt) localStorage.setItem(`watched-${item.tmdbId}`, 'true');
+          if (item.inWatchlist) localStorage.setItem(`watchlist-${item.tmdbId}`, JSON.stringify({ id: item.tmdbId, title: item.matchedTitle, poster: item.poster ?? '', year: item.year, type: meta.type }));
+          if (item.rating) localStorage.setItem(`movie-rating-${item.tmdbId}`, String(item.rating));
+        }
+      } catch { /* ignore */ }
+
       setResult(json.data);
       setStep('done');
     } catch {
