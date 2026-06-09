@@ -170,7 +170,7 @@ function CommentSection({ reviewId, currentUser }: { reviewId: string; currentUs
                       <Trash2 className="h-3.5 w-3.5" />
                     </button>
                   ) : currentUser && (
-                    <button onClick={() => setReportTarget(c.id)} className="opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-yellow-500 shrink-0">
+                    <button onClick={() => setReportTarget(c.id)} className="text-muted-foreground/40 hover:text-yellow-500 transition-colors shrink-0">
                       <Flag className="h-3.5 w-3.5" />
                     </button>
                   )}
