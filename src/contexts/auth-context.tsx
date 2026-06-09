@@ -75,7 +75,14 @@ async function restoreFromDb() {
     // ── Watchlist: write DB items to local; upload any local-only items to DB ──
     const dbWatchlistIds = new Set(watchlist.map(w => w.tmdbId));
     for (const w of watchlist) {
-      try { localStorage.setItem(`watchlist-${w.tmdbId}`, JSON.stringify({ id: w.tmdbId, type: w.mediaType === 'SHOW' ? 'show' : 'movie' })); } catch { /* ignore */ }
+      try {
+        const existing = localStorage.getItem(`watchlist-${w.tmdbId}`);
+        const parsed = existing ? JSON.parse(existing) : null;
+        // Only overwrite if there's no existing entry with title metadata
+        if (!parsed?.title) {
+          localStorage.setItem(`watchlist-${w.tmdbId}`, JSON.stringify({ id: w.tmdbId, type: w.mediaType === 'SHOW' ? 'show' : 'movie' }));
+        }
+      } catch { /* ignore */ }
     }
     try {
       for (let i = 0; i < localStorage.length; i++) {
