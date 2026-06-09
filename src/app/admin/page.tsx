@@ -82,7 +82,7 @@ export default function AdminPage() {
         const res = await fetchWithAuth(url);
         const json = await res.json().catch(() => null);
         if (!res.ok) {
-          setUsersError(`API error ${res.status}: ${json?.error ?? 'unknown'}`);
+          setUsersError(`API error ${res.status}: ${json?.message ?? 'unknown'}`);
           setUserResults([]);
         } else {
           setUserResults(json?.data ?? []);
