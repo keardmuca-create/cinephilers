@@ -7,16 +7,17 @@ const ADMIN_IDS = new Set(['0e4f66de-b8f9-4d0b-b176-ad31a788fd1e']);
 
 async function requireAdmin(req: NextRequest) {
   const auth = await getCurrentUser(req);
-  if (!auth) return null;
-  if (ADMIN_IDS.has(auth.sub)) return auth;
+  if (!auth) return { auth: null, status: 'unauthenticated' as const };
+  if (ADMIN_IDS.has(auth.sub)) return { auth, status: 'ok' as const };
   const user = await prisma.user.findUnique({ where: { id: auth.sub }, select: { role: true } });
-  if (user?.role !== 'ADMIN') return null;
-  return auth;
+  if (user?.role !== 'ADMIN') return { auth: null, status: 'forbidden' as const };
+  return { auth, status: 'ok' as const };
 }
 
 export async function GET(req: NextRequest) {
-  const auth = await requireAdmin(req);
-  if (!auth) return err('Forbidden', 403);
+  const { status } = await requireAdmin(req);
+  if (status === 'unauthenticated') return err('Unauthorized', 401);
+  if (status === 'forbidden') return err('Forbidden', 403);
 
   const reports = await prisma.report.findMany({
     orderBy: { createdAt: 'desc' },
@@ -51,8 +52,9 @@ export async function GET(req: NextRequest) {
 }
 
 export async function PATCH(req: NextRequest) {
-  const auth = await requireAdmin(req);
-  if (!auth) return err('Forbidden', 403);
+  const { status: adminStatus } = await requireAdmin(req);
+  if (adminStatus === 'unauthenticated') return err('Unauthorized', 401);
+  if (adminStatus === 'forbidden') return err('Forbidden', 403);
 
   const { id, status } = await req.json().catch(() => ({}));
   if (!id || !['reviewed', 'dismissed'].includes(status)) return err('Invalid');
@@ -62,8 +64,9 @@ export async function PATCH(req: NextRequest) {
 }
 
 export async function DELETE(req: NextRequest) {
-  const auth = await requireAdmin(req);
-  if (!auth) return err('Forbidden', 403);
+  const { status } = await requireAdmin(req);
+  if (status === 'unauthenticated') return err('Unauthorized', 401);
+  if (status === 'forbidden') return err('Forbidden', 403);
 
   const { reportId, targetType, targetId } = await req.json().catch(() => ({}));
 
