@@ -368,6 +368,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => { refetch(); }, [refetch]);
 
+  // If any fetchWithAuth call fails to refresh, the session is dead — log out
+  useEffect(() => {
+    const handle = () => {
+      setUser(null);
+      saveUserToStorage(null);
+      window.location.href = '/login';
+    };
+    window.addEventListener('session-expired', handle);
+    return () => window.removeEventListener('session-expired', handle);
+  }, []);
+
   // Silently refresh the access token every 10 minutes so it never expires mid-session.
   // This ensures background syncDb calls (watch, rate, etc.) always reach the server.
   useEffect(() => {

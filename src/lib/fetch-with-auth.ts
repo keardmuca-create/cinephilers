@@ -13,7 +13,13 @@ export async function fetchWithAuth(input: RequestInfo | URL, init?: RequestInit
   if (res.status !== 401) return res;
 
   const refreshed = await tryRefresh();
-  if (!refreshed) return res;
+  if (!refreshed) {
+    // Session is dead — tell the app to log out
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('session-expired'));
+    }
+    return res;
+  }
 
   return fetch(input, opts);
 }
