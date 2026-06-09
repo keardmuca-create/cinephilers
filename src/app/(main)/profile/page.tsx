@@ -9,7 +9,8 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { MovieCard } from '@/components/movie-card';
 import Link from 'next/link';
-import { Settings, Star, Film, List, MessageSquare, ChevronRight, Award, History, Bookmark, User, Eye, Plus, Heart, Loader2, TrendingUp } from 'lucide-react';
+import { Settings, Star, Film, List, MessageSquare, ChevronRight, Award, History, Bookmark, User, Eye, Plus, Heart, Loader2, TrendingUp, Download } from 'lucide-react';
+import { ImportDialog } from '@/components/import-dialog';
 import { FavoritesSection } from '@/components/favorites-section';
 import { BarChart, Bar, XAxis, ResponsiveContainer, Cell, YAxis, Tooltip as ChartTooltip } from 'recharts';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
@@ -405,6 +406,7 @@ export default function ProfilePage() {
   const [localIsPrivate, setLocalIsPrivate] = useState(authUser?.isPrivate ?? false);
   const [deleteConfirmText, setDeleteConfirmText] = useState('');
   const [deleting, setDeleting] = useState(false);
+  const [showImport, setShowImport] = useState(false);
 
   // Captured before hooks — rendered after all hooks to respect Rules of Hooks
   const guestView = !authLoading && !authUser ? (
@@ -923,6 +925,8 @@ export default function ProfilePage() {
           <Settings className="h-5 w-5" />
         </Button>
 
+        {showImport && <ImportDialog onClose={() => setShowImport(false)} />}
+
         <Dialog open={showSettings} onOpenChange={v => { setShowSettings(v); if (!v) setSettingsView('main'); }}>
           <DialogContent className="sm:max-w-md rounded-3xl max-h-[85vh] flex flex-col">
             {/* ── Main settings view ── */}
@@ -950,6 +954,13 @@ export default function ProfilePage() {
                       <Link href="/support" onClick={() => setShowSettings(false)}>
                         Help & Support <ChevronRight className="h-4 w-4 ml-auto" />
                       </Link>
+                    </Button>
+                  </div>
+                  <div className="space-y-2">
+                    <h4 className="text-sm font-bold">Data</h4>
+                    <Button variant="ghost" className="w-full justify-start text-sm h-12 rounded-xl" onClick={() => { setShowSettings(false); setShowImport(true); }}>
+                      <Download className="h-4 w-4 mr-2 text-muted-foreground" />
+                      Import from Letterboxd / IMDb <ChevronRight className="h-4 w-4 ml-auto" />
                     </Button>
                   </div>
                   <div className="space-y-2">
