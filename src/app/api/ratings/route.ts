@@ -36,5 +36,12 @@ export async function POST(req: NextRequest) {
     await awardBadgeIfEarned(auth.sub, user.ratingsCount);
   }
 
+  // Auto-mark as watched when rated
+  await prisma.watchedItem.upsert({
+    where: { userId_tmdbId_mediaType: { userId: auth.sub, tmdbId, mediaType: mediaType as MediaType } },
+    create: { userId: auth.sub, tmdbId, mediaType: mediaType as MediaType },
+    update: {},
+  });
+
   return ok(rating, existing ? 'Rating updated' : 'Rating saved', { status: existing ? 200 : 201 });
 }
