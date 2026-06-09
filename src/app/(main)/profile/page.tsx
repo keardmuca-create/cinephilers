@@ -663,7 +663,7 @@ export default function ProfilePage() {
     try {
       const res = await fetchWithAuth('/api/watched', { method: 'DELETE' });
       if (!res.ok) { toast({ title: 'Something went wrong. Please try again.', variant: 'destructive' }); return; }
-      // Clear localStorage watched keys
+      // Clear localStorage watched keys and activity feed entries
       try {
         const toRemove: string[] = [];
         for (let i = 0; i < localStorage.length; i++) {
@@ -671,6 +671,11 @@ export default function ProfilePage() {
           if (k.startsWith('watched-') || k.startsWith('watch-log')) toRemove.push(k);
         }
         toRemove.forEach(k => localStorage.removeItem(k));
+        // Remove watched entries from activity-feed (keep rated/reviewed/watchlist)
+        const feed = JSON.parse(localStorage.getItem('activity-feed') ?? '[]');
+        const filtered = feed.filter((e: { action: string }) => e.action !== 'watched');
+        localStorage.setItem('activity-feed', JSON.stringify(filtered));
+        localStorage.removeItem('friend-feed-cache');
       } catch { /* ignore */ }
       setShowClearHistory(false);
       setRecentWatched([]);
