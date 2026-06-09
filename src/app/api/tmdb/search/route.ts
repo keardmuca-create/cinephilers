@@ -42,20 +42,27 @@ export async function GET(req: NextRequest) {
 
   const q = req.nextUrl.searchParams.get('q')?.trim();
   const year = req.nextUrl.searchParams.get('year')?.trim();
+  const typeHint = req.nextUrl.searchParams.get('type')?.trim(); // 'movie' | 'tv' | null
   if (!q) return err('Missing query');
 
   const inputYear = year ? parseInt(year, 10) : null;
+  const wantMovie = typeHint !== 'tv';
+  const wantTV = typeHint !== 'movie';
 
   try {
     const [movieRes, tvRes] = await Promise.all([
-      fetch(
-        `${BASE}/search/movie?api_key=${key}&query=${encodeURIComponent(q)}${year ? `&year=${year}` : ''}&include_adult=false`,
-        { next: { revalidate: 3600 } }
-      ),
-      fetch(
-        `${BASE}/search/tv?api_key=${key}&query=${encodeURIComponent(q)}${year ? `&first_air_date_year=${year}` : ''}&include_adult=false`,
-        { next: { revalidate: 3600 } }
-      ),
+      wantMovie
+        ? fetch(
+            `${BASE}/search/movie?api_key=${key}&query=${encodeURIComponent(q)}${year ? `&year=${year}` : ''}&include_adult=false`,
+            { next: { revalidate: 3600 } }
+          )
+        : Promise.resolve(new Response('{"results":[]}', { status: 200 })),
+      wantTV
+        ? fetch(
+            `${BASE}/search/tv?api_key=${key}&query=${encodeURIComponent(q)}${year ? `&first_air_date_year=${year}` : ''}&include_adult=false`,
+            { next: { revalidate: 3600 } }
+          )
+        : Promise.resolve(new Response('{"results":[]}', { status: 200 })),
     ]);
 
     const [movieData, tvData] = await Promise.all([

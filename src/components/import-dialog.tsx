@@ -142,10 +142,11 @@ async function parseIMDb(file: File): Promise<ParsedItem[]> {
   return items;
 }
 
-async function matchToTMDB(item: ParsedItem): Promise<MatchedItem | null> {
+async function matchToTMDB(item: ParsedItem, typeHint?: 'movie' | 'tv'): Promise<MatchedItem | null> {
   try {
     const params = new URLSearchParams({ q: item.title });
     if (item.year) params.set('year', item.year);
+    if (typeHint) params.set('type', typeHint);
     const res = await fetch(`/api/tmdb/search?${params}`);
     if (!res.ok) return null;
     const json = await res.json();
@@ -178,13 +179,15 @@ export function ImportDialog({ onClose }: { onClose: () => void }) {
       await fetch('/api/auth/refresh', { method: 'POST', credentials: 'include' }).catch(() => {});
 
       // Match to TMDB — 5 concurrent
+      // Letterboxd is movies-only; force movie search to prevent wrong TV matches
+      const typeHint: 'movie' | undefined = platform === 'letterboxd' ? 'movie' : undefined;
       const matchedList: MatchedItem[] = [];
       const unmatchedList: ParsedItem[] = [];
       const CONCURRENCY = 5;
 
       for (let i = 0; i < items.length; i += CONCURRENCY) {
         const batch = items.slice(i, i + CONCURRENCY);
-        const results = await Promise.all(batch.map(matchToTMDB));
+        const results = await Promise.all(batch.map(item => matchToTMDB(item, typeHint)));
         results.forEach((r, idx) => {
           if (r) matchedList.push(r);
           else unmatchedList.push(batch[idx]);

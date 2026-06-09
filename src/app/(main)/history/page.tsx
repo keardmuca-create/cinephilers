@@ -1,9 +1,10 @@
 "use client"
 
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import Link from 'next/link';
-import { History, Eye, Search, SlidersHorizontal, Check, X } from 'lucide-react';
+import { History, Eye, Search, SlidersHorizontal, Check, X, Trash2 } from 'lucide-react';
 import type { ItemMeta } from '@/app/api/meta/[id]/route';
+import { fetchWithAuth } from '@/lib/fetch-with-auth';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -98,11 +99,12 @@ function formatAddedDate(iso: string): string {
 
 // ─── Card ─────────────────────────────────────────────────────────────────────
 
-function HistoryCard({ id, meta, userRating, addedAt }: {
+function HistoryCard({ id, meta, userRating, addedAt, onRemove }: {
   id: string;
   meta: ItemMeta | undefined;
   userRating: number | undefined;
   addedAt: string;
+  onRemove: () => void;
 }) {
   if (!meta) {
     return (
@@ -119,9 +121,23 @@ function HistoryCard({ id, meta, userRating, addedAt }: {
 
   const dateStr = formatAddedDate(addedAt);
   const linkId = meta.showId ?? id;
+  const mediaType = meta.type === 'show' ? 'SHOW' : 'MOVIE';
+
+  const handleRemove = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    // Remove from localStorage
+    try {
+      localStorage.removeItem(`watched-${id}`);
+      localStorage.removeItem(`watched-ep-${id}`);
+    } catch { /* ignore */ }
+    // Remove from DB
+    fetchWithAuth(`/api/watched/${id}?mediaType=${mediaType}`, { method: 'DELETE' }).catch(() => {});
+    onRemove();
+  };
 
   return (
-    <Link href={`/movie/${linkId}`} className="group flex items-center gap-4 py-3.5">
+    <Link href={`/movie/${linkId}`} className="group relative flex items-center gap-4 py-3.5">
       {/* Thumbnail */}
       <div className="relative w-16 aspect-[2/3] overflow-hidden rounded-lg bg-muted shadow-md shrink-0">
         <img
@@ -160,6 +176,15 @@ function HistoryCard({ id, meta, userRating, addedAt }: {
           <p className="text-[10px] text-muted-foreground/60 mt-1">{dateStr}</p>
         )}
       </div>
+
+      {/* Delete button */}
+      <button
+        onClick={handleRemove}
+        className="shrink-0 opacity-0 group-hover:opacity-100 transition-opacity p-2 rounded-full hover:bg-red-500/20 text-muted-foreground hover:text-red-400"
+        aria-label={`Remove ${meta.title} from history`}
+      >
+        <Trash2 className="h-4 w-4" />
+      </button>
     </Link>
   );
 }
@@ -185,6 +210,12 @@ export default function HistoryPage() {
   const sentinelRef = useRef<HTMLDivElement>(null);
   const fetchingRef = useRef(new Set<string>());
   const dateMapRef  = useRef(new Map<string, string>());
+
+  const removeId = useCallback((id: string) => {
+    setAllIds(prev => prev.filter(x => x !== id));
+    setMetaMap(prev => { const next = new Map(prev); next.delete(id); return next; });
+    setUserRatings(prev => { const next = new Map(prev); next.delete(id); return next; });
+  }, []);
 
   // ─── Initial load ──────────────────────────────────────────────────────────
 
@@ -394,6 +425,7 @@ export default function HistoryPage() {
                 meta={metaMap.get(id)}
                 userRating={userRatings.get(id)}
                 addedAt={dateMapRef.current.get(id) ?? ''}
+                onRemove={() => removeId(id)}
               />
             ))}
           </div>
