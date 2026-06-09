@@ -14,36 +14,51 @@ async function requireAdmin(req: NextRequest) {
   return auth;
 }
 
+const USER_SELECT = {
+  id: true,
+  username: true,
+  displayName: true,
+  avatarUrl: true,
+  email: true,
+  role: true,
+  createdAt: true,
+  reviewsCount: true,
+  ratingsCount: true,
+} as const;
+
 export async function GET(req: NextRequest) {
   const auth = await requireAdmin(req);
   if (!auth) return err('Forbidden', 403);
 
   const q = req.nextUrl.searchParams.get('q')?.trim() ?? '';
 
-  const users = await prisma.user.findMany({
-    where: q ? {
-      OR: [
-        { username: { contains: q, mode: 'insensitive' } },
-        { displayName: { contains: q, mode: 'insensitive' } },
-        { email: { contains: q, mode: 'insensitive' } },
-      ],
-    } : undefined,
-    select: {
-      id: true,
-      username: true,
-      displayName: true,
-      avatarUrl: true,
-      email: true,
-      role: true,
-      createdAt: true,
-      reviewsCount: true,
-      ratingsCount: true,
-    },
-    take: 20,
-    orderBy: { createdAt: 'desc' },
-  });
-
-  return ok(users);
+  try {
+    let users;
+    if (q) {
+      users = await prisma.user.findMany({
+        where: {
+          OR: [
+            { username: { contains: q, mode: 'insensitive' } },
+            { displayName: { contains: q, mode: 'insensitive' } },
+            { email: { contains: q, mode: 'insensitive' } },
+          ],
+        },
+        select: USER_SELECT,
+        take: 20,
+        orderBy: { createdAt: 'desc' },
+      });
+    } else {
+      users = await prisma.user.findMany({
+        select: USER_SELECT,
+        take: 20,
+        orderBy: { createdAt: 'desc' },
+      });
+    }
+    return ok(users);
+  } catch (e) {
+    console.error('admin users GET error:', e);
+    return err('Internal error', 500);
+  }
 }
 
 export async function DELETE(req: NextRequest) {
@@ -53,7 +68,6 @@ export async function DELETE(req: NextRequest) {
   const { userId } = await req.json().catch(() => ({}));
   if (!userId) return err('Missing userId');
 
-  // Prevent self-deletion
   if (userId === auth.sub) return err('Cannot delete your own account', 400);
 
   await prisma.user.delete({ where: { id: userId } });
