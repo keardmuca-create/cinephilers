@@ -53,6 +53,7 @@ export default function AdminPage() {
   const [searchingUsers, setSearchingUsers] = useState(false);
   const [deletingUserId, setDeletingUserId] = useState<string | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const [usersError, setUsersError] = useState<string | null>(null);
   const searchTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
@@ -75,11 +76,19 @@ export default function AdminPage() {
     const delay = userQuery.trim() ? 400 : 0;
     searchTimeout.current = setTimeout(async () => {
       setSearchingUsers(true);
+      setUsersError(null);
       try {
         const url = userQuery.trim() ? `/api/admin/users?q=${encodeURIComponent(userQuery)}` : '/api/admin/users';
         const res = await fetchWithAuth(url);
-        const json = res.ok ? await res.json() : null;
-        setUserResults(json?.data ?? []);
+        const json = await res.json().catch(() => null);
+        if (!res.ok) {
+          setUsersError(`API error ${res.status}: ${json?.error ?? 'unknown'}`);
+          setUserResults([]);
+        } else {
+          setUserResults(json?.data ?? []);
+        }
+      } catch (e) {
+        setUsersError(`Network error: ${String(e)}`);
       } finally {
         setSearchingUsers(false);
       }
@@ -251,7 +260,11 @@ export default function AdminPage() {
             )}
           </div>
 
-          {!searchingUsers && userResults.length === 0 && (
+          {usersError && (
+            <p className="text-center text-red-400 text-sm py-4 bg-red-500/10 rounded-2xl px-4">{usersError}</p>
+          )}
+
+          {!searchingUsers && !usersError && userResults.length === 0 && (
             <div className="flex flex-col items-center justify-center py-16 gap-3 text-center">
               <Users className="h-10 w-10 text-muted-foreground/20" />
               <p className="text-muted-foreground text-sm">{userQuery ? 'No users found' : 'No users yet'}</p>
