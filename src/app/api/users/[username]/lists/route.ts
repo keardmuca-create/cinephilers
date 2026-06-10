@@ -11,9 +11,12 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ user
   if (!user) return err('User not found', 404);
 
   const isOwner = auth?.sub === user.id;
+  const limitParam = req.nextUrl.searchParams.get('limit');
+  const take = limitParam ? Math.min(100, parseInt(limitParam, 10)) : undefined;
   const lists = await prisma.customList.findMany({
     where: { userId: user.id, ...(isOwner ? {} : { isPublic: true }) },
     orderBy: { createdAt: 'desc' },
+    ...(take ? { take } : {}),
     include: {
       items: {
         orderBy: { addedAt: 'asc' },

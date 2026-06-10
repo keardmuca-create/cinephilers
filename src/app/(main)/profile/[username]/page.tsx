@@ -4,7 +4,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { useParams, useRouter } from 'next/navigation';
-import { Star, Film, Eye, UserPlus, UserCheck, Loader2, Lock, User, MessageSquare, Users, List, ChevronRight, Clock } from 'lucide-react';
+import { Star, Film, Eye, UserPlus, UserCheck, Loader2, Lock, User, MessageSquare, List, ChevronRight, Clock, Heart, Award } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/contexts/auth-context';
 import { relativeTime } from '@/lib/activity';
@@ -22,11 +22,45 @@ interface ProfileUser {
   isVerified: boolean;
   ratingsCount: number;
   reviewsCount: number;
+  watchedCount: number;
   followersCount: number;
   followingCount: number;
   isFollowing: boolean;
   isPendingRequest: boolean;
   isOwner: boolean;
+}
+
+const TIER_COLORS: Record<string, string> = {
+  GREY: '#9ca3af', BRONZE: '#cd7f32', SILVER: '#c0c0c0', GOLD: '#ffd700',
+};
+const TIER_LABELS: Record<string, string> = {
+  GREY: 'Grey', BRONZE: 'Bronze', SILVER: 'Silver', GOLD: 'Gold',
+};
+
+interface BadgeData {
+  currentTier: string;
+  nextTier: string | null;
+  nextThreshold: number | null;
+  ratingsCount: number;
+  progress: number;
+  memberSince: string;
+}
+
+interface FavoriteItem {
+  id: string;
+  tmdbId: string;
+  mediaType: string;
+}
+
+interface ReviewItem {
+  id: string;
+  tmdbId: string;
+  mediaType: string;
+  body: string;
+  containsSpoiler: boolean;
+  likesCount: number;
+  createdAt: string;
+  meta?: { title: string; year: string; poster: string };
 }
 
 interface RecentItem {
@@ -130,6 +164,53 @@ function FollowListModal({ username, type, count }: { username: string; type: 'f
   );
 }
 
+function FavoritePoster({ tmdbId }: { tmdbId: string }) {
+  const [meta, setMeta] = useState<{ title: string; year: string; poster: string } | null>(null);
+  useEffect(() => { getMeta(tmdbId).then(m => { if (m) setMeta(m); }); }, [tmdbId]);
+  return (
+    <Link href={`/movie/${tmdbId}`} className="group relative flex-1 aspect-[2/3] rounded-2xl overflow-hidden bg-muted shadow-md">
+      {meta?.poster
+        ? <Image src={meta.poster} alt={meta.title} fill className="object-cover transition-transform group-hover:scale-105" sizes="25vw" />
+        : <div className="w-full h-full flex items-center justify-center"><Film className="h-5 w-5 text-muted-foreground/40" /></div>
+      }
+      {/* Title tooltip on hover */}
+      {meta?.title && (
+        <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 to-transparent p-2 translate-y-full group-hover:translate-y-0 transition-transform">
+          <p className="text-[10px] font-bold text-white line-clamp-2 leading-tight">{meta.title}</p>
+        </div>
+      )}
+    </Link>
+  );
+}
+
+function ReviewCard({ review }: { review: ReviewItem }) {
+  const [meta, setMeta] = useState(review.meta ?? null);
+  useEffect(() => { if (!meta) getMeta(review.tmdbId).then(m => { if (m) setMeta(m); }); }, [review.tmdbId, meta]);
+  return (
+    <Link href={`/movie/${review.tmdbId}/reviews`} className="block bg-muted/30 hover:bg-muted/50 transition-colors rounded-2xl p-4 border border-white/5 group">
+      <div className="flex gap-3">
+        <div className="relative w-10 shrink-0 rounded-lg overflow-hidden bg-muted shadow-sm" style={{ aspectRatio: '2/3' }}>
+          {meta?.poster
+            ? <Image src={meta.poster} alt={meta.title ?? ''} fill className="object-cover" sizes="40px" />
+            : <div className="w-full h-full flex items-center justify-center"><Film className="h-3 w-3 text-muted-foreground/40" /></div>
+          }
+        </div>
+        <div className="flex-1 min-w-0">
+          {meta
+            ? <p className="text-sm font-bold group-hover:text-primary transition-colors line-clamp-1 mb-1">{meta.title}</p>
+            : <div className="h-3 bg-muted rounded-full w-2/3 animate-pulse mb-1" />
+          }
+          <p className="text-xs text-muted-foreground line-clamp-3 leading-relaxed">
+            {review.containsSpoiler && <span className="text-yellow-500/80 font-bold not-italic mr-1">[Spoiler]</span>}
+            {review.body}
+          </p>
+          <p className="text-[10px] text-muted-foreground mt-1.5">{relativeTime(review.createdAt)}</p>
+        </div>
+      </div>
+    </Link>
+  );
+}
+
 function RecentCard({ item }: { item: RecentItem }) {
   const [meta, setMeta] = useState(item.meta ?? null);
   useEffect(() => { if (!meta) getMeta(item.tmdbId).then(m => { if (m) setMeta(m); }); }, [item.tmdbId, meta]);
@@ -163,7 +244,16 @@ export default function PublicProfilePage() {
   const [notFound, setNotFound] = useState(false);
   const [recentActivity, setRecentActivity] = useState<RecentItem[]>([]);
   const [lists, setLists] = useState<PublicList[]>([]);
+  const [favorites, setFavorites] = useState<FavoriteItem[]>([]);
+  const [reviews, setReviews] = useState<ReviewItem[]>([]);
+  const [badgeData, setBadgeData] = useState<BadgeData | null>(null);
   const [followLoading, setFollowLoading] = useState(false);
+  const [loadingMoreActivity, setLoadingMoreActivity] = useState(false);
+  const [loadingMoreReviews, setLoadingMoreReviews] = useState(false);
+  const [loadingMoreLists, setLoadingMoreLists] = useState(false);
+  const [allActivityLoaded, setAllActivityLoaded] = useState(false);
+  const [allReviewsLoaded, setAllReviewsLoaded] = useState(false);
+  const [allListsLoaded, setAllListsLoaded] = useState(false);
 
   const loadProfile = useCallback(async () => {
     const res = await fetchWithAuth(`/api/users/${username}`);
@@ -178,12 +268,24 @@ export default function PublicProfilePage() {
     setProfile(p);
     setLoading(false);
 
-    // Load recent activity and lists if profile is visible
+    // Load recent activity, lists, favorites and reviews if profile is visible
     if (!p.isPrivate || p.isFollowing) {
       loadActivity(p.id, p.username);
-      fetch(`/api/users/${p.username}/lists`, { credentials: 'include' })
+      fetch(`/api/users/${p.username}/lists?limit=3`, { credentials: 'include' })
         .then(r => r.ok ? r.json() : null)
         .then(json => { if (json?.data) setLists(json.data); })
+        .catch(() => {});
+      fetch(`/api/users/${p.username}/favorites`, { credentials: 'include' })
+        .then(r => r.ok ? r.json() : null)
+        .then(json => { if (json?.data) setFavorites(json.data); })
+        .catch(() => {});
+      fetch(`/api/users/${p.username}/reviews?limit=3`, { credentials: 'include' })
+        .then(r => r.ok ? r.json() : null)
+        .then(json => { if (json?.data?.items) setReviews(json.data.items); })
+        .catch(() => {});
+      fetch(`/api/users/${p.username}/badges`, { credentials: 'include' })
+        .then(r => r.ok ? r.json() : null)
+        .then(json => { if (json?.data) setBadgeData(json.data); })
         .catch(() => {});
     }
   }, [username, router]);
@@ -210,6 +312,50 @@ export default function PublicProfilePage() {
       items.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
       setRecentActivity(items.slice(0, 6));
     } catch { /* ignore */ }
+  };
+
+  const loadAllActivity = async () => {
+    if (!profile) return;
+    setLoadingMoreActivity(true);
+    try {
+      const [watchedRes, ratingsRes] = await Promise.all([
+        fetch(`/api/users/${profile.username}/watched?limit=100`, { credentials: 'include' }),
+        fetch(`/api/users/${profile.username}/ratings?limit=100`, { credentials: 'include' }),
+      ]);
+      const items: RecentItem[] = [];
+      if (watchedRes.ok) {
+        const d = await watchedRes.json();
+        for (const w of (d.data ?? [])) items.push({ id: `w-${w.id ?? w.tmdbId}`, type: 'watched', tmdbId: w.tmdbId, mediaType: w.mediaType, createdAt: w.watchedAt ?? new Date().toISOString() });
+      }
+      if (ratingsRes.ok) {
+        const d = await ratingsRes.json();
+        for (const r of (d.data ?? [])) items.push({ id: `r-${r.id ?? r.tmdbId}`, type: 'rated', tmdbId: r.tmdbId, mediaType: r.mediaType, rating: r.score, createdAt: r.updatedAt ?? new Date().toISOString() });
+      }
+      items.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+      setRecentActivity(items);
+      setAllActivityLoaded(true);
+    } catch { /* ignore */ }
+    finally { setLoadingMoreActivity(false); }
+  };
+
+  const loadAllReviews = async () => {
+    if (!profile) return;
+    setLoadingMoreReviews(true);
+    try {
+      const res = await fetch(`/api/users/${profile.username}/reviews?limit=50`, { credentials: 'include' });
+      if (res.ok) { const json = await res.json(); setReviews(json.data?.items ?? []); setAllReviewsLoaded(true); }
+    } catch { /* ignore */ }
+    finally { setLoadingMoreReviews(false); }
+  };
+
+  const loadAllLists = async () => {
+    if (!profile) return;
+    setLoadingMoreLists(true);
+    try {
+      const res = await fetch(`/api/users/${profile.username}/lists`, { credentials: 'include' });
+      if (res.ok) { const json = await res.json(); setLists(json.data ?? []); setAllListsLoaded(true); }
+    } catch { /* ignore */ }
+    finally { setLoadingMoreLists(false); }
   };
 
   useEffect(() => { loadProfile(); }, [loadProfile]);
@@ -297,9 +443,25 @@ export default function PublicProfilePage() {
         </div>
       </div>
 
+      {/* Favorite films */}
+      {isVisible && favorites.length > 0 && (
+        <section className="space-y-3">
+          <h2 className="text-lg font-headline font-bold flex items-center gap-2">
+            <Heart className="h-5 w-5 text-primary" />Favorite Films
+          </h2>
+          <div className="grid grid-cols-5 gap-2">
+            {favorites.map(f => <FavoritePoster key={f.id} tmdbId={f.tmdbId} />)}
+          </div>
+        </section>
+      )}
+
       {/* Stats */}
       {isVisible && (
         <div className="flex gap-8">
+          <div className="flex flex-col items-center">
+            <span className="text-xl font-bold font-headline">{profile.watchedCount ?? 0}</span>
+            <span className="text-xs text-muted-foreground uppercase tracking-widest font-bold">Watched</span>
+          </div>
           <div className="flex flex-col items-center">
             <span className="text-xl font-bold font-headline">{profile.ratingsCount}</span>
             <span className="text-xs text-muted-foreground uppercase tracking-widest font-bold">Ratings</span>
@@ -307,6 +469,58 @@ export default function PublicProfilePage() {
           <FollowListModal username={profile.username} type="following" count={profile.followingCount} />
           <FollowListModal username={profile.username} type="followers" count={profile.followersCount} />
         </div>
+      )}
+
+      {/* Badges */}
+      {isVisible && badgeData && (
+        <section className="space-y-3">
+          <h2 className="text-lg font-headline font-bold flex items-center gap-2">
+            <Award className="h-5 w-5 text-primary" />Badges
+          </h2>
+
+          {/* Founder badge — full-width hero card */}
+          {(() => {
+            const color = '#ffd700';
+            const memberSinceLabel = new Date(badgeData.memberSince).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+            return (
+              <div
+                className="w-full rounded-3xl border overflow-hidden"
+                style={{ borderColor: `${color}44`, background: `linear-gradient(135deg, ${color}12 0%, ${color}06 100%)` }}
+              >
+                <div className="flex items-center justify-between px-5 pt-4 pb-2">
+                  <span className="text-[10px] font-bold uppercase tracking-widest px-2 py-0.5 rounded-full"
+                    style={{ color, backgroundColor: `${color}20`, border: `1px solid ${color}44` }}>
+                    Founder
+                  </span>
+                </div>
+                <div className="flex items-center gap-5 px-5 pb-5">
+                  <div className="shrink-0">
+                    <svg width="64" height="64" viewBox="0 0 24 24" fill="none">
+                      <rect x="9" y="1.5" width="2.2" height="7" rx="1.1" fill={color} fillOpacity="0.75" />
+                      <rect x="12.8" y="1.5" width="2.2" height="7" rx="1.1" fill={color} fillOpacity="0.75" />
+                      <circle cx="12" cy="16" r="6.5" fill={color} fillOpacity="0.12" stroke={color} strokeWidth="1.5" />
+                      <circle cx="12" cy="16" r="3.5" fill={color} fillOpacity="0.3" />
+                    </svg>
+                  </div>
+                  <div className="flex-1 min-w-0 space-y-2">
+                    <div>
+                      <div className="flex items-center gap-2 mb-1">
+                        <h4 className="text-lg font-bold font-headline leading-tight">Founder</h4>
+                        <span className="text-[9px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded-full shrink-0"
+                          style={{ color, backgroundColor: `${color}18`, border: `1px solid ${color}33` }}>
+                          Gold
+                        </span>
+                      </div>
+                      <p className="text-xs text-muted-foreground leading-snug">Awarded to everyone who joins the community.</p>
+                    </div>
+                    <p className="text-xs font-medium" style={{ color }}>Member since {memberSinceLabel}</p>
+                  </div>
+                </div>
+              </div>
+            );
+          })()}
+
+        </section>
       )}
 
       {/* Private lock */}
@@ -325,9 +539,17 @@ export default function PublicProfilePage() {
       {/* Recent activity */}
       {isVisible && recentActivity.length > 0 && (
         <section className="space-y-3">
-          <h2 className="text-lg font-headline font-bold flex items-center gap-2">
-            <Eye className="h-5 w-5 text-primary" />Recent Activity
-          </h2>
+          <div className="flex items-center justify-between">
+            <h2 className="text-lg font-headline font-bold flex items-center gap-2">
+              <Eye className="h-5 w-5 text-primary" />Recent Activity
+            </h2>
+            {profile.isFollowing && !allActivityLoaded && (
+              <button onClick={loadAllActivity} disabled={loadingMoreActivity}
+                className="text-xs font-semibold text-primary hover:opacity-70 transition-opacity flex items-center gap-1">
+                {loadingMoreActivity ? <Loader2 className="h-3 w-3 animate-spin" /> : 'See All'}
+              </button>
+            )}
+          </div>
           <div className="bg-card rounded-3xl border border-white/5 px-5 py-2">
             {recentActivity.map(item => <RecentCard key={item.id} item={item} />)}
           </div>
@@ -342,12 +564,40 @@ export default function PublicProfilePage() {
         </div>
       )}
 
+      {/* Reviews */}
+      {isVisible && reviews.length > 0 && (
+        <section className="space-y-3">
+          <div className="flex items-center justify-between">
+            <h2 className="text-lg font-headline font-bold flex items-center gap-2">
+              <MessageSquare className="h-5 w-5 text-primary" />Reviews
+            </h2>
+            {profile.isFollowing && !allReviewsLoaded && (
+              <button onClick={loadAllReviews} disabled={loadingMoreReviews}
+                className="text-xs font-semibold text-primary hover:opacity-70 transition-opacity flex items-center gap-1">
+                {loadingMoreReviews ? <Loader2 className="h-3 w-3 animate-spin" /> : 'See All'}
+              </button>
+            )}
+          </div>
+          <div className="space-y-2">
+            {reviews.map(r => <ReviewCard key={r.id} review={r} />)}
+          </div>
+        </section>
+      )}
+
       {/* Lists */}
       {isVisible && lists.length > 0 && (
         <section className="space-y-3">
-          <h2 className="text-lg font-headline font-bold flex items-center gap-2">
-            <List className="h-5 w-5 text-primary" /> Lists
-          </h2>
+          <div className="flex items-center justify-between">
+            <h2 className="text-lg font-headline font-bold flex items-center gap-2">
+              <List className="h-5 w-5 text-primary" />Lists
+            </h2>
+            {profile.isFollowing && !allListsLoaded && lists.length >= 3 && (
+              <button onClick={loadAllLists} disabled={loadingMoreLists}
+                className="text-xs font-semibold text-primary hover:opacity-70 transition-opacity flex items-center gap-1">
+                {loadingMoreLists ? <Loader2 className="h-3 w-3 animate-spin" /> : 'See All'}
+              </button>
+            )}
+          </div>
           <div className="space-y-3">
             {lists.map(l => (
               <Link key={l.id} href={`/lists/${l.id}`} className="bg-card rounded-3xl border border-white/5 px-5 py-4 flex items-center gap-4 hover:bg-white/5 transition-colors">

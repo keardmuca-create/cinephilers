@@ -166,6 +166,7 @@ export function ImportDialog({ onClose }: { onClose: () => void }) {
   const [matchProgress, setMatchProgress] = useState(0);
   const [result, setResult] = useState<{ watchedAdded: number; ratingsAdded: number; watchlistAdded: number; reviewsAdded: number } | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [shareActivity, setShareActivity] = useState(true);
   const fileRef = useRef<HTMLInputElement>(null);
 
   const handleFile = async (file: File) => {
@@ -228,6 +229,15 @@ export function ImportDialog({ onClose }: { onClose: () => void }) {
       } catch { /* ignore */ }
 
       setResult(json.data);
+
+      if (shareActivity && matched.length > 0) {
+        fetchWithAuth('/api/import-activity', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ platform, count: matched.length }),
+        }).catch(() => {});
+      }
+
       setStep('done');
     } catch {
       setError('Import failed. Please try again.');
@@ -388,9 +398,20 @@ export function ImportDialog({ onClose }: { onClose: () => void }) {
               {matched.length === 0 ? (
                 <p className="text-sm text-muted-foreground text-center py-4">No films could be matched. Try a different file.</p>
               ) : (
-                <Button className="w-full rounded-2xl h-12 font-bold" onClick={runImport}>
-                  Import {matched.length} film{matched.length !== 1 ? 's' : ''}
-                </Button>
+                <div className="space-y-3">
+                  <label className="flex items-center gap-3 cursor-pointer select-none">
+                    <input
+                      type="checkbox"
+                      checked={shareActivity}
+                      onChange={e => setShareActivity(e.target.checked)}
+                      className="h-4 w-4 rounded accent-primary"
+                    />
+                    <span className="text-sm text-muted-foreground">Share this import in my activity feed</span>
+                  </label>
+                  <Button className="w-full rounded-2xl h-12 font-bold" onClick={runImport}>
+                    Import {matched.length} film{matched.length !== 1 ? 's' : ''}
+                  </Button>
+                </div>
               )}
             </div>
           )}

@@ -5,13 +5,15 @@ import { getCurrentUser } from '@/lib/auth-utils';
 
 export interface FeedItem {
   id: string;
-  type: 'watched' | 'rated' | 'reviewed';
+  type: 'watched' | 'rated' | 'reviewed' | 'imported';
   user: { id: string; username: string; displayName: string | null; avatarUrl: string | null };
   tmdbId: string;
   mediaType: string;
   rating?: number;
   reviewBody?: string;
   containsSpoiler?: boolean;
+  importPlatform?: string;
+  importCount?: number;
   createdAt: string;
 }
 
@@ -35,8 +37,8 @@ export async function GET(req: NextRequest) {
     select: { id: true, username: true, displayName: true, avatarUrl: true },
   };
 
-  // Fetch recent activity from all three tables in parallel
-  const [watched, ratings, reviews] = await Promise.all([
+  // Fetch recent activity from all tables in parallel
+  const [watched, ratings, reviews, imports] = await Promise.all([
     prisma.watchedItem.findMany({
       where: { userId: { in: followingIds }, watchedAt: { gte: since } },
       take: limit,
@@ -50,6 +52,12 @@ export async function GET(req: NextRequest) {
       include: { user: userSelect },
     }),
     prisma.review.findMany({
+      where: { userId: { in: followingIds }, createdAt: { gte: since } },
+      take: limit,
+      orderBy: { createdAt: 'desc' },
+      include: { user: userSelect },
+    }),
+    prisma.importActivity.findMany({
       where: { userId: { in: followingIds }, createdAt: { gte: since } },
       take: limit,
       orderBy: { createdAt: 'desc' },
@@ -84,6 +92,16 @@ export async function GET(req: NextRequest) {
       reviewBody: r.body,
       containsSpoiler: r.containsSpoiler,
       createdAt: r.createdAt.toISOString(),
+    })),
+    ...imports.map(i => ({
+      id: `imported-${i.id}`,
+      type: 'imported' as const,
+      user: i.user,
+      tmdbId: '',
+      mediaType: '',
+      importPlatform: i.platform,
+      importCount: i.count,
+      createdAt: i.createdAt.toISOString(),
     })),
   ];
 

@@ -13,7 +13,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ user
       id: true, username: true, displayName: true, avatarUrl: true,
       bio: true, isPrivate: true, role: true, isVerified: true,
       ratingsCount: true, reviewsCount: true, createdAt: true,
-      _count: { select: { followers: true, following: true } },
+      _count: { select: { followers: true, following: true, watched: true } },
     },
   });
   if (!user) return err('User not found', 404);
@@ -41,6 +41,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ user
     ...user,
     followersCount: user._count.followers,
     followingCount: user._count.following,
+    watchedCount: user._count.watched,
     isFollowing: isFollowingBool,
     isPendingRequest,
     isOwner,

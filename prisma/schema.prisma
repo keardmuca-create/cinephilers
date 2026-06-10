@@ -66,6 +66,7 @@ model User {
   receivedRequests  FollowRequest[]   @relation("ReceivedRequests")
   reviewComments    ReviewComment[]
   reports           Report[]
+  importActivities  ImportActivity[]
 }
 
 model Rating {
@@ -244,6 +245,16 @@ model ReviewComment {
 
   review Review @relation(fields: [reviewId], references: [id], onDelete: Cascade)
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model ImportActivity {
+  id        String   @id @default(cuid())
+  userId    String
+  platform  String   // 'letterboxd' | 'imdb'
+  count     Int
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
 model Report {

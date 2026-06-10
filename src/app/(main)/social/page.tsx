@@ -13,13 +13,15 @@ import { Button } from '@/components/ui/button';
 
 interface FeedItem {
   id: string;
-  type: 'watched' | 'rated' | 'reviewed';
+  type: 'watched' | 'rated' | 'reviewed' | 'imported';
   user: { id: string; username: string; displayName: string | null; avatarUrl: string | null };
   tmdbId: string;
   mediaType: string;
   rating?: number;
   reviewBody?: string;
   containsSpoiler?: boolean;
+  importPlatform?: string;
+  importCount?: number;
   createdAt: string;
 }
 
@@ -77,13 +79,15 @@ function UserAvatar({ user, size = 40 }: {
 interface UnifiedItem {
   id: string;
   isMe: boolean;
-  type: 'watched' | 'rated' | 'reviewed' | 'watchlist';
+  type: 'watched' | 'rated' | 'reviewed' | 'watchlist' | 'imported';
   user: { username: string; displayName: string | null; avatarUrl: string | null };
   tmdbId: string;
   meta?: { title: string; year: string; poster: string };
   rating?: number;
   reviewBody?: string;
   containsSpoiler?: boolean;
+  importPlatform?: string;
+  importCount?: number;
   createdAt: string;
   // my-activity-only fields
   localId?: string;
@@ -121,6 +125,36 @@ function ActivityCard({ item, onLike, onRemove }: {
     if (navigator.share) navigator.share({ title: meta?.title ?? '', url: href }).catch(() => {});
     else navigator.clipboard.writeText(`${window.location.origin}${href}`).catch(() => {});
   };
+
+  // Import activity card — no movie poster, just a summary banner
+  if (item.type === 'imported') {
+    const platformLabel = item.importPlatform === 'letterboxd' ? 'Letterboxd' : item.importPlatform === 'imdb' ? 'IMDb' : item.importPlatform ?? 'another platform';
+    const platformColor = item.importPlatform === 'letterboxd' ? 'text-orange-400 bg-orange-400/10' : 'text-yellow-400 bg-yellow-400/10';
+    const platformLetter = item.importPlatform === 'letterboxd' ? 'L' : 'i';
+    return (
+      <div className="bg-card rounded-3xl border border-white/5 shadow-lg overflow-hidden">
+        <div className="flex items-center gap-3 px-5 py-4">
+          <Link href={item.isMe ? '/profile' : `/profile/${item.user.username}`}>
+            <UserAvatar user={item.user} size={40} />
+          </Link>
+          <div className="flex-1 min-w-0">
+            <Link href={item.isMe ? '/profile' : `/profile/${item.user.username}`} className="text-sm font-bold font-headline hover:text-primary transition-colors">
+              {item.user.displayName ?? item.user.username}
+            </Link>
+            <p className="text-xs text-muted-foreground mt-0.5">{relativeTime(item.createdAt)}</p>
+          </div>
+        </div>
+        <div className="mx-5 mb-4 flex items-center gap-3 bg-muted/40 rounded-2xl p-3.5 border border-white/5">
+          <div className={`h-9 w-9 rounded-xl flex items-center justify-center shrink-0 font-black text-base ${platformColor}`}>
+            {platformLetter}
+          </div>
+          <p className="text-sm text-foreground/80 leading-snug">
+            Imported <span className="font-bold text-foreground">{item.importCount?.toLocaleString()} film{item.importCount !== 1 ? 's' : ''}</span> from <span className="font-semibold">{platformLabel}</span>
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="bg-card rounded-3xl border border-white/5 shadow-lg overflow-hidden">
@@ -425,6 +459,8 @@ export default function SocialPage() {
       rating: f.rating,
       reviewBody: f.reviewBody,
       containsSpoiler: f.containsSpoiler,
+      importPlatform: f.importPlatform,
+      importCount: f.importCount,
       createdAt: f.createdAt,
     }));
 

@@ -22,7 +22,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ user
   const items = await prisma.favorite.findMany({
     where: { userId: user.id },
     orderBy: { addedAt: 'asc' },
-    take: 4,
+    take: 10,
   });
 
   return ok(items);

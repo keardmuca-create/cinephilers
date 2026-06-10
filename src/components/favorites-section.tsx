@@ -4,6 +4,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Plus, X, Search, Heart, RefreshCw } from 'lucide-react';
 import Link from 'next/link';
 import { fetchWithAuth } from '@/lib/fetch-with-auth';
+import { useAuth } from '@/contexts/auth-context';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 
@@ -32,6 +33,7 @@ function saveFavorites(items: FavoriteItem[]) {
 }
 
 export function FavoritesSection() {
+  const { user } = useAuth();
   const [favorites, setFavorites] = useState<FavoriteItem[]>([]);
   const [searchOpen, setSearchOpen] = useState(false);
   const [swapIndex, setSwapIndex] = useState<number | null>(null);
@@ -42,11 +44,40 @@ export function FavoritesSection() {
   const dragIndexRef = useRef<number | null>(null);
 
   useEffect(() => {
-    setFavorites(loadFavorites());
+    // Load from localStorage immediately for fast render
+    const local = loadFavorites();
+    if (local.length > 0) setFavorites(local);
+
+    // Then hydrate from DB so favorites survive new devices/cleared storage
+    if (!user) return;
+    fetch(`/api/users/${user.username}/favorites`, { credentials: 'include' })
+      .then(r => r.ok ? r.json() : null)
+      .then(async json => {
+        const dbItems: { id: string; tmdbId: string; mediaType: string }[] = json?.data ?? [];
+        if (dbItems.length === 0) return;
+        // local item.id === db.tmdbId — build merged list preserving local metadata
+        const localByTmdbId = new Map(local.map(f => [f.id, f]));
+        const merged: FavoriteItem[] = await Promise.all(dbItems.map(async db => {
+          if (localByTmdbId.has(db.tmdbId)) return localByTmdbId.get(db.tmdbId)!;
+          // Not in localStorage — fetch meta from API
+          try {
+            const res = await fetch(`/api/meta/${db.tmdbId}`);
+            if (res.ok) {
+              const m = await res.json();
+              return { id: db.tmdbId, title: m.title ?? '', year: m.year ?? '', poster: m.poster ?? '', type: db.mediaType === 'SHOW' ? 'show' as const : 'movie' as const };
+            }
+          } catch { /* ignore */ }
+          return { id: db.tmdbId, title: '', year: '', poster: '', type: db.mediaType === 'SHOW' ? 'show' as const : 'movie' as const };
+        }));
+        setFavorites(merged);
+        saveFavorites(merged);
+      })
+      .catch(() => {});
+
     const onDbRestored = () => setFavorites(loadFavorites());
     window.addEventListener('cinephilers-db-restored', onDbRestored);
     return () => window.removeEventListener('cinephilers-db-restored', onDbRestored);
-  }, []);
+  }, [user]);
 
   const updateFavorites = useCallback((items: FavoriteItem[]) => {
     setFavorites(items);

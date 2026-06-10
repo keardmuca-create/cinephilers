@@ -11,7 +11,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ user
 
   const user = await prisma.user.findUnique({
     where: { username: username.toLowerCase() },
-    select: { id: true, isPrivate: true, ratingsCount: true },
+    select: { id: true, isPrivate: true, ratingsCount: true, createdAt: true },
   });
   if (!user) return err('User not found', 404);
 
@@ -43,5 +43,6 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ user
     nextTier: nextTier ?? null,
     nextThreshold,
     progress: nextThreshold ? Math.round((user.ratingsCount / nextThreshold) * 100) : 100,
+    memberSince: user.createdAt.toISOString(),
   });
 }
