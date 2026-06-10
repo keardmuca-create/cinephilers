@@ -53,12 +53,12 @@ function ItemCard({ item }: { item: WatchlistItem }) {
 export default function WatchlistPage() {
   const router = useRouter();
   const [items, setItems]           = useState<WatchlistItem[]>([]);
-  const [sort, setSort]             = useState<SortOption>(() => (sessionStorage.getItem('watchlist-sort') as SortOption) || 'title-asc');
+  const [sort, setSort]             = useState<SortOption>(() => (typeof sessionStorage !== 'undefined' ? sessionStorage.getItem('watchlist-sort') as SortOption : null) || 'title-asc');
   const [search, setSearch]         = useState('');
   const [refineOpen, setRefineOpen] = useState(false);
   const [pendingSort, setPendingSort] = useState<SortOption>('title-asc');
-  const [yearFrom, setYearFrom] = useState(() => sessionStorage.getItem('watchlist-year-from') || '');
-  const [yearTo, setYearTo]     = useState(() => sessionStorage.getItem('watchlist-year-to') || '');
+  const [yearFrom, setYearFrom] = useState(() => (typeof sessionStorage !== 'undefined' ? sessionStorage.getItem('watchlist-year-from') : null) || '');
+  const [yearTo, setYearTo]     = useState(() => (typeof sessionStorage !== 'undefined' ? sessionStorage.getItem('watchlist-year-to') : null) || '');
   const [pendingYearFrom, setPendingYearFrom] = useState('');
   const [pendingYearTo, setPendingYearTo]     = useState('');
 

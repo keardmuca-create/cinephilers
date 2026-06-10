@@ -71,12 +71,12 @@ export default function RatingsPage() {
   const router = useRouter();
   const [items, setItems]           = useState<RatedItem[]>([]);
   const [loading, setLoading]       = useState(true);
-  const [sort, setSort]             = useState<SortOption>(() => (sessionStorage.getItem('ratings-sort') as SortOption) || 'rating-desc');
+  const [sort, setSort]             = useState<SortOption>(() => (typeof sessionStorage !== 'undefined' ? sessionStorage.getItem('ratings-sort') as SortOption : null) || 'rating-desc');
   const [search, setSearch]         = useState('');
   const [refineOpen, setRefineOpen] = useState(false);
   const [pendingSort, setPendingSort] = useState<SortOption>('rating-desc');
-  const [yearFrom, setYearFrom] = useState(() => sessionStorage.getItem('ratings-year-from') || '');
-  const [yearTo, setYearTo]     = useState(() => sessionStorage.getItem('ratings-year-to') || '');
+  const [yearFrom, setYearFrom] = useState(() => (typeof sessionStorage !== 'undefined' ? sessionStorage.getItem('ratings-year-from') : null) || '');
+  const [yearTo, setYearTo]     = useState(() => (typeof sessionStorage !== 'undefined' ? sessionStorage.getItem('ratings-year-to') : null) || '');
   const [pendingYearFrom, setPendingYearFrom] = useState('');
   const [pendingYearTo, setPendingYearTo]     = useState('');
   const fetchingRef = useRef(new Set<string>());

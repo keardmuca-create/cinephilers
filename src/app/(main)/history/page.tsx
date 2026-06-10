@@ -199,14 +199,14 @@ export default function HistoryPage() {
   const [metaMap, setMetaMap]         = useState<Map<string, ItemMeta>>(new Map());
   const [userRatings, setUserRatings] = useState<Map<string, number>>(new Map());
   const [fetching, setFetching]       = useState(false);
-  const [sort, setSort]                 = useState<SortOption>(() => (sessionStorage.getItem('history-sort') as SortOption) || 'date-desc');
-  const [typeFilter, setTypeFilter]     = useState<TypeFilter>(() => (sessionStorage.getItem('history-type') as TypeFilter) || 'any');
+  const [sort, setSort]                 = useState<SortOption>(() => (typeof sessionStorage !== 'undefined' ? sessionStorage.getItem('history-sort') as SortOption : null) || 'date-desc');
+  const [typeFilter, setTypeFilter]     = useState<TypeFilter>(() => (typeof sessionStorage !== 'undefined' ? sessionStorage.getItem('history-type') as TypeFilter : null) || 'any');
   const [search, setSearch]             = useState('');
   const [refineOpen, setRefineOpen]     = useState(false);
   const [pendingSort, setPendingSort]   = useState<SortOption>('date-desc');
   const [pendingType, setPendingType]   = useState<TypeFilter>('any');
-  const [yearFrom, setYearFrom] = useState(() => sessionStorage.getItem('history-year-from') || '');
-  const [yearTo, setYearTo]     = useState(() => sessionStorage.getItem('history-year-to') || '');
+  const [yearFrom, setYearFrom] = useState(() => (typeof sessionStorage !== 'undefined' ? sessionStorage.getItem('history-year-from') : null) || '');
+  const [yearTo, setYearTo]     = useState(() => (typeof sessionStorage !== 'undefined' ? sessionStorage.getItem('history-year-to') : null) || '');
   const [pendingYearFrom, setPendingYearFrom] = useState('');
   const [pendingYearTo, setPendingYearTo]     = useState('');
 
