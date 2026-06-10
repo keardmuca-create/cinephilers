@@ -199,15 +199,14 @@ export default function HistoryPage() {
   const [metaMap, setMetaMap]         = useState<Map<string, ItemMeta>>(new Map());
   const [userRatings, setUserRatings] = useState<Map<string, number>>(new Map());
   const [fetching, setFetching]       = useState(false);
-  const [sort, setSort]                 = useState<SortOption>('date-desc');
-  const [typeFilter, setTypeFilter]     = useState<TypeFilter>('any');
+  const [sort, setSort]                 = useState<SortOption>(() => (sessionStorage.getItem('history-sort') as SortOption) || 'date-desc');
+  const [typeFilter, setTypeFilter]     = useState<TypeFilter>(() => (sessionStorage.getItem('history-type') as TypeFilter) || 'any');
   const [search, setSearch]             = useState('');
   const [refineOpen, setRefineOpen]     = useState(false);
-  // pending values inside refine sheet (applied on "Refine")
   const [pendingSort, setPendingSort]   = useState<SortOption>('date-desc');
   const [pendingType, setPendingType]   = useState<TypeFilter>('any');
-  const [yearFrom, setYearFrom] = useState('');
-  const [yearTo, setYearTo]     = useState('');
+  const [yearFrom, setYearFrom] = useState(() => sessionStorage.getItem('history-year-from') || '');
+  const [yearTo, setYearTo]     = useState(() => sessionStorage.getItem('history-year-to') || '');
   const [pendingYearFrom, setPendingYearFrom] = useState('');
   const [pendingYearTo, setPendingYearTo]     = useState('');
 
@@ -360,6 +359,10 @@ export default function HistoryPage() {
     setTypeFilter(pendingType);
     setYearFrom(pendingYearFrom);
     setYearTo(pendingYearTo);
+    sessionStorage.setItem('history-sort', pendingSort);
+    sessionStorage.setItem('history-type', pendingType);
+    sessionStorage.setItem('history-year-from', pendingYearFrom);
+    sessionStorage.setItem('history-year-to', pendingYearTo);
     setRefineOpen(false);
   };
 

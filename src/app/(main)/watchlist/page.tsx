@@ -53,12 +53,12 @@ function ItemCard({ item }: { item: WatchlistItem }) {
 export default function WatchlistPage() {
   const router = useRouter();
   const [items, setItems]           = useState<WatchlistItem[]>([]);
-  const [sort, setSort]             = useState<SortOption>('title-asc');
+  const [sort, setSort]             = useState<SortOption>(() => (sessionStorage.getItem('watchlist-sort') as SortOption) || 'title-asc');
   const [search, setSearch]         = useState('');
   const [refineOpen, setRefineOpen] = useState(false);
   const [pendingSort, setPendingSort] = useState<SortOption>('title-asc');
-  const [yearFrom, setYearFrom] = useState('');
-  const [yearTo, setYearTo]     = useState('');
+  const [yearFrom, setYearFrom] = useState(() => sessionStorage.getItem('watchlist-year-from') || '');
+  const [yearTo, setYearTo]     = useState(() => sessionStorage.getItem('watchlist-year-to') || '');
   const [pendingYearFrom, setPendingYearFrom] = useState('');
   const [pendingYearTo, setPendingYearTo]     = useState('');
 
@@ -158,7 +158,7 @@ export default function WatchlistPage() {
             <div className="flex items-center justify-between px-6 pt-5 pb-4 border-b border-gray-100 shrink-0">
               <button onClick={() => setRefineOpen(false)} className="text-sm text-gray-500 hover:text-gray-800 transition-colors">Cancel</button>
               <span className="text-sm font-bold text-gray-900">{items.length} Titles</span>
-              <button onClick={() => { setSort(pendingSort); setYearFrom(pendingYearFrom); setYearTo(pendingYearTo); setRefineOpen(false); }} className="text-sm font-bold text-primary hover:opacity-80 transition-opacity">Refine</button>
+              <button onClick={() => { setSort(pendingSort); setYearFrom(pendingYearFrom); setYearTo(pendingYearTo); sessionStorage.setItem('watchlist-sort', pendingSort); sessionStorage.setItem('watchlist-year-from', pendingYearFrom); sessionStorage.setItem('watchlist-year-to', pendingYearTo); setRefineOpen(false); }} className="text-sm font-bold text-primary hover:opacity-80 transition-opacity">Refine</button>
             </div>
             <div className="overflow-y-auto flex-1 px-6 py-4">
               <div className="flex items-center justify-between mb-3">
