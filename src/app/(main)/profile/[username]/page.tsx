@@ -410,50 +410,40 @@ export default function PublicProfilePage() {
   return (
     <main className="max-w-xl mx-auto px-4 pt-10 pb-32 space-y-8">
       {/* Header */}
-      <div className="flex items-start gap-4">
+      <div className="flex items-center gap-4">
         <Avatar user={profile} size={80} />
-        <div className="flex-1 min-w-0 space-y-2">
-          <div>
-            <div className="flex items-center gap-2">
-              <h1 className="text-xl font-bold font-headline truncate">{profile.displayName ?? profile.username}</h1>
-              {profile.isVerified && <span className="text-[10px] bg-primary/20 text-primary px-1.5 py-0.5 rounded-full font-bold shrink-0">✓</span>}
-              {profile.isPrivate && <Lock className="h-3.5 w-3.5 text-muted-foreground shrink-0" />}
+        <div className="flex-1 min-w-0">
+          <div className="flex items-start justify-between gap-2">
+            <div className="min-w-0">
+              <div className="flex items-center gap-2">
+                <h1 className="text-xl font-bold font-headline truncate">{profile.displayName ?? profile.username}</h1>
+                {profile.isVerified && <span className="text-[10px] bg-primary/20 text-primary px-1.5 py-0.5 rounded-full font-bold shrink-0">✓</span>}
+                {profile.isPrivate && <Lock className="h-3.5 w-3.5 text-muted-foreground shrink-0" />}
+              </div>
+              <p className="text-sm text-muted-foreground">@{profile.username}</p>
+              {profile.bio && isVisible && <p className="text-sm text-foreground/80 leading-relaxed mt-1">{profile.bio}</p>}
             </div>
-            <p className="text-sm text-muted-foreground">@{profile.username}</p>
+            {me && (
+              <Button
+                size="sm"
+                variant={profile.isFollowing || profile.isPendingRequest ? 'outline' : 'default'}
+                className="rounded-xl font-bold gap-1.5 shrink-0"
+                onClick={toggleFollow}
+                disabled={followLoading}
+              >
+                {followLoading
+                  ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  : profile.isFollowing
+                    ? <><UserCheck className="h-3.5 w-3.5" />Following</>
+                    : profile.isPendingRequest
+                      ? <><Clock className="h-3.5 w-3.5" />Requested</>
+                      : <><UserPlus className="h-3.5 w-3.5" />Follow</>
+                }
+              </Button>
+            )}
           </div>
-          {profile.bio && isVisible && <p className="text-sm text-foreground/80 leading-relaxed">{profile.bio}</p>}
-          {me && (
-            <Button
-              size="sm"
-              variant={profile.isFollowing || profile.isPendingRequest ? 'outline' : 'default'}
-              className="rounded-xl font-bold gap-1.5"
-              onClick={toggleFollow}
-              disabled={followLoading}
-            >
-              {followLoading
-                ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                : profile.isFollowing
-                  ? <><UserCheck className="h-3.5 w-3.5" />Following</>
-                  : profile.isPendingRequest
-                    ? <><Clock className="h-3.5 w-3.5" />Requested</>
-                    : <><UserPlus className="h-3.5 w-3.5" />Follow</>
-              }
-            </Button>
-          )}
         </div>
       </div>
-
-      {/* Favorite films */}
-      {isVisible && favorites.length > 0 && (
-        <section className="space-y-3">
-          <h2 className="text-lg font-headline font-bold flex items-center gap-2">
-            <Heart className="h-5 w-5 text-primary" />Favorite Films
-          </h2>
-          <div className="grid grid-cols-5 gap-2">
-            {favorites.map(f => <FavoritePoster key={f.id} tmdbId={f.tmdbId} />)}
-          </div>
-        </section>
-      )}
 
       {/* Stats */}
       {isVisible && (
@@ -469,6 +459,18 @@ export default function PublicProfilePage() {
           <FollowListModal username={profile.username} type="following" count={profile.followingCount} />
           <FollowListModal username={profile.username} type="followers" count={profile.followersCount} />
         </div>
+      )}
+
+      {/* Favorite films */}
+      {isVisible && favorites.length > 0 && (
+        <section className="space-y-3">
+          <h2 className="text-lg font-headline font-bold flex items-center gap-2">
+            <Heart className="h-5 w-5 text-primary" />Favorite Films
+          </h2>
+          <div className="grid grid-cols-5 gap-2">
+            {favorites.map(f => <FavoritePoster key={f.id} tmdbId={f.tmdbId} />)}
+          </div>
+        </section>
       )}
 
       {/* Badges */}
