@@ -260,13 +260,17 @@ async function restoreFromDb() {
         return { title: '', poster: '', year: '' };
       };
 
+      // Only sync recent activity (last 30 days) — bulk imports have old dates and must not flood the feed
+      const cutoff = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
       for (const w of watched) {
         if (existingKeys.has(`watched-${w.tmdbId}`)) continue;
+        if (new Date(w.watchedAt) < cutoff) continue;
         const { title, poster, year } = getMeta(w.tmdbId);
         newEntries.push({ id: `db-w-${w.tmdbId}`, action: 'watched', contentId: w.tmdbId, contentTitle: title, contentPoster: poster, contentYear: year, timestamp: w.watchedAt, likes: [] });
       }
       for (const r of ratings) {
         if (existingKeys.has(`rated-${r.tmdbId}`)) continue;
+        if (new Date(r.updatedAt) < cutoff) continue;
         const { title, poster, year } = getMeta(r.tmdbId);
         newEntries.push({ id: `db-r-${r.tmdbId}`, action: 'rated', contentId: r.tmdbId, contentTitle: title, contentPoster: poster, contentYear: year, rating: r.score, timestamp: r.updatedAt, likes: [] });
       }
