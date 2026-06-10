@@ -25,7 +25,7 @@ const securityHeaders = [
       "img-src 'self' data: blob: https://image.tmdb.org https://picsum.photos https://placehold.co https://images.unsplash.com",
       "font-src 'self'",
       "frame-src 'self' https://www.youtube.com https://www.youtube-nocookie.com",
-      "connect-src 'self' https://api.themoviedb.org",
+      "connect-src 'self' https://api.themoviedb.org https://*.ingest.sentry.io https://*.sentry.io",
       "media-src 'self' https://www.youtube.com",
       "object-src 'none'",
       "base-uri 'self'",
