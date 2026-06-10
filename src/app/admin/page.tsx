@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
-import { Flag, Trash2, Check, X, Loader2, ShieldAlert, Users, Search } from 'lucide-react';
+import { Flag, Trash2, Check, X, Loader2, ShieldAlert, Users, Search, Ban, ShieldCheck, ChevronUp, ChevronDown, Star, Eye } from 'lucide-react';
 import { useAuth } from '@/contexts/auth-context';
 import { fetchWithAuth } from '@/lib/fetch-with-auth';
 import { relativeTime } from '@/lib/activity';
@@ -26,9 +26,18 @@ interface AdminUser {
   avatarUrl: string | null;
   email: string;
   role: string;
+  isBanned: boolean;
   createdAt: string;
   reviewsCount: number;
   ratingsCount: number;
+}
+
+interface AdminStats {
+  totalUsers: number;
+  bannedUsers: number;
+  totalRatings: number;
+  totalReviews: number;
+  totalWatched: number;
 }
 
 const STATUS_COLOURS: Record<string, string> = {
@@ -53,8 +62,12 @@ export default function AdminPage() {
   const [searchingUsers, setSearchingUsers] = useState(false);
   const [deletingUserId, setDeletingUserId] = useState<string | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const [actionLoadingId, setActionLoadingId] = useState<string | null>(null);
   const [usersError, setUsersError] = useState<string | null>(null);
   const searchTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Stats state
+  const [stats, setStats] = useState<AdminStats | null>(null);
 
   useEffect(() => {
     if (authLoading) return;
@@ -67,6 +80,11 @@ export default function AdminPage() {
       .then(json => setReports(json?.data ?? []))
       .catch(() => {})
       .finally(() => setLoadingReports(false));
+
+    fetchWithAuth('/api/admin/stats')
+      .then(r => r.ok ? r.json() : null)
+      .then(json => { if (json?.data) setStats(json.data); })
+      .catch(() => {});
   }, [user, authLoading, router]);
 
   // Load users when tab opens, then debounce search on query change
@@ -128,6 +146,27 @@ export default function AdminPage() {
     }
   };
 
+  const userAction = async (userId: string, action: 'ban' | 'unban' | 'promote' | 'demote') => {
+    setActionLoadingId(userId);
+    try {
+      await fetchWithAuth('/api/admin/users', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId, action }),
+      });
+      setUserResults(prev => prev.map(u => {
+        if (u.id !== userId) return u;
+        if (action === 'ban') return { ...u, isBanned: true };
+        if (action === 'unban') return { ...u, isBanned: false };
+        if (action === 'promote') return { ...u, role: 'ADMIN' };
+        if (action === 'demote') return { ...u, role: 'USER' };
+        return u;
+      }));
+    } finally {
+      setActionLoadingId(null);
+    }
+  };
+
   if (authLoading || !user) return null;
 
   const filtered = filter === 'all' ? reports : reports.filter(r => r.status === filter);
@@ -144,6 +183,26 @@ export default function AdminPage() {
           <p className="text-sm text-muted-foreground">{pendingCount} pending reports</p>
         </div>
       </div>
+
+      {/* Stats overview */}
+      {stats && (
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          {[
+            { label: 'Total Users', value: stats.totalUsers, icon: <Users className="h-4 w-4" /> },
+            { label: 'Banned', value: stats.bannedUsers, icon: <Ban className="h-4 w-4" /> },
+            { label: 'Ratings', value: stats.totalRatings, icon: <Star className="h-4 w-4" /> },
+            { label: 'Watched', value: stats.totalWatched, icon: <Eye className="h-4 w-4" /> },
+          ].map(s => (
+            <div key={s.label} className="bg-card border border-white/5 rounded-2xl p-4 flex items-center gap-3">
+              <div className="h-8 w-8 rounded-xl bg-primary/10 flex items-center justify-center text-primary shrink-0">{s.icon}</div>
+              <div>
+                <p className="text-lg font-bold leading-tight">{s.value.toLocaleString()}</p>
+                <p className="text-xs text-muted-foreground">{s.label}</p>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
 
       {/* Main tabs */}
       <div className="flex gap-2">
@@ -296,31 +355,43 @@ export default function AdminPage() {
                   </div>
 
                   {u.id !== user.id && (
-                    confirmDeleteId === u.id ? (
-                      <div className="flex gap-2 shrink-0">
-                        <button
-                          onClick={() => setConfirmDeleteId(null)}
-                          className="px-3 py-1.5 rounded-full bg-white/5 hover:bg-white/10 text-xs font-bold text-muted-foreground transition-colors"
-                        >
-                          Cancel
-                        </button>
-                        <button
-                          onClick={() => deleteUser(u.id)}
-                          disabled={deletingUserId === u.id}
-                          className="px-3 py-1.5 rounded-full bg-red-500 hover:bg-red-600 text-xs font-bold text-white transition-colors disabled:opacity-60"
-                        >
-                          {deletingUserId === u.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : 'Confirm delete'}
-                        </button>
-                      </div>
-                    ) : (
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      {/* Ban / Unban */}
                       <button
-                        onClick={() => setConfirmDeleteId(u.id)}
-                        className="shrink-0 h-8 w-8 rounded-full bg-red-500/10 hover:bg-red-500/20 flex items-center justify-center transition-colors"
-                        title="Delete account"
+                        onClick={() => userAction(u.id, u.isBanned ? 'unban' : 'ban')}
+                        disabled={actionLoadingId === u.id}
+                        title={u.isBanned ? 'Unban user' : 'Ban user'}
+                        className={`h-8 w-8 rounded-full flex items-center justify-center transition-colors disabled:opacity-60 ${u.isBanned ? 'bg-green-500/10 hover:bg-green-500/20' : 'bg-orange-500/10 hover:bg-orange-500/20'}`}
                       >
-                        <Trash2 className="h-4 w-4 text-red-400" />
+                        {actionLoadingId === u.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : u.isBanned ? <ShieldCheck className="h-4 w-4 text-green-400" /> : <Ban className="h-4 w-4 text-orange-400" />}
                       </button>
-                    )
+
+                      {/* Promote / Demote */}
+                      <button
+                        onClick={() => userAction(u.id, u.role === 'ADMIN' ? 'demote' : 'promote')}
+                        disabled={actionLoadingId === u.id}
+                        title={u.role === 'ADMIN' ? 'Demote to user' : 'Promote to admin'}
+                        className={`h-8 w-8 rounded-full flex items-center justify-center transition-colors disabled:opacity-60 ${u.role === 'ADMIN' ? 'bg-yellow-500/10 hover:bg-yellow-500/20' : 'bg-primary/10 hover:bg-primary/20'}`}
+                      >
+                        {u.role === 'ADMIN' ? <ChevronDown className="h-4 w-4 text-yellow-400" /> : <ChevronUp className="h-4 w-4 text-primary" />}
+                      </button>
+
+                      {/* Delete */}
+                      {confirmDeleteId === u.id ? (
+                        <div className="flex gap-1.5">
+                          <button onClick={() => setConfirmDeleteId(null)} className="px-3 py-1.5 rounded-full bg-white/5 hover:bg-white/10 text-xs font-bold text-muted-foreground transition-colors">
+                            Cancel
+                          </button>
+                          <button onClick={() => deleteUser(u.id)} disabled={deletingUserId === u.id} className="px-3 py-1.5 rounded-full bg-red-500 hover:bg-red-600 text-xs font-bold text-white transition-colors disabled:opacity-60">
+                            {deletingUserId === u.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : 'Confirm'}
+                          </button>
+                        </div>
+                      ) : (
+                        <button onClick={() => setConfirmDeleteId(u.id)} className="h-8 w-8 rounded-full bg-red-500/10 hover:bg-red-500/20 flex items-center justify-center transition-colors" title="Delete account">
+                          <Trash2 className="h-4 w-4 text-red-400" />
+                        </button>
+                      )}
+                    </div>
                   )}
                 </div>
               </div>

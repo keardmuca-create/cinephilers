@@ -27,6 +27,7 @@ const USER_SELECT = {
   avatarUrl: true,
   email: true,
   role: true,
+  isBanned: true,
   createdAt: true,
   reviewsCount: true,
   ratingsCount: true,
@@ -66,6 +67,35 @@ export async function GET(req: NextRequest) {
     console.error('admin users GET error:', e);
     return err('Internal error', 500);
   }
+}
+
+export async function PATCH(req: NextRequest) {
+  const { auth, status } = await requireAdmin();
+  if (status === 'unauthenticated') return err('Unauthorized', 401);
+  if (status === 'forbidden' || !auth) return err('Forbidden', 403);
+
+  const { userId, action } = await req.json().catch(() => ({}));
+  if (!userId || !action) return err('Missing userId or action', 400);
+  if (userId === auth.sub) return err('Cannot modify your own account', 400);
+
+  if (action === 'ban') {
+    await prisma.user.update({ where: { id: userId }, data: { isBanned: true } });
+    return ok(null, 'User banned');
+  }
+  if (action === 'unban') {
+    await prisma.user.update({ where: { id: userId }, data: { isBanned: false } });
+    return ok(null, 'User unbanned');
+  }
+  if (action === 'promote') {
+    await prisma.user.update({ where: { id: userId }, data: { role: 'ADMIN' } });
+    return ok(null, 'User promoted to admin');
+  }
+  if (action === 'demote') {
+    await prisma.user.update({ where: { id: userId }, data: { role: 'USER' } });
+    return ok(null, 'User demoted to user');
+  }
+
+  return err('Unknown action', 400);
 }
 
 export async function DELETE(req: NextRequest) {
