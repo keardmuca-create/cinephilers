@@ -2,6 +2,7 @@ import { NextRequest } from 'next/server';
 import { prisma } from '@/lib/db';
 import { ok, err } from '@/lib/api-response';
 import { getCurrentUser } from '@/lib/auth-utils';
+import { sanitizeText } from '@/lib/sanitize';
 
 export async function GET(req: NextRequest) {
   const auth = await getCurrentUser(req);
@@ -36,13 +37,18 @@ export async function PUT(req: NextRequest) {
   if (bio && typeof bio === 'string' && bio.length > 300)
     return err('Bio must be 300 characters or less');
 
-  const stripHtml = (s: string) => s.replace(/<[^>]*>/g, '').trim();
+  if (avatarUrl !== undefined && avatarUrl !== null) {
+    if (typeof avatarUrl !== 'string') return err('Invalid avatar URL');
+    const isHttps = avatarUrl.startsWith('https://') && avatarUrl.length <= 2000;
+    const isDataImage = avatarUrl.startsWith('data:image/') && avatarUrl.length <= 500_000;
+    if (!isHttps && !isDataImage) return err('Avatar must be an https URL or an uploaded image');
+  }
 
   const updated = await prisma.user.update({
     where: { id: auth.sub },
     data: {
-      ...(displayName !== undefined && { displayName: displayName ? stripHtml(displayName as string) : null }),
-      ...(bio !== undefined && { bio: bio ? stripHtml(bio as string) : null }),
+      ...(displayName !== undefined && { displayName: displayName ? sanitizeText(displayName as string) : null }),
+      ...(bio !== undefined && { bio: bio ? sanitizeText(bio as string) : null }),
       ...(avatarUrl !== undefined && { avatarUrl: avatarUrl as string | null }),
       ...(favoriteGenres !== undefined && { favoriteGenres: favoriteGenres as string[] }),
       ...(country !== undefined && { country: country as string | null }),

@@ -2,6 +2,7 @@ import { NextRequest } from 'next/server';
 import { prisma } from '@/lib/db';
 import { ok, err } from '@/lib/api-response';
 import { getCurrentUser } from '@/lib/auth-utils';
+import { sanitizeText } from '@/lib/sanitize';
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id: reviewId } = await params;
@@ -26,7 +27,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
   const { id: reviewId } = await params;
   const { body } = await req.json();
-  const cleanBody = typeof body === 'string' ? body.replace(/<[^>]*>/g, '').trim() : '';
+  const cleanBody = typeof body === 'string' ? sanitizeText(body) : '';
   if (!cleanBody) return err('Comment cannot be empty', 400);
   if (cleanBody.length > 500) return err('Comment too long', 400);
 

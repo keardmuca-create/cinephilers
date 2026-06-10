@@ -4,6 +4,7 @@ import { prisma } from '@/lib/db';
 import { ok, err } from '@/lib/api-response';
 import { verifyAccessToken } from '@/lib/auth-utils';
 import { awardBadgeIfEarned } from '@/lib/badge-service';
+import { sanitizeText } from '@/lib/sanitize';
 
 export const dynamic = 'force-dynamic';
 
@@ -79,7 +80,7 @@ export async function POST(req: NextRequest) {
 
     // Review
     if (item.review && item.review.trim().length >= 10 && !hasReview.has(key)) {
-      const body = item.review.replace(/<[^>]*>/g, '').trim().slice(0, 5000);
+      const body = sanitizeText(item.review).slice(0, 5000);
       await prisma.review.create({
         data: { userId, tmdbId: item.tmdbId, mediaType: item.mediaType, body, containsSpoiler: false },
       }).catch(() => {});

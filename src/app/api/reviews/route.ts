@@ -3,6 +3,7 @@ import { prisma } from '@/lib/db';
 import { ok, err } from '@/lib/api-response';
 import { getCurrentUser } from '@/lib/auth-utils';
 import { MediaType } from '@/generated/prisma/client';
+import { sanitizeText } from '@/lib/sanitize';
 
 export async function POST(req: NextRequest) {
   const auth = await getCurrentUser(req);
@@ -16,7 +17,7 @@ export async function POST(req: NextRequest) {
   };
   if (!tmdbId || !mediaType || !reviewBody) return err('tmdbId, mediaType, and body are required');
   if (!['MOVIE', 'SHOW'].includes(mediaType)) return err('mediaType must be MOVIE or SHOW');
-  const cleanBody = reviewBody.replace(/<[^>]*>/g, '').trim();
+  const cleanBody = sanitizeText(reviewBody);
   if (cleanBody.length < 10) return err('Review must be at least 10 characters');
   if (cleanBody.length > 5000) return err('Review must be under 5000 characters');
 
