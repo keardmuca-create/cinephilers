@@ -28,6 +28,7 @@ export async function POST(req: NextRequest) {
 
   const items = body.items as ImportItem[];
   if (items.length === 0) return ok({ imported: 0 });
+  if (items.length > 10000) return err('Too many items (max 10,000 per import)', 400);
 
   const userId = auth.sub;
 

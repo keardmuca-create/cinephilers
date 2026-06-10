@@ -2,13 +2,19 @@ import { SignJWT, jwtVerify } from 'jose';
 import { cookies } from 'next/headers';
 import { NextRequest } from 'next/server';
 
+function requireSecret(name: string): string {
+  const s = process.env[name];
+  if (!s) {
+    if (process.env.NODE_ENV === 'production') throw new Error(`${name} must be set in production`);
+    return `dev-${name.toLowerCase()}-change-me`;
+  }
+  return s;
+}
 function getAccessSecret() {
-  const s = process.env.JWT_ACCESS_SECRET ?? 'dev-access-secret-change-me';
-  return new TextEncoder().encode(s);
+  return new TextEncoder().encode(requireSecret('JWT_ACCESS_SECRET'));
 }
 function getRefreshSecret() {
-  const s = process.env.JWT_REFRESH_SECRET ?? 'dev-refresh-secret-change-me';
-  return new TextEncoder().encode(s);
+  return new TextEncoder().encode(requireSecret('JWT_REFRESH_SECRET'));
 }
 
 const ACCESS_EXPIRES = process.env.JWT_ACCESS_EXPIRES ?? '15m';
