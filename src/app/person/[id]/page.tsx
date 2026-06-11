@@ -54,7 +54,7 @@ function CreditRow({ credit, watched, userRating }: {
       href={`/movie/${credit.id}`}
       className="group flex items-center gap-4 px-6 py-3.5 border-b border-border hover:bg-muted/40 transition-colors"
     >
-      <div className="relative w-12 shrink-0 rounded-lg overflow-hidden shadow-sm bg-muted/60 border border-white/5" style={{ aspectRatio: '2/3' }}>
+      <div className="relative w-12 shrink-0 rounded-lg overflow-hidden shadow-sm bg-muted/60 border border-border" style={{ aspectRatio: '2/3' }}>
         {credit.poster ? (
           <Image src={credit.poster} alt={credit.title} fill className="object-cover transition-transform group-hover:scale-105" sizes="48px" />
         ) : (
@@ -115,7 +115,7 @@ function SectionBlock({ section, upcomingSection, watchedMap, ratingsMap }: {
 
   return (
     <div>
-      <div className="sticky top-[73px] z-[5] bg-background/95 backdrop-blur-sm px-6 py-2.5 border-b border-white/5 flex items-center justify-between">
+      <div className="sticky top-[73px] z-[5] bg-background/95 backdrop-blur-sm px-6 py-2.5 border-b border-border flex items-center justify-between">
         <div className="flex items-center gap-2">
           <div className={`w-1 h-4 rounded-full ${isUpcomingView ? 'bg-orange-400' : 'bg-primary'}`} />
           <span className="text-sm font-bold font-headline">{section.label}</span>
@@ -201,7 +201,7 @@ export default function PersonPage() {
 
   return (
     <main className="min-h-screen pb-24 bg-background">
-      <header className="sticky top-0 z-10 bg-background/90 backdrop-blur-xl border-b border-white/5 px-4 py-4 flex items-center gap-3">
+      <header className="sticky top-0 z-10 bg-background/90 backdrop-blur-xl border-b border-border px-4 py-4 flex items-center gap-3">
         <Button variant="ghost" size="icon" className="rounded-full shrink-0" onClick={() => router.back()}>
           <ChevronLeft className="h-5 w-5" />
         </Button>
@@ -227,7 +227,7 @@ export default function PersonPage() {
       ) : !data ? (
         <div className="flex flex-col items-center justify-center py-24 gap-4">
           <p className="text-muted-foreground font-bold">Person not found.</p>
-          <Button variant="outline" className="rounded-full border-white/10" onClick={() => router.back()}>Go Back</Button>
+          <Button variant="outline" className="rounded-full border-border" onClick={() => router.back()}>Go Back</Button>
         </div>
       ) : (
         <div>

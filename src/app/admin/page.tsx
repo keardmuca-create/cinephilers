@@ -43,7 +43,7 @@ interface AdminStats {
 const STATUS_COLOURS: Record<string, string> = {
   pending: 'bg-yellow-500/10 text-yellow-400',
   reviewed: 'bg-green-500/10 text-green-400',
-  dismissed: 'bg-white/5 text-muted-foreground',
+  dismissed: 'bg-muted text-muted-foreground',
 };
 
 export default function AdminPage() {
@@ -193,7 +193,7 @@ export default function AdminPage() {
             { label: 'Ratings', value: stats.totalRatings, icon: <Star className="h-4 w-4" /> },
             { label: 'Watched', value: stats.totalWatched, icon: <Eye className="h-4 w-4" /> },
           ].map(s => (
-            <div key={s.label} className="bg-card border border-white/5 rounded-2xl p-4 flex items-center gap-3">
+            <div key={s.label} className="bg-card border border-border rounded-2xl p-4 flex items-center gap-3">
               <div className="h-8 w-8 rounded-xl bg-primary/10 flex items-center justify-center text-primary shrink-0">{s.icon}</div>
               <div>
                 <p className="text-lg font-bold leading-tight">{s.value.toLocaleString()}</p>
@@ -208,13 +208,13 @@ export default function AdminPage() {
       <div className="flex gap-2">
         <button
           onClick={() => setTab('reports')}
-          className={`flex items-center gap-2 px-4 py-2 rounded-full text-sm font-semibold transition-colors ${tab === 'reports' ? 'bg-primary text-white' : 'bg-white/5 text-muted-foreground hover:bg-white/10'}`}
+          className={`flex items-center gap-2 px-4 py-2 rounded-full text-sm font-semibold transition-colors ${tab === 'reports' ? 'bg-primary text-white' : 'bg-muted text-muted-foreground hover:bg-muted/80'}`}
         >
-          <Flag className="h-4 w-4" /> Reports {pendingCount > 0 && <span className="bg-white/20 text-xs px-1.5 py-0.5 rounded-full">{pendingCount}</span>}
+          <Flag className="h-4 w-4" /> Reports {pendingCount > 0 && <span className="bg-foreground/10 text-xs px-1.5 py-0.5 rounded-full">{pendingCount}</span>}
         </button>
         <button
           onClick={() => setTab('users')}
-          className={`flex items-center gap-2 px-4 py-2 rounded-full text-sm font-semibold transition-colors ${tab === 'users' ? 'bg-primary text-white' : 'bg-white/5 text-muted-foreground hover:bg-white/10'}`}
+          className={`flex items-center gap-2 px-4 py-2 rounded-full text-sm font-semibold transition-colors ${tab === 'users' ? 'bg-primary text-white' : 'bg-muted text-muted-foreground hover:bg-muted/80'}`}
         >
           <Users className="h-4 w-4" /> Users
         </button>
@@ -228,7 +228,7 @@ export default function AdminPage() {
               <button
                 key={f}
                 onClick={() => setFilter(f)}
-                className={`px-4 py-1.5 rounded-full text-sm font-semibold capitalize transition-colors ${filter === f ? 'bg-primary/20 text-primary' : 'bg-white/5 text-muted-foreground hover:bg-white/10'}`}
+                className={`px-4 py-1.5 rounded-full text-sm font-semibold capitalize transition-colors ${filter === f ? 'bg-primary/20 text-primary' : 'bg-muted text-muted-foreground hover:bg-muted/80'}`}
               >
                 {f}
               </button>
@@ -250,14 +250,14 @@ export default function AdminPage() {
 
           <div className="space-y-3">
             {filtered.map(r => (
-              <div key={r.id} className="bg-card border border-white/5 rounded-2xl p-5 space-y-3">
+              <div key={r.id} className="bg-card border border-border rounded-2xl p-5 space-y-3">
                 <div className="flex items-start justify-between gap-3">
                   <div className="space-y-1">
                     <div className="flex items-center gap-2 flex-wrap">
                       <span className={`text-xs font-bold px-2 py-0.5 rounded-full capitalize ${STATUS_COLOURS[r.status]}`}>
                         {r.status}
                       </span>
-                      <span className="text-xs bg-white/5 px-2 py-0.5 rounded-full capitalize">{r.targetType}</span>
+                      <span className="text-xs bg-muted px-2 py-0.5 rounded-full capitalize">{r.targetType}</span>
                       <span className="text-xs text-muted-foreground">{relativeTime(r.createdAt)}</span>
                     </div>
                     <p className="text-sm font-semibold">{r.reason}</p>
@@ -271,7 +271,7 @@ export default function AdminPage() {
                       <button
                         onClick={() => dismiss(r.id)}
                         title="Dismiss"
-                        className="h-8 w-8 rounded-full bg-white/5 hover:bg-white/10 flex items-center justify-center transition-colors"
+                        className="h-8 w-8 rounded-full bg-muted hover:bg-muted/80 flex items-center justify-center transition-colors"
                       >
                         <X className="h-4 w-4 text-muted-foreground" />
                       </button>
@@ -312,7 +312,7 @@ export default function AdminPage() {
               value={userQuery}
               onChange={e => setUserQuery(e.target.value)}
               placeholder="Search by username, name or email…"
-              className="w-full bg-white/5 border-2 border-primary/80 rounded-2xl pl-10 pr-4 py-3 text-sm outline-none focus:border-primary placeholder:text-muted-foreground/60 transition-colors"
+              className="w-full bg-muted border-2 border-primary/80 rounded-2xl pl-10 pr-4 py-3 text-sm outline-none focus:border-primary placeholder:text-muted-foreground/60 transition-colors"
             />
             {searchingUsers && (
               <Loader2 className="absolute right-3.5 top-1/2 -translate-y-1/2 h-4 w-4 animate-spin text-muted-foreground" />
@@ -332,7 +332,7 @@ export default function AdminPage() {
 
           <div className="space-y-3">
             {userResults.map(u => (
-              <div key={u.id} className="bg-card border border-white/5 rounded-2xl p-4 space-y-3">
+              <div key={u.id} className="bg-card border border-border rounded-2xl p-4 space-y-3">
                 <div className="flex items-center justify-between gap-3">
                   <div className="flex items-center gap-3 min-w-0">
                     <div className="h-10 w-10 rounded-2xl bg-primary/20 overflow-hidden flex items-center justify-center shrink-0">
@@ -345,7 +345,7 @@ export default function AdminPage() {
                       <p className="font-bold text-sm truncate">{u.displayName ?? u.username}</p>
                       <p className="text-xs text-muted-foreground">@{u.username} · {u.email}</p>
                       <div className="flex items-center gap-2 mt-0.5">
-                        <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${u.role === 'ADMIN' ? 'bg-primary/20 text-primary' : 'bg-white/5 text-muted-foreground'}`}>
+                        <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${u.role === 'ADMIN' ? 'bg-primary/20 text-primary' : 'bg-muted text-muted-foreground'}`}>
                           {u.role}
                         </span>
                         <span className="text-[10px] text-muted-foreground">{u.ratingsCount} ratings · {u.reviewsCount} reviews</span>
@@ -379,7 +379,7 @@ export default function AdminPage() {
                       {/* Delete */}
                       {confirmDeleteId === u.id ? (
                         <div className="flex gap-1.5">
-                          <button onClick={() => setConfirmDeleteId(null)} className="px-3 py-1.5 rounded-full bg-white/5 hover:bg-white/10 text-xs font-bold text-muted-foreground transition-colors">
+                          <button onClick={() => setConfirmDeleteId(null)} className="px-3 py-1.5 rounded-full bg-muted hover:bg-muted/80 text-xs font-bold text-muted-foreground transition-colors">
                             Cancel
                           </button>
                           <button onClick={() => deleteUser(u.id)} disabled={deletingUserId === u.id} className="px-3 py-1.5 rounded-full bg-red-500 hover:bg-red-600 text-xs font-bold text-white transition-colors disabled:opacity-60">

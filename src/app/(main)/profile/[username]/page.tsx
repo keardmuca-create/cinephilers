@@ -138,7 +138,7 @@ function ReviewCard({ review }: { review: ReviewItem }) {
   const [meta, setMeta] = useState(review.meta ?? null);
   useEffect(() => { if (!meta) getMeta(review.tmdbId).then(m => { if (m) setMeta(m); }); }, [review.tmdbId, meta]);
   return (
-    <Link href={`/movie/${review.tmdbId}/reviews`} className="block bg-muted/30 hover:bg-muted/50 transition-colors rounded-2xl p-4 border border-white/5 group">
+    <Link href={`/movie/${review.tmdbId}/reviews`} className="block bg-muted/30 hover:bg-muted/50 transition-colors rounded-2xl p-4 border border-border group">
       <div className="flex gap-3">
         <div className="relative w-10 shrink-0 rounded-lg overflow-hidden bg-muted shadow-sm" style={{ aspectRatio: '2/3' }}>
           {meta?.poster
@@ -168,7 +168,7 @@ function RecentCard({ item }: { item: RecentItem }) {
   const href = `/movie/${item.tmdbId}`;
 
   return (
-    <Link href={href} className="flex items-center gap-3 py-3 border-b border-white/5 last:border-0 group">
+    <Link href={href} className="flex items-center gap-3 py-3 border-b border-border last:border-0 group">
       <div className="relative w-12 shrink-0 rounded-lg overflow-hidden bg-muted shadow-sm" style={{ aspectRatio: '2/3' }}>
         {meta?.poster ? <Image src={meta.poster} alt={meta.title ?? ''} fill className="object-cover" sizes="48px" /> : <div className="w-full h-full flex items-center justify-center"><Film className="h-4 w-4 text-primary/60" /></div>}
       </div>
@@ -345,7 +345,7 @@ export default function PublicProfilePage() {
 
   if (notFound || !profile) return (
     <main className="max-w-xl mx-auto px-4 pt-10 pb-32 flex flex-col items-center justify-center gap-4 text-center py-32">
-      <div className="h-16 w-16 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center">
+      <div className="h-16 w-16 rounded-2xl bg-muted border border-border flex items-center justify-center">
         <User className="h-8 w-8 text-muted-foreground" />
       </div>
       <div>
@@ -478,8 +478,8 @@ export default function PublicProfilePage() {
 
       {/* Private lock */}
       {profile.isPrivate && !profile.isFollowing && (
-        <div className="flex flex-col items-center justify-center py-16 gap-4 text-center border border-white/10 rounded-3xl bg-white/5">
-          <div className="h-14 w-14 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center">
+        <div className="flex flex-col items-center justify-center py-16 gap-4 text-center border border-border rounded-3xl bg-muted">
+          <div className="h-14 w-14 rounded-2xl bg-muted border border-border flex items-center justify-center">
             <Lock className="h-7 w-7 text-muted-foreground" />
           </div>
           <div>
@@ -503,7 +503,7 @@ export default function PublicProfilePage() {
               </button>
             )}
           </div>
-          <div className="bg-card rounded-3xl border border-white/5 px-5 py-2">
+          <div className="bg-card rounded-3xl border border-border px-5 py-2">
             {recentActivity.map(item => <RecentCard key={item.id} item={item} />)}
           </div>
         </section>
@@ -553,7 +553,7 @@ export default function PublicProfilePage() {
           </div>
           <div className="space-y-3">
             {lists.map(l => (
-              <Link key={l.id} href={`/lists/${l.id}`} className="bg-card rounded-3xl border border-white/5 px-5 py-4 flex items-center gap-4 hover:bg-white/5 transition-colors">
+              <Link key={l.id} href={`/lists/${l.id}`} className="bg-card rounded-3xl border border-border px-5 py-4 flex items-center gap-4 hover:bg-muted/50 transition-colors">
                 {/* Mini poster strip */}
                 <div className="flex gap-1 shrink-0">
                   {l.items.slice(0, 3).map(item => (

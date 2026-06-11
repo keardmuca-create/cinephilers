@@ -132,7 +132,7 @@ function ActivityCard({ item, onLike, onRemove }: {
     const platformColor = item.importPlatform === 'letterboxd' ? 'text-orange-400 bg-orange-400/10' : 'text-yellow-400 bg-yellow-400/10';
     const platformLetter = item.importPlatform === 'letterboxd' ? 'L' : 'i';
     return (
-      <div className="bg-card rounded-3xl border border-white/5 shadow-lg overflow-hidden">
+      <div className="bg-card rounded-3xl border border-border shadow-lg overflow-hidden">
         <div className="flex items-center gap-3 px-5 py-4">
           <Link href={item.isMe ? '/profile' : `/profile/${item.user.username}`}>
             <UserAvatar user={item.user} size={40} />
@@ -144,7 +144,7 @@ function ActivityCard({ item, onLike, onRemove }: {
             <p className="text-xs text-muted-foreground mt-0.5">{relativeTime(item.createdAt)}</p>
           </div>
         </div>
-        <div className="mx-5 mb-4 flex items-center gap-3 bg-muted/40 rounded-2xl p-3.5 border border-white/5">
+        <div className="mx-5 mb-4 flex items-center gap-3 bg-muted/40 rounded-2xl p-3.5 border border-border">
           <div className={`h-9 w-9 rounded-xl flex items-center justify-center shrink-0 font-black text-base ${platformColor}`}>
             {platformLetter}
           </div>
@@ -157,7 +157,7 @@ function ActivityCard({ item, onLike, onRemove }: {
   }
 
   return (
-    <div className="bg-card rounded-3xl border border-white/5 shadow-lg overflow-hidden">
+    <div className="bg-card rounded-3xl border border-border shadow-lg overflow-hidden">
       {/* Header */}
       <div className="flex items-center gap-3 px-5 pt-5 pb-3">
         <Link href={item.isMe ? '/profile' : `/profile/${item.user.username}`}>
@@ -182,7 +182,7 @@ function ActivityCard({ item, onLike, onRemove }: {
               <MoreHorizontal className="h-4 w-4" />
             </button>
             {menuOpen && (
-              <div className="absolute right-0 top-9 z-50 min-w-[140px] bg-card border border-white/10 rounded-2xl shadow-xl overflow-hidden">
+              <div className="absolute right-0 top-9 z-50 min-w-[140px] bg-card border border-border rounded-2xl shadow-xl overflow-hidden">
                 <button onClick={handleShare} className="flex items-center gap-2.5 w-full px-4 py-3 text-sm hover:bg-muted/50 transition-colors">
                   <Share2 className="h-4 w-4 text-muted-foreground" />Share
                 </button>
@@ -197,7 +197,7 @@ function ActivityCard({ item, onLike, onRemove }: {
 
       {/* Movie card */}
       <Link href={href} className="block mx-5 mb-4 group">
-        <div className="bg-muted/40 rounded-2xl p-3.5 flex gap-4 hover:bg-muted/70 transition-colors border border-white/5">
+        <div className="bg-muted/40 rounded-2xl p-3.5 flex gap-4 hover:bg-muted/70 transition-colors border border-border">
           <div className="relative w-16 shrink-0 rounded-xl overflow-hidden shadow-md bg-muted" style={{ aspectRatio: '2/3' }}>
             {meta?.poster
               ? <Image src={meta.poster} alt={meta.title} fill className="object-cover" sizes="64px" />
@@ -283,7 +283,7 @@ function NotificationCard({ notif, onFollowBack, onRequestHandled }: {
   }[notif.type] ?? notif.type;
 
   return (
-    <div className={`flex items-start gap-3 p-4 rounded-2xl border transition-colors ${notif.read ? 'border-white/5 bg-card' : 'border-primary/20 bg-primary/5'}`}>
+    <div className={`flex items-start gap-3 p-4 rounded-2xl border transition-colors ${notif.read ? 'border-border bg-card' : 'border-primary/20 bg-primary/5'}`}>
       <Link href={`/profile/${notif.from.username}`}>
         <UserAvatar user={notif.from} size={44} />
       </Link>
@@ -332,7 +332,7 @@ function NotificationCard({ notif, onFollowBack, onRequestHandled }: {
       {/* Follow back button for regular follows */}
       {notif.type === 'follow' && (
         followState === 'following'
-          ? <span className="text-xs text-muted-foreground font-bold px-3 py-1.5 rounded-xl border border-white/10 shrink-0">Following</span>
+          ? <span className="text-xs text-muted-foreground font-bold px-3 py-1.5 rounded-xl border border-border shrink-0">Following</span>
           : <Button size="sm" variant="outline" className="rounded-xl font-bold text-xs gap-1.5 shrink-0" onClick={handleFollowBack} disabled={followState === 'loading'}>
               {followState === 'loading' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <><UserPlus className="h-3.5 w-3.5" />Follow back</>}
             </Button>
@@ -450,7 +450,11 @@ export default function SocialPage() {
       createdAt: e.timestamp,
     }));
 
-    const friendItems: UnifiedItem[] = friendFeed.map(f => ({
+    // The server feed includes our own activity; skip entries already shown from the local log
+    const localKeys = new Set(myItems.map(i => `${i.type}-${i.tmdbId}`));
+    const friendItems: UnifiedItem[] = friendFeed
+      .filter(f => !(f.user.username === user?.username && localKeys.has(`${f.type}-${f.tmdbId}`)))
+      .map(f => ({
       id: f.id,
       isMe: false,
       type: f.type,
@@ -515,7 +519,7 @@ export default function SocialPage() {
       </div>
 
       {/* Tabs */}
-      <div className="flex bg-white/5 rounded-2xl p-1 gap-1">
+      <div className="flex bg-muted rounded-2xl p-1 gap-1">
         {(['activity', 'notifications'] as Tab[]).map(t => (
           <button
             key={t}
@@ -545,7 +549,7 @@ export default function SocialPage() {
           {activityLoading && friendFeed.length === 0 && myLocalFeed.length === 0 && (
             <div className="space-y-4">
               {[1, 2, 3].map(i => (
-                <div key={i} className="bg-card rounded-3xl border border-white/5 p-5 space-y-4">
+                <div key={i} className="bg-card rounded-3xl border border-border p-5 space-y-4">
                   <div className="flex items-center gap-3">
                     <div className="h-10 w-10 rounded-2xl bg-muted animate-pulse" />
                     <div className="space-y-2 flex-1">
@@ -567,7 +571,7 @@ export default function SocialPage() {
 
           {!activityLoading && mergedActivity.length === 0 && (
             <div className="flex flex-col items-center justify-center py-20 gap-4 text-center">
-              <div className="h-16 w-16 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center">
+              <div className="h-16 w-16 rounded-2xl bg-muted border border-border flex items-center justify-center">
                 <Eye className="h-8 w-8 text-muted-foreground" />
               </div>
               <div>
@@ -600,7 +604,7 @@ export default function SocialPage() {
           )}
           {!notifLoading && notifications.length === 0 && (
             <div className="flex flex-col items-center justify-center py-20 gap-4 text-center">
-              <div className="h-16 w-16 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center">
+              <div className="h-16 w-16 rounded-2xl bg-muted border border-border flex items-center justify-center">
                 <Bell className="h-8 w-8 text-muted-foreground" />
               </div>
               <div>

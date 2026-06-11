@@ -85,7 +85,7 @@ export default function ListDetailPage() {
   return (
     <main className="max-w-xl mx-auto pb-32">
       {/* Header */}
-      <div className="sticky top-0 z-10 bg-background/90 backdrop-blur-xl border-b border-white/5 px-4 py-4 flex items-center gap-3">
+      <div className="sticky top-0 z-10 bg-background/90 backdrop-blur-xl border-b border-border px-4 py-4 flex items-center gap-3">
         <Button variant="ghost" size="icon" className="rounded-full shrink-0" onClick={() => router.back()}>
           <ChevronLeft className="h-5 w-5" />
         </Button>
@@ -119,7 +119,7 @@ export default function ListDetailPage() {
               placeholder="Search this list"
               value={search}
               onChange={e => setSearch(e.target.value)}
-              className="w-full bg-white/5 border-2 border-primary/80 rounded-2xl pl-10 pr-10 py-3 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary transition-colors"
+              className="w-full bg-muted border-2 border-primary/80 rounded-2xl pl-10 pr-10 py-3 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary transition-colors"
             />
             {search && (
               <button onClick={() => setSearch('')} className="absolute right-3.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
@@ -131,7 +131,7 @@ export default function ListDetailPage() {
 
         {/* Loading skeleton */}
         {loading && !list && (
-          <div className="divide-y divide-white/[0.06]">
+          <div className="divide-y divide-border">
             {Array(6).fill(0).map((_, i) => (
               <div key={i} className="flex gap-4 py-3.5">
                 <div className="w-16 aspect-[2/3] bg-muted rounded-lg animate-pulse shrink-0" />
@@ -162,7 +162,7 @@ export default function ListDetailPage() {
 
         {/* Items */}
         {filtered.length > 0 && (
-          <div className="divide-y divide-white/[0.06]">
+          <div className="divide-y divide-border">
             {filtered.map((item, i) => (
               <Link
                 key={item.movieId ?? i}

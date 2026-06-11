@@ -75,7 +75,7 @@ function FollowButton({ username, isFollowing, onToggle }: { username: string; i
 
 function UserCard({ user, onToggle }: { user: UserResult; onToggle: (username: string, nowFollowing: boolean) => void }) {
   return (
-    <div className="flex items-center gap-3 p-4 rounded-2xl bg-card border border-white/5">
+    <div className="flex items-center gap-3 p-4 rounded-2xl bg-card border border-border">
       <Link href={`/profile/${user.username}`} className="flex-1 flex items-center gap-3 min-w-0">
         <Avatar user={user} size={44} />
         <div className="min-w-0">
@@ -194,7 +194,7 @@ export default function FriendsPage() {
         )}
         <Input
           placeholder="Search by username or name…"
-          className="pl-10 pr-10 bg-white/5 border-2 border-primary/80 focus-visible:border-primary focus-visible:ring-0 h-12 rounded-2xl"
+          className="pl-10 pr-10 bg-muted border-2 border-primary/80 focus-visible:border-primary focus-visible:ring-0 h-12 rounded-2xl"
           value={query}
           onChange={e => setQuery(e.target.value)}
           autoComplete="off"
@@ -206,7 +206,7 @@ export default function FriendsPage() {
         <section className="space-y-3">
           {searchResults.length === 0 && !searching && (
             <div className="flex flex-col items-center justify-center py-10 gap-3 text-center">
-              <div className="h-12 w-12 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center">
+              <div className="h-12 w-12 rounded-2xl bg-muted border border-border flex items-center justify-center">
                 <User className="h-6 w-6 text-muted-foreground" />
               </div>
               <p className="text-sm text-muted-foreground">No users found for &ldquo;{query}&rdquo;</p>
@@ -232,7 +232,7 @@ export default function FriendsPage() {
           {followingLoading ? (
             <div className="space-y-3">
               {[1, 2, 3].map(i => (
-                <div key={i} className="flex items-center gap-3 p-4 rounded-2xl bg-card border border-white/5">
+                <div key={i} className="flex items-center gap-3 p-4 rounded-2xl bg-card border border-border">
                   <div className="h-11 w-11 rounded-2xl bg-muted animate-pulse shrink-0" />
                   <div className="flex-1 space-y-2">
                     <div className="h-3 bg-muted rounded-full w-1/2 animate-pulse" />
@@ -244,7 +244,7 @@ export default function FriendsPage() {
             </div>
           ) : following.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-16 gap-4 text-center">
-              <div className="h-16 w-16 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center">
+              <div className="h-16 w-16 rounded-2xl bg-muted border border-border flex items-center justify-center">
                 <UserPlus className="h-8 w-8 text-muted-foreground" />
               </div>
               <div>

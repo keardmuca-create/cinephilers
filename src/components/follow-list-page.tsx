@@ -50,12 +50,12 @@ export function FollowListPage({ type }: { type: 'followers' | 'following' }) {
           </p>
         </div>
       ) : (
-        <div className="divide-y divide-white/5">
+        <div className="divide-y divide-border">
           {users.map(u => (
             <Link
               key={u.username}
               href={`/profile/${u.username}`}
-              className="flex items-center gap-3 px-2 py-4 hover:bg-white/5 transition-colors rounded-xl"
+              className="flex items-center gap-3 px-2 py-4 hover:bg-muted/50 transition-colors rounded-xl"
             >
               <div className="h-10 w-10 rounded-2xl bg-primary/20 flex items-center justify-center shrink-0 overflow-hidden">
                 {u.avatarUrl

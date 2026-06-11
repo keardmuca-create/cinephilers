@@ -268,12 +268,12 @@ export function ImportDialog({ onClose }: { onClose: () => void }) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={onClose}>
-      <div className="bg-card border border-white/10 rounded-3xl w-full max-w-md max-h-[85vh] flex flex-col" onClick={e => e.stopPropagation()}>
+      <div className="bg-card border border-border rounded-3xl w-full max-w-md max-h-[85vh] flex flex-col" onClick={e => e.stopPropagation()}>
 
         {/* Header */}
         <div className="flex items-center justify-between p-6 pb-4 shrink-0">
           <h2 className="text-lg font-headline font-bold">Import Data</h2>
-          <button onClick={onClose} className="h-8 w-8 rounded-full bg-white/5 hover:bg-white/10 flex items-center justify-center transition-colors">
+          <button onClick={onClose} className="h-8 w-8 rounded-full bg-muted hover:bg-muted/80 flex items-center justify-center transition-colors">
             <X className="h-4 w-4" />
           </button>
         </div>
@@ -286,7 +286,7 @@ export function ImportDialog({ onClose }: { onClose: () => void }) {
               <p className="text-sm text-muted-foreground">Choose where you want to import from:</p>
               <button
                 onClick={() => { setPlatform('letterboxd'); setStep('upload'); }}
-                className="w-full flex items-center gap-4 p-4 rounded-2xl border border-white/10 bg-white/5 hover:bg-white/10 transition-colors text-left"
+                className="w-full flex items-center gap-4 p-4 rounded-2xl border border-border bg-muted hover:bg-muted/80 transition-colors text-left"
               >
                 <div className="h-10 w-10 rounded-xl bg-orange-500/20 flex items-center justify-center shrink-0">
                   <span className="text-orange-400 font-black text-lg">L</span>
@@ -299,7 +299,7 @@ export function ImportDialog({ onClose }: { onClose: () => void }) {
               </button>
               <button
                 onClick={() => { setPlatform('imdb'); setStep('upload'); }}
-                className="w-full flex items-center gap-4 p-4 rounded-2xl border border-white/10 bg-white/5 hover:bg-white/10 transition-colors text-left"
+                className="w-full flex items-center gap-4 p-4 rounded-2xl border border-border bg-muted hover:bg-muted/80 transition-colors text-left"
               >
                 <div className="h-10 w-10 rounded-xl bg-yellow-500/20 flex items-center justify-center shrink-0">
                   <span className="text-yellow-400 font-black text-lg">i</span>
@@ -351,7 +351,7 @@ export function ImportDialog({ onClose }: { onClose: () => void }) {
               />
               <button
                 onClick={() => fileRef.current?.click()}
-                className="w-full border-2 border-dashed border-white/20 hover:border-primary/60 rounded-2xl p-8 flex flex-col items-center gap-3 transition-colors"
+                className="w-full border-2 border-dashed border-border hover:border-primary/60 rounded-2xl p-8 flex flex-col items-center gap-3 transition-colors"
               >
                 <Upload className="h-8 w-8 text-muted-foreground" />
                 <div className="text-center">
@@ -370,7 +370,7 @@ export function ImportDialog({ onClose }: { onClose: () => void }) {
                 <p className="font-bold">Matching films…</p>
                 <p className="text-sm text-muted-foreground mt-1">{matchProgress} / {parsed.length} processed</p>
               </div>
-              <div className="h-2 bg-white/10 rounded-full overflow-hidden">
+              <div className="h-2 bg-muted rounded-full overflow-hidden">
                 <div
                   className="h-full bg-primary rounded-full transition-all duration-300"
                   style={{ width: `${parsed.length > 0 ? (matchProgress / parsed.length) * 100 : 0}%` }}
@@ -390,7 +390,7 @@ export function ImportDialog({ onClose }: { onClose: () => void }) {
                   { label: 'Watchlist', value: matched.filter(m => m.inWatchlist).length },
                   { label: 'Reviews', value: matched.filter(m => m.review).length },
                 ].map(s => (
-                  <div key={s.label} className="bg-white/5 rounded-2xl p-4 text-center">
+                  <div key={s.label} className="bg-muted rounded-2xl p-4 text-center">
                     <p className="text-2xl font-black text-primary">{s.value}</p>
                     <p className="text-xs text-muted-foreground mt-0.5">{s.label}</p>
                   </div>
@@ -460,7 +460,7 @@ export function ImportDialog({ onClose }: { onClose: () => void }) {
                   { label: 'Added to watchlist', value: result.watchlistAdded },
                   { label: 'Reviews imported', value: result.reviewsAdded },
                 ].filter(s => s.value > 0).map(s => (
-                  <div key={s.label} className="flex items-center justify-between px-4 py-3 bg-white/5 rounded-2xl">
+                  <div key={s.label} className="flex items-center justify-between px-4 py-3 bg-muted rounded-2xl">
                     <p className="text-sm text-muted-foreground">{s.label}</p>
                     <p className="text-sm font-bold text-primary">+{s.value}</p>
                   </div>

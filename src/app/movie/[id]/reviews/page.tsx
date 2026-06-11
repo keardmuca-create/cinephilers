@@ -58,7 +58,7 @@ function ReportDialog({ targetType, targetId, onClose }: { targetType: 'review' 
 
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={onClose}>
-      <div className="bg-card border border-white/10 rounded-3xl p-6 w-full max-w-sm space-y-4" onClick={e => e.stopPropagation()}>
+      <div className="bg-card border border-border rounded-3xl p-6 w-full max-w-sm space-y-4" onClick={e => e.stopPropagation()}>
         {done ? (
           <div className="text-center py-4">
             <p className="font-bold font-headline text-lg">Thanks for reporting</p>
@@ -75,14 +75,14 @@ function ReportDialog({ targetType, targetId, onClose }: { targetType: 'review' 
                 <button
                   key={r}
                   onClick={() => setReason(r)}
-                  className={`w-full text-left px-4 py-3 rounded-2xl text-sm font-medium transition-colors border ${reason === r ? 'border-primary bg-primary/10 text-foreground' : 'border-white/10 bg-white/5 text-muted-foreground hover:bg-white/10'}`}
+                  className={`w-full text-left px-4 py-3 rounded-2xl text-sm font-medium transition-colors border ${reason === r ? 'border-primary bg-primary/10 text-foreground' : 'border-border bg-muted text-muted-foreground hover:bg-muted/80'}`}
                 >
                   {r}
                 </button>
               ))}
             </div>
             <div className="flex gap-3 pt-1">
-              <button onClick={onClose} className="flex-1 py-3 rounded-2xl border border-white/10 text-sm font-bold text-muted-foreground hover:bg-white/5 transition-colors">
+              <button onClick={onClose} className="flex-1 py-3 rounded-2xl border border-border text-sm font-bold text-muted-foreground hover:bg-muted/50 transition-colors">
                 Cancel
               </button>
               <button
@@ -288,7 +288,7 @@ export default function MovieReviewsPage() {
 
       {!loading && reviews.length === 0 && (
         <div className="flex flex-col items-center justify-center py-20 gap-4 text-center">
-          <div className="h-16 w-16 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center">
+          <div className="h-16 w-16 rounded-2xl bg-muted border border-border flex items-center justify-center">
             <MessageSquare className="h-8 w-8 text-muted-foreground" />
           </div>
           <div>
@@ -301,7 +301,7 @@ export default function MovieReviewsPage() {
       {!loading && reviews.length > 0 && (
         <div className="space-y-4">
           {reviews.map(r => (
-            <div key={r.id} className="bg-card rounded-3xl border border-white/5 p-5 space-y-4">
+            <div key={r.id} className="bg-card rounded-3xl border border-border p-5 space-y-4">
               {/* User row */}
               <div className="flex items-center justify-between gap-3">
                 <Link

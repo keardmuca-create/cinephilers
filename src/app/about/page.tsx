@@ -13,7 +13,7 @@ export default function AboutPage() {
       <div className="max-w-2xl mx-auto px-4 pt-8 pb-20">
         {/* Header */}
         <div className="flex items-center gap-3 mb-10">
-          <Link href="/" className="p-2 rounded-full hover:bg-white/5 transition-colors">
+          <Link href="/" className="p-2 rounded-full hover:bg-muted/50 transition-colors">
             <ChevronLeft className="h-5 w-5" />
           </Link>
           <svg width="160" viewBox="0 0 520 110" xmlns="http://www.w3.org/2000/svg" aria-label="Cinephilers">
@@ -43,7 +43,7 @@ export default function AboutPage() {
               { icon: Users, title: 'Follow Friends', body: 'Follow people you know and see their ratings, reviews, and activity. Private accounts require a follow request.' },
               { icon: BookOpen, title: 'Build Lists', body: 'Organise films into custom lists — public or private. Share your favourites, your comfort watches, your all-time bests.' },
             ].map(({ icon: Icon, title, body }) => (
-              <div key={title} className="flex gap-4 p-5 bg-card border border-white/5 rounded-2xl">
+              <div key={title} className="flex gap-4 p-5 bg-card border border-border rounded-2xl">
                 <div className="h-10 w-10 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
                   <Icon className="h-5 w-5 text-primary" />
                 </div>
@@ -82,7 +82,7 @@ export default function AboutPage() {
         </section>
 
         {/* Footer links */}
-        <footer className="pt-8 border-t border-white/5 flex flex-wrap gap-x-6 gap-y-2 text-sm text-muted-foreground">
+        <footer className="pt-8 border-t border-border flex flex-wrap gap-x-6 gap-y-2 text-sm text-muted-foreground">
           <Link href="/privacy" className="hover:text-foreground transition-colors">Privacy Policy</Link>
           <Link href="/terms" className="hover:text-foreground transition-colors">Terms of Service</Link>
           <Link href="/support" className="hover:text-foreground transition-colors">Support</Link>

@@ -33,7 +33,7 @@ function StarRating({
         >
           <Star
             className={`h-4 w-4 transition-colors ${
-              n <= (hover || value) ? 'fill-accent text-accent' : 'text-white/20'
+              n <= (hover || value) ? 'fill-accent text-accent' : 'text-muted-foreground'
             }`}
           />
         </button>
@@ -50,7 +50,7 @@ function StarRating({
 function PersonChip({ name, role, image }: { name: string; role: string; image?: string }) {
   return (
     <div className="flex flex-col items-center gap-2 shrink-0 w-20 text-center">
-      <Avatar className="h-14 w-14 ring-2 ring-white/10">
+      <Avatar className="h-14 w-14 ring-2 ring-border">
         <AvatarImage
           src={image ?? `https://picsum.photos/seed/${name}/80/80`}
           alt={name}
@@ -238,7 +238,7 @@ export function EpisodeModal({ showTmdbId, seasonNumber, episode, showTitle, isW
 
       {/* Sheet */}
       <div className="fixed inset-x-0 bottom-0 z-[110] md:inset-0 md:flex md:items-center md:justify-center md:p-6">
-        <div className="relative bg-background border border-white/10 rounded-t-[2rem] md:rounded-[2rem] w-full md:max-w-2xl max-h-[92vh] md:max-h-[90vh] overflow-y-auto shadow-2xl">
+        <div className="relative bg-background border border-border rounded-t-[2rem] md:rounded-[2rem] w-full md:max-w-2xl max-h-[92vh] md:max-h-[90vh] overflow-y-auto shadow-2xl">
 
           {/* Action buttons — close + watched toggle */}
           <div className="absolute top-4 right-4 z-20 flex items-center gap-2">
@@ -365,7 +365,7 @@ export function EpisodeModal({ showTmdbId, seasonNumber, episode, showTitle, isW
                         <button
                           key={t.key}
                           onClick={() => { setPlayTrailer(false); setTimeout(() => { setPlayTrailer(true); }, 0); }}
-                          className="w-full flex items-center gap-3 p-3 rounded-xl bg-white/5 hover:bg-white/10 transition-colors text-left"
+                          className="w-full flex items-center gap-3 p-3 rounded-xl bg-muted hover:bg-muted/80 transition-colors text-left"
                         >
                           <div className="h-8 w-8 rounded-full bg-primary/20 flex items-center justify-center shrink-0">
                             <Play className="h-3.5 w-3.5 fill-current text-primary ml-0.5" />
@@ -414,7 +414,7 @@ export function EpisodeModal({ showTmdbId, seasonNumber, episode, showTitle, isW
                     </p>
                     <div className="grid grid-cols-2 gap-2">
                       {detail.crew.map((c, i) => (
-                        <div key={i} className="bg-white/5 rounded-xl p-3 border border-white/5">
+                        <div key={i} className="bg-muted rounded-xl p-3 border border-border">
                           <p className="text-[9px] font-bold uppercase tracking-widest text-muted-foreground">{c.job}</p>
                           <p className="text-xs font-bold font-headline mt-0.5">{c.name}</p>
                         </div>

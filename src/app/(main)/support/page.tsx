@@ -50,7 +50,7 @@ export default function SupportPage() {
         <p className="text-muted-foreground text-sm">Have a question or issue? We&apos;ll get back to you as soon as possible.</p>
       </div>
 
-      <div className="bg-card border border-white/5 rounded-3xl p-6 shadow-lg">
+      <div className="bg-card border border-border rounded-3xl p-6 shadow-lg">
         {success ? (
           <div className="flex flex-col items-center justify-center py-10 gap-4 text-center">
             <div className="h-16 w-16 rounded-full bg-green-500/20 flex items-center justify-center">

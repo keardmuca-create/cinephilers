@@ -21,7 +21,7 @@ interface RecentItem {
 function PersonRow({ person }: { person: PersonResult }) {
   return (
     <Link href={`/person/${person.id}`} className="flex items-center gap-4 py-3 hover:bg-black/5 transition-colors -mx-6 px-6">
-      <div className="w-14 h-14 rounded-full overflow-hidden bg-muted shrink-0 shadow-sm border border-white/10">
+      <div className="w-14 h-14 rounded-full overflow-hidden bg-muted shrink-0 shadow-sm border border-border">
         {person.profileImage ? (
           <img src={person.profileImage} alt={person.name} className="w-full h-full object-cover" loading="lazy" />
         ) : (
@@ -75,7 +75,7 @@ function ResultRow({ id, poster, title, sub, onRemove }: {
 function RecentPersonRow({ item, onRemove }: { item: RecentItem; onRemove?: () => void }) {
   return (
     <Link href={`/person/${item.id}`} className="flex items-center gap-4 py-3 hover:bg-black/5 transition-colors -mx-6 px-6">
-      <div className="w-14 h-14 rounded-full overflow-hidden bg-muted shrink-0 shadow-sm border border-white/10 flex items-center justify-center">
+      <div className="w-14 h-14 rounded-full overflow-hidden bg-muted shrink-0 shadow-sm border border-border flex items-center justify-center">
         {item.poster ? (
           <img src={item.poster} alt={item.title} className="w-full h-full object-cover" loading="lazy" />
         ) : (

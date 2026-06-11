@@ -52,7 +52,7 @@ export const AIRecommendations = () => {
 
       {/* Movies / Shows toggle */}
       <div className="px-6">
-        <div className="flex items-center bg-white/5 rounded-full p-1 border border-white/10 w-full">
+        <div className="flex items-center bg-muted rounded-full p-1 border border-border w-full">
           <button
             onClick={() => setTab('movies')}
             className={[

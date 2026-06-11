@@ -177,7 +177,7 @@ export default function HomePage() {
           <div className="flex overflow-x-auto gap-4 px-6 pb-6 no-scrollbar">
             {top10.map((movie, index) => (
               <Link href={`/movie/${movie.id}`} key={movie.id} className="group shrink-0 w-44">
-                <div className="relative aspect-[2/3] w-44 rounded-xl overflow-hidden shadow-xl movie-card-hover border border-white/10 mb-3">
+                <div className="relative aspect-[2/3] w-44 rounded-xl overflow-hidden shadow-xl movie-card-hover border border-border mb-3">
                   <Image src={movie.poster} alt={movie.title} fill className="object-cover transition-transform group-hover:scale-110" />
                   {/* Rank number overlaid inside the poster, bottom-left */}
                   <span

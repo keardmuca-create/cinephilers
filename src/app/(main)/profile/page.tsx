@@ -780,10 +780,10 @@ export default function ProfilePage() {
             onChange={e => { const f = e.target.files?.[0]; if (f) handleAvatarFile(f); e.target.value = ''; }}
           />
         </div>
-        <Button variant="outline" size="icon" className="rounded-full border-white/10 bg-white/5 hover:bg-white/10" asChild>
+        <Button variant="outline" size="icon" className="rounded-full border-border bg-muted hover:bg-muted/80" asChild>
           <Link href="/stats"><TrendingUp className="h-5 w-5" /></Link>
         </Button>
-        <Button variant="outline" size="icon" className="rounded-full border-white/10 bg-white/5 hover:bg-white/10" onClick={openSettings}>
+        <Button variant="outline" size="icon" className="rounded-full border-border bg-muted hover:bg-muted/80" onClick={openSettings}>
           <Settings className="h-5 w-5" />
         </Button>
 
@@ -867,7 +867,7 @@ export default function ProfilePage() {
                       </Link>
                     </Button>
                   </div>
-                  <Separator className="bg-white/5" />
+                  <Separator className="bg-muted" />
                   <Button
                     variant="ghost"
                     className="w-full rounded-xl h-12 text-red-500 hover:text-red-600 hover:bg-red-500/10 text-sm"
@@ -1020,7 +1020,7 @@ export default function ProfilePage() {
         </div>
       </div>
 
-      <Separator className="bg-white/5" />
+      <Separator className="bg-muted" />
 
       {/* Favorites */}
       <section>

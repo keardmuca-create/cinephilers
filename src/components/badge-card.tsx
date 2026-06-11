@@ -318,7 +318,7 @@ export function BadgeCard({ badge }: BadgeCardProps) {
     <>
       <button
         onClick={() => setModalOpen(true)}
-        className="text-left flex flex-col gap-3 rounded-2xl p-4 bg-white/5 border border-white/[0.08] transition-colors duration-200 hover:bg-white/[0.08] active:scale-[0.98] w-full"
+        className="text-left flex flex-col gap-3 rounded-2xl p-4 bg-muted border border-border transition-colors duration-200 hover:bg-muted/80 active:scale-[0.98] w-full"
         style={{ borderColor: `${color}33` }}
       >
         {/* Icon row */}
@@ -497,7 +497,7 @@ const TIER_GUIDE: { tier: BadgeTier; label: string; desc: string }[] = [
 
 export function TierGuide() {
   return (
-    <div className="rounded-2xl bg-white/[0.04] border border-white/[0.08] p-4">
+    <div className="rounded-2xl bg-muted border border-border p-4">
       <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground mb-4">Tier Guide</p>
       <div className="grid grid-cols-4 gap-3">
         {TIER_GUIDE.map(({ tier, label, desc }) => (

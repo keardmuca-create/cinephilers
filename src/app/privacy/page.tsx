@@ -13,7 +13,7 @@ export default function PrivacyPage() {
       <div className="max-w-2xl mx-auto px-4 pt-8 pb-20">
         {/* Header */}
         <div className="flex items-center gap-3 mb-10">
-          <Link href="/" className="p-2 rounded-full hover:bg-white/5 transition-colors">
+          <Link href="/" className="p-2 rounded-full hover:bg-muted/50 transition-colors">
             <ChevronLeft className="h-5 w-5" />
           </Link>
           <h1 className="text-2xl font-headline font-bold">Privacy Policy</h1>
@@ -111,7 +111,7 @@ export default function PrivacyPage() {
         </div>
 
         {/* Footer links */}
-        <footer className="pt-8 mt-10 border-t border-white/5 flex flex-wrap gap-x-6 gap-y-2 text-sm text-muted-foreground">
+        <footer className="pt-8 mt-10 border-t border-border flex flex-wrap gap-x-6 gap-y-2 text-sm text-muted-foreground">
           <Link href="/terms" className="hover:text-foreground transition-colors">Terms of Service</Link>
           <Link href="/about" className="hover:text-foreground transition-colors">About</Link>
           <Link href="/support" className="hover:text-foreground transition-colors">Support</Link>

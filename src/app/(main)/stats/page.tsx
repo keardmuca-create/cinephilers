@@ -28,7 +28,7 @@ function StatCard({ icon: Icon, label, value, sub, color = 'text-primary' }: {
   color?: string;
 }) {
   return (
-    <div className="bg-card rounded-3xl border border-white/5 p-5 flex flex-col gap-3">
+    <div className="bg-card rounded-3xl border border-border p-5 flex flex-col gap-3">
       <div className={`h-10 w-10 rounded-2xl bg-primary/10 flex items-center justify-center ${color}`}>
         <Icon className="h-5 w-5" />
       </div>
@@ -46,14 +46,14 @@ function Skeleton() {
     <div className="space-y-6">
       <div className="grid grid-cols-2 gap-3">
         {[1,2,3,4].map(i => (
-          <div key={i} className="bg-card rounded-3xl border border-white/5 p-5 space-y-3">
+          <div key={i} className="bg-card rounded-3xl border border-border p-5 space-y-3">
             <div className="h-10 w-10 rounded-2xl bg-muted animate-pulse" />
             <div className="h-8 bg-muted rounded-full w-1/2 animate-pulse" />
             <div className="h-3 bg-muted rounded-full w-3/4 animate-pulse" />
           </div>
         ))}
       </div>
-      <div className="bg-card rounded-3xl border border-white/5 p-5 space-y-4">
+      <div className="bg-card rounded-3xl border border-border p-5 space-y-4">
         <div className="h-5 bg-muted rounded-full w-1/3 animate-pulse" />
         <div className="h-40 bg-muted/40 rounded-2xl animate-pulse" />
       </div>
@@ -132,7 +132,7 @@ export default function StatsPage() {
           </div>
 
           {/* Monthly activity chart */}
-          <div className="bg-card rounded-3xl border border-white/5 p-5 space-y-4">
+          <div className="bg-card rounded-3xl border border-border p-5 space-y-4">
             <div className="flex items-center gap-2">
               <TrendingUp className="h-5 w-5 text-primary" />
               <h2 className="font-headline font-bold text-lg">Monthly Activity</h2>
@@ -193,7 +193,7 @@ export default function StatsPage() {
 
       {!loading && !stats && (
         <div className="flex flex-col items-center justify-center py-20 gap-4 text-center">
-          <div className="h-16 w-16 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center">
+          <div className="h-16 w-16 rounded-2xl bg-muted border border-border flex items-center justify-center">
             <TrendingUp className="h-8 w-8 text-muted-foreground" />
           </div>
           <div>

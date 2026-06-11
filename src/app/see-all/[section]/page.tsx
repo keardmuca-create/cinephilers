@@ -29,7 +29,7 @@ function getSectionTitle(section: string, titleParam: string | null): string {
 
 function ListItemSkeleton() {
   return (
-    <div className="flex gap-4 px-6 py-4 border-b border-white/5">
+    <div className="flex gap-4 px-6 py-4 border-b border-border">
       <Skeleton className="w-16 rounded-xl shrink-0" style={{ aspectRatio: '2/3' }} />
       <div className="flex-1 space-y-2 py-1">
         <Skeleton className="h-4 w-3/4" />
@@ -117,7 +117,7 @@ export default function SeeAllPage() {
 
   return (
     <main className="min-h-screen pb-20 bg-background">
-      <header className="sticky top-0 z-10 bg-background/90 backdrop-blur-xl border-b border-white/5 px-4 py-4 flex items-center gap-3">
+      <header className="sticky top-0 z-10 bg-background/90 backdrop-blur-xl border-b border-border px-4 py-4 flex items-center gap-3">
         <Button
           variant="ghost"
           size="icon"
@@ -132,12 +132,12 @@ export default function SeeAllPage() {
       {error ? (
         <div className="flex flex-col items-center justify-center py-24 gap-4">
           <p className="text-muted-foreground font-bold">Failed to load titles.</p>
-          <Button variant="outline" className="rounded-full border-white/10" onClick={() => router.back()}>
+          <Button variant="outline" className="rounded-full border-border" onClick={() => router.back()}>
             Go Back
           </Button>
         </div>
       ) : loading ? (
-        <div className="divide-y divide-white/5">
+        <div className="divide-y divide-border">
           {Array(15).fill(0).map((_, i) => <ListItemSkeleton key={i} />)}
         </div>
       ) : (

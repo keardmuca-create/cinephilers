@@ -183,7 +183,7 @@ export default function RatingsPage() {
         <div className="relative">
           <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <input type="text" placeholder="Search ratings" value={search} onChange={e => setSearch(e.target.value)}
-            className="w-full bg-white/5 border-2 border-primary/80 rounded-2xl pl-10 pr-4 py-3 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary transition-colors" />
+            className="w-full bg-muted border-2 border-primary/80 rounded-2xl pl-10 pr-4 py-3 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary transition-colors" />
           {search && (
             <button onClick={() => setSearch('')} className="absolute right-3.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
               <X className="h-4 w-4" />
@@ -206,7 +206,7 @@ export default function RatingsPage() {
 
       {/* List */}
       {loading ? (
-        <div className="px-6 divide-y divide-white/[0.06]">
+        <div className="px-6 divide-y divide-border">
           {Array(6).fill(0).map((_, i) => (
             <div key={i} className="flex gap-4 py-3.5">
               <div className="w-16 aspect-[2/3] bg-muted rounded-lg animate-pulse shrink-0" />
@@ -224,7 +224,7 @@ export default function RatingsPage() {
           <p className="text-muted-foreground text-sm">Rate movies to see them here</p>
         </div>
       ) : (
-        <div className="px-6 divide-y divide-white/[0.06]">
+        <div className="px-6 divide-y divide-border">
           {sortedFiltered.map(item => <ItemCard key={item.id} item={item} />)}
         </div>
       )}

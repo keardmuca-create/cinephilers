@@ -110,11 +110,11 @@ function HistoryCard({ id, meta, userRating, addedAt, onRemove }: {
   if (!meta) {
     return (
       <div className="flex items-center gap-4 py-3.5">
-        <div className="w-16 aspect-[2/3] bg-white/5 rounded-lg animate-pulse shrink-0" />
+        <div className="w-16 aspect-[2/3] bg-muted rounded-lg animate-pulse shrink-0" />
         <div className="flex-1 space-y-2">
-          <div className="h-4 bg-white/5 rounded animate-pulse w-2/3" />
-          <div className="h-3 bg-white/5 rounded animate-pulse w-1/3" />
-          <div className="h-3 bg-white/5 rounded animate-pulse w-1/2" />
+          <div className="h-4 bg-muted rounded animate-pulse w-2/3" />
+          <div className="h-3 bg-muted rounded animate-pulse w-1/3" />
+          <div className="h-3 bg-muted rounded animate-pulse w-1/2" />
         </div>
       </div>
     );
@@ -395,7 +395,7 @@ export default function HistoryPage() {
             placeholder="Search this page"
             value={search}
             onChange={e => setSearch(e.target.value)}
-            className="w-full bg-white/5 border-2 border-primary/80 rounded-2xl pl-10 pr-4 py-3 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary transition-colors"
+            className="w-full bg-muted border-2 border-primary/80 rounded-2xl pl-10 pr-4 py-3 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary transition-colors"
           />
           {search && (
             <button onClick={() => setSearch('')} className="absolute right-3.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
@@ -429,7 +429,7 @@ export default function HistoryPage() {
         </div>
       ) : (
         <div className="px-6">
-          <div className="divide-y divide-white/[0.06]">
+          <div className="divide-y divide-border">
             {sortedFilteredIds.map(id => (
               <HistoryCard
                 key={id}

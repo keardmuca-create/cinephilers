@@ -74,7 +74,7 @@ function TrailersSection({ trailers }: { trailers: NonNullable<Movie['trailers']
       <h3 className="text-2xl font-headline font-bold flex items-center gap-3">
         <Clapperboard className="h-6 w-6 text-primary" /> Trailers & Clips
       </h3>
-      <div className="rounded-3xl overflow-hidden border border-white/10 shadow-2xl aspect-video w-full">
+      <div className="rounded-3xl overflow-hidden border border-border shadow-2xl aspect-video w-full">
         <iframe
           key={trailers[active].key}
           src={`https://www.youtube.com/embed/${trailers[active].key}?rel=0`}
@@ -107,7 +107,7 @@ function ImagesGallery({ images, movieId }: { images: string[]; movieId: string 
       </div>
       <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
         {images.slice(0, 6).map((url, i) => (
-          <div key={i} className="relative aspect-video rounded-2xl overflow-hidden border border-white/5">
+          <div key={i} className="relative aspect-video rounded-2xl overflow-hidden border border-border">
             <Image src={url} alt="" fill className="object-cover hover:scale-105 transition-transform duration-500" />
           </div>
         ))}
@@ -155,7 +155,7 @@ function ReleaseInfo({ movie }: { movie: Movie }) {
       <h3 className="text-2xl font-headline font-bold flex items-center gap-3">
         <Info className="h-6 w-6 text-primary" /> Release Info
       </h3>
-      <div className="bg-white/5 rounded-3xl p-8 border border-white/5 grid grid-cols-1 sm:grid-cols-2 gap-6">
+      <div className="bg-muted rounded-3xl p-8 border border-border grid grid-cols-1 sm:grid-cols-2 gap-6">
         {rows.map(r => <InfoRow key={r.label} {...r} />)}
       </div>
     </section>
@@ -288,9 +288,9 @@ function SeasonsSection({
           const allWatched = total > 0 && watched >= total;
 
           return (
-            <div key={season.id} className="rounded-3xl border border-white/5 overflow-hidden">
+            <div key={season.id} className="rounded-3xl border border-border overflow-hidden">
               {/* Season header */}
-              <div className="flex items-center gap-3 p-4 bg-white/5">
+              <div className="flex items-center gap-3 p-4 bg-muted">
                 {/* Expand area */}
                 <button
                   className="flex items-center gap-3 flex-1 min-w-0 text-left hover:opacity-80 transition-opacity"
@@ -306,7 +306,7 @@ function SeasonsSection({
                         {total} ep{season.air_date ? ` · ${season.air_date.slice(0, 4)}` : ''}
                       </p>
                       {watched > 0 && (
-                        <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${allWatched ? 'bg-primary/20 text-primary' : 'bg-white/10 text-muted-foreground'}`}>
+                        <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${allWatched ? 'bg-primary/20 text-primary' : 'bg-muted text-muted-foreground'}`}>
                           {allWatched ? '✓ All watched' : `${watched} / ${total}`}
                         </span>
                       )}
@@ -326,7 +326,7 @@ function SeasonsSection({
                   <button
                     onClick={(e) => handleMarkSeason(e, season)}
                     disabled={markLoading === sn}
-                    className="text-[10px] font-bold text-muted-foreground hover:text-white px-2 py-1 rounded-lg hover:bg-white/10 transition-colors shrink-0 disabled:opacity-40"
+                    className="text-[10px] font-bold text-muted-foreground hover:text-foreground px-2 py-1 rounded-lg hover:bg-muted transition-colors shrink-0 disabled:opacity-40"
                   >
                     {markLoading === sn
                       ? <div className="h-3 w-3 border border-current border-t-transparent rounded-full animate-spin" />
@@ -631,7 +631,7 @@ function ReviewsSection({ movie, writeOpen, setWriteOpen, myReview, setMyReview 
           </div>
           <div className="space-y-4">
             {previewReviews.map(r => (
-              <div key={r.id} className="bg-card rounded-3xl border border-white/5 p-5 space-y-3">
+              <div key={r.id} className="bg-card rounded-3xl border border-border p-5 space-y-3">
                 <div className="flex items-center justify-between gap-3">
                   <Link
                     href={r.isOwn ? '/profile' : `/profile/${r.user.username}`}
@@ -1023,14 +1023,14 @@ export default function MovieDetailPage() {
 
   if (!movie) return (
     <main className="min-h-screen flex flex-col items-center justify-center gap-6 pb-32">
-      <div className="h-20 w-20 rounded-3xl bg-white/5 border border-white/10 flex items-center justify-center">
+      <div className="h-20 w-20 rounded-3xl bg-muted border border-border flex items-center justify-center">
         <Film className="h-10 w-10 text-muted-foreground" />
       </div>
       <div className="text-center space-y-2">
         <h1 className="text-2xl font-headline font-bold">Title not found</h1>
         <p className="text-muted-foreground">This movie or show could not be loaded.</p>
       </div>
-      <Button variant="outline" className="rounded-full border-white/10" onClick={() => router.back()}>
+      <Button variant="outline" className="rounded-full border-border" onClick={() => router.back()}>
         <ChevronLeft className="h-4 w-4 mr-2" /> Go Back
       </Button>
     </main>
@@ -1090,7 +1090,7 @@ export default function MovieDetailPage() {
         {/* Poster & Overview */}
         <section className="flex flex-col md:flex-row gap-8 -mt-20 relative z-10">
           <div className="shrink-0 mx-auto md:mx-0">
-            <div className="relative aspect-[2/3] w-48 md:w-64 rounded-[2rem] overflow-hidden shadow-2xl border-4 border-background ring-1 ring-white/10 bg-muted">
+            <div className="relative aspect-[2/3] w-48 md:w-64 rounded-[2rem] overflow-hidden shadow-2xl border-4 border-background ring-1 ring-border bg-muted">
               {movie.poster ? (
                 <Image src={movie.poster} alt={movie.title} fill className="object-cover" />
               ) : (
@@ -1103,7 +1103,7 @@ export default function MovieDetailPage() {
           <div className="flex-1 flex flex-col justify-end gap-3">
             <div className="flex flex-wrap gap-2">
               <Badge variant="secondary" className="text-[10px] font-bold uppercase tracking-widest">{movie.type === 'show' ? 'TV Show' : 'Movie'}</Badge>
-              <Badge variant="outline" className="text-[10px] border-white/10">{movie.genre}</Badge>
+              <Badge variant="outline" className="text-[10px] border-border">{movie.genre}</Badge>
             </div>
             <h1 className="text-4xl md:text-5xl font-headline font-bold leading-tight">{movie.title}</h1>
             {movie.tagline && <p className="text-base text-primary italic font-medium">&ldquo;{movie.tagline}&rdquo;</p>}
@@ -1287,7 +1287,7 @@ export default function MovieDetailPage() {
                 See All
               </Link>
             </div>
-            <div className="bg-white/5 rounded-3xl p-6 border border-white/5 space-y-6">
+            <div className="bg-muted rounded-3xl p-6 border border-border space-y-6">
               {/* Key crew */}
               {movie.crew && movie.crew.length > 0 && (
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 pb-4">
@@ -1311,7 +1311,7 @@ export default function MovieDetailPage() {
                   <p className="text-xl font-bold font-headline">{movie.director}</p>
                 </div>
               )}
-              <Separator className="bg-white/5" />
+              <Separator className="bg-muted" />
               {/* Cast */}
               {movie.cast.length > 0 && (
                 <ScrollArea className="w-full">
@@ -1355,7 +1355,7 @@ export default function MovieDetailPage() {
             </h3>
             <div className="space-y-4">
               {movie.quotes.map((q, i) => (
-                <div key={i} className="p-6 bg-white/5 rounded-3xl border-l-4 border-primary italic text-base text-gray-300 shadow-lg">{q}</div>
+                <div key={i} className="p-6 bg-muted rounded-3xl border-l-4 border-primary italic text-base text-gray-300 shadow-lg">{q}</div>
               ))}
             </div>
           </section>

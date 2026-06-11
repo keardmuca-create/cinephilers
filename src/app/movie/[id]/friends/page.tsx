@@ -82,7 +82,7 @@ export default function MovieFriendsPage() {
             placeholder="Search friends"
             value={search}
             onChange={e => setSearch(e.target.value)}
-            className="w-full bg-white/5 border-2 border-primary/80 rounded-2xl pl-10 pr-10 py-3 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary transition-colors"
+            className="w-full bg-muted border-2 border-primary/80 rounded-2xl pl-10 pr-10 py-3 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary transition-colors"
           />
           {search && (
             <button onClick={() => setSearch('')} className="absolute right-3.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
@@ -102,7 +102,7 @@ export default function MovieFriendsPage() {
       {/* Empty */}
       {!loading && entries.length === 0 && (
         <div className="flex flex-col items-center justify-center py-20 gap-4 text-center">
-          <div className="h-16 w-16 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center">
+          <div className="h-16 w-16 rounded-2xl bg-muted border border-border flex items-center justify-center">
             <Users className="h-8 w-8 text-muted-foreground" />
           </div>
           <div>
@@ -122,12 +122,12 @@ export default function MovieFriendsPage() {
 
       {/* List */}
       {!loading && filtered.length > 0 && (
-        <div className="bg-card rounded-3xl border border-white/5 divide-y divide-white/5 overflow-hidden">
+        <div className="bg-card rounded-3xl border border-border divide-y divide-border overflow-hidden">
           {filtered.map(e => (
             <Link
               key={e.user.id}
               href={`/profile/${e.user.username}`}
-              className="flex items-center gap-4 px-5 py-4 hover:bg-white/5 transition-colors"
+              className="flex items-center gap-4 px-5 py-4 hover:bg-muted/50 transition-colors"
             >
               {/* Avatar */}
               <div className="h-12 w-12 rounded-2xl bg-primary/20 overflow-hidden flex items-center justify-center shrink-0">

@@ -258,7 +258,7 @@ export function FavoritesSection() {
       </div>
 
       <Dialog open={searchOpen} onOpenChange={setSearchOpen}>
-        <DialogContent className="sm:max-w-md rounded-3xl bg-background/95 backdrop-blur-xl border-white/10">
+        <DialogContent className="sm:max-w-md rounded-3xl bg-background/95 backdrop-blur-xl border-border">
           <DialogHeader>
             <DialogTitle className="font-headline">
               {swapIndex !== null ? 'Replace Favorite' : 'Add to Favorites'}
@@ -275,7 +275,7 @@ export function FavoritesSection() {
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
                 <Input
                   placeholder="Search movies & shows..."
-                  className="pl-9 rounded-xl bg-white/5 border-white/10 focus-visible:ring-primary/50"
+                  className="pl-9 rounded-xl bg-muted border-border focus-visible:ring-primary/50"
                   value={query}
                   onChange={e => setQuery(e.target.value)}
                   autoFocus
@@ -296,12 +296,12 @@ export function FavoritesSection() {
                   <button
                     key={r.id}
                     onClick={() => addFavorite(r)}
-                    className="w-full flex items-center gap-3 p-2 rounded-xl hover:bg-white/5 transition-colors text-left"
+                    className="w-full flex items-center gap-3 p-2 rounded-xl hover:bg-muted/50 transition-colors text-left"
                   >
                     <img
                       src={r.poster}
                       alt={r.title}
-                      className="w-9 h-[54px] object-cover rounded-lg flex-shrink-0 bg-white/5"
+                      className="w-9 h-[54px] object-cover rounded-lg flex-shrink-0 bg-muted"
                     />
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-semibold truncate">{r.title}</p>
