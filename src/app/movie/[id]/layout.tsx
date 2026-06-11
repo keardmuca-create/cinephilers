@@ -19,7 +19,12 @@ async function fetchMovieMeta(id: string) {
           title: d.title ?? d.name,
           year: (d.release_date ?? d.first_air_date)?.slice(0, 4),
           overview: d.overview,
-          poster: d.poster_path ? `https://image.tmdb.org/t/p/w500${d.poster_path}` : null,
+          // Wide backdrop fits the 1.91:1 social-card format; poster is the fallback
+          image: d.backdrop_path
+            ? { url: `https://image.tmdb.org/t/p/w780${d.backdrop_path}`, width: 780, height: 439 }
+            : d.poster_path
+              ? { url: `https://image.tmdb.org/t/p/w500${d.poster_path}`, width: 500, height: 750 }
+              : null,
         };
       }
     } catch { /* ignore */ }
@@ -34,7 +39,7 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
 
   const title = `${meta.title}${meta.year ? ` (${meta.year})` : ''} — Cinephilers`;
   const description = meta.overview
-    ? meta.overview.slice(0, 155) + (meta.overview.length > 155 ? '…' : '')
+    ? meta.overview.slice(0, 120) + (meta.overview.length > 120 ? '…' : '')
     : `Track, rate, and review ${meta.title} on Cinephilers.`;
 
   return {
@@ -43,14 +48,14 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
     openGraph: {
       title,
       description,
-      images: meta.poster ? [{ url: meta.poster, width: 500, height: 750, alt: meta.title }] : [],
+      images: meta.image ? [{ ...meta.image, alt: meta.title }] : [],
       url: `https://cinephilers.app/movie/${id}`,
     },
     twitter: {
-      card: 'summary',
+      card: 'summary_large_image',
       title,
       description,
-      images: meta.poster ? [meta.poster] : [],
+      images: meta.image ? [meta.image.url] : [],
     },
   };
 }
