@@ -65,7 +65,7 @@ export default function OnboardingPage() {
           const Icon = step.icon;
           const isDone = done.has(i);
           return (
-            <div key={i} className={`bg-card rounded-3xl border p-5 flex items-start gap-4 transition-colors ${isDone ? 'border-primary/30 bg-primary/5' : 'border-white/5'}`}>
+            <div key={i} className={`bg-card rounded-3xl border p-5 flex items-start gap-4 transition-colors ${isDone ? 'border-primary/30 bg-primary/5' : 'border-border'}`}>
               <div className={`h-12 w-12 rounded-2xl ${step.bg} flex items-center justify-center shrink-0`}>
                 {isDone
                   ? <Check className="h-6 w-6 text-primary" />
