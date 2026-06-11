@@ -384,7 +384,7 @@ function saveLists(lists: UserList[]) {
   try { localStorage.setItem('user-lists', JSON.stringify(lists)); } catch { /* ignore */ }
 }
 
-function AddToListButton({ movie }: { movie: Movie }) {
+function AddToListButton({ movie, onRequireAuth }: { movie: Movie; onRequireAuth: (() => void) | null }) {
   const [open, setOpen] = useState(false);
   const [lists, setLists] = useState<UserList[]>([]);
   const [createOpen, setCreateOpen] = useState(false);
@@ -473,7 +473,7 @@ function AddToListButton({ movie }: { movie: Movie }) {
 
   return (
     <>
-      <Dialog open={open} onOpenChange={setOpen}>
+      <Dialog open={open} onOpenChange={v => { if (v && onRequireAuth) { onRequireAuth(); return; } setOpen(v); }}>
         <DialogTrigger asChild>
           <Button variant="outline" className="h-14 px-8 rounded-2xl border-2 border-foreground bg-background text-foreground font-bold flex-1 md:flex-none text-base">
             <ListPlus className="h-5 w-5 mr-2" /> Add to List
@@ -926,6 +926,7 @@ export default function MovieDetailPage() {
   const epKey = (sn: number, epNum: number) => `S${sn}E${epNum}`;
 
   const toggleEpisodeWatched = useCallback((sn: number, ep: TvEpisode) => {
+    if (!authUser) { setAuthGate('track episodes'); return; }
     const key   = epKey(sn, ep.episode_number);
     const lsKey = `watched-ep-${id}-${key}`;
     const logId = `${id}-${key}`;
@@ -958,9 +959,10 @@ export default function MovieDetailPage() {
     }
     // Sync to DB in background
     syncDb('POST', '/api/watched/episodes', { showTmdbId: id, season: sn, episode: ep.episode_number, watched: nowWatched });
-  }, [id, watchedEpisodes, movie, syncDb]);
+  }, [id, watchedEpisodes, movie, syncDb, authUser]);
 
   const markSeasonWatched = useCallback(async (season: TvSeason, cached?: TvEpisode[]) => {
+    if (!authUser) { setAuthGate('track episodes'); return; }
     let episodes = cached;
     if (!episodes) {
       try {
@@ -985,7 +987,7 @@ export default function MovieDetailPage() {
       return next;
     });
     toast({ title: `Season ${season.season_number} marked as watched` });
-  }, [id, movie, syncDb]);
+  }, [id, movie, syncDb, authUser]);
 
   const unmarkSeasonWatched = useCallback((season: TvSeason) => {
     const snPrefix = `S${season.season_number}E`;
@@ -1214,7 +1216,7 @@ export default function MovieDetailPage() {
             {isWatched ? <Check className="h-5 w-5 mr-2" /> : <Play className="h-5 w-5 mr-2" />}
             {isWatched ? 'Watched' : 'Mark as Watched'}
           </Button>
-          <AddToListButton movie={movie} />
+          <AddToListButton movie={movie} onRequireAuth={authUser ? null : () => setAuthGate('save movies to lists')} />
         </section>
 
         {/* Ratings */}
