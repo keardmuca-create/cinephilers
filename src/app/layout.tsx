@@ -32,6 +32,8 @@ export const metadata: Metadata = {
 
 export const viewport: Viewport = {
   themeColor: '#0a0a0a',
+  // Required for env(safe-area-inset-*) to work in installed PWA mode
+  viewportFit: 'cover',
 };
 
 export default function RootLayout({

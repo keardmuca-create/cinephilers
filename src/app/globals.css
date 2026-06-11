@@ -3,6 +3,13 @@
 @tailwind components;
 @tailwind utilities;
 
+@layer utilities {
+  /* Keeps the bottom nav above the phone's gesture/home bar in installed PWA mode */
+  .pb-safe {
+    padding-bottom: max(env(safe-area-inset-bottom), 0.5rem);
+  }
+}
+
 @layer base {
   :root {
     --background: 0 0% 100%;
