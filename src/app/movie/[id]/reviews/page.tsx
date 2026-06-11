@@ -237,6 +237,14 @@ export default function MovieReviewsPage() {
       .finally(() => setLoading(false));
   }, [id]);
 
+  const deleteReview = async (reviewId: string) => {
+    setReviews(prev => prev.filter(r => r.id !== reviewId));
+    try { localStorage.removeItem(`review-${id}`); } catch { /* ignore */ }
+    try {
+      await fetchWithAuth(`/api/reviews/${reviewId}`, { method: 'DELETE' });
+    } catch { /* ignore */ }
+  };
+
   const toggleLike = async (reviewId: string, likedByMe: boolean) => {
     setReviews(prev => prev.map(r => r.id !== reviewId ? r : {
       ...r,
@@ -328,6 +336,18 @@ export default function MovieReviewsPage() {
                 )}
                 <p className="text-sm text-foreground/90 leading-relaxed italic">&ldquo;{r.body}&rdquo;</p>
               </div>
+
+              {/* Delete own review */}
+              {r.isOwn && (
+                <div className="flex justify-end">
+                  <button
+                    onClick={() => deleteReview(r.id)}
+                    className="flex items-center gap-1.5 text-xs font-bold text-muted-foreground hover:text-red-400 transition-colors"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" /> Delete
+                  </button>
+                </div>
+              )}
 
               {/* Like + Report buttons */}
               {!r.isOwn && user && (
