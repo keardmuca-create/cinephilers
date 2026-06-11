@@ -3,6 +3,7 @@ import { prisma } from '@/lib/db';
 import { ok, err } from '@/lib/api-response';
 import { getCurrentUser } from '@/lib/auth-utils';
 import { sanitizeText } from '@/lib/sanitize';
+import { rateLimit } from '@/lib/rate-limit';
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id: reviewId } = await params;
@@ -24,6 +25,9 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const auth = await getCurrentUser(req);
   if (!auth) return err('Unauthorized', 401);
+
+  const { allowed, retryAfter } = await rateLimit(`comment:${auth.sub}`, 15, 60_000);
+  if (!allowed) return err(`Too many comments. Try again in ${retryAfter}s`, 429);
 
   const { id: reviewId } = await params;
   const { body } = await req.json();

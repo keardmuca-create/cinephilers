@@ -7,7 +7,7 @@ import { signAccessToken, signRefreshToken, setAuthCookies } from '@/lib/auth-ut
 import { rateLimit, getIp } from '@/lib/rate-limit';
 
 export async function POST(req: NextRequest) {
-  const { allowed, retryAfter } = rateLimit(`login:${getIp(req)}`, 10, 60_000);
+  const { allowed, retryAfter } = await rateLimit(`login:${getIp(req)}`, 10, 60_000);
   if (!allowed) return err(`Too many attempts. Try again in ${retryAfter}s`, 429);
 
   const body = await req.json().catch(() => null);

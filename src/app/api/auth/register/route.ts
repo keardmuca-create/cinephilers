@@ -1,4 +1,4 @@
-import { NextRequest } from 'next/server';
+﻿import { NextRequest } from 'next/server';
 import bcrypt from 'bcryptjs';
 import crypto from 'crypto';
 import { prisma } from '@/lib/db';
@@ -7,7 +7,7 @@ import { sendVerificationEmail } from '@/lib/email';
 import { rateLimit, getIp } from '@/lib/rate-limit';
 
 export async function POST(req: NextRequest) {
-  const { allowed, retryAfter } = rateLimit(`register:${getIp(req)}`, 5, 60_000);
+  const { allowed, retryAfter } = await rateLimit(`register:${getIp(req)}`, 5, 60_000);
   if (!allowed) return err(`Too many attempts. Try again in ${retryAfter}s`, 429);
 
   const body = await req.json().catch(() => null);
@@ -20,7 +20,7 @@ export async function POST(req: NextRequest) {
   if (password !== confirmPassword) return err('Passwords do not match');
   if (password.length < 8) return err('Password must be at least 8 characters');
   if (!/^[a-zA-Z0-9_]{3,20}$/.test(username))
-    return err('Username must be 3–20 alphanumeric characters or underscores');
+    return err('Username must be 3â€“20 alphanumeric characters or underscores');
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return err('Invalid email address');
 
   const [existingEmail, existingUsername] = await Promise.all([
@@ -50,7 +50,7 @@ export async function POST(req: NextRequest) {
   try {
     await sendVerificationEmail(user.email, emailVerificationToken);
   } catch {
-    // Non-fatal — user is created, email may fail in dev
+    // Non-fatal â€” user is created, email may fail in dev
   }
 
   return ok(

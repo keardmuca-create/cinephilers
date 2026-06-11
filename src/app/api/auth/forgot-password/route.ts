@@ -1,4 +1,4 @@
-import { NextRequest } from 'next/server';
+﻿import { NextRequest } from 'next/server';
 import crypto from 'crypto';
 import { prisma } from '@/lib/db';
 import { ok, err } from '@/lib/api-response';
@@ -6,7 +6,7 @@ import { sendPasswordResetEmail } from '@/lib/email';
 import { rateLimit, getIp } from '@/lib/rate-limit';
 
 export async function POST(req: NextRequest) {
-  const { allowed, retryAfter } = rateLimit(`forgot:${getIp(req)}`, 3, 60_000);
+  const { allowed, retryAfter } = await rateLimit(`forgot:${getIp(req)}`, 3, 60_000);
   if (!allowed) return err(`Too many attempts. Try again in ${retryAfter}s`, 429);
 
   const body = await req.json().catch(() => null);

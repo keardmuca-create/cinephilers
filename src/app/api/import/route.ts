@@ -5,6 +5,7 @@ import { ok, err } from '@/lib/api-response';
 import { verifyAccessToken } from '@/lib/auth-utils';
 import { awardBadgeIfEarned } from '@/lib/badge-service';
 import { sanitizeText } from '@/lib/sanitize';
+import { rateLimit } from '@/lib/rate-limit';
 
 export const dynamic = 'force-dynamic';
 
@@ -23,6 +24,9 @@ export async function POST(req: NextRequest) {
   if (!token) return err('Unauthorized', 401);
   const auth = await verifyAccessToken(token);
   if (!auth) return err('Unauthorized', 401);
+
+  const { allowed, retryAfter } = await rateLimit(`import:${auth.sub}`, 3, 600_000);
+  if (!allowed) return err(`Too many imports. Try again in ${retryAfter}s`, 429);
 
   const body = await req.json().catch(() => null);
   if (!body || !Array.isArray(body.items)) return err('Invalid payload');

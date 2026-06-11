@@ -1,7 +1,31 @@
+import { Redis } from '@upstash/redis';
+
+const url = process.env.UPSTASH_REDIS_REST_URL ?? process.env.KV_REST_API_URL;
+const token = process.env.UPSTASH_REDIS_REST_TOKEN ?? process.env.KV_REST_API_TOKEN;
+const redis = url && token ? new Redis({ url, token }) : null;
+
+// In-memory fallback for local dev (resets per serverless instance, so Redis is required in production)
 interface Entry { count: number; resetAt: number }
 const store = new Map<string, Entry>();
 
-export function rateLimit(key: string, limit: number, windowMs: number): { allowed: boolean; retryAfter: number } {
+export async function rateLimit(key: string, limit: number, windowMs: number): Promise<{ allowed: boolean; retryAfter: number }> {
+  if (redis) {
+    try {
+      const window = Math.floor(Date.now() / windowMs);
+      const bucket = `rl:${key}:${window}`;
+      const count = await redis.incr(bucket);
+      if (count === 1) await redis.expire(bucket, Math.ceil(windowMs / 1000));
+      if (count > limit) {
+        const resetAt = (window + 1) * windowMs;
+        return { allowed: false, retryAfter: Math.ceil((resetAt - Date.now()) / 1000) };
+      }
+      return { allowed: true, retryAfter: 0 };
+    } catch {
+      // Redis unreachable — fail open rather than blocking all logins
+      return { allowed: true, retryAfter: 0 };
+    }
+  }
+
   const now = Date.now();
   const entry = store.get(key);
 
