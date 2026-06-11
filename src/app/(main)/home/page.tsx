@@ -13,6 +13,7 @@ import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { usePopularMovies } from '@/hooks/use-movies';
 import { seededShuffle, WEEK_MS } from '@/lib/seed-shuffle';
+import { useAuth } from '@/contexts/auth-context';
 
 const EMPTY = { movies: [] as Movie[], shows: [] as Movie[], trending: [] as Movie[] };
 
@@ -53,6 +54,7 @@ const HeroSkeleton = () => (
 
 export default function HomePage() {
   const { data, loading } = usePopularMovies(EMPTY);
+  const { user, loading: authLoading } = useAuth();
 
   // Stable daily pool — server-cached for 24 hours, identical across all devices
   const [stablePool, setStablePool] = useState<Movie[]>([]);
@@ -89,6 +91,22 @@ export default function HomePage() {
 
   return (
     <main className="flex flex-col gap-10 pb-20">
+      {/* Guest signup banner */}
+      {!authLoading && !user && (
+        <div className="px-6 pt-6 -mb-4">
+          <div className="bg-primary/10 border border-primary/20 rounded-2xl p-5 flex flex-col sm:flex-row sm:items-center gap-3 max-w-3xl mx-auto">
+            <div className="space-y-1 flex-1">
+              <p className="font-bold text-base">Join Cinephilers</p>
+              <p className="text-sm text-muted-foreground">Track every movie and show you watch, rate them, and follow friends — free.</p>
+            </div>
+            <div className="flex gap-2 shrink-0">
+              <Button asChild size="sm" className="rounded-xl font-bold"><Link href="/signup">Sign Up Free</Link></Button>
+              <Button asChild size="sm" variant="outline" className="rounded-xl font-bold"><Link href="/login">Log In</Link></Button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Hero Section */}
       {loading || !heroMovie ? (
         <HeroSkeleton />

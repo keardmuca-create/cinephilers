@@ -238,6 +238,7 @@ export default function MovieReviewsPage() {
   }, [id]);
 
   const deleteReview = async (reviewId: string) => {
+    if (!window.confirm('Delete your review? This cannot be undone.')) return;
     setReviews(prev => prev.filter(r => r.id !== reviewId));
     try { localStorage.removeItem(`review-${id}`); } catch { /* ignore */ }
     try {

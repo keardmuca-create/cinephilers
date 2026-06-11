@@ -601,6 +601,7 @@ function ReviewsSection({ movie, writeOpen, setWriteOpen, myReview, setMyReview 
   };
 
   const deleteReview = () => {
+    if (!window.confirm('Delete your review? This cannot be undone.')) return;
     try { localStorage.removeItem(`review-${movie.id}`); } catch { /* ignore */ }
     const own = cinephilersReviews.find(r => r.isOwn);
     if (own) {
