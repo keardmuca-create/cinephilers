@@ -22,7 +22,7 @@ const securityHeaders = [
       "default-src 'self'",
       "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
       "style-src 'self' 'unsafe-inline'",
-      "img-src 'self' data: blob: https://image.tmdb.org https://picsum.photos https://placehold.co https://images.unsplash.com",
+      "img-src 'self' data: blob: https://image.tmdb.org https://picsum.photos https://placehold.co https://images.unsplash.com https://*.public.blob.vercel-storage.com",
       "font-src 'self'",
       "frame-src 'self' https://www.youtube.com https://www.youtube-nocookie.com",
       "connect-src 'self' https://api.themoviedb.org https://*.ingest.sentry.io https://*.sentry.io",
@@ -41,6 +41,7 @@ const nextConfig: NextConfig = {
       { protocol: 'https', hostname: 'image.tmdb.org', port: '', pathname: '/**' },
       { protocol: 'https', hostname: 'images.unsplash.com', port: '', pathname: '/**' },
       { protocol: 'https', hostname: 'picsum.photos', port: '', pathname: '/**' },
+      { protocol: 'https', hostname: '*.public.blob.vercel-storage.com', port: '', pathname: '/**' },
     ],
   },
   async headers() {

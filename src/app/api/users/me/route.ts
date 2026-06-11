@@ -3,6 +3,23 @@ import { prisma } from '@/lib/db';
 import { ok, err } from '@/lib/api-response';
 import { getCurrentUser } from '@/lib/auth-utils';
 import { sanitizeText } from '@/lib/sanitize';
+import { put, del } from '@vercel/blob';
+
+const BLOB_HOST = '.blob.vercel-storage.com';
+
+async function uploadAvatarToBlob(userId: string, dataUrl: string): Promise<string | null> {
+  if (!process.env.BLOB_READ_WRITE_TOKEN) return null;
+  const match = dataUrl.match(/^data:(image\/(?:jpeg|png|webp));base64,(.+)$/);
+  if (!match) return null;
+  const buffer = Buffer.from(match[2], 'base64');
+  const ext = match[1] === 'image/png' ? 'png' : match[1] === 'image/webp' ? 'webp' : 'jpg';
+  const blob = await put(`avatars/${userId}.${ext}`, buffer, {
+    access: 'public',
+    contentType: match[1],
+    addRandomSuffix: true,
+  });
+  return blob.url;
+}
 
 export async function GET(req: NextRequest) {
   const auth = await getCurrentUser(req);
@@ -44,12 +61,27 @@ export async function PUT(req: NextRequest) {
     if (!isHttps && !isDataImage) return err('Avatar must be an https URL or an uploaded image');
   }
 
+  let finalAvatarUrl = avatarUrl as string | null | undefined;
+  if (typeof avatarUrl === 'string' && avatarUrl.startsWith('data:image/')) {
+    const uploaded = await uploadAvatarToBlob(auth.sub, avatarUrl).catch(() => null);
+    // Without a Blob token (local dev) the data URL is stored as-is
+    if (uploaded) finalAvatarUrl = uploaded;
+  }
+
+  // Clean up the previous blob when the avatar changes or is removed
+  if (avatarUrl !== undefined) {
+    const prev = await prisma.user.findUnique({ where: { id: auth.sub }, select: { avatarUrl: true } });
+    if (prev?.avatarUrl?.includes(BLOB_HOST) && prev.avatarUrl !== finalAvatarUrl) {
+      await del(prev.avatarUrl).catch(() => {});
+    }
+  }
+
   const updated = await prisma.user.update({
     where: { id: auth.sub },
     data: {
       ...(displayName !== undefined && { displayName: displayName ? sanitizeText(displayName as string) : null }),
       ...(bio !== undefined && { bio: bio ? sanitizeText(bio as string) : null }),
-      ...(avatarUrl !== undefined && { avatarUrl: avatarUrl as string | null }),
+      ...(avatarUrl !== undefined && { avatarUrl: finalAvatarUrl ?? null }),
       ...(favoriteGenres !== undefined && { favoriteGenres: favoriteGenres as string[] }),
       ...(country !== undefined && { country: country as string | null }),
       ...(isPrivate !== undefined && { isPrivate: isPrivate as boolean }),
