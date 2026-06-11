@@ -10,7 +10,7 @@ import { Button } from '@/components/ui/button';
 import {
   Play, Check, Plus, Star, ChevronLeft, Share2, ListPlus, Quote,
   Info, Film, Calendar, Clock, Globe, Building2, Tv, ChevronDown, ChevronUp,
-  DollarSign, Images, Clapperboard, PenLine, Eye, ChevronRight, User, Users, MessageSquare,
+  DollarSign, Images, Clapperboard, PenLine, Eye, ChevronRight, User, Users, MessageSquare, Trash2,
 } from 'lucide-react';
 import { Avatar, AvatarImage } from '@/components/ui/avatar';
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
@@ -600,6 +600,17 @@ function ReviewsSection({ movie, writeOpen, setWriteOpen, myReview, setMyReview 
     toast({ title: 'Review saved' });
   };
 
+  const deleteReview = () => {
+    try { localStorage.removeItem(`review-${movie.id}`); } catch { /* ignore */ }
+    const own = cinephilersReviews.find(r => r.isOwn);
+    if (own) {
+      fetch(`/api/reviews/${own.id}`, { method: 'DELETE', credentials: 'include' }).catch(() => { /* background sync */ });
+      setCinephilersReviews(prev => prev.filter(r => !r.isOwn));
+    }
+    setMyReview(null);
+    toast({ title: 'Review deleted' });
+  };
+
   const allReviews = movie.reviews ?? [];
   const previewReviews = cinephilersReviews.slice(0, 3);
 
@@ -673,11 +684,20 @@ function ReviewsSection({ movie, writeOpen, setWriteOpen, myReview, setMyReview 
         <div className="bg-primary/5 border border-primary/20 p-5 rounded-2xl space-y-2">
           <div className="flex items-center justify-between">
             <span className="text-xs font-bold uppercase tracking-widest text-primary">Your Review</span>
-            {myReview.rating > 0 && (
-              <div className="flex items-center gap-1 text-yellow-500 text-xs font-black">
-                <Star className="h-3 w-3 fill-current" /> {myReview.rating}
-              </div>
-            )}
+            <div className="flex items-center gap-3">
+              {myReview.rating > 0 && (
+                <div className="flex items-center gap-1 text-yellow-500 text-xs font-black">
+                  <Star className="h-3 w-3 fill-current" /> {myReview.rating}
+                </div>
+              )}
+              <button
+                onClick={deleteReview}
+                className="h-7 w-7 rounded-full flex items-center justify-center text-muted-foreground hover:text-red-400 hover:bg-red-500/10 transition-colors"
+                aria-label="Delete review"
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+              </button>
+            </div>
           </div>
           <p className="text-sm text-foreground leading-relaxed italic">&ldquo;{myReview.content}&rdquo;</p>
           <p className="text-[10px] text-muted-foreground">{myReview.date}</p>

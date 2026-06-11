@@ -29,9 +29,8 @@ export async function GET(req: NextRequest) {
     where: { followerId: auth.sub },
     select: { followingId: true },
   });
-  const followingIds = following.map(f => f.followingId);
-
-  if (followingIds.length === 0) return ok([]);
+  // Include the user's own activity alongside the people they follow
+  const followingIds = [...following.map(f => f.followingId), auth.sub];
 
   const userSelect = {
     select: { id: true, username: true, displayName: true, avatarUrl: true },

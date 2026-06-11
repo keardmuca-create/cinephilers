@@ -64,6 +64,7 @@ export default function WatchlistPage() {
 
   useEffect(() => {
     const loaded: WatchlistItem[] = [];
+    const missing: string[] = [];
     try {
       for (let i = 0; i < localStorage.length; i++) {
         const k = localStorage.key(i)!;
@@ -72,9 +73,18 @@ export default function WatchlistPage() {
         if (!raw) continue;
         let meta: Record<string, unknown>;
         try { meta = JSON.parse(raw); } catch { continue; }
-        if (!meta.title) continue;
+        const id = k.slice('watchlist-'.length);
+        if (!meta.title) {
+          // Synced from the DB without metadata (e.g. after login on a new device) —
+          // try the cached meta entry, otherwise fetch it below
+          try {
+            const cached = localStorage.getItem(`meta-${id}`);
+            if (cached) meta = { ...meta, ...JSON.parse(cached) };
+          } catch { /* ignore */ }
+        }
+        if (!meta.title) { missing.push(id); continue; }
         loaded.push({
-          id: k.slice('watchlist-'.length),
+          id,
           title: meta.title as string,
           poster: (meta.poster as string) ?? '',
           year:   (meta.year as string) ?? '',
@@ -83,6 +93,27 @@ export default function WatchlistPage() {
       }
     } catch { /* ignore */ }
     setItems(loaded);
+
+    if (missing.length === 0) return;
+    let cancelled = false;
+    (async () => {
+      const fetched: WatchlistItem[] = [];
+      for (const id of missing) {
+        try {
+          const res = await fetch(`/api/movies/${id}`);
+          if (!res.ok) continue;
+          const m = await res.json();
+          if (!m?.title) continue;
+          const item: WatchlistItem = { id, title: m.title, poster: m.poster ?? '', year: m.year ?? '' };
+          fetched.push(item);
+          try {
+            localStorage.setItem(`watchlist-${id}`, JSON.stringify({ id, title: item.title, poster: item.poster, year: item.year, type: m.type ?? 'movie' }));
+          } catch { /* ignore */ }
+        } catch { /* ignore */ }
+      }
+      if (!cancelled && fetched.length > 0) setItems(prev => [...prev, ...fetched]);
+    })();
+    return () => { cancelled = true; };
   }, []);
 
   const sortedFiltered = useMemo(() => {
