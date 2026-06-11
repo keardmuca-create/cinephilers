@@ -159,7 +159,7 @@ function ListsSection() {
                 ))}
                 {l.items.length === 0 && (
                   <div className="w-10 aspect-[2/3] rounded-lg bg-muted flex items-center justify-center">
-                    <Film className="h-4 w-4 text-muted-foreground" />
+                    <Film className="h-4 w-4 text-primary/60" />
                   </div>
                 )}
               </div>

@@ -1072,7 +1072,7 @@ export default function MovieDetailPage() {
                 <Image src={movie.poster} alt={movie.title} fill className="object-cover" />
               ) : (
                 <div className="w-full h-full flex items-center justify-center">
-                  <Film className="h-20 w-20 text-muted-foreground/30" />
+                  <Film className="h-20 w-20 text-primary/60" />
                 </div>
               )}
             </div>

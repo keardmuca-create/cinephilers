@@ -53,7 +53,7 @@ function ResultRow({ id, poster, title, sub, onRemove }: {
         {poster ? (
           <img src={poster} alt={title} className="w-full h-full object-cover" loading="lazy" />
         ) : (
-          <Film className="h-6 w-6 text-muted-foreground/40" />
+          <Film className="h-6 w-6 text-primary/60" />
         )}
       </div>
       <div className="flex-1 min-w-0">

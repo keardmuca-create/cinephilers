@@ -59,7 +59,7 @@ function CreditRow({ credit, watched, userRating }: {
           <Image src={credit.poster} alt={credit.title} fill className="object-cover transition-transform group-hover:scale-105" sizes="48px" />
         ) : (
           <div className="w-full h-full flex items-center justify-center">
-            <Film className="h-5 w-5 text-muted-foreground/40" />
+            <Film className="h-5 w-5 text-primary/60" />
           </div>
         )}
       </div>

@@ -52,9 +52,8 @@ export const MovieCard = React.memo(function MovieCard({ movie, className, horiz
               loading="lazy"
             />
           ) : (
-            <div className="w-full h-full flex flex-col items-center justify-center gap-2 bg-muted/50">
-              <Film className="h-10 w-10 text-muted-foreground/40" />
-              <p className="text-[10px] text-muted-foreground/50 font-medium text-center px-2 line-clamp-2">{movie.title}</p>
+            <div className="w-full h-full flex items-center justify-center bg-muted">
+              <Film className="h-10 w-10 text-primary/60" />
             </div>
           )}
         </div>

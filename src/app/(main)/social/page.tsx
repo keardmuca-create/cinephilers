@@ -201,7 +201,7 @@ function ActivityCard({ item, onLike, onRemove }: {
           <div className="relative w-16 shrink-0 rounded-xl overflow-hidden shadow-md bg-muted" style={{ aspectRatio: '2/3' }}>
             {meta?.poster
               ? <Image src={meta.poster} alt={meta.title} fill className="object-cover" sizes="64px" />
-              : <div className="w-full h-full flex items-center justify-center"><Film className="h-6 w-6 text-muted-foreground/40" /></div>
+              : <div className="w-full h-full flex items-center justify-center"><Film className="h-6 w-6 text-primary/60" /></div>
             }
           </div>
           <div className="flex flex-col justify-center gap-1.5 flex-1 min-w-0">

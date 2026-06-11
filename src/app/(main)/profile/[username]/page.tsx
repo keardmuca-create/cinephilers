@@ -122,7 +122,7 @@ function FavoritePoster({ tmdbId }: { tmdbId: string }) {
     <Link href={`/movie/${tmdbId}`} className="group relative flex-1 aspect-[2/3] rounded-2xl overflow-hidden bg-muted shadow-md">
       {meta?.poster
         ? <Image src={meta.poster} alt={meta.title} fill className="object-cover transition-transform group-hover:scale-105" sizes="25vw" />
-        : <div className="w-full h-full flex items-center justify-center"><Film className="h-5 w-5 text-muted-foreground/40" /></div>
+        : <div className="w-full h-full flex items-center justify-center"><Film className="h-5 w-5 text-primary/60" /></div>
       }
       {/* Title tooltip on hover */}
       {meta?.title && (
@@ -143,7 +143,7 @@ function ReviewCard({ review }: { review: ReviewItem }) {
         <div className="relative w-10 shrink-0 rounded-lg overflow-hidden bg-muted shadow-sm" style={{ aspectRatio: '2/3' }}>
           {meta?.poster
             ? <Image src={meta.poster} alt={meta.title ?? ''} fill className="object-cover" sizes="40px" />
-            : <div className="w-full h-full flex items-center justify-center"><Film className="h-3 w-3 text-muted-foreground/40" /></div>
+            : <div className="w-full h-full flex items-center justify-center"><Film className="h-3 w-3 text-primary/60" /></div>
           }
         </div>
         <div className="flex-1 min-w-0">
@@ -170,7 +170,7 @@ function RecentCard({ item }: { item: RecentItem }) {
   return (
     <Link href={href} className="flex items-center gap-3 py-3 border-b border-white/5 last:border-0 group">
       <div className="relative w-12 shrink-0 rounded-lg overflow-hidden bg-muted shadow-sm" style={{ aspectRatio: '2/3' }}>
-        {meta?.poster ? <Image src={meta.poster} alt={meta.title ?? ''} fill className="object-cover" sizes="48px" /> : <div className="w-full h-full flex items-center justify-center"><Film className="h-4 w-4 text-muted-foreground/40" /></div>}
+        {meta?.poster ? <Image src={meta.poster} alt={meta.title ?? ''} fill className="object-cover" sizes="48px" /> : <div className="w-full h-full flex items-center justify-center"><Film className="h-4 w-4 text-primary/60" /></div>}
       </div>
       <div className="flex-1 min-w-0">
         {meta ? <p className="text-sm font-bold group-hover:text-primary transition-colors line-clamp-1">{meta.title}</p> : <div className="h-3 bg-muted rounded-full w-3/4 animate-pulse" />}
@@ -560,13 +560,13 @@ export default function PublicProfilePage() {
                     <div key={item.tmdbId} className="w-10 aspect-[2/3] rounded-lg overflow-hidden bg-muted shrink-0">
                       {item.poster
                         ? <img src={item.poster} alt={item.title ?? ''} className="w-full h-full object-cover" />
-                        : <div className="w-full h-full flex items-center justify-center"><Film className="h-3 w-3 text-muted-foreground/40" /></div>
+                        : <div className="w-full h-full flex items-center justify-center"><Film className="h-3 w-3 text-primary/60" /></div>
                       }
                     </div>
                   ))}
                   {l.items.length === 0 && (
                     <div className="w-10 aspect-[2/3] rounded-lg bg-muted flex items-center justify-center">
-                      <Film className="h-3 w-3 text-muted-foreground/40" />
+                      <Film className="h-3 w-3 text-primary/60" />
                     </div>
                   )}
                 </div>
