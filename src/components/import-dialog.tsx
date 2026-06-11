@@ -5,6 +5,7 @@ import JSZip from 'jszip';
 import { X, Upload, Loader2, CheckCircle, AlertCircle, ChevronRight, Film } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { fetchWithAuth } from '@/lib/fetch-with-auth';
+import type { WatchEntry } from '@/lib/badges';
 
 type Platform = 'letterboxd' | 'imdb';
 type Step = 'pick' | 'upload' | 'matching' | 'confirm' | 'importing' | 'done';
@@ -23,6 +24,7 @@ interface MatchedItem extends ParsedItem {
   mediaType: 'MOVIE' | 'SHOW';
   matchedTitle: string;
   poster: string | null;
+  language: string;
 }
 
 function parseCSV(text: string): Record<string, string>[] {
@@ -151,7 +153,7 @@ async function matchToTMDB(item: ParsedItem, typeHint?: 'movie' | 'tv'): Promise
     if (!res.ok) return null;
     const json = await res.json();
     if (!json.data) return null;
-    return { ...item, tmdbId: json.data.tmdbId, mediaType: json.data.mediaType, matchedTitle: json.data.title, poster: json.data.poster };
+    return { ...item, tmdbId: json.data.tmdbId, mediaType: json.data.mediaType, matchedTitle: json.data.title, poster: json.data.poster, language: json.data.language ?? '' };
   } catch {
     return null;
   }
@@ -226,6 +228,17 @@ export function ImportDialog({ onClose }: { onClose: () => void }) {
           if (item.inWatchlist) localStorage.setItem(`watchlist-${item.tmdbId}`, JSON.stringify({ id: item.tmdbId, title: item.matchedTitle, poster: item.poster ?? '', year: item.year, type: meta.type }));
           if (item.rating) localStorage.setItem(`movie-rating-${item.tmdbId}`, String(item.rating));
         }
+
+        // Append watched movies to the badge watch-log so badges like World Cinema count them.
+        // hour is fixed to 12 so a late-night import doesn't falsely earn the Night Owl badge.
+        const log: WatchEntry[] = JSON.parse(localStorage.getItem('watch-log') ?? '[]');
+        const existingIds = new Set(log.filter(e => e.type === 'movie').map(e => e.id));
+        for (const item of matched) {
+          if (item.mediaType !== 'MOVIE' || !item.watchedAt || existingIds.has(item.tmdbId)) continue;
+          log.push({ id: item.tmdbId, type: 'movie', loggedAt: item.watchedAt, hour: 12, genre: '', language: item.language });
+          existingIds.add(item.tmdbId);
+        }
+        localStorage.setItem('watch-log', JSON.stringify(log));
       } catch { /* ignore */ }
 
       setResult(json.data);

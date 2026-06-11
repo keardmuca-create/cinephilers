@@ -14,6 +14,7 @@ interface TMDBResult {
   poster_path?: string;
   popularity?: number;
   vote_count?: number;
+  original_language?: string;
 }
 
 function yearOf(r: TMDBResult, isTV: boolean): number {
@@ -102,7 +103,7 @@ export async function GET(req: NextRequest) {
     const releaseYear = (isTV ? (top.first_air_date ?? '') : (top.release_date ?? '')).slice(0, 4);
     const poster = top.poster_path ? `https://image.tmdb.org/t/p/w200${top.poster_path}` : null;
 
-    return ok({ tmdbId, mediaType, title, year: releaseYear, poster });
+    return ok({ tmdbId, mediaType, title, year: releaseYear, poster, language: top.original_language ?? '' });
   } catch {
     return err('Search failed', 502);
   }
