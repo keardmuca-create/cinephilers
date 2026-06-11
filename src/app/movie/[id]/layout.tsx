@@ -46,6 +46,7 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
     title,
     description,
     openGraph: {
+      siteName: 'Cinephilers',
       title,
       description,
       images: meta.image ? [{ ...meta.image, alt: meta.title }] : [],
