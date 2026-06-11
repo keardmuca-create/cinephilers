@@ -172,13 +172,14 @@ async function restoreFromDb() {
       const newEntries: typeof existing = [];
       for (const w of watched) {
         if (existingIds.has(w.tmdbId)) continue;
-        const watchedDate = new Date(w.watchedAt);
         let genre = '', language = '';
         try {
           const cached = localStorage.getItem(`meta-${w.tmdbId}`);
           if (cached) { const m = JSON.parse(cached); genre = m.genre ?? ''; language = m.language ?? ''; }
         } catch { /* ignore */ }
-        newEntries.push({ id: w.tmdbId, type: 'movie', genre, language, hour: watchedDate.getHours(), loggedAt: w.watchedAt });
+        // hour fixed to 12: imported/synced dates are often midnight, which would
+        // falsely count every film toward the Night Owl (12am-4am) badge
+        newEntries.push({ id: w.tmdbId, type: 'movie', genre, language, hour: 12, loggedAt: w.watchedAt });
       }
       if (newEntries.length > 0) {
         localStorage.setItem('watch-log', JSON.stringify([...existing, ...newEntries]));
