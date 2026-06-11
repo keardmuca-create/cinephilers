@@ -2,6 +2,7 @@
 "use client"
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { useRouter } from 'next/navigation';
 import { Movie } from '@/lib/types';
 import { readUserStats, computeAllBadges, ensureSignupDate, ComputedBadge } from '@/lib/badges';
 import { BadgeCard, FeaturedSeasonalBadge, TierGuide } from '@/components/badge-card';
@@ -13,8 +14,7 @@ import { Settings, Star, Film, List, MessageSquare, ChevronRight, Award, History
 import { ImportDialog } from '@/components/import-dialog';
 import { FavoritesSection } from '@/components/favorites-section';
 import { BarChart, Bar, XAxis, ResponsiveContainer, Cell, YAxis, Tooltip as ChartTooltip } from 'recharts';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { ScrollArea } from '@/components/ui/scroll-area';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Separator } from '@/components/ui/separator';
 import { Progress } from '@/components/ui/progress';
 import { toast } from '@/hooks/use-toast';
@@ -42,73 +42,6 @@ const SectionHeader = ({
   </div>
 );
 
-function WatchlistRow({ movie }: { movie: Movie }) {
-  const [userRating, setUserRating] = React.useState<number | undefined>();
-  const [watched, setWatched] = React.useState(false);
-
-  React.useEffect(() => {
-    try {
-      if (localStorage.getItem(`watched-${movie.id}`) === 'true') setWatched(true);
-      const r = localStorage.getItem(`movie-rating-${movie.id}`);
-      if (r) setUserRating(Number(r));
-    } catch { /* ignore */ }
-  }, [movie.id]);
-
-  return (
-    <Link href={`/movie/${movie.id}`} className="group flex items-center gap-4 py-3.5 border-b border-border last:border-0">
-      <div className="w-16 aspect-[2/3] rounded-lg overflow-hidden bg-muted shadow-sm shrink-0">
-        <img src={movie.poster} alt={movie.title} className="w-full h-full object-cover transition-transform group-hover:scale-105" loading="lazy" />
-      </div>
-      <div className="flex-1 min-w-0">
-        <h3 className="text-sm font-semibold font-headline line-clamp-2 group-hover:text-primary transition-colors leading-snug mb-0.5">
-          {movie.title}
-        </h3>
-        <p className="text-xs text-muted-foreground mb-1.5">{movie.year}</p>
-        <div className="flex items-center gap-2.5 flex-wrap">
-          {movie.rating > 0 && (
-            <div className="flex items-center gap-0.5">
-              <span className="text-xs text-yellow-400 font-bold">★</span>
-              <span className="text-xs font-bold text-foreground">{movie.rating.toFixed(1)}</span>
-            </div>
-          )}
-          {userRating !== undefined && (
-            <div className="flex items-center gap-0.5">
-              <span className="text-xs text-blue-400 font-bold">★</span>
-              <span className="text-xs font-bold text-blue-400">{userRating}</span>
-            </div>
-          )}
-          {watched && (
-            <div className="flex items-center gap-1 text-blue-400">
-              <Eye className="h-3.5 w-3.5" />
-              <span className="text-xs font-semibold">Watched</span>
-            </div>
-          )}
-        </div>
-      </div>
-    </Link>
-  );
-}
-
-const MovieListDialog = ({ title, movies }: { title: string; movies: Movie[] }) => (
-  <Dialog>
-    <DialogTrigger asChild>
-      <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-primary transition-colors">
-        See All <ChevronRight className="h-4 w-4 ml-1" />
-      </Button>
-    </DialogTrigger>
-    <DialogContent className="max-w-lg rounded-3xl h-[80vh] flex flex-col p-0 bg-background border-border">
-      <DialogHeader className="px-6 pt-6 pb-3 border-b border-border shrink-0">
-        <DialogTitle className="font-headline text-2xl font-bold">{title}</DialogTitle>
-      </DialogHeader>
-      <ScrollArea className="flex-1 px-6 pb-6">
-        <div className="pt-2">
-          {movies.map(movie => <WatchlistRow key={movie.id} movie={movie} />)}
-        </div>
-      </ScrollArea>
-    </DialogContent>
-  </Dialog>
-);
-
 const EmptyRow = ({ message }: { message: string }) => (
   <div className="flex items-center justify-center py-10 text-muted-foreground text-sm">
     {message}
@@ -131,7 +64,6 @@ function ListsSection() {
   const [createOpen, setCreateOpen] = useState(false);
   const [newTitle, setNewTitle] = useState('');
   const [newPrivate, setNewPrivate] = useState(false);
-  const [viewList, setViewList] = useState<UserList | null>(null);
 
   useEffect(() => {
     setLists(loadLists());
@@ -270,36 +202,6 @@ function ListsSection() {
         </DialogContent>
       </Dialog>
 
-      {/* View list dialog */}
-      <Dialog open={!!viewList} onOpenChange={v => !v && setViewList(null)}>
-        <DialogContent className="max-w-lg rounded-3xl h-[80vh] flex flex-col p-0 bg-background border-border">
-          <DialogHeader className="px-6 pt-6 pb-3 border-b border-border shrink-0">
-            <DialogTitle className="font-headline text-2xl font-bold flex items-center justify-between">
-              {viewList?.title}
-              <span className="text-xs font-normal text-muted-foreground border border-border rounded-full px-2 py-0.5">{viewList?.isPrivate ? 'Private' : 'Public'}</span>
-            </DialogTitle>
-          </DialogHeader>
-          <ScrollArea className="flex-1 px-6 pb-6">
-            {viewList?.items.length === 0 ? (
-              <p className="text-sm text-muted-foreground text-center py-10">No movies added yet</p>
-            ) : (
-              <div className="pt-2">
-                {viewList?.items.map(item => (
-                  <Link key={item.movieId} href={`/movie/${item.movieId}`} className="group flex items-center gap-4 py-3.5 border-b border-border last:border-0">
-                    <div className="w-16 aspect-[2/3] rounded-lg overflow-hidden bg-muted shadow-sm shrink-0">
-                      <img src={item.poster} alt={item.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-semibold font-headline line-clamp-2 group-hover:text-primary transition-colors">{item.title}</p>
-                      <p className="text-xs text-muted-foreground mt-0.5">{item.year}</p>
-                    </div>
-                  </Link>
-                ))}
-              </div>
-            )}
-          </ScrollArea>
-        </DialogContent>
-      </Dialog>
     </section>
   );
 }
@@ -321,84 +223,18 @@ function SkeletonCard() {
   );
 }
 
-interface FollowUser { username: string; displayName: string | null; avatarUrl: string | null }
-
-function FollowListModal({ username, type, count }: { username: string; type: 'following' | 'followers'; count: number }) {
-  const [open, setOpen] = React.useState(false);
-  const [users, setUsers] = React.useState<FollowUser[]>([]);
-  const [loading, setLoading] = React.useState(false);
-
-  const load = React.useCallback(async () => {
-    setLoading(true);
-    try {
-      const res = await fetch(`/api/users/${username}/${type}?limit=50`, { credentials: 'include' });
-      if (res.ok) {
-        const json = await res.json();
-        setUsers(json.data ?? []);
-      }
-    } finally {
-      setLoading(false);
-    }
-  }, [username, type]);
-
-  React.useEffect(() => { if (open) load(); }, [open, load]);
-
+function FollowStatLink({ username, type, count }: { username: string; type: 'following' | 'followers'; count: number }) {
   const label = type === 'following' ? 'Following' : 'Followers';
-
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        <button className="flex flex-col items-start hover:opacity-70 transition-opacity">
-          <span className="text-2xl font-bold font-headline">{count}</span>
-          <span className="text-xs text-muted-foreground uppercase tracking-widest font-bold">{label}</span>
-        </button>
-      </DialogTrigger>
-      <DialogContent className="max-w-sm rounded-3xl p-0 overflow-hidden">
-        <DialogHeader className="px-6 pt-6 pb-4 border-b border-white/5">
-          <DialogTitle className="font-headline">{label}</DialogTitle>
-        </DialogHeader>
-        <ScrollArea className="max-h-[60vh]">
-          {loading ? (
-            <div className="flex items-center justify-center py-12">
-              <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-            </div>
-          ) : users.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-12 gap-2 text-center px-6">
-              <User className="h-8 w-8 text-muted-foreground/40" />
-              <p className="text-sm text-muted-foreground">
-                {type === 'following' ? 'Not following anyone yet' : 'No followers yet'}
-              </p>
-            </div>
-          ) : (
-            <div className="divide-y divide-white/5">
-              {users.map(u => (
-                <Link
-                  key={u.username}
-                  href={`/profile/${u.username}`}
-                  onClick={() => setOpen(false)}
-                  className="flex items-center gap-3 px-6 py-4 hover:bg-white/5 transition-colors"
-                >
-                  <div className="h-10 w-10 rounded-2xl bg-primary/20 flex items-center justify-center shrink-0 overflow-hidden">
-                    {u.avatarUrl
-                      ? <img src={u.avatarUrl} alt={u.username} className="w-full h-full object-cover" />
-                      : <span className="text-primary font-bold text-sm">{(u.displayName ?? u.username).slice(0, 2).toUpperCase()}</span>
-                    }
-                  </div>
-                  <div className="min-w-0">
-                    <p className="font-bold text-sm truncate">{u.displayName ?? u.username}</p>
-                    <p className="text-xs text-muted-foreground truncate">@{u.username}</p>
-                  </div>
-                </Link>
-              ))}
-            </div>
-          )}
-        </ScrollArea>
-      </DialogContent>
-    </Dialog>
+    <Link href={`/profile/${username}/${type}`} className="flex flex-col items-start hover:opacity-70 transition-opacity">
+      <span className="text-2xl font-bold font-headline">{count}</span>
+      <span className="text-xs text-muted-foreground uppercase tracking-widest font-bold">{label}</span>
+    </Link>
   );
 }
 
 export default function ProfilePage() {
+  const router = useRouter();
   const { user: authUser, loading: authLoading, logout, refetch, updateUserLocally } = useAuth();
   const [showSettings, setShowSettings] = useState(false);
   const [settingsView, setSettingsView] = useState<SettingsView>('main');
@@ -603,13 +439,11 @@ export default function ProfilePage() {
   }, [updateUserLocally]);
 
   const [badges, setBadges] = useState<ComputedBadge[]>([]);
-  const [showBadgesDialog, setShowBadgesDialog] = useState(false);
   const [recentWatched, setRecentWatched] = useState<RecentItem[]>([]);
   const [watchedCount, setWatchedCount] = useState(0);
   const [watchlist, setWatchlist] = useState<Movie[]>([]);
   const [userReviews, setUserReviews] = useState<UserReview[]>([]);
   const [ratedItems, setRatedItems] = useState<RatedItem[]>([]);
-  const [ratingFilter, setRatingFilter] = useState<number | null>(null);
 
   function openSettings() {
     setEditForm({
@@ -1181,8 +1015,8 @@ export default function ProfilePage() {
           {authUser?.bio ?? 'Set up your profile to track movies and connect with friends.'}
         </p>
         <div className="flex gap-10 pt-4">
-          <FollowListModal username={authUser?.username ?? ''} type="following" count={authUser?.followingCount ?? 0} />
-          <FollowListModal username={authUser?.username ?? ''} type="followers" count={authUser?.followersCount ?? 0} />
+          <FollowStatLink username={authUser?.username ?? ''} type="following" count={authUser?.followingCount ?? 0} />
+          <FollowStatLink username={authUser?.username ?? ''} type="followers" count={authUser?.followersCount ?? 0} />
         </div>
       </div>
 
@@ -1298,7 +1132,7 @@ export default function ProfilePage() {
         <SectionHeader title="Rating Distribution" icon={Star} />
         <div className="h-56 w-full bg-muted/40 rounded-3xl p-6 border border-border">
           <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={ratingData} onClick={d => { if (d?.activePayload?.[0]) { const r = parseInt(d.activePayload[0].payload.rating); if (ratedItems.filter(i => i.userRating === r).length > 0) setRatingFilter(r); } }}>
+            <BarChart data={ratingData} onClick={d => { if (d?.activePayload?.[0]) { const r = parseInt(d.activePayload[0].payload.rating); if (ratedItems.filter(i => i.userRating === r).length > 0) router.push(`/ratings?rating=${r}`); } }}>
               <XAxis dataKey="rating" axisLine={false} tickLine={false} tick={{ fill: '#888', fontSize: 11, fontWeight: 'bold' }} />
               <YAxis hide domain={[0, yDomainMax]} />
               <ChartTooltip cursor={{ fill: 'rgba(0,0,0,0.05)' }} contentStyle={{ backgroundColor: '#fff', border: '1px solid #eee', borderRadius: '12px', color: '#111' }} />
@@ -1317,47 +1151,6 @@ export default function ProfilePage() {
           <p className="text-center text-xs text-muted-foreground">Tap a bar to see titles with that rating</p>
         )}
       </section>
-
-      {/* Rating filter dialog */}
-      <Dialog open={ratingFilter !== null} onOpenChange={v => !v && setRatingFilter(null)}>
-        <DialogContent className="max-w-lg rounded-3xl h-[80vh] flex flex-col p-0 bg-background border-border">
-          <DialogHeader className="px-6 pt-6 pb-3 border-b border-border shrink-0">
-            <DialogTitle className="font-headline text-2xl font-bold flex items-center gap-2">
-              <span className="text-blue-400">★</span> Rated {ratingFilter}/10
-              <span className="text-sm font-normal text-muted-foreground ml-1">
-                ({ratedItems.filter(i => i.userRating === ratingFilter).length} titles)
-              </span>
-            </DialogTitle>
-          </DialogHeader>
-          <ScrollArea className="flex-1 px-6 pb-6">
-            <div className="pt-2">
-              {ratedItems.filter(i => i.userRating === ratingFilter).map(item => (
-                <Link key={item.id} href={`/movie/${item.id}`} className="group flex items-center gap-4 py-3.5 border-b border-border last:border-0">
-                  <div className="w-16 aspect-[2/3] rounded-lg overflow-hidden bg-muted shadow-sm shrink-0">
-                    <img src={item.poster} alt={item.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-semibold font-headline line-clamp-2 group-hover:text-primary transition-colors leading-snug mb-0.5">{item.title}</p>
-                    <p className="text-xs text-muted-foreground mb-1.5">{item.year}</p>
-                    <div className="flex items-center gap-2.5">
-                      {item.tmdbRating !== undefined && (
-                        <div className="flex items-center gap-0.5">
-                          <span className="text-xs text-yellow-400 font-bold">★</span>
-                          <span className="text-xs font-bold text-foreground">{item.tmdbRating.toFixed(1)}</span>
-                        </div>
-                      )}
-                      <div className="flex items-center gap-0.5">
-                        <span className="text-xs text-blue-400 font-bold">★</span>
-                        <span className="text-xs font-bold text-blue-400">{item.userRating}</span>
-                      </div>
-                    </div>
-                  </div>
-                </Link>
-              ))}
-            </div>
-          </ScrollArea>
-        </DialogContent>
-      </Dialog>
 
       {/* Watchlist */}
       <section>
@@ -1388,41 +1181,12 @@ export default function ProfilePage() {
           title="Reviews"
           icon={MessageSquare}
           seeAllContent={userReviews.length > 0 ? (
-            <Dialog>
-              <DialogTrigger asChild>
-                <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-primary transition-colors">
-                  See All <ChevronRight className="h-4 w-4 ml-1" />
-                </Button>
-              </DialogTrigger>
-              <DialogContent className="max-w-lg rounded-3xl h-[80vh] flex flex-col p-0 bg-background border-border">
-                <DialogHeader className="px-6 pt-6 pb-3 border-b border-border shrink-0">
-                  <DialogTitle className="font-headline text-2xl font-bold">Your Reviews</DialogTitle>
-                </DialogHeader>
-                <ScrollArea className="flex-1 px-6 pb-6">
-                  <div className="space-y-3 pt-3">
-                    {userReviews.map(r => (
-                      <Link key={r.movieId} href={`/movie/${r.movieId}`} className="group flex gap-4 p-4 rounded-2xl border border-border hover:bg-muted/40 transition-colors">
-                        <div className="w-14 shrink-0 aspect-[2/3] rounded-lg overflow-hidden bg-muted">
-                          <img src={r.moviePoster} alt={r.movieTitle} className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
-                        </div>
-                        <div className="flex-1 min-w-0 space-y-1">
-                          <div className="flex items-start justify-between gap-2">
-                            <p className="text-sm font-bold font-headline line-clamp-1 group-hover:text-primary transition-colors">{r.movieTitle}</p>
-                            {r.rating > 0 && (
-                              <div className="flex items-center gap-0.5 shrink-0 text-yellow-500 text-xs font-black">
-                                <Star className="h-3 w-3 fill-current" /> {r.rating}
-                              </div>
-                            )}
-                          </div>
-                          <p className="text-[10px] text-muted-foreground">{r.movieYear} · {r.date}</p>
-                          <p className="text-xs text-foreground/80 italic line-clamp-2 leading-relaxed">&ldquo;{r.content}&rdquo;</p>
-                        </div>
-                      </Link>
-                    ))}
-                  </div>
-                </ScrollArea>
-              </DialogContent>
-            </Dialog>
+            <Link
+              href="/reviews"
+              className="text-xs text-primary border border-primary/30 rounded-full px-3 py-1 hover:bg-primary/10 transition-colors font-semibold flex items-center gap-1"
+            >
+              See All <ChevronRight className="h-3 w-3" />
+            </Link>
           ) : undefined}
         />
         {userReviews.length > 0 ? (
@@ -1458,12 +1222,12 @@ export default function ProfilePage() {
           title="Badges & Achievements"
           icon={Award}
           seeAllContent={badges.length > 0 ? (
-            <button
-              onClick={() => setShowBadgesDialog(true)}
+            <Link
+              href="/badges"
               className="text-xs text-primary border border-primary/30 rounded-full px-3 py-1 hover:bg-primary/10 transition-colors font-semibold flex items-center gap-1"
             >
               See All <ChevronRight className="h-3 w-3" />
-            </button>
+            </Link>
           ) : undefined}
         />
 
@@ -1486,12 +1250,12 @@ export default function ProfilePage() {
             <div className="flex items-center justify-between">
               <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground">All Time</p>
               {otherBadges.length > 3 && (
-                <button
-                  onClick={() => setShowBadgesDialog(true)}
+                <Link
+                  href="/badges"
                   className="text-xs text-primary border border-primary/30 rounded-full px-3 py-1 hover:bg-primary/10 transition-colors font-semibold flex items-center gap-1"
                 >
                   See All <ChevronRight className="h-3 w-3" />
-                </button>
+                </Link>
               )}
             </div>
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
@@ -1503,40 +1267,6 @@ export default function ProfilePage() {
         )}
       </section>
 
-      {/* Badges See All dialog */}
-      <Dialog open={showBadgesDialog} onOpenChange={setShowBadgesDialog}>
-        <DialogContent className="max-w-lg rounded-3xl h-[80vh] flex flex-col p-0 bg-background border-border">
-          <DialogHeader className="px-6 pt-6 pb-3 border-b border-border shrink-0">
-            <DialogTitle className="font-headline text-2xl font-bold">Badges & Achievements</DialogTitle>
-          </DialogHeader>
-          <ScrollArea className="flex-1 px-6 pb-6">
-            <div className="pt-4 space-y-6">
-              {/* All-time badges */}
-              {badges.filter(b => !b.isSeasonal).length > 0 && (
-                <div className="space-y-3">
-                  <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground">All Time</p>
-                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                    {badges.filter(b => !b.isSeasonal).map(badge => (
-                      <BadgeCard key={badge.id} badge={badge} />
-                    ))}
-                  </div>
-                </div>
-              )}
-              {/* Seasonal badges */}
-              {badges.filter(b => b.isSeasonal).length > 0 && (
-                <div className="space-y-3">
-                  <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Seasonal</p>
-                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                    {badges.filter(b => b.isSeasonal).map(badge => (
-                      <BadgeCard key={badge.id} badge={badge} />
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-          </ScrollArea>
-        </DialogContent>
-      </Dialog>
     </main>
   );
 }

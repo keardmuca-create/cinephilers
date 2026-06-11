@@ -79,6 +79,12 @@ export default function RatingsPage() {
   const [yearTo, setYearTo]     = useState(() => (typeof sessionStorage !== 'undefined' ? sessionStorage.getItem('ratings-year-to') : null) || '');
   const [pendingYearFrom, setPendingYearFrom] = useState('');
   const [pendingYearTo, setPendingYearTo]     = useState('');
+  const [ratingFilter, setRatingFilter] = useState<number | null>(() => {
+    if (typeof window === 'undefined') return null;
+    const v = new URLSearchParams(window.location.search).get('rating');
+    const n = v ? parseInt(v, 10) : NaN;
+    return Number.isFinite(n) && n >= 1 && n <= 10 ? n : null;
+  });
   const fetchingRef = useRef(new Set<string>());
 
   useEffect(() => {
@@ -136,6 +142,7 @@ export default function RatingsPage() {
 
   const sortedFiltered = useMemo(() => {
     let result = items.filter(i => i.title);
+    if (ratingFilter !== null) result = result.filter(i => i.userRating === ratingFilter);
     if (search.trim()) {
       const q = search.trim().toLowerCase();
       result = result.filter(i => i.title.toLowerCase().includes(q));
@@ -151,7 +158,7 @@ export default function RatingsPage() {
     else if (sort === 'release-desc')  result.sort((a, b) => parseInt(b.year, 10) - parseInt(a.year, 10));
     else if (sort === 'release-asc')   result.sort((a, b) => parseInt(a.year, 10) - parseInt(b.year, 10));
     return result;
-  }, [items, sort, search, yearFrom, yearTo]);
+  }, [items, sort, search, yearFrom, yearTo, ratingFilter]);
 
   return (
     <main className="pb-32">
@@ -161,6 +168,14 @@ export default function RatingsPage() {
           <ChevronLeft className="h-5 w-5" />
         </button>
         <h1 className="text-lg font-headline font-bold truncate flex-1">Ratings</h1>
+        {ratingFilter !== null && (
+          <button
+            onClick={() => setRatingFilter(null)}
+            className="flex items-center gap-1.5 text-xs font-bold text-blue-400 bg-blue-400/10 border border-blue-400/30 rounded-full px-3 py-1.5 hover:bg-blue-400/20 transition-colors"
+          >
+            ★ Rated {ratingFilter}/10 <X className="h-3 w-3" />
+          </button>
+        )}
       </div>
 
       {/* Search */}

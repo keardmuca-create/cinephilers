@@ -9,8 +9,6 @@ import { Button } from '@/components/ui/button';
 import { useAuth } from '@/contexts/auth-context';
 import { relativeTime } from '@/lib/activity';
 import { fetchWithAuth } from '@/lib/fetch-with-auth';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { ScrollArea } from '@/components/ui/scroll-area';
 
 interface ProfileUser {
   id: string;
@@ -74,8 +72,6 @@ interface RecentItem {
   meta?: { title: string; year: string; poster: string };
 }
 
-interface FollowUser { username: string; displayName: string | null; avatarUrl: string | null }
-
 interface PublicList {
   id: string;
   name: string;
@@ -110,57 +106,12 @@ function Avatar({ user, size = 80 }: { user: { username: string; displayName?: s
   );
 }
 
-function FollowListModal({ username, type, count }: { username: string; type: 'following' | 'followers'; count: number }) {
-  const [open, setOpen] = useState(false);
-  const [users, setUsers] = useState<FollowUser[]>([]);
-  const [loading, setLoading] = useState(false);
-
-  const load = useCallback(async () => {
-    setLoading(true);
-    try {
-      const res = await fetch(`/api/users/${username}/${type}?limit=50`);
-      if (res.ok) { const json = await res.json(); setUsers(json.data ?? []); }
-    } finally { setLoading(false); }
-  }, [username, type]);
-
-  useEffect(() => { if (open) load(); }, [open, load]);
-
+function FollowStatLink({ username, type, count }: { username: string; type: 'following' | 'followers'; count: number }) {
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <button onClick={() => setOpen(true)} className="flex flex-col items-center hover:opacity-70 transition-opacity">
-        <span className="text-xl font-bold font-headline">{count}</span>
-        <span className="text-xs text-muted-foreground uppercase tracking-widest font-bold">{type === 'following' ? 'Following' : 'Followers'}</span>
-      </button>
-      <DialogContent className="max-w-sm rounded-3xl p-0 overflow-hidden">
-        <DialogHeader className="px-6 pt-6 pb-4 border-b border-white/5">
-          <DialogTitle className="font-headline">{type === 'following' ? 'Following' : 'Followers'}</DialogTitle>
-        </DialogHeader>
-        <ScrollArea className="max-h-[60vh]">
-          {loading ? (
-            <div className="flex items-center justify-center py-12"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>
-          ) : users.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-12 gap-2 px-6 text-center">
-              <User className="h-8 w-8 text-muted-foreground/40" />
-              <p className="text-sm text-muted-foreground">{type === 'following' ? 'Not following anyone yet' : 'No followers yet'}</p>
-            </div>
-          ) : (
-            <div className="divide-y divide-white/5">
-              {users.map(u => (
-                <Link key={u.username} href={`/profile/${u.username}`} onClick={() => setOpen(false)} className="flex items-center gap-3 px-6 py-4 hover:bg-white/5 transition-colors">
-                  <div className="h-10 w-10 rounded-2xl bg-primary/20 flex items-center justify-center shrink-0 overflow-hidden">
-                    {u.avatarUrl ? <img src={u.avatarUrl} alt={u.username} className="w-full h-full object-cover" /> : <span className="text-primary font-bold text-sm">{(u.displayName ?? u.username).slice(0, 2).toUpperCase()}</span>}
-                  </div>
-                  <div className="min-w-0">
-                    <p className="font-bold text-sm truncate">{u.displayName ?? u.username}</p>
-                    <p className="text-xs text-muted-foreground truncate">@{u.username}</p>
-                  </div>
-                </Link>
-              ))}
-            </div>
-          )}
-        </ScrollArea>
-      </DialogContent>
-    </Dialog>
+    <Link href={`/profile/${username}/${type}`} className="flex flex-col items-center hover:opacity-70 transition-opacity">
+      <span className="text-xl font-bold font-headline">{count}</span>
+      <span className="text-xs text-muted-foreground uppercase tracking-widest font-bold">{type === 'following' ? 'Following' : 'Followers'}</span>
+    </Link>
   );
 }
 
@@ -456,8 +407,8 @@ export default function PublicProfilePage() {
             <span className="text-xl font-bold font-headline">{profile.ratingsCount}</span>
             <span className="text-xs text-muted-foreground uppercase tracking-widest font-bold">Ratings</span>
           </div>
-          <FollowListModal username={profile.username} type="following" count={profile.followingCount} />
-          <FollowListModal username={profile.username} type="followers" count={profile.followersCount} />
+          <FollowStatLink username={profile.username} type="following" count={profile.followingCount} />
+          <FollowStatLink username={profile.username} type="followers" count={profile.followersCount} />
         </div>
       )}
 

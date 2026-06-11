@@ -3,11 +3,9 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
 import Link from 'next/link';
-import { Search, X, ChevronRight, Film, Loader2, Eye, User } from 'lucide-react';
+import { Search, X, ChevronRight, Film, Loader2, User } from 'lucide-react';
 import { Movie } from '@/lib/mock-data';
 import { MovieCard } from '@/components/movie-card';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { ScrollArea } from '@/components/ui/scroll-area';
 import { useSearch, usePopularMovies, PersonResult } from '@/hooks/use-movies';
 
 interface RecentItem {
@@ -100,87 +98,22 @@ function RecentPersonRow({ item, onRemove }: { item: RecentItem; onRemove?: () =
   );
 }
 
-// ─── List row inside the See All dialog ──────────────────────────────────────
-
-function DialogMovieRow({ movie }: { movie: Movie }) {
-  const [userRating, setUserRating] = useState<number | undefined>();
-  const [watched, setWatched] = useState(false);
-
-  useEffect(() => {
-    try {
-      if (localStorage.getItem(`watched-${movie.id}`) === 'true') setWatched(true);
-      const r = localStorage.getItem(`movie-rating-${movie.id}`);
-      if (r) setUserRating(Number(r));
-    } catch { /* ignore */ }
-  }, [movie.id]);
-
-  return (
-    <Link href={`/movie/${movie.id}`} className="group flex items-center gap-4 py-3.5 border-b border-border last:border-0">
-      <div className="w-16 aspect-[2/3] rounded-lg overflow-hidden bg-muted shadow-sm shrink-0">
-        <img src={movie.poster} alt={movie.title} className="w-full h-full object-cover transition-transform group-hover:scale-105" loading="lazy" />
-      </div>
-      <div className="flex-1 min-w-0">
-        <h3 className="text-sm font-semibold font-headline line-clamp-2 group-hover:text-primary transition-colors leading-snug mb-0.5">
-          {movie.title}
-        </h3>
-        <p className="text-xs text-muted-foreground mb-1.5">{movie.year}</p>
-        <div className="flex items-center gap-2.5 flex-wrap">
-          <div className="flex items-center gap-0.5">
-            <span className="text-xs text-yellow-400 font-bold">★</span>
-            <span className="text-xs font-bold text-foreground">{movie.rating.toFixed(1)}</span>
-          </div>
-          {userRating !== undefined && (
-            <div className="flex items-center gap-0.5">
-              <span className="text-xs text-blue-400 font-bold">★</span>
-              <span className="text-xs font-bold text-blue-400">{userRating}</span>
-            </div>
-          )}
-          {watched && (
-            <div className="flex items-center gap-1 text-blue-400">
-              <Eye className="h-3.5 w-3.5" />
-              <span className="text-xs font-semibold">Watched</span>
-            </div>
-          )}
-        </div>
-      </div>
-    </Link>
-  );
-}
-
 // ─── Section header used for Top Movies / Top Shows / Coming Soon ─────────────
 
-const SectionHeader = ({ title, allItems, seeAllHref }: { title: string; allItems?: Movie[]; seeAllHref?: string }) => (
+const SectionHeader = ({ title, seeAllHref }: { title: string; seeAllHref?: string }) => (
   <div className="flex items-center justify-between px-6">
     <div className="flex items-center gap-3">
       <div className="w-1 h-5 bg-primary rounded-full" />
       <h3 className="text-xl font-headline font-bold">{title}</h3>
     </div>
-    {seeAllHref ? (
+    {seeAllHref && (
       <Link
         href={seeAllHref}
         className="text-xs text-primary border border-primary/30 rounded-full px-3 py-1 hover:bg-primary/10 transition-colors font-semibold flex items-center gap-1"
       >
         See All <ChevronRight className="h-3 w-3" />
       </Link>
-    ) : allItems ? (
-      <Dialog>
-        <DialogTrigger asChild>
-          <button className="text-xs text-primary border border-primary/30 rounded-full px-3 py-1 hover:bg-primary/10 transition-colors font-semibold flex items-center gap-1">
-            See All <ChevronRight className="h-3 w-3" />
-          </button>
-        </DialogTrigger>
-        <DialogContent className="max-w-lg rounded-3xl h-[80vh] flex flex-col p-0 bg-background border-border">
-          <DialogHeader className="px-6 pt-6 pb-3 border-b border-border shrink-0">
-            <DialogTitle className="font-headline text-2xl font-bold">{title}</DialogTitle>
-          </DialogHeader>
-          <ScrollArea className="flex-1 px-6 pb-6">
-            <div className="pt-2">
-              {allItems.map(movie => <DialogMovieRow key={movie.id} movie={movie} />)}
-            </div>
-          </ScrollArea>
-        </DialogContent>
-      </Dialog>
-    ) : null}
+    )}
   </div>
 );
 
@@ -333,7 +266,7 @@ export default function SearchPage() {
             )}
           </div>
           <div className="space-y-4">
-            <SectionHeader title="Coming Soon" allItems={comingSoonList} />
+            <SectionHeader title="Coming Soon" seeAllHref={comingSoonTab === 'show' ? '/see-all/coming-soon-shows' : '/see-all/coming-soon'} />
             {/* Full-width Movie / Show toggle */}
             <div className="flex mx-6 rounded-2xl overflow-hidden border border-border">
               <button
