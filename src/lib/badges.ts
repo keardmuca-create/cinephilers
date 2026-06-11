@@ -109,14 +109,6 @@ export interface ComputedBadge {
   seasonEarnedYears?: number[];
 }
 
-export interface ComingSoonBadge {
-  id: string;
-  name: string;
-  description: string;
-  activatesAt: Date;
-  activatesLabel: string;
-}
-
 // ─── Badge definitions ─────────────────────────────────────────────────────────
 
 const BADGE_DEFS: BadgeDefinition[] = [
@@ -610,18 +602,3 @@ export function computeAllBadges(stats: UserStats): ComputedBadge[] {
   });
 }
 
-// Returns inactive seasonal badges for the Coming Soon section
-export function getComingSoonBadges(): ComingSoonBadge[] {
-  return BADGE_DEFS
-    .filter(d => d.category === 'seasonal' && d.seasonal && !currentSeasonWindow(d.seasonal))
-    .map(d => {
-      const next = nextSeasonStart(d.seasonal!);
-      return {
-        id: d.id,
-        name: d.name,
-        description: d.description,
-        activatesAt: next,
-        activatesLabel: next.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
-      };
-    });
-}

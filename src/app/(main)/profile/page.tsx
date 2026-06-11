@@ -3,8 +3,8 @@
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Movie } from '@/lib/types';
-import { readUserStats, computeAllBadges, getComingSoonBadges, ensureSignupDate, ComputedBadge, ComingSoonBadge } from '@/lib/badges';
-import { BadgeCard, FeaturedSeasonalBadge, ComingSoonCard, TierGuide } from '@/components/badge-card';
+import { readUserStats, computeAllBadges, ensureSignupDate, ComputedBadge } from '@/lib/badges';
+import { BadgeCard, FeaturedSeasonalBadge, TierGuide } from '@/components/badge-card';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { MovieCard } from '@/components/movie-card';
@@ -603,7 +603,6 @@ export default function ProfilePage() {
   }, [updateUserLocally]);
 
   const [badges, setBadges] = useState<ComputedBadge[]>([]);
-  const [comingSoon, setComingSoon] = useState<ComingSoonBadge[]>([]);
   const [showBadgesDialog, setShowBadgesDialog] = useState(false);
   const [recentWatched, setRecentWatched] = useState<RecentItem[]>([]);
   const [watchedCount, setWatchedCount] = useState(0);
@@ -705,7 +704,6 @@ export default function ProfilePage() {
   const loadFromStorage = useCallback(() => {
     ensureSignupDate();
     setBadges(computeAllBadges(readUserStats()));
-    setComingSoon(getComingSoonBadges());
 
     // Count total watched titles
     try {
@@ -899,7 +897,6 @@ export default function ProfilePage() {
   const recomputeStats = useCallback(() => {
     ensureSignupDate();
     setBadges(computeAllBadges(readUserStats()));
-    setComingSoon(getComingSoonBadges());
   }, []);
 
   // Refresh follower/following counts from DB on mount
@@ -1533,15 +1530,6 @@ export default function ProfilePage() {
                     {badges.filter(b => b.isSeasonal).map(badge => (
                       <BadgeCard key={badge.id} badge={badge} />
                     ))}
-                  </div>
-                </div>
-              )}
-              {/* Coming Soon */}
-              {comingSoon.length > 0 && (
-                <div className="space-y-3">
-                  <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Coming Soon</p>
-                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                    {comingSoon.map(b => <ComingSoonCard key={b.id} badge={b} />)}
                   </div>
                 </div>
               )}

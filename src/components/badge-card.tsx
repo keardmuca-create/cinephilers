@@ -4,7 +4,7 @@
 import React, { useEffect, useState } from 'react';
 import { Check, Lock } from 'lucide-react';
 import {
-  ComputedBadge, ComingSoonBadge,
+  ComputedBadge,
   TIER_COLORS, TIER_LABELS, TIER_ORDER, EARNED_TIERS,
   BadgeTier, EarnedTier, TierThresholds, TierHistory,
 } from '@/lib/badges';
@@ -483,34 +483,6 @@ export function FeaturedSeasonalBadge({ badge }: FeaturedSeasonalBadgeProps) {
 
       <BadgeDetailModal badge={badge} open={modalOpen} onClose={() => setModalOpen(false)} />
     </>
-  );
-}
-
-// ─── Coming soon card ──────────────────────────────────────────────────────────
-
-interface ComingSoonCardProps {
-  badge: ComingSoonBadge;
-}
-
-export function ComingSoonCard({ badge }: ComingSoonCardProps) {
-  const color = TIER_COLORS.locked;
-  return (
-    <div className="flex flex-col gap-3 rounded-2xl p-4 bg-white/[0.03] border border-white/[0.06]">
-      <div className="flex items-start justify-between gap-2">
-        <MedalIcon color={color} size={30} />
-        <span
-          className="text-[9px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded-full shrink-0 text-muted-foreground"
-          style={{ backgroundColor: `${color}18`, border: `1px solid ${color}33` }}
-        >
-          Coming Soon
-        </span>
-      </div>
-      <div className="space-y-1">
-        <p className="text-sm font-bold leading-tight text-foreground">{badge.name}</p>
-        <p className="text-[11px] leading-snug text-muted-foreground/70 line-clamp-2">{badge.description}</p>
-      </div>
-      <p className="text-[10px] font-bold text-muted-foreground/60">Active {badge.activatesLabel}</p>
-    </div>
   );
 }
 
