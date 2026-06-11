@@ -186,12 +186,15 @@ async function restoreFromDb() {
       }
     } catch { /* ignore */ }
 
-    // Always sync signup-date from DB so it's never wrong on new devices
+    // Always sync signup-date and following-count from DB so badges work on every device
     try {
       if (meResEarly.ok) {
         const meData = await meResEarly.json();
         if (meData.data?.createdAt) {
           localStorage.setItem('signup-date', meData.data.createdAt);
+        }
+        if (typeof meData.data?.followingCount === 'number') {
+          localStorage.setItem('following-count', String(meData.data.followingCount));
         }
       }
     } catch { /* ignore */ }
@@ -323,6 +326,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const fresh = data.data as AuthUser;
         setUser(fresh);
         saveUserToStorage(fresh);
+        if (typeof fresh.followingCount === 'number') {
+          try { localStorage.setItem('following-count', String(fresh.followingCount)); } catch { /* ignore */ }
+        }
         // Restore user data from DB into localStorage
         restoreFromDb();
       } else {
