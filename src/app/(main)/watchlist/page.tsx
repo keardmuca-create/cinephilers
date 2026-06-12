@@ -53,6 +53,7 @@ function ItemCard({ item }: { item: WatchlistItem }) {
 export default function WatchlistPage() {
   const router = useRouter();
   const [items, setItems]           = useState<WatchlistItem[]>([]);
+  const [fetchingMeta, setFetchingMeta] = useState(false);
   const [sort, setSort]             = useState<SortOption>(() => (typeof sessionStorage !== 'undefined' ? sessionStorage.getItem('watchlist-sort') as SortOption : null) || 'title-asc');
   const [search, setSearch]         = useState('');
   const [refineOpen, setRefineOpen] = useState(false);
@@ -97,27 +98,46 @@ export default function WatchlistPage() {
       } catch { /* ignore */ }
       if (!cancelled) setItems(loaded);
 
-      if (missing.length === 0) return;
-      const fetched: WatchlistItem[] = [];
-      for (const id of missing) {
-        try {
-          const res = await fetch(`/api/movies/${id}`);
-          if (!res.ok) continue;
-          const m = await res.json();
-          if (!m?.title) continue;
-          const item: WatchlistItem = { id, title: m.title, poster: m.poster ?? '', year: m.year ?? '' };
-          fetched.push(item);
+      if (missing.length === 0) {
+        if (!cancelled) setFetchingMeta(false);
+        return;
+      }
+      if (!cancelled) setFetchingMeta(true);
+      // Fetch metadata in small parallel batches and render as results arrive,
+      // so a large synced watchlist doesn't look empty while loading
+      const CONCURRENCY = 5;
+      for (let i = 0; i < missing.length; i += CONCURRENCY) {
+        if (cancelled) return;
+        const batch = missing.slice(i, i + CONCURRENCY);
+        const results = await Promise.all(batch.map(async (id): Promise<WatchlistItem | null> => {
           try {
-            localStorage.setItem(`watchlist-${id}`, JSON.stringify({ id, title: item.title, poster: item.poster, year: item.year, type: m.type ?? 'movie' }));
-          } catch { /* ignore */ }
-        } catch { /* ignore */ }
+            const res = await fetch(`/api/meta/${id}`);
+            if (!res.ok) return null;
+            const m = await res.json();
+            if (!m?.title) return null;
+            const item: WatchlistItem = {
+              id,
+              title: m.title,
+              poster: m.poster ?? '',
+              year: m.year ?? '',
+              tmdbRating: typeof m.tmdbRating === 'number' ? m.tmdbRating : undefined,
+            };
+            try {
+              localStorage.setItem(`watchlist-${id}`, JSON.stringify({ id, title: item.title, poster: item.poster, year: item.year, type: m.type ?? 'movie' }));
+              localStorage.setItem(`meta-${id}`, JSON.stringify(m));
+            } catch { /* ignore */ }
+            return item;
+          } catch { return null; }
+        }));
+        const fetched = results.filter((x): x is WatchlistItem => x !== null);
+        if (!cancelled && fetched.length > 0) {
+          setItems(prev => {
+            const seen = new Set(prev.map(p => p.id));
+            return [...prev, ...fetched.filter(f => !seen.has(f.id))];
+          });
+        }
       }
-      if (!cancelled && fetched.length > 0) {
-        setItems(prev => {
-          const seen = new Set(prev.map(p => p.id));
-          return [...prev, ...fetched.filter(f => !seen.has(f.id))];
-        });
-      }
+      if (!cancelled) setFetchingMeta(false);
     };
 
     load();
@@ -184,7 +204,12 @@ export default function WatchlistPage() {
       </div>
 
       {/* List */}
-      {items.length === 0 ? (
+      {items.length === 0 && fetchingMeta ? (
+        <div className="flex flex-col items-center justify-center py-20 gap-3 text-center px-6">
+          <div className="h-8 w-8 rounded-full border-2 border-primary border-t-transparent animate-spin" />
+          <p className="text-muted-foreground text-sm">Loading your watchlist…</p>
+        </div>
+      ) : items.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-20 gap-3 text-center px-6">
           <Bookmark className="h-12 w-12 text-muted-foreground/20" />
           <p className="text-muted-foreground text-sm">Save movies to watch later</p>
