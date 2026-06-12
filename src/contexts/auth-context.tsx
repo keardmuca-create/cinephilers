@@ -320,7 +320,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const refetch = useCallback(async () => {
     try {
-      const res = await fetch('/api/users/me', { credentials: 'include' });
+      let res = await fetch('/api/users/me', { credentials: 'include' });
+      if (res.status === 401) {
+        // Access token expired (e.g. app reopened after 15+ min). Without this retry,
+        // the user looks logged in (cached) but restoreFromDb never runs — no data syncs.
+        const refreshRes = await fetch('/api/auth/refresh', { method: 'POST', credentials: 'include' }).catch(() => null);
+        if (refreshRes?.ok) {
+          res = await fetch('/api/users/me', { credentials: 'include' });
+        }
+      }
       if (res.ok) {
         const data = await res.json();
         const fresh = data.data as AuthUser;
