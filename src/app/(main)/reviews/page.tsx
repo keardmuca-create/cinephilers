@@ -22,18 +22,24 @@ export default function ReviewsPage() {
   const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
-    try {
-      const found: UserReview[] = [];
-      for (let i = 0; i < localStorage.length; i++) {
-        const k = localStorage.key(i)!;
-        if (!k.startsWith('review-')) continue;
-        const raw = localStorage.getItem(k);
-        if (!raw) continue;
-        try { found.push(JSON.parse(raw)); } catch { /* ignore */ }
-      }
-      setReviews(found.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()));
-    } catch { /* ignore */ }
-    setLoaded(true);
+    const load = () => {
+      try {
+        const found: UserReview[] = [];
+        for (let i = 0; i < localStorage.length; i++) {
+          const k = localStorage.key(i)!;
+          if (!k.startsWith('review-')) continue;
+          const raw = localStorage.getItem(k);
+          if (!raw) continue;
+          try { found.push(JSON.parse(raw)); } catch { /* ignore */ }
+        }
+        setReviews(found.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()));
+      } catch { /* ignore */ }
+      setLoaded(true);
+    };
+    load();
+    // Re-load once the login sync finishes writing DB reviews into localStorage
+    window.addEventListener('cinephilers-db-restored', load);
+    return () => window.removeEventListener('cinephilers-db-restored', load);
   }, []);
 
   return (

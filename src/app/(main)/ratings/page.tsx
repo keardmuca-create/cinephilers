@@ -138,6 +138,10 @@ export default function RatingsPage() {
       setLoading(false);
     };
     load();
+    // Re-load once the login sync finishes writing DB ratings into localStorage
+    const handler = () => { load(); };
+    window.addEventListener('cinephilers-db-restored', handler);
+    return () => window.removeEventListener('cinephilers-db-restored', handler);
   }, []);
 
   const sortedFiltered = useMemo(() => {
@@ -231,7 +235,7 @@ export default function RatingsPage() {
 
       {/* Refine modal */}
       {refineOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-6">
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-6">
           <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setRefineOpen(false)} />
           <div className="relative bg-white rounded-3xl w-full max-w-sm max-h-[75vh] flex flex-col overflow-hidden shadow-2xl border border-gray-200">
             <div className="flex items-center justify-between px-6 pt-5 pb-4 border-b border-gray-100 shrink-0">

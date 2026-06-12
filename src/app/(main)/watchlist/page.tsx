@@ -63,40 +63,41 @@ export default function WatchlistPage() {
   const [pendingYearTo, setPendingYearTo]     = useState('');
 
   useEffect(() => {
-    const loaded: WatchlistItem[] = [];
-    const missing: string[] = [];
-    try {
-      for (let i = 0; i < localStorage.length; i++) {
-        const k = localStorage.key(i)!;
-        if (!k.startsWith('watchlist-')) continue;
-        const raw = localStorage.getItem(k);
-        if (!raw) continue;
-        let meta: Record<string, unknown>;
-        try { meta = JSON.parse(raw); } catch { continue; }
-        const id = k.slice('watchlist-'.length);
-        if (!meta.title) {
-          // Synced from the DB without metadata (e.g. after login on a new device) —
-          // try the cached meta entry, otherwise fetch it below
-          try {
-            const cached = localStorage.getItem(`meta-${id}`);
-            if (cached) meta = { ...meta, ...JSON.parse(cached) };
-          } catch { /* ignore */ }
-        }
-        if (!meta.title) { missing.push(id); continue; }
-        loaded.push({
-          id,
-          title: meta.title as string,
-          poster: (meta.poster as string) ?? '',
-          year:   (meta.year as string) ?? '',
-          tmdbRating: typeof meta.tmdbRating === 'number' ? meta.tmdbRating : undefined,
-        });
-      }
-    } catch { /* ignore */ }
-    setItems(loaded);
-
-    if (missing.length === 0) return;
     let cancelled = false;
-    (async () => {
+
+    const load = async () => {
+      const loaded: WatchlistItem[] = [];
+      const missing: string[] = [];
+      try {
+        for (let i = 0; i < localStorage.length; i++) {
+          const k = localStorage.key(i)!;
+          if (!k.startsWith('watchlist-')) continue;
+          const raw = localStorage.getItem(k);
+          if (!raw) continue;
+          let meta: Record<string, unknown>;
+          try { meta = JSON.parse(raw); } catch { continue; }
+          const id = k.slice('watchlist-'.length);
+          if (!meta.title) {
+            // Synced from the DB without metadata (e.g. after login on a new device) —
+            // try the cached meta entry, otherwise fetch it below
+            try {
+              const cached = localStorage.getItem(`meta-${id}`);
+              if (cached) meta = { ...meta, ...JSON.parse(cached) };
+            } catch { /* ignore */ }
+          }
+          if (!meta.title) { missing.push(id); continue; }
+          loaded.push({
+            id,
+            title: meta.title as string,
+            poster: (meta.poster as string) ?? '',
+            year:   (meta.year as string) ?? '',
+            tmdbRating: typeof meta.tmdbRating === 'number' ? meta.tmdbRating : undefined,
+          });
+        }
+      } catch { /* ignore */ }
+      if (!cancelled) setItems(loaded);
+
+      if (missing.length === 0) return;
       const fetched: WatchlistItem[] = [];
       for (const id of missing) {
         try {
@@ -111,9 +112,22 @@ export default function WatchlistPage() {
           } catch { /* ignore */ }
         } catch { /* ignore */ }
       }
-      if (!cancelled && fetched.length > 0) setItems(prev => [...prev, ...fetched]);
-    })();
-    return () => { cancelled = true; };
+      if (!cancelled && fetched.length > 0) {
+        setItems(prev => {
+          const seen = new Set(prev.map(p => p.id));
+          return [...prev, ...fetched.filter(f => !seen.has(f.id))];
+        });
+      }
+    };
+
+    load();
+    // Re-load once the login sync finishes writing DB items into localStorage
+    const handler = () => { load(); };
+    window.addEventListener('cinephilers-db-restored', handler);
+    return () => {
+      cancelled = true;
+      window.removeEventListener('cinephilers-db-restored', handler);
+    };
   }, []);
 
   const sortedFiltered = useMemo(() => {
@@ -183,7 +197,7 @@ export default function WatchlistPage() {
 
       {/* Refine modal */}
       {refineOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-6">
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-6">
           <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setRefineOpen(false)} />
           <div className="relative bg-white rounded-3xl w-full max-w-sm max-h-[75vh] flex flex-col overflow-hidden shadow-2xl border border-gray-200">
             <div className="flex items-center justify-between px-6 pt-5 pb-4 border-b border-gray-100 shrink-0">
