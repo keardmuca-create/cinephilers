@@ -258,20 +258,24 @@ function NotificationCard({ notif, onFollowBack, onRequestHandled }: {
 
   const handleFollowBack = async () => {
     setFollowState('loading');
-    const res = await fetch(`/api/users/${notif.from.username}/follow`, { method: 'POST', credentials: 'include' });
-    if (res.ok) { setFollowState('following'); onFollowBack(notif.from.username); }
-    else setFollowState('idle');
+    try {
+      const res = await fetch(`/api/users/${notif.from.username}/follow`, { method: 'POST', credentials: 'include' });
+      if (res.ok) { setFollowState('following'); onFollowBack(notif.from.username); }
+      else setFollowState('idle');
+    } catch { setFollowState('idle'); }
   };
 
   const handleRequest = async (action: 'accept' | 'deny') => {
     if (!notif.refId) return;
     setRequestState('loading');
     const method = action === 'accept' ? 'POST' : 'DELETE';
-    const res = await fetch(`/api/follow-requests/${notif.refId}`, { method, credentials: 'include' });
-    if (res.ok) {
-      setRequestState(action === 'accept' ? 'accepted' : 'denied');
-      onRequestHandled(notif.id);
-    } else setRequestState('pending');
+    try {
+      const res = await fetch(`/api/follow-requests/${notif.refId}`, { method, credentials: 'include' });
+      if (res.ok) {
+        setRequestState(action === 'accept' ? 'accepted' : 'denied');
+        onRequestHandled(notif.id);
+      } else setRequestState('pending');
+    } catch { setRequestState('pending'); }
   };
 
   const text = {
@@ -389,6 +393,7 @@ export default function SocialPage() {
         setFriendFeed(feed);
         try { localStorage.setItem(FEED_CACHE_KEY, JSON.stringify(feed)); } catch { /* ignore */ }
       }
+    } catch { /* network error (e.g. app reopened while offline) — keep cached feed */
     } finally {
       setActivityLoading(false);
     }
@@ -404,6 +409,7 @@ export default function SocialPage() {
         setNotifications(json.data?.notifications ?? []);
         setUnreadCount(json.data?.unreadCount ?? 0);
       }
+    } catch { /* network error — keep current notifications */
     } finally {
       setNotifLoading(false);
     }
