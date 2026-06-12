@@ -4,7 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
-import { ChevronLeft, Star } from 'lucide-react';
+import { ChevronLeft, Star, Film } from 'lucide-react';
 
 interface UserReview {
   movieId: string;
@@ -22,9 +22,9 @@ export default function ReviewsPage() {
   const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
-    const load = () => {
+    const load = async () => {
+      const found: UserReview[] = [];
       try {
-        const found: UserReview[] = [];
         for (let i = 0; i < localStorage.length; i++) {
           const k = localStorage.key(i)!;
           if (!k.startsWith('review-')) continue;
@@ -35,6 +35,21 @@ export default function ReviewsPage() {
         setReviews(found.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()));
       } catch { /* ignore */ }
       setLoaded(true);
+
+      // Reviews synced from the DB on a new device have no title/poster — backfill from the meta API
+      const missing = found.filter(r => !r.movieTitle || !r.moviePoster);
+      if (missing.length === 0) return;
+      await Promise.allSettled(missing.map(async r => {
+        try {
+          const res = await fetch(`/api/meta/${r.movieId}`);
+          if (!res.ok) return;
+          const m = await res.json();
+          if (!m?.title) return;
+          const patched = { ...r, movieTitle: m.title, moviePoster: m.poster ?? '', movieYear: m.year ?? r.movieYear };
+          try { localStorage.setItem(`review-${r.movieId}`, JSON.stringify(patched)); } catch { /* ignore */ }
+          setReviews(prev => prev.map(p => p.movieId === r.movieId ? patched : p));
+        } catch { /* ignore */ }
+      }));
     };
     load();
     // Re-load once the login sync finishes writing DB reviews into localStorage
@@ -62,7 +77,13 @@ export default function ReviewsPage() {
         {reviews.map(r => (
           <Link key={r.movieId} href={`/movie/${r.movieId}`} className="group flex gap-4 p-4 rounded-2xl border border-border hover:bg-muted/40 transition-colors">
             <div className="w-14 shrink-0 aspect-[2/3] rounded-lg overflow-hidden bg-muted">
-              <img src={r.moviePoster} alt={r.movieTitle} className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
+              {r.moviePoster ? (
+                <img src={r.moviePoster} alt={r.movieTitle} className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
+              ) : (
+                <div className="w-full h-full flex items-center justify-center">
+                  <Film className="h-5 w-5 text-primary/60" />
+                </div>
+              )}
             </div>
             <div className="flex-1 min-w-0 space-y-1">
               <div className="flex items-start justify-between gap-2">
