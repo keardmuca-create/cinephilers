@@ -653,6 +653,7 @@ export default function ProfilePage() {
     // Build watchlist from watchlist-* keys
     try {
       const wlItems: Movie[] = [];
+      const wlMissing: string[] = [];
       for (let i = 0; i < localStorage.length; i++) {
         const k = localStorage.key(i)!;
         if (!k.startsWith('watchlist-')) continue;
@@ -660,7 +661,16 @@ export default function ProfilePage() {
         if (!raw) continue;
         let meta: Record<string, unknown>;
         try { meta = JSON.parse(raw); } catch { continue; }
-        if (!meta.title) continue;
+        if (!meta.title) {
+          // Synced from the DB without metadata (e.g. after login on a new device) —
+          // try the cached meta entry, otherwise fetch it below
+          const id = k.slice('watchlist-'.length);
+          try {
+            const cached = localStorage.getItem(`meta-${id}`);
+            if (cached) meta = { ...meta, ...JSON.parse(cached) };
+          } catch { /* ignore */ }
+          if (!meta.title) { wlMissing.push(id); continue; }
+        }
         wlItems.push({
           id: k.slice('watchlist-'.length),
           title: meta.title as string,
@@ -681,6 +691,54 @@ export default function ProfilePage() {
         } as Movie);
       }
       setWatchlist(wlItems);
+
+      // Fetch missing metadata in small parallel batches and append as results
+      // arrive, so a freshly synced watchlist isn't invisible on the profile
+      if (wlMissing.length > 0) {
+        (async () => {
+          const CONCURRENCY = 5;
+          for (let i = 0; i < wlMissing.length; i += CONCURRENCY) {
+            const batch = wlMissing.slice(i, i + CONCURRENCY);
+            const results = await Promise.all(batch.map(async (id): Promise<Movie | null> => {
+              try {
+                const res = await fetch(`/api/meta/${id}`);
+                if (!res.ok) return null;
+                const m = await res.json();
+                if (!m?.title) return null;
+                try {
+                  localStorage.setItem(`watchlist-${id}`, JSON.stringify({ id, title: m.title, poster: m.poster ?? '', year: m.year ?? '', type: m.type ?? 'movie' }));
+                  localStorage.setItem(`meta-${id}`, JSON.stringify(m));
+                } catch { /* ignore */ }
+                return {
+                  id,
+                  title: m.title,
+                  poster: m.poster ?? '',
+                  backdrop: '',
+                  year: m.year ?? '',
+                  genre: m.genre ?? '',
+                  rating: typeof m.tmdbRating === 'number' ? m.tmdbRating : 0,
+                  description: '',
+                  type: (m.type as 'movie' | 'show') ?? 'movie',
+                  followingsRating: 0,
+                  votes: 0,
+                  director: '',
+                  cast: [],
+                  reviews: [],
+                  quotes: [],
+                  trivia: [],
+                } as Movie;
+              } catch { return null; }
+            }));
+            const fetched = results.filter((x): x is Movie => x !== null);
+            if (fetched.length > 0) {
+              setWatchlist(prev => {
+                const seen = new Set(prev.map(p => p.id));
+                return [...prev, ...fetched.filter(f => !seen.has(f.id))];
+              });
+            }
+          }
+        })();
+      }
     } catch { /* ignore */ }
 
     // Load user-written reviews
@@ -694,6 +752,35 @@ export default function ProfilePage() {
         try { reviews.push(JSON.parse(raw)); } catch { /* ignore */ }
       }
       setUserReviews(reviews.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()));
+
+      // Backfill title/poster for reviews synced from the DB without metadata
+      const reviewsMissing = reviews.filter(r => !r.movieTitle || !r.moviePoster);
+      if (reviewsMissing.length > 0) {
+        (async () => {
+          const CONCURRENCY = 5;
+          for (let i = 0; i < reviewsMissing.length; i += CONCURRENCY) {
+            const batch = reviewsMissing.slice(i, i + CONCURRENCY);
+            const results = await Promise.all(batch.map(async (r): Promise<UserReview | null> => {
+              try {
+                const res = await fetch(`/api/meta/${r.movieId}`);
+                if (!res.ok) return null;
+                const m = await res.json();
+                if (!m?.title) return null;
+                const updated = { ...r, movieTitle: m.title, moviePoster: m.poster ?? '', movieYear: m.year ?? '' };
+                try {
+                  localStorage.setItem(`review-${r.movieId}`, JSON.stringify(updated));
+                  localStorage.setItem(`meta-${r.movieId}`, JSON.stringify(m));
+                } catch { /* ignore */ }
+                return updated;
+              } catch { return null; }
+            }));
+            const fetched = results.filter((x): x is UserReview => x !== null);
+            if (fetched.length > 0) {
+              setUserReviews(prev => prev.map(p => fetched.find(f => f.movieId === p.movieId) ?? p));
+            }
+          }
+        })();
+      }
     } catch { /* ignore */ }
 
     // Load rated items
@@ -708,6 +795,7 @@ export default function ProfilePage() {
       } catch { /* ignore */ }
 
       const rated: RatedItem[] = [];
+      const ratedMissing: { id: string; userRating: number }[] = [];
       for (let i = 0; i < localStorage.length; i++) {
         const k = localStorage.key(i)!;
         if (!k.startsWith('movie-rating-')) continue;
@@ -719,10 +807,37 @@ export default function ProfilePage() {
         const rv = rvMap.get(id);
         const title = meta?.title ?? rv?.title;
         const poster = meta?.poster ?? rv?.poster;
-        if (!title || !poster) continue;
+        if (!title || !poster) { ratedMissing.push({ id, userRating }); continue; }
         rated.push({ id, title, poster, year: meta?.year ?? rv?.year ?? '', tmdbRating: meta?.tmdbRating ?? rv?.tmdbRating, userRating });
       }
       setRatedItems(rated);
+
+      // Fetch missing metadata so freshly synced ratings appear without a manual refresh
+      if (ratedMissing.length > 0) {
+        (async () => {
+          const CONCURRENCY = 5;
+          for (let i = 0; i < ratedMissing.length; i += CONCURRENCY) {
+            const batch = ratedMissing.slice(i, i + CONCURRENCY);
+            const results = await Promise.all(batch.map(async ({ id, userRating }): Promise<RatedItem | null> => {
+              try {
+                const res = await fetch(`/api/meta/${id}`);
+                if (!res.ok) return null;
+                const m = await res.json();
+                if (!m?.title) return null;
+                try { localStorage.setItem(`meta-${id}`, JSON.stringify(m)); } catch { /* ignore */ }
+                return { id, title: m.title, poster: m.poster ?? '', year: m.year ?? '', tmdbRating: typeof m.tmdbRating === 'number' ? m.tmdbRating : undefined, userRating };
+              } catch { return null; }
+            }));
+            const fetched = results.filter((x): x is RatedItem => x !== null);
+            if (fetched.length > 0) {
+              setRatedItems(prev => {
+                const seen = new Set(prev.map(p => p.id));
+                return [...prev, ...fetched.filter(f => !seen.has(f.id))];
+              });
+            }
+          }
+        })();
+      }
     } catch { /* ignore */ }
   }, []);
 
@@ -1194,7 +1309,13 @@ export default function ProfilePage() {
             {userReviews.slice(0, 3).map(r => (
               <Link key={r.movieId} href={`/movie/${r.movieId}`} className="group flex gap-4 p-4 rounded-2xl border border-border hover:bg-muted/40 transition-colors">
                 <div className="w-14 shrink-0 aspect-[2/3] rounded-lg overflow-hidden bg-muted">
-                  <img src={r.moviePoster} alt={r.movieTitle} className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
+                  {r.moviePoster ? (
+                    <img src={r.moviePoster} alt={r.movieTitle} className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center">
+                      <Film className="h-5 w-5 text-primary/60" />
+                    </div>
+                  )}
                 </div>
                 <div className="flex-1 min-w-0 space-y-1">
                   <div className="flex items-start justify-between gap-2">
