@@ -1,4 +1,10 @@
+import { Redis } from '@upstash/redis';
 import type { Movie } from '@/lib/types';
+import { WEEK_MS } from '@/lib/seed-shuffle';
+
+const redisUrl = process.env.UPSTASH_REDIS_REST_URL ?? process.env.KV_REST_API_URL;
+const redisToken = process.env.UPSTASH_REDIS_REST_TOKEN ?? process.env.KV_REST_API_TOKEN;
+const redis = redisUrl && redisToken ? new Redis({ url: redisUrl, token: redisToken }) : null;
 
 const BASE = 'https://api.themoviedb.org/3';
 const IMG  = 'https://image.tmdb.org/t/p';
@@ -51,4 +57,39 @@ export async function buildHomePool(): Promise<Movie[]> {
   }
   pool.sort((a, b) => a.id.localeCompare(b.id));
   return pool;
+}
+
+// Freeze the first pool built in a period in Redis so it survives deployments
+// and cache evictions — otherwise the hero/featured/top-10 reshuffle mid-day.
+async function frozenPool(key: string, ttlSeconds: number): Promise<Movie[]> {
+  if (redis) {
+    try {
+      const cached = await redis.get<Movie[]>(key);
+      if (Array.isArray(cached) && cached.length) return cached;
+    } catch {}
+  }
+
+  const pool = await buildHomePool();
+
+  if (redis && pool.length) {
+    try {
+      const set = await redis.set(key, pool, { ex: ttlSeconds, nx: true });
+      if (set === null) {
+        // Another request froze a pool first — use theirs so everyone matches
+        const winner = await redis.get<Movie[]>(key);
+        if (Array.isArray(winner) && winner.length) return winner;
+      }
+    } catch {}
+  }
+  return pool;
+}
+
+export async function getDailyPool(): Promise<Movie[]> {
+  const day = new Date().toISOString().slice(0, 10);
+  return frozenPool(`home-pool:day:${day}`, 2 * 86_400);
+}
+
+export async function getWeeklyPool(): Promise<Movie[]> {
+  const week = Math.floor(Date.now() / WEEK_MS);
+  return frozenPool(`home-pool:week:${week}`, 9 * 86_400);
 }

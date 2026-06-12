@@ -537,14 +537,25 @@ export async function getTopRatedShows(count = 25): Promise<Movie[]> {
   return results.map(m => tmdbToMovie({ ...m, media_type: 'tv' }));
 }
 
+function tomorrowDate(): string {
+  return new Date(Date.now() + 86_400_000).toISOString().slice(0, 10);
+}
+
 export async function getUpcomingMovies(count = 25): Promise<Movie[]> {
-  const results = await fetchManyPages('/movie/upcoming', count);
-  return results.map(m => tmdbToMovie(m));
+  const results = await fetchManyPages('/discover/movie', count, {
+    'primary_release_date.gte': tomorrowDate(),
+    sort_by: 'popularity.desc',
+    include_adult: 'false',
+  });
+  return results.filter(m => m.poster_path).map(m => tmdbToMovie(m));
 }
 
 export async function getUpcomingShows(count = 25): Promise<Movie[]> {
-  const results = await fetchManyPages('/tv/on_the_air', count);
-  return results.map(m => tmdbToMovie({ ...m, media_type: 'tv' }));
+  const results = await fetchManyPages('/discover/tv', count, {
+    'first_air_date.gte': tomorrowDate(),
+    sort_by: 'popularity.desc',
+  });
+  return results.filter(m => m.poster_path).map(m => tmdbToMovie({ ...m, media_type: 'tv' }));
 }
 
 export async function getMovieGenres(): Promise<TmdbGenre[]> {

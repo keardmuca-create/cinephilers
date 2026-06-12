@@ -56,17 +56,21 @@ export default function HomePage() {
   const { data, loading } = usePopularMovies(EMPTY);
   const { user, loading: authLoading } = useAuth();
 
-  // Stable daily pool — server-cached for 24 hours, identical across all devices
-  const [stablePool, setStablePool] = useState<Movie[]>([]);
+  // Stable pools — frozen in Redis per day/week, identical across all devices
+  const [stablePool, setStablePool] = useState<{ daily: Movie[]; weekly: Movie[] }>({ daily: [], weekly: [] });
   useEffect(() => {
     fetch('/api/home-pool')
       .then(r => r.json())
-      .then((pool: Movie[]) => { if (Array.isArray(pool)) setStablePool(pool); })
+      .then((pool: { daily?: Movie[]; weekly?: Movie[] }) => {
+        if (Array.isArray(pool?.daily)) {
+          setStablePool({ daily: pool.daily, weekly: Array.isArray(pool.weekly) ? pool.weekly : pool.daily });
+        }
+      })
       .catch(() => {});
   }, []);
 
   const { heroMovie, featured, top10 } = useMemo(() => {
-    if (!stablePool.length) return { heroMovie: null, featured: [] as Movie[], top10: [] as Movie[] };
+    if (!stablePool.daily.length) return { heroMovie: null, featured: [] as Movie[], top10: [] as Movie[] };
 
     const now = new Date();
     const daySeed = now.getFullYear() * 10000 + (now.getMonth() + 1) * 100 + now.getDate();
@@ -75,8 +79,8 @@ export default function HomePage() {
     const localMonday = new Date(now.getFullYear(), now.getMonth(), now.getDate() - daysSinceMonday);
     const weekSeed = Math.floor(localMonday.getTime() / WEEK_MS) + 99_999;
 
-    const dailyPool  = seededShuffle(stablePool, daySeed);
-    const weeklyPool = seededShuffle(stablePool, weekSeed);
+    const dailyPool  = seededShuffle(stablePool.daily, daySeed);
+    const weeklyPool = seededShuffle(stablePool.weekly, weekSeed);
 
     const hero = dailyPool.find(m => m.type === 'movie') ?? null;
     const feat = dailyPool.slice(1, 16);

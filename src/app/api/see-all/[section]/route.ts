@@ -12,7 +12,7 @@ import {
 } from '@/lib/tmdb';
 import type { Movie } from '@/lib/types';
 import { seededShuffle, dedup, WEEK_MS } from '@/lib/seed-shuffle';
-import { buildHomePool } from '@/lib/home-pool';
+import { getDailyPool } from '@/lib/home-pool';
 
 export async function GET(
   _req: NextRequest,
@@ -43,7 +43,7 @@ export async function GET(
     switch (section) {
       case 'featured': {
         // Same pool + seed as home page so the lists always match exactly
-        const pool = await buildHomePool();
+        const pool = await getDailyPool();
         const now = new Date();
         const daySeed = now.getFullYear() * 10000 + (now.getMonth() + 1) * 100 + now.getDate();
         items = seededShuffle(pool, daySeed).slice(1, 101);
