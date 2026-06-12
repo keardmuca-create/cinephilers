@@ -54,41 +54,50 @@ export async function POST(req: NextRequest) {
   let ratingsAdded = 0;
   let watchlistAdded = 0;
   let reviewsAdded = 0;
+  let failed = 0;
 
   for (const item of items) {
     const key = `${item.tmdbId}:${item.mediaType}`;
 
     // Watched
     if (item.watchedAt && !hasWatched.has(key)) {
-      await prisma.watchedItem.create({
-        data: { userId, tmdbId: item.tmdbId, mediaType: item.mediaType, watchedAt: new Date(item.watchedAt) },
-      }).catch(() => {});
-      watchedAdded++;
+      try {
+        await prisma.watchedItem.create({
+          data: { userId, tmdbId: item.tmdbId, mediaType: item.mediaType, watchedAt: new Date(item.watchedAt) },
+        });
+        watchedAdded++;
+      } catch { failed++; }
     }
 
     // Watchlist
     if (item.inWatchlist && !hasWatchlist.has(key)) {
-      await prisma.watchlistItem.create({
-        data: { userId, tmdbId: item.tmdbId, mediaType: item.mediaType },
-      }).catch(() => {});
-      watchlistAdded++;
+      try {
+        await prisma.watchlistItem.create({
+          data: { userId, tmdbId: item.tmdbId, mediaType: item.mediaType },
+        });
+        watchlistAdded++;
+      } catch { failed++; }
     }
 
     // Rating
     if (item.rating && !hasRating.has(key)) {
-      await prisma.rating.create({
-        data: { userId, tmdbId: item.tmdbId, mediaType: item.mediaType, score: item.rating },
-      }).catch(() => {});
-      ratingsAdded++;
+      try {
+        await prisma.rating.create({
+          data: { userId, tmdbId: item.tmdbId, mediaType: item.mediaType, score: item.rating },
+        });
+        ratingsAdded++;
+      } catch { failed++; }
     }
 
     // Review
     if (item.review && item.review.trim().length >= 10 && !hasReview.has(key)) {
       const body = sanitizeText(item.review).slice(0, 5000);
-      await prisma.review.create({
-        data: { userId, tmdbId: item.tmdbId, mediaType: item.mediaType, body, containsSpoiler: false },
-      }).catch(() => {});
-      reviewsAdded++;
+      try {
+        await prisma.review.create({
+          data: { userId, tmdbId: item.tmdbId, mediaType: item.mediaType, body, containsSpoiler: false },
+        });
+        reviewsAdded++;
+      } catch { failed++; }
     }
   }
 
@@ -106,5 +115,5 @@ export async function POST(req: NextRequest) {
   // Award any newly earned badges
   await awardBadgeIfEarned(userId, totalRatings);
 
-  return ok({ watchedAdded, ratingsAdded, watchlistAdded, reviewsAdded });
+  return ok({ watchedAdded, ratingsAdded, watchlistAdded, reviewsAdded, failed });
 }

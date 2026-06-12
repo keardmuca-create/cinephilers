@@ -166,7 +166,7 @@ export function ImportDialog({ onClose }: { onClose: () => void }) {
   const [matched, setMatched] = useState<MatchedItem[]>([]);
   const [unmatched, setUnmatched] = useState<ParsedItem[]>([]);
   const [matchProgress, setMatchProgress] = useState(0);
-  const [result, setResult] = useState<{ watchedAdded: number; ratingsAdded: number; watchlistAdded: number; reviewsAdded: number } | null>(null);
+  const [result, setResult] = useState<{ watchedAdded: number; ratingsAdded: number; watchlistAdded: number; reviewsAdded: number; failed?: number } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [shareActivity, setShareActivity] = useState(true);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -469,6 +469,12 @@ export function ImportDialog({ onClose }: { onClose: () => void }) {
                   <p className="text-sm text-muted-foreground text-center py-2">Everything was already in your library — nothing new to add.</p>
                 )}
               </div>
+              {(result.failed ?? 0) > 0 && (
+                <div className="bg-red-500/10 rounded-2xl px-4 py-3">
+                  <p className="text-xs text-red-400 font-bold">{result.failed} item{result.failed !== 1 ? 's' : ''} could not be saved</p>
+                  <p className="text-xs text-muted-foreground mt-1">Something went wrong saving these to your account. Try importing again — items already saved will be skipped automatically.</p>
+                </div>
+              )}
               {unmatched.length > 0 && (
                 <div className="bg-yellow-500/10 rounded-2xl px-4 py-3">
                   <p className="text-xs text-yellow-400 font-bold">{unmatched.length} unmatched film{unmatched.length !== 1 ? 's' : ''}</p>
