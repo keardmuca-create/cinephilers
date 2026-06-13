@@ -43,7 +43,7 @@ export async function GET(
       const epData   = await epRes.json();
       const poster   = showData.poster_path
         ? `${IMG}/w342${showData.poster_path}`
-        : `https://picsum.photos/seed/${showId}/400/600`;
+        : '';
       const epTitle  = epData.name ?? `Episode ${epNum}`;
       const airDate  = epData.air_date ?? showData.first_air_date ?? '';
       const year     = airDate ? airDate.slice(0, 4) : '—';
@@ -73,7 +73,7 @@ export async function GET(
 
     const poster = d.poster_path
       ? `${IMG}/w342${d.poster_path}`
-      : `https://picsum.photos/seed/${id}/400/600`;
+      : '';
 
     const title = d.title ?? d.name ?? 'Untitled';
     const release = d.release_date ?? d.first_air_date ?? '';

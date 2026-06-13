@@ -15,7 +15,7 @@ function toMovie(m: Record<string, unknown>, forceType?: 'movie' | 'show'): Movi
   const id = isShow ? `tmdb-tv-${m.id}` : `tmdb-${m.id}`;
   const title = (m.title ?? m.name ?? 'Unknown') as string;
   const release = ((m.release_date ?? m.first_air_date ?? '') as string).slice(0, 4);
-  const poster = m.poster_path ? `${IMG}/w342${m.poster_path}` : `https://picsum.photos/seed/${id}/400/600`;
+  const poster = m.poster_path ? `${IMG}/w342${m.poster_path}` : '';
   const backdrop = m.backdrop_path ? `${IMG}/w1280${m.backdrop_path}` : poster;
   return {
     id, title, year: release || '—', poster, backdrop,
