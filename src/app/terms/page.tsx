@@ -5,6 +5,7 @@ import type { Metadata } from 'next';
 export const metadata: Metadata = {
   title: 'Terms of Service — Cinephilers',
   description: 'Terms of Service for Cinephilers — the rules for using the platform.',
+  alternates: { canonical: '/terms' },
 };
 
 export default function TermsPage() {

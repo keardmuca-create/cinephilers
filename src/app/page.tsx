@@ -4,6 +4,11 @@ import Link from 'next/link';
 import { Play, Star, ListPlus, Users, Upload, Award } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { buildHomePool } from '@/lib/home-pool';
+import type { Metadata } from 'next';
+
+export const metadata: Metadata = {
+  alternates: { canonical: '/' },
+};
 
 const FEATURES = [
   { icon: Play, title: 'Track everything', text: 'Mark movies, shows, and individual episodes as watched. Your full viewing history, in one place.' },
