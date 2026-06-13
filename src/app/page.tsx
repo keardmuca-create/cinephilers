@@ -35,7 +35,7 @@ export default async function RootPage() {
         {/* Poster wall */}
         {posters.length > 0 && (
           <div className="absolute inset-0 grid grid-cols-3 sm:grid-cols-6 gap-2 p-2 opacity-30 scale-105 -rotate-1">
-            {posters.map(m => (
+            {posters.filter(m => m.poster).map(m => (
               // eslint-disable-next-line @next/next/no-img-element
               <img key={m.id} src={m.poster} alt="" className="w-full aspect-[2/3] object-cover rounded-xl" />
             ))}

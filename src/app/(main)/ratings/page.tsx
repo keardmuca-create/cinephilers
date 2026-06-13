@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { Star, ChevronLeft, Search, SlidersHorizontal, Check, X } from 'lucide-react';
+import { Star, ChevronLeft, Search, SlidersHorizontal, Check, X, Film } from 'lucide-react';
 
 type SortOption = 'rating-desc' | 'rating-asc' | 'title-asc' | 'title-desc' | 'release-desc' | 'release-asc';
 
@@ -43,7 +43,13 @@ function ItemCard({ item }: { item: RatedItem }) {
   return (
     <Link href={`/movie/${item.id}`} className="group flex items-center gap-4 py-3.5">
       <div className="relative w-16 aspect-[2/3] overflow-hidden rounded-lg bg-muted shadow-md shrink-0">
-        <img src={item.poster} alt={item.title} className="w-full h-full object-cover transition-transform group-hover:scale-105" loading="lazy" />
+        {item.poster ? (
+          <img src={item.poster} alt={item.title} className="w-full h-full object-cover transition-transform group-hover:scale-105" loading="lazy" />
+        ) : (
+          <div className="w-full h-full flex items-center justify-center bg-muted">
+            <Film className="h-7 w-7 text-primary/60" />
+          </div>
+        )}
       </div>
       <div className="flex-1 min-w-0">
         <h3 className="text-sm font-semibold font-headline line-clamp-2 group-hover:text-primary transition-colors leading-snug mb-0.5">

@@ -153,8 +153,12 @@ function ListsSection() {
               {/* Mini poster strip */}
               <div className="flex gap-1 shrink-0">
                 {l.items.slice(0, 3).map(item => (
-                  <div key={item.movieId} className="w-10 aspect-[2/3] rounded-lg overflow-hidden bg-muted">
-                    <img src={item.poster} alt={item.title} className="w-full h-full object-cover" />
+                  <div key={item.movieId} className="w-10 aspect-[2/3] rounded-lg overflow-hidden bg-muted flex items-center justify-center">
+                    {item.poster ? (
+                      <img src={item.poster} alt={item.title} className="w-full h-full object-cover" />
+                    ) : (
+                      <Film className="h-4 w-4 text-primary/60" />
+                    )}
                   </div>
                 ))}
                 {l.items.length === 0 && (
@@ -1165,7 +1169,13 @@ export default function ProfilePage() {
             {recentWatched.map(item => (
               <Link key={item.id} href={`/movie/${item.id}`} className="group shrink-0 w-36">
                 <div className="relative aspect-[2/3] overflow-hidden rounded-xl bg-muted shadow-lg movie-card-hover mb-2">
-                  <img src={item.poster} alt={item.title} className="w-full h-full object-cover transition-transform group-hover:scale-110" />
+                  {item.poster ? (
+                    <img src={item.poster} alt={item.title} className="w-full h-full object-cover transition-transform group-hover:scale-110" />
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center bg-muted">
+                      <Film className="h-9 w-9 text-primary/60" />
+                    </div>
+                  )}
                   {item.episodeCount !== undefined && (
                     <div className="absolute bottom-1.5 right-1.5 bg-black/70 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full">
                       {item.episodeCount} ep{item.episodeCount !== 1 ? 's' : ''}
@@ -1217,7 +1227,13 @@ export default function ProfilePage() {
             {ratedItems.slice(0, 50).map(item => (
               <Link key={item.id} href={`/movie/${item.id}`} className="group shrink-0 w-36">
                 <div className="relative aspect-[2/3] overflow-hidden rounded-xl bg-muted shadow-lg movie-card-hover mb-2">
-                  <img src={item.poster} alt={item.title} className="w-full h-full object-cover transition-transform group-hover:scale-110" />
+                  {item.poster ? (
+                    <img src={item.poster} alt={item.title} className="w-full h-full object-cover transition-transform group-hover:scale-110" />
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center bg-muted">
+                      <Film className="h-9 w-9 text-primary/60" />
+                    </div>
+                  )}
                 </div>
                 <div className="flex items-center gap-1.5 mb-0.5 flex-wrap">
                   {item.tmdbRating !== undefined && (

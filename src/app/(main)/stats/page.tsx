@@ -174,20 +174,6 @@ export default function StatsPage() {
               </div>
             )}
           </div>
-
-          {/* Average score callout */}
-          {stats.avgScore !== null && (
-            <div className="bg-yellow-400/5 border border-yellow-400/20 rounded-3xl p-5 flex items-center gap-4">
-              <div className="h-12 w-12 rounded-2xl bg-yellow-400/10 flex items-center justify-center shrink-0">
-                <Star className="h-6 w-6 text-yellow-400 fill-yellow-400" />
-              </div>
-              <div>
-                <p className="text-2xl font-black font-headline text-yellow-400">{stats.avgScore}<span className="text-base font-bold text-muted-foreground">/10</span></p>
-                <p className="text-sm text-foreground/80 font-bold">your average rating</p>
-                <p className="text-xs text-muted-foreground">across {stats.totalRatings} rated title{stats.totalRatings !== 1 ? 's' : ''}</p>
-              </div>
-            </div>
-          )}
         </div>
       )}
 

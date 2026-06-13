@@ -1,7 +1,7 @@
 "use client"
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Plus, X, Search, Heart, RefreshCw } from 'lucide-react';
+import { Plus, X, Search, Heart, RefreshCw, Film } from 'lucide-react';
 import Link from 'next/link';
 import { fetchWithAuth } from '@/lib/fetch-with-auth';
 import { useAuth } from '@/contexts/auth-context';
@@ -203,12 +203,18 @@ export function FavoritesSection() {
             onDragEnd={onDragEnd}
             className="relative aspect-[2/3] rounded-xl overflow-hidden border-2 border-foreground/20 group cursor-grab active:cursor-grabbing select-none"
           >
-            <img
-              src={fav.poster}
-              alt={fav.title}
-              className="w-full h-full object-cover"
-              draggable={false}
-            />
+            {fav.poster ? (
+              <img
+                src={fav.poster}
+                alt={fav.title}
+                className="w-full h-full object-cover"
+                draggable={false}
+              />
+            ) : (
+              <div className="w-full h-full flex items-center justify-center bg-muted">
+                <Film className="h-8 w-8 text-primary/60" />
+              </div>
+            )}
 
             {/* Title overlay */}
             <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/90 via-black/40 to-transparent p-2 pt-6">
@@ -298,11 +304,17 @@ export function FavoritesSection() {
                     onClick={() => addFavorite(r)}
                     className="w-full flex items-center gap-3 p-2 rounded-xl hover:bg-muted/50 transition-colors text-left"
                   >
-                    <img
-                      src={r.poster}
-                      alt={r.title}
-                      className="w-9 h-[54px] object-cover rounded-lg flex-shrink-0 bg-muted"
-                    />
+                    {r.poster ? (
+                      <img
+                        src={r.poster}
+                        alt={r.title}
+                        className="w-9 h-[54px] object-cover rounded-lg flex-shrink-0 bg-muted"
+                      />
+                    ) : (
+                      <div className="w-9 h-[54px] rounded-lg flex-shrink-0 bg-muted flex items-center justify-center">
+                        <Film className="h-4 w-4 text-primary/60" />
+                      </div>
+                    )}
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-semibold truncate">{r.title}</p>
                       <p className="text-xs text-muted-foreground">{r.year}</p>

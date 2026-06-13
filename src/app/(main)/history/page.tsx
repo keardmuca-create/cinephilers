@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import Link from 'next/link';
-import { History, Eye, Search, SlidersHorizontal, Check, X, Trash2 } from 'lucide-react';
+import { History, Eye, Search, SlidersHorizontal, Check, X, Trash2, Film } from 'lucide-react';
 import type { ItemMeta } from '@/app/api/meta/[id]/route';
 import { fetchWithAuth } from '@/lib/fetch-with-auth';
 
@@ -141,12 +141,18 @@ function HistoryCard({ id, meta, userRating, addedAt, onRemove }: {
     <Link href={`/movie/${linkId}`} className="group relative flex items-center gap-4 py-3.5">
       {/* Thumbnail */}
       <div className="relative w-16 aspect-[2/3] overflow-hidden rounded-lg bg-muted shadow-md shrink-0">
-        <img
-          src={meta.poster}
-          alt={meta.title}
-          className="w-full h-full object-cover transition-transform group-hover:scale-105"
-          loading="lazy"
-        />
+        {meta.poster ? (
+          <img
+            src={meta.poster}
+            alt={meta.title}
+            className="w-full h-full object-cover transition-transform group-hover:scale-105"
+            loading="lazy"
+          />
+        ) : (
+          <div className="w-full h-full flex items-center justify-center bg-muted">
+            <Film className="h-7 w-7 text-primary/60" />
+          </div>
+        )}
       </div>
 
       {/* Info */}
