@@ -22,12 +22,55 @@ function yearOf(r: TMDBResult, isTV: boolean): number {
   return d ? parseInt(d.slice(0, 4), 10) : 0;
 }
 
-function scoredMatch(results: TMDBResult[], inputYear: number | null, isTV: boolean): TMDBResult | null {
-  if (results.length === 0) return null;
-  if (!inputYear) return results[0];
+// Normalize a title for comparison: lowercase, strip accents/punctuation/articles
+function normalizeTitle(s: string): string {
+  return s
+    .toLowerCase()
+    .normalize('NFD').replace(/[̀-ͯ]/g, '')
+    .replace(/&/g, 'and')
+    .replace(/[^a-z0-9 ]/g, ' ')
+    .replace(/\b(the|a|an)\b/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function levenshtein(a: string, b: string): number {
+  const m = a.length, n = b.length;
+  if (m === 0) return n;
+  if (n === 0) return m;
+  let prev = Array.from({ length: n + 1 }, (_, j) => j);
+  for (let i = 1; i <= m; i++) {
+    const curr = [i];
+    for (let j = 1; j <= n; j++) {
+      const cost = a[i - 1] === b[j - 1] ? 0 : 1;
+      curr[j] = Math.min(prev[j] + 1, curr[j - 1] + 1, prev[j - 1] + cost);
+    }
+    prev = curr;
+  }
+  return prev[n];
+}
+
+// True if the TMDB title is close enough to the imported title to trust the match
+function titleMatches(input: string, candidate: string): boolean {
+  const a = normalizeTitle(input);
+  const b = normalizeTitle(candidate);
+  if (!a || !b) return false;
+  if (a === b) return true;
+  // Subtitle/edition differences ("Dune" ↔ "Dune: Part One")
+  if (a.includes(b) || b.includes(a)) return true;
+  const dist = levenshtein(a, b);
+  return 1 - dist / Math.max(a.length, b.length) >= 0.82;
+}
+
+function scoredMatch(results: TMDBResult[], inputYear: number | null, isTV: boolean, query: string): TMDBResult | null {
+  // Only trust results whose title actually resembles the imported title —
+  // otherwise an unavailable film silently matches a popular unrelated one.
+  const candidates = results.filter(r => titleMatches(query, (isTV ? r.name : r.title) ?? ''));
+  if (candidates.length === 0) return null;
+  if (!inputYear) return candidates[0];
 
   // Score each result: 2 = exact year, 1 = within 1 year, 0 = no match
-  const scored = results.map(r => {
+  const scored = candidates.map(r => {
     const diff = Math.abs(yearOf(r, isTV) - inputYear);
     return { r, score: diff === 0 ? 2 : diff === 1 ? 1 : 0, pop: r.popularity ?? 0 };
   });
@@ -74,8 +117,8 @@ export async function GET(req: NextRequest) {
     const movieResults: TMDBResult[] = (movieData.results ?? []).slice(0, 5);
     const tvResults: TMDBResult[] = (tvData.results ?? []).slice(0, 5);
 
-    const bestMovie = scoredMatch(movieResults, inputYear, false);
-    const bestTV = scoredMatch(tvResults, inputYear, true);
+    const bestMovie = scoredMatch(movieResults, inputYear, false, q);
+    const bestTV = scoredMatch(tvResults, inputYear, true, q);
 
     if (!bestMovie && !bestTV) return ok(null);
 
