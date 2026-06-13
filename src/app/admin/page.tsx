@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
-import { Flag, Trash2, Check, X, Loader2, ShieldAlert, Users, Search, Ban, ShieldCheck, ChevronUp, ChevronDown, Star, Eye } from 'lucide-react';
+import { Flag, Trash2, Check, X, Loader2, ShieldAlert, Users, Search, Ban, ShieldCheck, ChevronUp, ChevronDown } from 'lucide-react';
 import { useAuth } from '@/contexts/auth-context';
 import { fetchWithAuth } from '@/lib/fetch-with-auth';
 import { relativeTime } from '@/lib/activity';
@@ -35,9 +35,6 @@ interface AdminUser {
 interface AdminStats {
   totalUsers: number;
   bannedUsers: number;
-  totalRatings: number;
-  totalReviews: number;
-  totalWatched: number;
 }
 
 const STATUS_COLOURS: Record<string, string> = {
@@ -186,12 +183,10 @@ export default function AdminPage() {
 
       {/* Stats overview */}
       {stats && (
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <div className="grid grid-cols-2 gap-3">
           {[
             { label: 'Total Users', value: stats.totalUsers, icon: <Users className="h-4 w-4" /> },
             { label: 'Banned', value: stats.bannedUsers, icon: <Ban className="h-4 w-4" /> },
-            { label: 'Ratings', value: stats.totalRatings, icon: <Star className="h-4 w-4" /> },
-            { label: 'Watched', value: stats.totalWatched, icon: <Eye className="h-4 w-4" /> },
           ].map(s => (
             <div key={s.label} className="bg-card border border-border rounded-2xl p-4 flex items-center gap-3">
               <div className="h-8 w-8 rounded-xl bg-primary/10 flex items-center justify-center text-primary shrink-0">{s.icon}</div>
