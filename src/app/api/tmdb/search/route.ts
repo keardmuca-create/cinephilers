@@ -14,6 +14,7 @@ interface TMDBResult {
   poster_path?: string;
   popularity?: number;
   vote_count?: number;
+  vote_average?: number;
   original_language?: string;
 }
 
@@ -146,7 +147,7 @@ export async function GET(req: NextRequest) {
     const releaseYear = (isTV ? (top.first_air_date ?? '') : (top.release_date ?? '')).slice(0, 4);
     const poster = top.poster_path ? `https://image.tmdb.org/t/p/w200${top.poster_path}` : null;
 
-    return ok({ tmdbId, mediaType, title, year: releaseYear, poster, language: top.original_language ?? '' });
+    return ok({ tmdbId, mediaType, title, year: releaseYear, poster, language: top.original_language ?? '', rating: typeof top.vote_average === 'number' ? top.vote_average : undefined });
   } catch {
     return err('Search failed', 502);
   }

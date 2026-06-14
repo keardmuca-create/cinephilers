@@ -25,6 +25,7 @@ interface MatchedItem extends ParsedItem {
   matchedTitle: string;
   poster: string | null;
   language: string;
+  tmdbRating?: number;
 }
 
 function parseCSV(text: string): Record<string, string>[] {
@@ -153,7 +154,7 @@ async function matchToTMDB(item: ParsedItem, typeHint?: 'movie' | 'tv'): Promise
     if (!res.ok) return null;
     const json = await res.json();
     if (!json.data) return null;
-    return { ...item, tmdbId: json.data.tmdbId, mediaType: json.data.mediaType, matchedTitle: json.data.title, poster: json.data.poster, language: json.data.language ?? '' };
+    return { ...item, tmdbId: json.data.tmdbId, mediaType: json.data.mediaType, matchedTitle: json.data.title, poster: json.data.poster, language: json.data.language ?? '', tmdbRating: json.data.rating };
   } catch {
     return null;
   }
@@ -222,7 +223,7 @@ export function ImportDialog({ onClose }: { onClose: () => void }) {
       // Write metadata to localStorage so pages can render imported items immediately
       try {
         for (const item of matched) {
-          const meta = { id: item.tmdbId, title: item.matchedTitle, poster: item.poster ?? '', year: item.year, type: item.mediaType === 'SHOW' ? 'show' : 'movie', language: item.language };
+          const meta = { id: item.tmdbId, title: item.matchedTitle, poster: item.poster ?? '', year: item.year, type: item.mediaType === 'SHOW' ? 'show' : 'movie', language: item.language, tmdbRating: item.tmdbRating };
           localStorage.setItem(`meta-${item.tmdbId}`, JSON.stringify(meta));
           if (item.watchedAt) localStorage.setItem(`watched-${item.tmdbId}`, 'true');
           if (item.inWatchlist) localStorage.setItem(`watchlist-${item.tmdbId}`, JSON.stringify({ id: item.tmdbId, title: item.matchedTitle, poster: item.poster ?? '', year: item.year, type: meta.type }));
