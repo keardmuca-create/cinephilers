@@ -33,6 +33,26 @@ export function removeActivity(action: string, contentId: string) {
   } catch { /* ignore */ }
 }
 
+const DISMISS_KEY = 'activity-dismissed';
+
+// Activity cards are derived from both the local log AND the server feed (which
+// includes our own activity). Removing only the local copy lets the server twin
+// reappear, so we also record a dismissed key the feed filters out from both sources.
+export function getDismissed(): string[] {
+  try {
+    return JSON.parse(localStorage.getItem(DISMISS_KEY) ?? '[]') as string[];
+  } catch { return []; }
+}
+
+export function dismissActivity(action: string, contentId: string) {
+  try {
+    const key = `${action}-${contentId}`;
+    const set = new Set(getDismissed());
+    set.add(key);
+    localStorage.setItem(DISMISS_KEY, JSON.stringify([...set].slice(-500)));
+  } catch { /* ignore */ }
+}
+
 export function toggleLike(entryId: string) {
   try {
     const feed = getFeed().map(e => {

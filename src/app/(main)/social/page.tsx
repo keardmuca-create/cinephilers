@@ -4,7 +4,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { Heart, Star, Eye, Bookmark, Film, MoreHorizontal, Share2, Trash2, Users, MessageSquare, Loader2, UserPlus, Bell, User } from 'lucide-react';
-import { ActivityEntry, getFeed, toggleLike, removeActivity, relativeTime } from '@/lib/activity';
+import { ActivityEntry, getFeed, toggleLike, removeActivity, dismissActivity, getDismissed, relativeTime } from '@/lib/activity';
 import { useAuth } from '@/contexts/auth-context';
 import { fetchWithAuth } from '@/lib/fetch-with-auth';
 import { Button } from '@/components/ui/button';
@@ -443,7 +443,10 @@ export default function SocialPage() {
 
   // Build merged + sorted activity list
   const mergedActivity: UnifiedItem[] = React.useMemo(() => {
-    const myItems: UnifiedItem[] = myLocalFeed.map(e => ({
+    const dismissed = new Set(getDismissed());
+    const myItems: UnifiedItem[] = myLocalFeed
+      .filter(e => !dismissed.has(`${e.action}-${e.contentId}`))
+      .map(e => ({
       id: `me-${e.id}`,
       localId: e.id,
       isMe: true,
@@ -459,7 +462,11 @@ export default function SocialPage() {
     // The server feed includes our own activity; skip entries already shown from the local log
     const localKeys = new Set(myItems.map(i => `${i.type}-${i.tmdbId}`));
     const friendItems: UnifiedItem[] = friendFeed
-      .filter(f => !(f.user.username === user?.username && localKeys.has(`${f.type}-${f.tmdbId}`)))
+      .filter(f => {
+        if (f.user.username !== user?.username) return true;
+        const k = `${f.type}-${f.tmdbId}`;
+        return !localKeys.has(k) && !dismissed.has(k);
+      })
       .map(f => ({
       id: f.id,
       isMe: false,
@@ -481,7 +488,11 @@ export default function SocialPage() {
   const handleRemove = (item: UnifiedItem) => {
     if (!item.localId) return;
     const entry = myLocalFeed.find(e => e.id === item.localId);
-    if (entry) { removeActivity(entry.action, entry.contentId); setMyLocalFeed(getFeed()); }
+    if (entry) {
+      dismissActivity(entry.action, entry.contentId);
+      removeActivity(entry.action, entry.contentId);
+      setMyLocalFeed(getFeed());
+    }
   };
 
   // Guest view
