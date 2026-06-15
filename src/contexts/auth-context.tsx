@@ -44,14 +44,23 @@ async function restoreFromDb() {
     ]);
     if (!res.ok) return;
     const { data } = await res.json();
-    const { ratings, watchlist, watched, reviews, favorites, lists } = data as {
+    const { ratings, watchlist, watched, reviews, favorites, lists, hidden } = data as {
       ratings: { tmdbId: string; mediaType: string; score: number; updatedAt: string }[];
       watchlist: { tmdbId: string; mediaType: string }[];
       watched: { tmdbId: string; mediaType: string; watchedAt: string }[];
       reviews: { tmdbId: string; mediaType: string; body: string; containsSpoiler: boolean; createdAt: string }[];
       favorites: { tmdbId: string; mediaType: string }[];
       lists: { id: string; name: string; isPublic: boolean; createdAt: string; items: { tmdbId: string; mediaType: string; title: string | null; poster: string | null; year: string | null }[] }[];
+      hidden?: { type: string; tmdbId: string }[];
     };
+
+    // Feed activities the user removed (on any device) — merge server's hidden list into
+    // the local dismissed set so this device also hides them and never re-adds them below.
+    try {
+      const local = new Set<string>(JSON.parse(localStorage.getItem('activity-dismissed') ?? '[]'));
+      for (const h of hidden ?? []) local.add(`${h.type}-${h.tmdbId}`);
+      localStorage.setItem('activity-dismissed', JSON.stringify([...local].slice(-500)));
+    } catch { /* ignore */ }
 
     // ── Ratings: write DB scores to local; upload any local-only ratings to DB ──
     const dbRatingIds = new Set(ratings.map(r => r.tmdbId));
@@ -254,6 +263,8 @@ async function restoreFromDb() {
       type ActivityEntry = { id: string; action: string; contentId: string; contentTitle: string; contentPoster: string; contentYear: string; rating?: number; timestamp: string; likes: string[] };
       const existing: ActivityEntry[] = JSON.parse(localStorage.getItem('activity-feed') ?? '[]');
       const existingKeys = new Set(existing.map(e => `${e.action}-${e.contentId}`));
+      // Activities the user removed from their feed must not be resurrected by DB sync
+      const dismissed = new Set<string>(JSON.parse(localStorage.getItem('activity-dismissed') ?? '[]'));
       const newEntries: ActivityEntry[] = [];
 
       const getMeta = (tmdbId: string) => {
@@ -268,12 +279,14 @@ async function restoreFromDb() {
       const cutoff = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
       for (const w of watched) {
         if (existingKeys.has(`watched-${w.tmdbId}`)) continue;
+        if (dismissed.has(`watched-${w.tmdbId}`)) continue;
         if (new Date(w.watchedAt) < cutoff) continue;
         const { title, poster, year } = getMeta(w.tmdbId);
         newEntries.push({ id: `db-w-${w.tmdbId}`, action: 'watched', contentId: w.tmdbId, contentTitle: title, contentPoster: poster, contentYear: year, timestamp: w.watchedAt, likes: [] });
       }
       for (const r of ratings) {
         if (existingKeys.has(`rated-${r.tmdbId}`)) continue;
+        if (dismissed.has(`rated-${r.tmdbId}`)) continue;
         if (new Date(r.updatedAt) < cutoff) continue;
         const { title, poster, year } = getMeta(r.tmdbId);
         newEntries.push({ id: `db-r-${r.tmdbId}`, action: 'rated', contentId: r.tmdbId, contentTitle: title, contentPoster: poster, contentYear: year, rating: r.score, timestamp: r.updatedAt, likes: [] });

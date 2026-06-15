@@ -492,6 +492,15 @@ export default function SocialPage() {
       dismissActivity(entry.action, entry.contentId);
       removeActivity(entry.action, entry.contentId);
       setMyLocalFeed(getFeed());
+      // Persist server-side so the activity stays hidden on every device. Watchlist
+      // entries are local-only (the feed API has no watchlist type), so skip those.
+      if (entry.action !== 'watchlist') {
+        fetchWithAuth('/api/feed/hidden', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ type: entry.action, tmdbId: entry.contentId }),
+        }).catch(() => {});
+      }
     }
   };
 

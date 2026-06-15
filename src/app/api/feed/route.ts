@@ -36,6 +36,13 @@ export async function GET(req: NextRequest) {
     select: { id: true, username: true, displayName: true, avatarUrl: true },
   };
 
+  // Activities the user removed from their own feed (hidden everywhere, on every device)
+  const hidden = await prisma.hiddenActivity.findMany({
+    where: { userId: auth.sub },
+    select: { type: true, tmdbId: true },
+  });
+  const hiddenKeys = new Set(hidden.map(h => `${h.type}-${h.tmdbId}`));
+
   // Fetch recent activity from all tables in parallel
   const [watched, ratings, reviews, imports] = await Promise.all([
     prisma.watchedItem.findMany({
@@ -104,8 +111,13 @@ export async function GET(req: NextRequest) {
     })),
   ];
 
-  // Sort merged items by recency and return top `limit`
-  items.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  // Drop the user's own activity they chose to hide from their feed
+  const visible = hiddenKeys.size === 0
+    ? items
+    : items.filter(i => !(i.user.id === auth.sub && hiddenKeys.has(`${i.type}-${i.tmdbId}`)));
 
-  return ok(items.slice(0, limit));
+  // Sort merged items by recency and return top `limit`
+  visible.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+
+  return ok(visible.slice(0, limit));
 }

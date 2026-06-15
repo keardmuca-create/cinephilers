@@ -68,6 +68,7 @@ model User {
   reviewComments    ReviewComment[]
   reports           Report[]
   importActivities  ImportActivity[]
+  hiddenActivities  HiddenActivity[]
 }
 
 model Rating {
@@ -256,6 +257,18 @@ model ImportActivity {
   createdAt DateTime @default(now())
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model HiddenActivity {
+  id        String   @id @default(uuid())
+  userId    String
+  type      String   // 'watched' | 'rated' | 'reviewed'
+  tmdbId    String
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, type, tmdbId])
 }
 
 model Report {
