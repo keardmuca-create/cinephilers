@@ -48,7 +48,7 @@ const EmptyRow = ({ message }: { message: string }) => (
   </div>
 );
 
-interface RecentItem { id: string; title: string; poster: string; year: string; loggedAt: string; rating?: number; tmdbRating?: number; linkId?: string; episodeCount?: number; }
+interface RecentItem { id: string; title: string; poster: string; year: string; loggedAt: string; rating?: number; tmdbRating?: number; linkId?: string; isEpisode?: boolean; seasonNumber?: number; episodeNumber?: number; showName?: string; }
 interface UserReview { movieId: string; movieTitle: string; moviePoster: string; movieYear: string; content: string; rating: number; date: string; }
 interface UserList { id: string; title: string; isPrivate: boolean; createdAt: string; items: { movieId: string; title: string; poster: string; year: string; type: string }[]; }
 
@@ -575,7 +575,7 @@ export default function ProfilePage() {
 
         // Separate movies/whole-shows from individual episodes
         const movieIds = new Set<string>();
-        const episodesByShow = new Map<string, { keys: string[]; latestLoggedAt: string }>();
+        const episodeIds: string[] = [];
 
         for (let i = 0; i < localStorage.length; i++) {
           const k = localStorage.key(i)!;
@@ -584,28 +584,14 @@ export default function ProfilePage() {
           }
           if (k.startsWith('watched-ep-') && localStorage.getItem(k) === 'true') {
             const epId = k.slice('watched-ep-'.length); // e.g. tmdb-tv-12345-S1E5
-            const m = epId.match(/^(.+)-S\d+E\d+$/);
-            if (!m) continue;
-            const showId = m[1];
-            const epLoggedAt = logMap.get(epId) ?? new Date(0).toISOString();
-            const existing = episodesByShow.get(showId);
-            if (!existing) {
-              episodesByShow.set(showId, { keys: [epId], latestLoggedAt: epLoggedAt });
-            } else {
-              existing.keys.push(epId);
-              if (epLoggedAt > existing.latestLoggedAt) existing.latestLoggedAt = epLoggedAt;
-            }
+            if (/-S\d+E\d+$/.test(epId)) episodeIds.push(epId);
           }
         }
-
-        // Shows with individual episodes tracked take precedence — remove them from movieIds
-        // so we don't show the show twice (once as whole-watched, once as grouped episodes)
-        for (const showId of episodesByShow.keys()) movieIds.delete(showId);
 
         const items: RecentItem[] = [];
         const fetchPromises: Promise<void>[] = [];
 
-        const resolveItem = (id: string, loggedAt: string, episodeCount?: number) => {
+        const resolveItem = (id: string, loggedAt: string) => {
           const raw = localStorage.getItem(`meta-${id}`);
           const meta = raw ? JSON.parse(raw) : null;
           const rv = rvMap.get(id);
@@ -619,7 +605,6 @@ export default function ProfilePage() {
               loggedAt,
               rating: rating ? Number(rating) : undefined,
               tmdbRating: typeof meta?.tmdbRating === 'number' ? meta.tmdbRating : rv?.tmdbRating,
-              episodeCount,
             });
           } else {
             fetchPromises.push(
@@ -629,11 +614,43 @@ export default function ProfilePage() {
                   if (data.error || !data.title) return;
                   const cached = { title: data.title, poster: data.poster ?? '', year: data.year ?? '', type: data.type ?? 'movie', tmdbRating: data.rating ?? data.tmdbRating };
                   try { localStorage.setItem(`meta-${id}`, JSON.stringify(cached)); } catch { /* ignore */ }
-                  items.push({ id, title: cached.title, poster: cached.poster, year: cached.year, loggedAt, rating: rating ? Number(rating) : undefined, tmdbRating: cached.tmdbRating, episodeCount });
+                  items.push({ id, title: cached.title, poster: cached.poster, year: cached.year, loggedAt, rating: rating ? Number(rating) : undefined, tmdbRating: cached.tmdbRating });
                 })
                 .catch(() => { /* ignore */ })
             );
           }
+        };
+
+        // One card per episode — title is the episode name, links back to the show
+        const resolveEpisode = (epId: string, loggedAt: string) => {
+          const m = epId.match(/^(.+)-S(\d+)E(\d+)$/);
+          if (!m) return;
+          const showId = m[1];
+          const season = parseInt(m[2], 10);
+          const episode = parseInt(m[3], 10);
+          const rating = localStorage.getItem(`movie-rating-${epId}`);
+          fetchPromises.push(
+            fetch(`/api/meta/${epId}`)
+              .then(r => r.json())
+              .then((data: { title?: string; poster?: string; year?: string; showName?: string; seasonNumber?: number; episodeNumber?: number; tmdbRating?: number; error?: string }) => {
+                if (data.error || !data.title) return;
+                items.push({
+                  id: epId,
+                  linkId: showId,
+                  title: data.title.replace(/^S\d+E\d+\s·\s/, ''),
+                  poster: data.poster ?? '',
+                  year: data.year ?? '',
+                  loggedAt,
+                  rating: rating ? Number(rating) : undefined,
+                  tmdbRating: data.tmdbRating,
+                  isEpisode: true,
+                  seasonNumber: data.seasonNumber ?? season,
+                  episodeNumber: data.episodeNumber ?? episode,
+                  showName: data.showName,
+                });
+              })
+              .catch(() => { /* ignore */ })
+          );
         };
 
         // Movies and whole-show watched entries
@@ -641,9 +658,9 @@ export default function ProfilePage() {
           resolveItem(id, logMap.get(id) ?? new Date(0).toISOString());
         }
 
-        // Episode-grouped show entries — one card per show with episode count
-        for (const [showId, { keys, latestLoggedAt }] of episodesByShow) {
-          resolveItem(showId, latestLoggedAt, keys.length);
+        // Individual watched episodes
+        for (const epId of episodeIds) {
+          resolveEpisode(epId, logMap.get(epId) ?? new Date(0).toISOString());
         }
 
         if (fetchPromises.length > 0) await Promise.allSettled(fetchPromises);
@@ -1167,18 +1184,13 @@ export default function ProfilePage() {
         {recentWatched.length > 0 ? (
           <div className="flex overflow-x-auto gap-4 pb-4 no-scrollbar -mx-6 px-6">
             {recentWatched.map(item => (
-              <Link key={item.id} href={`/movie/${item.id}`} className="group shrink-0 w-36">
+              <Link key={item.id} href={`/movie/${item.linkId ?? item.id}`} className="group shrink-0 w-36">
                 <div className="relative aspect-[2/3] overflow-hidden rounded-xl bg-muted shadow-lg movie-card-hover mb-2">
                   {item.poster ? (
                     <img src={item.poster} alt={item.title} className="w-full h-full object-cover transition-transform group-hover:scale-110" />
                   ) : (
                     <div className="w-full h-full flex items-center justify-center bg-muted">
                       <Film className="h-9 w-9 text-primary/60" />
-                    </div>
-                  )}
-                  {item.episodeCount !== undefined && (
-                    <div className="absolute bottom-1.5 right-1.5 bg-black/70 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full">
-                      {item.episodeCount} ep{item.episodeCount !== 1 ? 's' : ''}
                     </div>
                   )}
                 </div>
@@ -1200,6 +1212,11 @@ export default function ProfilePage() {
                 <p className="text-xs font-semibold font-headline line-clamp-2 group-hover:text-primary transition-colors leading-snug">
                   {item.title} {item.year ? `(${item.year})` : ''}
                 </p>
+                {item.isEpisode && item.seasonNumber !== undefined && item.episodeNumber !== undefined && (
+                  <p className="text-[11px] text-muted-foreground line-clamp-1 mt-0.5">
+                    S{item.seasonNumber}·E{item.episodeNumber}{item.showName ? ` · ${item.showName}` : ''}
+                  </p>
+                )}
               </Link>
             ))}
           </div>

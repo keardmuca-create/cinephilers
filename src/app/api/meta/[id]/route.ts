@@ -17,6 +17,9 @@ export interface ItemMeta {
   tmdbRating?: number;
   showId?: string;  // set for episode entries — use to link back to the show page
   isEpisode?: boolean;
+  showName?: string;       // episode entries: the parent show's name
+  seasonNumber?: number;   // episode entries
+  episodeNumber?: number;  // episode entries
 }
 
 export async function GET(
@@ -48,8 +51,11 @@ export async function GET(
       const airDate  = epData.air_date ?? showData.first_air_date ?? '';
       const year     = airDate ? airDate.slice(0, 4) : '—';
       const meta: ItemMeta = {
-        id, title: `S${season}E${epNum} · ${epTitle}`, year, poster,
+        id, title: epTitle, year, poster,
         type: 'show', showId, isEpisode: true,
+        showName: showData.name ?? undefined,
+        seasonNumber: season,
+        episodeNumber: epNum,
         tmdbRating: typeof epData.vote_average === 'number' ? epData.vote_average : undefined,
       };
       return NextResponse.json(meta);

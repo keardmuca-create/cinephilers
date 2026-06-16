@@ -125,6 +125,17 @@ function HistoryCard({ id, meta, userRating, addedAt, onRemove }: {
   const linkId = meta.showId ?? id;
   const mediaType = meta.type === 'show' ? 'SHOW' : 'MOVIE';
 
+  // Episode display: clean title + "S1·E1 ShowName" subtitle.
+  const idEpMatch = id.match(/-S(\d+)E(\d+)$/);
+  const isEpisode = meta.isEpisode || !!idEpMatch;
+  // Strip any stale "S1E1 · " prefix from cached titles
+  const displayTitle = meta.title.replace(/^S\d+E\d+\s·\s/, '');
+  const epSeason = meta.seasonNumber ?? (idEpMatch ? parseInt(idEpMatch[1], 10) : undefined);
+  const epNumber = meta.episodeNumber ?? (idEpMatch ? parseInt(idEpMatch[2], 10) : undefined);
+  const epSubtitle = isEpisode && epSeason !== undefined && epNumber !== undefined
+    ? `S${epSeason}·E${epNumber}${meta.showName ? ` · ${meta.showName}` : ''}`
+    : null;
+
   const handleRemove = (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
@@ -184,8 +195,11 @@ function HistoryCard({ id, meta, userRating, addedAt, onRemove }: {
       {/* Info */}
       <div className="flex-1 min-w-0">
         <h3 className="text-sm font-semibold font-headline line-clamp-2 group-hover:text-primary transition-colors leading-snug mb-0.5">
-          {meta.title}
+          {displayTitle}
         </h3>
+        {epSubtitle && (
+          <p className="text-xs font-medium text-muted-foreground/90 mb-0.5">{epSubtitle}</p>
+        )}
         <p className="text-xs text-muted-foreground mb-1.5">{meta.year}</p>
         <div className="flex items-center gap-2.5 flex-wrap">
           {meta.tmdbRating !== undefined && (
