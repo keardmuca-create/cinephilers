@@ -349,7 +349,8 @@ export function readUserStats(): UserStats {
   try {
     for (let i = 0; i < localStorage.length; i++) {
       const key = localStorage.key(i);
-      if (key?.startsWith('watched-') && !key.startsWith('watched-episode-') && localStorage.getItem(key) === 'true') {
+      // Count real movies only: exclude episode keys (watched-ep-) and whole-show keys (watched-tmdb-tv-)
+      if (key?.startsWith('watched-') && !key.startsWith('watched-ep-') && !key.startsWith('watched-tmdb-tv-') && localStorage.getItem(key) === 'true') {
         moviesWatched++;
       }
     }

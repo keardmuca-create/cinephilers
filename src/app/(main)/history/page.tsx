@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { History, Eye, Search, SlidersHorizontal, Check, X, Trash2, Film } from 'lucide-react';
 import type { ItemMeta } from '@/app/api/meta/[id]/route';
 import { fetchWithAuth } from '@/lib/fetch-with-auth';
+import { removeFromWatchLog } from '@/lib/badges';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -127,13 +128,34 @@ function HistoryCard({ id, meta, userRating, addedAt, onRemove }: {
   const handleRemove = (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    // Remove from localStorage
-    try {
-      localStorage.removeItem(`watched-${id}`);
-      localStorage.removeItem(`watched-ep-${id}`);
-    } catch { /* ignore */ }
-    // Remove from DB
-    fetchWithAuth(`/api/watched/${id}?mediaType=${mediaType}`, { method: 'DELETE' }).catch(() => {});
+    const epMatch = id.match(/^(tmdb-tv-\d+)-S(\d+)E(\d+)$/);
+    if (epMatch) {
+      // Episode: clean the local key, the per-show index, and the watch-log,
+      // then delete on the server via the episodes endpoint. Hitting /api/watched
+      // here (the movie endpoint) left the DB record alive, so it re-synced back.
+      const [, showId, sStr, eStr] = epMatch;
+      const season = parseInt(sStr, 10);
+      const episode = parseInt(eStr, 10);
+      const epKey = `S${season}E${episode}`;
+      try {
+        localStorage.removeItem(`watched-ep-${id}`);
+        const idxRaw = localStorage.getItem(`watched-eps-index-${showId}`);
+        if (idxRaw) {
+          const idx = JSON.parse(idxRaw) as string[];
+          localStorage.setItem(`watched-eps-index-${showId}`, JSON.stringify(idx.filter(k => k !== epKey)));
+        }
+      } catch { /* ignore */ }
+      removeFromWatchLog(id, 'episode');
+      fetchWithAuth('/api/watched/episodes', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ showTmdbId: showId, season, episode, watched: false }),
+      }).catch(() => {});
+    } else {
+      // Movie or whole show
+      try { localStorage.removeItem(`watched-${id}`); } catch { /* ignore */ }
+      fetchWithAuth(`/api/watched/${id}?mediaType=${mediaType}`, { method: 'DELETE' }).catch(() => {});
+    }
     onRemove();
   };
 

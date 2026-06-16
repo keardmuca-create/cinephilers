@@ -230,22 +230,17 @@ function SeasonsSection({
   showTmdbId,
   watchedEpisodes,
   onToggleEpisodeWatched,
-  onMarkSeasonWatched,
-  onUnmarkSeasonWatched,
   onEpisodeClick,
 }: {
   seasons: TvSeason[];
   showTmdbId: string;
   watchedEpisodes: Set<string>;
   onToggleEpisodeWatched: (seasonNumber: number, ep: TvEpisode) => void;
-  onMarkSeasonWatched: (season: TvSeason, cachedEpisodes?: TvEpisode[]) => Promise<void>;
-  onUnmarkSeasonWatched: (season: TvSeason) => void;
   onEpisodeClick: (ep: TvEpisode, seasonNumber: number) => void;
 }) {
   const [expanded, setExpanded] = useState<number | null>(null);
   const [cache, setCache] = useState<Record<number, TvEpisode[]>>({});
   const [expandLoading, setExpandLoading] = useState<number | null>(null);
-  const [markLoading, setMarkLoading] = useState<number | null>(null);
 
   const toggle = async (n: number) => {
     if (expanded === n) { setExpanded(null); return; }
@@ -257,13 +252,6 @@ function SeasonsSection({
       setCache(prev => ({ ...prev, [n]: data.episodes ?? [] }));
       setExpanded(n);
     } finally { setExpandLoading(null); }
-  };
-
-  const handleMarkSeason = async (e: React.MouseEvent, season: TvSeason) => {
-    e.stopPropagation();
-    setMarkLoading(season.season_number);
-    await onMarkSeasonWatched(season, cache[season.season_number]);
-    setMarkLoading(null);
   };
 
   const getProgress = (sn: number, total: number) => {
@@ -313,27 +301,6 @@ function SeasonsSection({
                     </div>
                   </div>
                 </button>
-
-                {/* Mark / Unmark season */}
-                {allWatched ? (
-                  <button
-                    onClick={(e) => { e.stopPropagation(); onUnmarkSeasonWatched(season); }}
-                    className="text-[10px] font-bold text-primary/60 hover:text-primary px-2 py-1 rounded-lg hover:bg-primary/10 transition-colors shrink-0"
-                  >
-                    Unmark
-                  </button>
-                ) : (
-                  <button
-                    onClick={(e) => handleMarkSeason(e, season)}
-                    disabled={markLoading === sn}
-                    className="text-[10px] font-bold text-muted-foreground hover:text-foreground px-2 py-1 rounded-lg hover:bg-muted transition-colors shrink-0 disabled:opacity-40"
-                  >
-                    {markLoading === sn
-                      ? <div className="h-3 w-3 border border-current border-t-transparent rounded-full animate-spin" />
-                      : 'Mark All'
-                    }
-                  </button>
-                )}
 
                 {/* Chevron */}
                 <button onClick={() => toggle(sn)} className="text-muted-foreground hover:text-white transition-colors shrink-0">
@@ -961,64 +928,6 @@ export default function MovieDetailPage() {
     syncDb('POST', '/api/watched/episodes', { showTmdbId: id, season: sn, episode: ep.episode_number, watched: nowWatched });
   }, [id, watchedEpisodes, movie, syncDb, authUser]);
 
-  const markSeasonWatched = useCallback(async (season: TvSeason, cached?: TvEpisode[]) => {
-    if (!authUser) { setAuthGate('track episodes'); return; }
-    let episodes = cached;
-    if (!episodes) {
-      try {
-        const res  = await fetch(`/api/tv/${id.replace('tmdb-tv-', '')}/season/${season.season_number}`);
-        const data = await res.json() as { episodes?: TvEpisode[] };
-        episodes   = data.episodes ?? [];
-      } catch { return; }
-    }
-    setWatchedEpisodes(prev => {
-      const next = new Set(prev);
-      episodes!.forEach(ep => {
-        const key   = epKey(season.season_number, ep.episode_number);
-        const lsKey = `watched-ep-${id}-${key}`;
-        if (!next.has(key)) {
-          next.add(key);
-          try { localStorage.setItem(lsKey, 'true'); } catch { /* ignore */ }
-          appendWatchLog({ id: `${id}-${key}`, type: 'episode', genre: movie?.genre ?? '', language: movie?.originalLanguage ?? '' });
-          // Sync each episode to DB
-          syncDb('POST', '/api/watched/episodes', { showTmdbId: id, season: season.season_number, episode: ep.episode_number, watched: true });
-        }
-      });
-      return next;
-    });
-    toast({ title: `Season ${season.season_number} marked as watched` });
-  }, [id, movie, syncDb, authUser]);
-
-  const unmarkSeasonWatched = useCallback((season: TvSeason) => {
-    const snPrefix = `S${season.season_number}E`;
-    const lsPrefix = `watched-ep-${id}-${snPrefix}`;
-    const removedEpisodes: number[] = [];
-    try {
-      const toRemove: string[] = [];
-      for (let i = 0; i < localStorage.length; i++) {
-        const k = localStorage.key(i);
-        if (k?.startsWith(lsPrefix)) toRemove.push(k);
-      }
-      toRemove.forEach(k => {
-        localStorage.removeItem(k);
-        removeFromWatchLog(`${id}-${k.slice(`watched-ep-${id}-`.length)}`, 'episode');
-        // Extract episode number from key like "watched-ep-{id}-S1E5"
-        const epMatch = k.match(/E(\d+)$/);
-        if (epMatch) removedEpisodes.push(parseInt(epMatch[1]));
-      });
-    } catch { /* ignore */ }
-    setWatchedEpisodes(prev => {
-      const next = new Set(prev);
-      for (const k of [...next]) { if (k.startsWith(snPrefix)) next.delete(k); }
-      return next;
-    });
-    // Sync removals to DB in background
-    removedEpisodes.forEach(ep => {
-      syncDb('POST', '/api/watched/episodes', { showTmdbId: id, season: season.season_number, episode: ep, watched: false });
-    });
-    toast({ title: `Season ${season.season_number} unmarked` });
-  }, [id, syncDb]);
-
   if (loading) return <DetailSkeleton />;
 
   if (!movie) return (
@@ -1199,12 +1108,16 @@ export default function MovieDetailPage() {
                 syncDb('DELETE', `/api/watched/${id}?mediaType=${watchedMediaType}`);
               }
               if (next && movie) {
-                appendWatchLog({
-                  id,
-                  type: movie.type === 'show' ? 'movie' : 'movie',
-                  genre: movie.genre ?? '',
-                  language: movie.originalLanguage ?? '',
-                });
+                // Only movies belong in the movie watch-log; whole-show watches are
+                // credited to the episode count via the watched-show-eps key above.
+                if (movie.type !== 'show') {
+                  appendWatchLog({
+                    id,
+                    type: 'movie',
+                    genre: movie.genre ?? '',
+                    language: movie.originalLanguage ?? '',
+                  });
+                }
                 logActivity({ action: 'watched', contentId: id, contentTitle: movie.title, contentPoster: movie.poster, contentYear: movie.year });
               } else {
                 removeFromWatchLog(id, 'movie');
@@ -1338,8 +1251,6 @@ export default function MovieDetailPage() {
             showTmdbId={showTmdbId}
             watchedEpisodes={watchedEpisodes}
             onToggleEpisodeWatched={toggleEpisodeWatched}
-            onMarkSeasonWatched={markSeasonWatched}
-            onUnmarkSeasonWatched={unmarkSeasonWatched}
             onEpisodeClick={(ep, seasonNumber) => setEpisodeModal({ ep, seasonNumber })}
           />
         )}
