@@ -139,6 +139,8 @@ function HistoryCard({ id, meta, userRating, addedAt, onRemove }: {
       const epKey = `S${season}E${episode}`;
       try {
         localStorage.removeItem(`watched-ep-${id}`);
+        // Phantom key from an earlier sync bug that stored episode ids as watched-<id>
+        localStorage.removeItem(`watched-${id}`);
         const idxRaw = localStorage.getItem(`watched-eps-index-${showId}`);
         if (idxRaw) {
           const idx = JSON.parse(idxRaw) as string[];
@@ -151,6 +153,8 @@ function HistoryCard({ id, meta, userRating, addedAt, onRemove }: {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ showTmdbId: showId, season, episode, watched: false }),
       }).catch(() => {});
+      // Remove any phantom row this episode left in the movie/show watched table
+      fetchWithAuth(`/api/watched/${id}?mediaType=SHOW`, { method: 'DELETE' }).catch(() => {});
     } else {
       // Movie or whole show
       try { localStorage.removeItem(`watched-${id}`); } catch { /* ignore */ }

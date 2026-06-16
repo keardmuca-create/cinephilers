@@ -44,7 +44,7 @@ async function restoreFromDb() {
     ]);
     if (!res.ok) return;
     const { data } = await res.json();
-    const { ratings, watchlist, watched, reviews, favorites, lists, hidden } = data as {
+    const { ratings, watchlist, watched: watchedRaw, reviews, favorites, lists, hidden } = data as {
       ratings: { tmdbId: string; mediaType: string; score: number; updatedAt: string }[];
       watchlist: { tmdbId: string; mediaType: string }[];
       watched: { tmdbId: string; mediaType: string; watchedAt: string }[];
@@ -53,6 +53,19 @@ async function restoreFromDb() {
       lists: { id: string; name: string; isPublic: boolean; createdAt: string; items: { tmdbId: string; mediaType: string; title: string | null; poster: string | null; year: string | null }[] }[];
       hidden?: { type: string; tmdbId: string }[];
     };
+
+    // Episode ids look like "tmdb-tv-123-S1E2". An earlier sync bug uploaded them to
+    // the movie/show watched table; left there, they get rewritten as watched-<id>
+    // keys on every load and resurrect episodes the user deleted from history. Drop
+    // them from all downstream watched processing and self-heal by deleting the rows.
+    const isEpisodeId = (id: string) => /-S\d+E\d+$/.test(id);
+    const watched = watchedRaw.filter(w => {
+      if (isEpisodeId(w.tmdbId)) {
+        fetchWithAuth(`/api/watched/${w.tmdbId}?mediaType=SHOW`, { method: 'DELETE' }).catch(() => {});
+        return false;
+      }
+      return true;
+    });
 
     // Feed activities the user removed (on any device) — merge server's hidden list into
     // the local dismissed set so this device also hides them and never re-adds them below.
@@ -112,9 +125,12 @@ async function restoreFromDb() {
     // Recover watched state from watch-log (survives even if watched-* keys were wiped)
     // and upload any items not yet in DB so they're safe on every device going forward
     try {
-      const watchLog: { id: string }[] = JSON.parse(localStorage.getItem('watch-log') ?? '[]');
+      const watchLog: { id: string; type?: string }[] = JSON.parse(localStorage.getItem('watch-log') ?? '[]');
       for (const entry of watchLog) {
         if (!entry.id) continue;
+        // Episodes live in the watchedEpisode table — never treat them as a watched
+        // movie/show here, or they pollute history and the movie badge.
+        if (entry.type === 'episode' || isEpisodeId(entry.id)) continue;
         try { localStorage.setItem(`watched-${entry.id}`, 'true'); } catch { /* ignore */ }
         if (!dbWatchedIds.has(entry.id)) {
           const mediaType = entry.id.startsWith('tmdb-tv-') ? 'SHOW' : 'MOVIE';
