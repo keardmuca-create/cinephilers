@@ -5,6 +5,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { Movie } from '@/lib/types';
 import { readUserStats, computeAllBadges, ensureSignupDate, ComputedBadge } from '@/lib/badges';
+import { normalizeLocalMediaIds } from '@/lib/media-id';
 import { BadgeCard, FeaturedSeasonalBadge, TierGuide } from '@/components/badge-card';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
@@ -545,6 +546,7 @@ export default function ProfilePage() {
   }
 
   const loadFromStorage = useCallback(() => {
+    normalizeLocalMediaIds();
     ensureSignupDate();
     setBadges(computeAllBadges(readUserStats()));
 

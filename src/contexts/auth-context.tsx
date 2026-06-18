@@ -2,6 +2,7 @@
 
 import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
 import { fetchWithAuth } from '@/lib/fetch-with-auth';
+import { canonicalId, normalizeLocalMediaIds } from '@/lib/media-id';
 
 const STORAGE_KEY = 'cinephilers_user';
 
@@ -44,7 +45,7 @@ async function restoreFromDb() {
     ]);
     if (!res.ok) return;
     const { data } = await res.json();
-    const { ratings, watchlist, watched: watchedRaw, reviews, favorites, lists, hidden } = data as {
+    const { ratings: ratingsRaw, watchlist: watchlistRaw, watched: watchedRaw, reviews: reviewsRaw, favorites: favoritesRaw, lists: listsRaw, hidden } = data as {
       ratings: { tmdbId: string; mediaType: string; score: number; updatedAt: string }[];
       watchlist: { tmdbId: string; mediaType: string }[];
       watched: { tmdbId: string; mediaType: string; watchedAt: string }[];
@@ -54,18 +55,33 @@ async function restoreFromDb() {
       hidden?: { type: string; tmdbId: string }[];
     };
 
+    // Fold any legacy bare-numeric movie keys already in localStorage into the
+    // canonical `tmdb-{n}` form before we read/compare them below — otherwise a film
+    // imported under the old format and watched under the new one shows up twice.
+    normalizeLocalMediaIds();
+
+    // Canonicalize every id coming from the DB too, so a leftover bare-id row can't
+    // re-create the duplicate localStorage key on this sync.
+    const ratings = ratingsRaw.map(r => ({ ...r, tmdbId: canonicalId(r.tmdbId) }));
+    const watchlist = watchlistRaw.map(w => ({ ...w, tmdbId: canonicalId(w.tmdbId) }));
+    const reviews = reviewsRaw.map(r => ({ ...r, tmdbId: canonicalId(r.tmdbId) }));
+    const favorites = favoritesRaw.map(f => ({ ...f, tmdbId: canonicalId(f.tmdbId) }));
+    const lists = listsRaw.map(l => ({ ...l, items: l.items.map(i => ({ ...i, tmdbId: canonicalId(i.tmdbId) })) }));
+
     // Episode ids look like "tmdb-tv-123-S1E2". An earlier sync bug uploaded them to
     // the movie/show watched table; left there, they get rewritten as watched-<id>
     // keys on every load and resurrect episodes the user deleted from history. Drop
     // them from all downstream watched processing and self-heal by deleting the rows.
     const isEpisodeId = (id: string) => /-S\d+E\d+$/.test(id);
-    const watched = watchedRaw.filter(w => {
-      if (isEpisodeId(w.tmdbId)) {
-        fetchWithAuth(`/api/watched/${w.tmdbId}?mediaType=SHOW`, { method: 'DELETE' }).catch(() => {});
-        return false;
-      }
-      return true;
-    });
+    const watched = watchedRaw
+      .filter(w => {
+        if (isEpisodeId(w.tmdbId)) {
+          fetchWithAuth(`/api/watched/${w.tmdbId}?mediaType=SHOW`, { method: 'DELETE' }).catch(() => {});
+          return false;
+        }
+        return true;
+      })
+      .map(w => ({ ...w, tmdbId: canonicalId(w.tmdbId) }));
 
     // Feed activities the user removed (on any device) — merge server's hidden list into
     // the local dismissed set so this device also hides them and never re-adds them below.
@@ -405,6 +421,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           k === STORAGE_KEY ||
           k === 'recently-viewed' ||
           k === 'watch-log' ||
+          k === 'media-id-normalized-v1' ||
           k === 'user-favorites' ||
           k === 'user-lists' ||
           k.startsWith('movie-rating-') ||

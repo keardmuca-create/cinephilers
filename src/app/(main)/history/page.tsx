@@ -6,6 +6,7 @@ import { History, Eye, Search, SlidersHorizontal, Check, X, Trash2, Film } from 
 import type { ItemMeta } from '@/app/api/meta/[id]/route';
 import { fetchWithAuth } from '@/lib/fetch-with-auth';
 import { removeFromWatchLog } from '@/lib/badges';
+import { legacyTwin, normalizeLocalMediaIds } from '@/lib/media-id';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -167,9 +168,20 @@ function HistoryCard({ id, meta, userRating, addedAt, onRemove }: {
       // Remove any phantom row this episode left in the movie/show watched table
       fetchWithAuth(`/api/watched/${id}?mediaType=SHOW`, { method: 'DELETE' }).catch(() => {});
     } else {
-      // Movie or whole show
+      // Movie or whole show. The watch-log must be cleared too — otherwise the login
+      // sync's watch-log recovery re-creates watched-<id> and re-uploads it on the next
+      // load, resurrecting the item the user just deleted.
       try { localStorage.removeItem(`watched-${id}`); } catch { /* ignore */ }
+      removeFromWatchLog(id, 'movie');
       fetchWithAuth(`/api/watched/${id}?mediaType=${mediaType}`, { method: 'DELETE' }).catch(() => {});
+      // Also clear any legacy bare-numeric twin (older imports stored "262504" instead
+      // of "tmdb-262504"); without this, the leftover row syncs back as a duplicate.
+      const twin = legacyTwin(id);
+      if (twin) {
+        try { localStorage.removeItem(`watched-${twin}`); } catch { /* ignore */ }
+        removeFromWatchLog(twin, 'movie');
+        fetchWithAuth(`/api/watched/${twin}?mediaType=${mediaType}`, { method: 'DELETE' }).catch(() => {});
+      }
     }
     onRemove();
   };
@@ -268,6 +280,7 @@ export default function HistoryPage() {
   // ─── Initial load ──────────────────────────────────────────────────────────
 
   useEffect(() => {
+    normalizeLocalMediaIds();
     const ids = readAllWatchedIds();
 
     let log: { id: string; loggedAt: string }[] = [];

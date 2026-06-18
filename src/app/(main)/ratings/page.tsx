@@ -4,6 +4,7 @@ import React, { useState, useEffect, useRef, useMemo, Suspense } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Star, ChevronLeft, Search, SlidersHorizontal, Check, X, Film, Eye } from 'lucide-react';
+import { normalizeLocalMediaIds } from '@/lib/media-id';
 
 type SortOption = 'rating-desc' | 'rating-asc' | 'title-asc' | 'title-desc' | 'release-desc' | 'release-asc';
 
@@ -103,6 +104,7 @@ function RatingsPageInner() {
 
   useEffect(() => {
     const load = async () => {
+      normalizeLocalMediaIds();
       const rvMap = new Map<string, { title: string; poster: string; year: string; tmdbRating?: number }>();
       try {
         const stored = localStorage.getItem('recently-viewed');

@@ -151,7 +151,7 @@ export async function GET(req: NextRequest) {
       }
     }
 
-    const tmdbId = isTV ? `tmdb-tv-${top.id}` : String(top.id);
+    const tmdbId = isTV ? `tmdb-tv-${top.id}` : `tmdb-${top.id}`;
     const mediaType = isTV ? 'SHOW' : 'MOVIE';
     const title = (isTV ? top.name : top.title) ?? q;
     const releaseYear = (isTV ? (top.first_air_date ?? '') : (top.release_date ?? '')).slice(0, 4);
