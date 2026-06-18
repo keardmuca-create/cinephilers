@@ -29,14 +29,19 @@ const SectionHeader = ({
   title,
   icon: Icon,
   seeAllContent,
+  count,
 }: {
   title: string;
   icon: LucideIcon;
   seeAllContent?: React.ReactNode;
+  count?: number;
 }) => (
   <div className="flex items-center justify-between mb-6">
     <h3 className="text-2xl font-headline font-bold flex items-center gap-3">
       <Icon className="h-6 w-6 text-primary" /> {title}
+      {count !== undefined && count > 0 && (
+        <span className="text-2xl font-bold text-foreground">{count}</span>
+      )}
     </h3>
     {seeAllContent}
   </div>
@@ -1305,6 +1310,7 @@ export default function ProfilePage() {
         <SectionHeader
           title="Watchlist"
           icon={Bookmark}
+          count={watchlist.length}
           seeAllContent={watchlist.length > 0 ? (
             <Link href="/watchlist" className="text-xs text-primary border border-primary/30 rounded-full px-3 py-1 hover:bg-primary/10 transition-colors font-semibold flex items-center gap-1">
               See All <ChevronRight className="h-3 w-3" />

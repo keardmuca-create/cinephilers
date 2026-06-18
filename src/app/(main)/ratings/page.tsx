@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { Star, ChevronLeft, Search, SlidersHorizontal, Check, X, Film } from 'lucide-react';
+import { Star, ChevronLeft, Search, SlidersHorizontal, Check, X, Film, Eye } from 'lucide-react';
 
 type SortOption = 'rating-desc' | 'rating-asc' | 'title-asc' | 'title-desc' | 'release-desc' | 'release-asc';
 
@@ -66,6 +66,10 @@ function ItemCard({ item }: { item: RatedItem }) {
           <div className="flex items-center gap-0.5">
             <Star className="h-3 w-3 fill-blue-400 text-blue-400" />
             <span className="text-xs font-bold text-blue-400">{item.userRating}</span>
+          </div>
+          <div className="flex items-center gap-1 text-blue-400">
+            <Eye className="h-3.5 w-3.5" />
+            <span className="text-xs font-semibold">Watched</span>
           </div>
         </div>
       </div>

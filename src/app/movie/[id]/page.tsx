@@ -1153,7 +1153,25 @@ export default function MovieDetailPage() {
             <div className="flex flex-col gap-2">
               <div className="flex items-center gap-1">
                 {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(i => (
-                  <button key={i} onClick={() => { if (!authUser) { setAuthGate('rate movies'); return; } setUserRating(i); saveMovieRating(id, i); syncDb('POST', '/api/ratings', { tmdbId: id, mediaType: movie?.type === 'show' ? 'SHOW' : 'MOVIE', score: i }); if (movie) logActivity({ action: 'rated', contentId: id, contentTitle: movie.title, contentPoster: movie.poster, contentYear: movie.year, rating: i }); toast({ title: `You rated it ${i}/10!` }); window.dispatchEvent(new CustomEvent('cinephilers-rating-changed', { detail: { id, rating: i } })); try { localStorage.setItem(`watched-${id}`, 'true'); } catch { /* ignore */ } setIsWatched(true); }} className="transition-all hover:scale-125 active:scale-90 p-0.5">
+                  <button key={i} onClick={() => { if (!authUser) { setAuthGate('rate movies'); return; } setUserRating(i); saveMovieRating(id, i); syncDb('POST', '/api/ratings', { tmdbId: id, mediaType: movie?.type === 'show' ? 'SHOW' : 'MOVIE', score: i }); if (movie) logActivity({ action: 'rated', contentId: id, contentTitle: movie.title, contentPoster: movie.poster, contentYear: movie.year, rating: i }); toast({ title: `You rated it ${i}/10!` }); window.dispatchEvent(new CustomEvent('cinephilers-rating-changed', { detail: { id, rating: i } }));
+                    // Rating a title also marks it watched. Mirror the watched button so it
+                    // persists to the DB, watch-log, and activity feed — not just locally.
+                    if (!isWatched) {
+                      try {
+                        localStorage.setItem(`watched-${id}`, 'true');
+                        if (movie?.type === 'show') {
+                          localStorage.setItem(`show-status-${id}`, 'completed');
+                          if (movie.totalEpisodes && movie.totalEpisodes > 0) localStorage.setItem(`watched-show-eps-${id}`, String(movie.totalEpisodes));
+                        }
+                      } catch { /* ignore */ }
+                      setIsWatched(true);
+                      syncDb('POST', '/api/watched', { tmdbId: id, mediaType: movie?.type === 'show' ? 'SHOW' : 'MOVIE' });
+                      if (movie) {
+                        if (movie.type !== 'show') appendWatchLog({ id, type: 'movie', genre: movie.genre ?? '', language: movie.originalLanguage ?? '' });
+                        logActivity({ action: 'watched', contentId: id, contentTitle: movie.title, contentPoster: movie.poster, contentYear: movie.year });
+                      }
+                    }
+                  }} className="transition-all hover:scale-125 active:scale-90 p-0.5">
                     <Star className={`h-5 w-5 transition-colors ${userRating >= i ? 'fill-yellow-400 text-yellow-400' : 'text-foreground/25 hover:text-foreground/50'}`} />
                   </button>
                 ))}
