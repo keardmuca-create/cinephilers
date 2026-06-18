@@ -427,6 +427,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           k === 'media-id-normalized-v1' ||
           k === 'added-at-index' ||
           k === 'watched-at-index' ||
+          k === 'manual-watched-index' ||
           k === 'user-favorites' ||
           k === 'user-lists' ||
           k.startsWith('movie-rating-') ||

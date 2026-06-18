@@ -164,3 +164,54 @@ export function recordWatchedAt(id: string, iso?: string): void {
 export function getWatchedAtISO(id: string): string | null {
   return readWatchedAtMap()[canonicalId(id)] ?? null;
 }
+
+// ─── "Manual watch" index ────────────────────────────────────────────────────
+// Records titles the user marked watched IN THE APP (not via bulk import). A
+// Letterboxd import dates films by their log-date, which can be "today" and
+// would otherwise bury genuine taps in watch history. This index lets the
+// history list put hand-marked titles in a tier ABOVE imports, regardless of
+// the import's dates. Imports never write here — only the in-app watched action.
+const MANUAL_WATCHED_KEY = 'manual-watched-index';
+
+function readManualWatchMap(): Record<string, string> {
+  try {
+    const raw = localStorage.getItem(MANUAL_WATCHED_KEY);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === 'object' ? parsed : {};
+  } catch { return {}; }
+}
+
+// Stamp an in-app watched action. Latest wins, so re-marking bumps it up within
+// the manual tier.
+export function recordManualWatch(id: string, iso?: string): void {
+  try {
+    let next = iso ?? new Date().toISOString();
+    if (Number.isNaN(new Date(next).getTime())) next = new Date().toISOString();
+    const map = readManualWatchMap();
+    const cid = canonicalId(id);
+    const existing = map[cid];
+    if (!existing || new Date(next).getTime() > new Date(existing).getTime()) {
+      map[cid] = next;
+      localStorage.setItem(MANUAL_WATCHED_KEY, JSON.stringify(map));
+    }
+  } catch { /* ignore */ }
+}
+
+// Drop an item from the manual tier when the user un-marks it as watched.
+export function removeManualWatch(id: string): void {
+  try {
+    const map = readManualWatchMap();
+    const cid = canonicalId(id);
+    if (cid in map) {
+      delete map[cid];
+      localStorage.setItem(MANUAL_WATCHED_KEY, JSON.stringify(map));
+    }
+  } catch { /* ignore */ }
+}
+
+// ISO string for when the user hand-marked an item watched, or null if it was
+// never marked in-app (e.g. import-only). Presence = "belongs in the top tier".
+export function getManualWatchISO(id: string): string | null {
+  return readManualWatchMap()[canonicalId(id)] ?? null;
+}

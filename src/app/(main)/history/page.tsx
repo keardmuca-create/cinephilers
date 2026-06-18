@@ -6,7 +6,7 @@ import { History, Eye, Search, SlidersHorizontal, Check, X, Trash2, Film } from 
 import type { ItemMeta } from '@/app/api/meta/[id]/route';
 import { fetchWithAuth } from '@/lib/fetch-with-auth';
 import { removeFromWatchLog } from '@/lib/badges';
-import { legacyTwin, normalizeLocalMediaIds, getWatchedAtISO } from '@/lib/media-id';
+import { legacyTwin, normalizeLocalMediaIds, getWatchedAtISO, getManualWatchISO } from '@/lib/media-id';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -53,6 +53,19 @@ function readLoggedAt(id: string, log: { id: string; loggedAt: string }[]): stri
   // Shows and DB-synced items aren't in the movie watch-log; fall back to the
   // watched-at index so they still sort by date instead of sinking to 1970.
   return entry?.loggedAt ?? getWatchedAtISO(id) ?? new Date(0).toISOString();
+}
+
+// Newest-first ordering with a top tier for titles marked watched IN THE APP.
+// Hand-marked items always sort above imported ones (whose Letterboxd log-dates
+// can be "today" and would otherwise bury genuine taps). `dateFor` supplies the
+// fallback watch date for the import tier.
+function recencyCompare(a: string, b: string, dateFor: (id: string) => string): number {
+  const am = getManualWatchISO(a);
+  const bm = getManualWatchISO(b);
+  if (am && !bm) return -1;
+  if (!am && bm) return 1;
+  if (am && bm) return new Date(bm).getTime() - new Date(am).getTime();
+  return new Date(dateFor(b)).getTime() - new Date(dateFor(a)).getTime();
 }
 
 function readMetaCache(id: string): ItemMeta | null {
@@ -301,9 +314,7 @@ export default function HistoryPage() {
       if (r !== undefined) ratings.set(id, r);
     }
 
-    const sorted = [...ids].sort(
-      (a, b) => new Date(dm.get(b) ?? 0).getTime() - new Date(dm.get(a) ?? 0).getTime()
-    );
+    const sorted = [...ids].sort((a, b) => recencyCompare(a, b, id => dm.get(id) ?? new Date(0).toISOString()));
 
     setMetaMap(prev => {
       // Merge any cached meta we don't already hold; keep what we've fetched.
@@ -426,9 +437,9 @@ export default function HistoryPage() {
     } else if (sort === 'release-asc') {
       ids.sort((a, b) => parseInt(metaMap.get(a)?.year ?? '9999', 10) - parseInt(metaMap.get(b)?.year ?? '9999', 10));
     } else {
-      // date-desc (default): sort explicitly so a freshly-watched title always
-      // lands first, rather than relying on allIds happening to be pre-sorted.
-      ids.sort((a, b) => new Date(dateMapRef.current.get(b) ?? 0).getTime() - new Date(dateMapRef.current.get(a) ?? 0).getTime());
+      // date-desc (default): in-app marks first, then imports by date — so a
+      // hand-marked title always lands on top regardless of import log-dates.
+      ids.sort((a, b) => recencyCompare(a, b, id => dateMapRef.current.get(id) ?? new Date(0).toISOString()));
     }
 
     return ids;

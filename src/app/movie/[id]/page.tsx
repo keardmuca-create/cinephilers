@@ -20,7 +20,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Badge } from '@/components/ui/badge';
 import { toast } from '@/hooks/use-toast';
 import { appendWatchLog, removeFromWatchLog, saveMovieRating, ensureSignupDate } from '@/lib/badges';
-import { recordAddedAt, recordWatchedAt } from '@/lib/media-id';
+import { recordAddedAt, recordWatchedAt, recordManualWatch, removeManualWatch } from '@/lib/media-id';
 import { logActivity, removeActivity, relativeTime } from '@/lib/activity';
 import { useAuth } from '@/contexts/auth-context';
 import { fetchWithAuth } from '@/lib/fetch-with-auth';
@@ -1123,9 +1123,12 @@ export default function MovieDetailPage() {
                 // Stamp a watched date for everything (incl. shows) so watch history can
                 // sort it newest-first — the movie watch-log alone doesn't cover shows.
                 recordWatchedAt(id);
+                // Mark it as a hand-tapped watch so history ranks it above imports.
+                recordManualWatch(id);
                 logActivity({ action: 'watched', contentId: id, contentTitle: movie.title, contentPoster: movie.poster, contentYear: movie.year });
               } else {
                 removeFromWatchLog(id, 'movie');
+                removeManualWatch(id);
                 removeActivity('watched', id);
               }
               window.dispatchEvent(new Event('cinephilers-watched-changed'));
@@ -1175,6 +1178,7 @@ export default function MovieDetailPage() {
                       if (movie) {
                         if (movie.type !== 'show') appendWatchLog({ id, type: 'movie', genre: movie.genre ?? '', language: movie.originalLanguage ?? '' });
                         recordWatchedAt(id);
+                        recordManualWatch(id);
                         logActivity({ action: 'watched', contentId: id, contentTitle: movie.title, contentPoster: movie.poster, contentYear: movie.year });
                       }
                       window.dispatchEvent(new Event('cinephilers-watched-changed'));
