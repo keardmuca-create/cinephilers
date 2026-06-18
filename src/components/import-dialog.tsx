@@ -26,6 +26,7 @@ interface MatchedItem extends ParsedItem {
   poster: string | null;
   language: string;
   tmdbRating?: number;
+  confident: boolean;
 }
 
 function parseCSV(text: string): Record<string, string>[] {
@@ -154,7 +155,7 @@ async function matchToTMDB(item: ParsedItem, typeHint?: 'movie' | 'tv'): Promise
     if (!res.ok) return null;
     const json = await res.json();
     if (!json.data) return null;
-    return { ...item, tmdbId: json.data.tmdbId, mediaType: json.data.mediaType, matchedTitle: json.data.title, poster: json.data.poster, language: json.data.language ?? '', tmdbRating: json.data.rating };
+    return { ...item, tmdbId: json.data.tmdbId, mediaType: json.data.mediaType, matchedTitle: json.data.title, poster: json.data.poster, language: json.data.language ?? '', tmdbRating: json.data.rating, confident: json.data.confident === true };
   } catch {
     return null;
   }
@@ -165,6 +166,8 @@ export function ImportDialog({ onClose }: { onClose: () => void }) {
   const [step, setStep] = useState<Step>('pick');
   const [parsed, setParsed] = useState<ParsedItem[]>([]);
   const [matched, setMatched] = useState<MatchedItem[]>([]);
+  const [uncertain, setUncertain] = useState<MatchedItem[]>([]);
+  const [selectedUncertain, setSelectedUncertain] = useState<Set<string>>(new Set());
   const [unmatched, setUnmatched] = useState<ParsedItem[]>([]);
   const [matchProgress, setMatchProgress] = useState(0);
   const [result, setResult] = useState<{ watchedAdded: number; ratingsAdded: number; watchlistAdded: number; reviewsAdded: number; failed?: number } | null>(null);
@@ -186,6 +189,7 @@ export function ImportDialog({ onClose }: { onClose: () => void }) {
       // Letterboxd is movies-only; force movie search to prevent wrong TV matches
       const typeHint: 'movie' | undefined = platform === 'letterboxd' ? 'movie' : undefined;
       const matchedList: MatchedItem[] = [];
+      const uncertainList: MatchedItem[] = [];
       const unmatchedList: ParsedItem[] = [];
       const CONCURRENCY = 5;
 
@@ -193,19 +197,25 @@ export function ImportDialog({ onClose }: { onClose: () => void }) {
         const batch = items.slice(i, i + CONCURRENCY);
         const results = await Promise.all(batch.map(item => matchToTMDB(item, typeHint)));
         results.forEach((r, idx) => {
-          if (r) matchedList.push(r);
+          if (r && r.confident) matchedList.push(r);
+          else if (r) uncertainList.push(r);   // a guess exists but isn't trustworthy — let the user review it
           else unmatchedList.push(batch[idx]);
         });
         setMatchProgress(Math.min(i + CONCURRENCY, items.length));
       }
 
       setMatched(matchedList);
+      setUncertain(uncertainList);
+      setSelectedUncertain(new Set());
       setUnmatched(unmatchedList);
       setStep('confirm');
     } catch (e) {
       setError(`Failed to read file: ${String(e)}`);
     }
   };
+
+  // Confident matches plus any uncertain ones the user explicitly ticked
+  const toImport = [...matched, ...uncertain.filter(u => selectedUncertain.has(u.tmdbId))];
 
   const runImport = async () => {
     setStep('importing');
@@ -215,14 +225,14 @@ export function ImportDialog({ onClose }: { onClose: () => void }) {
       const res = await fetchWithAuth('/api/import', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ items: matched }),
+        body: JSON.stringify({ items: toImport }),
       });
       const json = await res.json();
       if (!res.ok) { setError(json?.message ?? 'Import failed'); setStep('confirm'); return; }
 
       // Write metadata to localStorage so pages can render imported items immediately
       try {
-        for (const item of matched) {
+        for (const item of toImport) {
           const meta = { id: item.tmdbId, title: item.matchedTitle, poster: item.poster ?? '', year: item.year, type: item.mediaType === 'SHOW' ? 'show' : 'movie', language: item.language, tmdbRating: item.tmdbRating };
           localStorage.setItem(`meta-${item.tmdbId}`, JSON.stringify(meta));
           if (item.watchedAt) localStorage.setItem(`watched-${item.tmdbId}`, 'true');
@@ -236,7 +246,7 @@ export function ImportDialog({ onClose }: { onClose: () => void }) {
         // hour is fixed to 12 so a late-night import doesn't falsely earn the Night Owl badge.
         const log: WatchEntry[] = JSON.parse(localStorage.getItem('watch-log') ?? '[]');
         const byId = new Map(log.filter(e => e.type === 'movie').map(e => [e.id, e]));
-        for (const item of matched) {
+        for (const item of toImport) {
           if (item.mediaType !== 'MOVIE' || !item.language) continue;
           const existing = byId.get(item.tmdbId);
           if (existing) {
@@ -252,11 +262,11 @@ export function ImportDialog({ onClose }: { onClose: () => void }) {
 
       setResult(json.data);
 
-      if (shareActivity && matched.length > 0) {
+      if (shareActivity && toImport.length > 0) {
         fetchWithAuth('/api/import-activity', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ platform, count: matched.length }),
+          body: JSON.stringify({ platform, count: toImport.length }),
         }).catch(() => {});
       }
 
@@ -386,10 +396,10 @@ export function ImportDialog({ onClose }: { onClose: () => void }) {
             <div className="space-y-5">
               <div className="grid grid-cols-2 gap-3">
                 {[
-                  { label: 'Watched', value: matched.filter(m => m.watchedAt).length },
-                  { label: 'Ratings', value: matched.filter(m => m.rating).length },
-                  { label: 'Watchlist', value: matched.filter(m => m.inWatchlist).length },
-                  { label: 'Reviews', value: matched.filter(m => m.review).length },
+                  { label: 'Watched', value: toImport.filter(m => m.watchedAt).length },
+                  { label: 'Ratings', value: toImport.filter(m => m.rating).length },
+                  { label: 'Watchlist', value: toImport.filter(m => m.inWatchlist).length },
+                  { label: 'Reviews', value: toImport.filter(m => m.review).length },
                 ].map(s => (
                   <div key={s.label} className="bg-muted rounded-2xl p-4 text-center">
                     <p className="text-2xl font-black text-primary">{s.value}</p>
@@ -398,15 +408,53 @@ export function ImportDialog({ onClose }: { onClose: () => void }) {
                 ))}
               </div>
 
+              {uncertain.length > 0 && (
+                <div className="space-y-2">
+                  <p className="text-sm font-bold text-orange-400 flex items-center gap-1.5">
+                    <AlertCircle className="h-4 w-4" />
+                    {uncertain.length} film{uncertain.length !== 1 ? 's' : ''} we&apos;re not sure about
+                  </p>
+                  <p className="text-xs text-muted-foreground">These didn&apos;t clearly match. Tick the ones that are correct — the rest won&apos;t be imported.</p>
+                  <div className="max-h-48 overflow-y-auto space-y-1.5">
+                    {uncertain.map(u => {
+                      const checked = selectedUncertain.has(u.tmdbId);
+                      return (
+                        <label key={u.tmdbId} className="flex items-center gap-3 p-2 rounded-xl bg-muted cursor-pointer select-none">
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            onChange={() => setSelectedUncertain(prev => {
+                              const next = new Set(prev);
+                              if (next.has(u.tmdbId)) next.delete(u.tmdbId); else next.add(u.tmdbId);
+                              return next;
+                            })}
+                            className="h-4 w-4 rounded accent-primary shrink-0"
+                          />
+                          {u.poster ? (
+                            <img src={u.poster} alt={u.matchedTitle} className="h-12 w-8 object-cover rounded shrink-0" />
+                          ) : (
+                            <div className="h-12 w-8 rounded bg-background flex items-center justify-center shrink-0"><Film className="h-4 w-4 text-muted-foreground" /></div>
+                          )}
+                          <div className="min-w-0">
+                            <p className="text-xs text-muted-foreground truncate">Yours: {u.title}{u.year ? ` (${u.year})` : ''}</p>
+                            <p className="text-xs font-semibold truncate">Closest: {u.matchedTitle}{u.year ? '' : ''}</p>
+                          </div>
+                        </label>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
               {unmatched.length > 0 && (
                 <div className="space-y-2">
                   <p className="text-sm font-bold text-yellow-400 flex items-center gap-1.5">
                     <AlertCircle className="h-4 w-4" />
                     {unmatched.length} film{unmatched.length !== 1 ? 's' : ''} couldn&apos;t be matched
                   </p>
-                  <div className="max-h-32 overflow-y-auto space-y-1">
+                  <div className="max-h-40 overflow-y-auto overscroll-contain rounded-xl border border-border bg-muted/50 p-3 space-y-1">
                     {unmatched.map((u, i) => (
-                      <p key={i} className="text-xs text-muted-foreground">
+                      <p key={i} className="text-xs text-foreground">
                         {u.title}{u.year ? ` (${u.year})` : ''}
                       </p>
                     ))}
@@ -417,7 +465,7 @@ export function ImportDialog({ onClose }: { onClose: () => void }) {
 
               {error && <p className="text-sm text-red-400 bg-red-500/10 rounded-xl px-4 py-3">{error}</p>}
 
-              {matched.length === 0 ? (
+              {matched.length === 0 && uncertain.length === 0 ? (
                 <p className="text-sm text-muted-foreground text-center py-4">No films could be matched. Try a different file.</p>
               ) : (
                 <div className="space-y-3">
@@ -430,8 +478,8 @@ export function ImportDialog({ onClose }: { onClose: () => void }) {
                     />
                     <span className="text-sm text-muted-foreground">Share this import in my activity feed</span>
                   </label>
-                  <Button className="w-full rounded-2xl h-12 font-bold" onClick={runImport}>
-                    Import {matched.length} film{matched.length !== 1 ? 's' : ''}
+                  <Button className="w-full rounded-2xl h-12 font-bold" onClick={runImport} disabled={toImport.length === 0}>
+                    Import {toImport.length} film{toImport.length !== 1 ? 's' : ''}
                   </Button>
                 </div>
               )}
@@ -476,16 +524,24 @@ export function ImportDialog({ onClose }: { onClose: () => void }) {
                   <p className="text-xs text-muted-foreground mt-1">Something went wrong saving these to your account. Try importing again — items already saved will be skipped automatically.</p>
                 </div>
               )}
-              {unmatched.length > 0 && (
-                <div className="bg-yellow-500/10 rounded-2xl px-4 py-3">
-                  <p className="text-xs text-yellow-400 font-bold">{unmatched.length} unmatched film{unmatched.length !== 1 ? 's' : ''}</p>
-                  <div className="mt-1 max-h-24 overflow-y-auto">
-                    {unmatched.map((u, i) => (
-                      <p key={i} className="text-xs text-muted-foreground">{u.title}{u.year ? ` (${u.year})` : ''}</p>
-                    ))}
+              {(() => {
+                const skipped = [
+                  ...unmatched.map(u => ({ title: u.title, year: u.year })),
+                  ...uncertain.filter(u => !selectedUncertain.has(u.tmdbId)).map(u => ({ title: u.title, year: u.year })),
+                ];
+                if (skipped.length === 0) return null;
+                return (
+                  <div className="bg-yellow-500/10 rounded-2xl px-4 py-3">
+                    <p className="text-xs text-yellow-400 font-bold">{skipped.length} film{skipped.length !== 1 ? 's' : ''} to add manually</p>
+                    <p className="text-[11px] text-muted-foreground mt-0.5">We couldn&apos;t confidently match these — search for them to add them yourself.</p>
+                    <div className="mt-2 max-h-40 overflow-y-auto overscroll-contain rounded-xl border border-border bg-background/40 p-3 space-y-1">
+                      {skipped.map((u, i) => (
+                        <p key={i} className="text-xs text-foreground">{u.title}{u.year ? ` (${u.year})` : ''}</p>
+                      ))}
+                    </div>
                   </div>
-                </div>
-              )}
+                );
+              })()}
               <Button className="w-full rounded-2xl h-12 font-bold" onClick={onClose}>Done</Button>
             </div>
           )}

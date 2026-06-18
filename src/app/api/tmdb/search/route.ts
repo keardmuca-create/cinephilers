@@ -63,6 +63,16 @@ function titleMatches(input: string, candidate: string): boolean {
   return 1 - dist / Math.max(a.length, b.length) >= 0.82;
 }
 
+// 0..1 similarity between two titles (1 = identical after normalizing)
+function titleSimilarity(input: string, candidate: string): number {
+  const a = normalizeTitle(input);
+  const b = normalizeTitle(candidate);
+  if (!a || !b) return 0;
+  if (a === b) return 1;
+  const dist = levenshtein(a, b);
+  return 1 - dist / Math.max(a.length, b.length);
+}
+
 function scoredMatch(results: TMDBResult[], inputYear: number | null, isTV: boolean, query: string): TMDBResult | null {
   // Only trust results whose title actually resembles the imported title —
   // otherwise an unavailable film silently matches a popular unrelated one.
@@ -147,7 +157,14 @@ export async function GET(req: NextRequest) {
     const releaseYear = (isTV ? (top.first_air_date ?? '') : (top.release_date ?? '')).slice(0, 4);
     const poster = top.poster_path ? `https://image.tmdb.org/t/p/w200${top.poster_path}` : null;
 
-    return ok({ tmdbId, mediaType, title, year: releaseYear, poster, language: top.original_language ?? '', rating: typeof top.vote_average === 'number' ? top.vote_average : undefined });
+    // Confident only when the title is (near-)identical AND the year lines up.
+    // Loose matches (subtitle/substring) or year gaps ≥ 2 are flagged for manual review
+    // so we don't silently import the wrong film.
+    const sim = titleSimilarity(q, title);
+    const yearGap = inputYear ? Math.abs(yearOf(top, isTV) - inputYear) : null;
+    const confident = sim >= 0.9 && (yearGap === null || yearGap <= 1);
+
+    return ok({ tmdbId, mediaType, title, year: releaseYear, poster, language: top.original_language ?? '', rating: typeof top.vote_average === 'number' ? top.vote_average : undefined, confident });
   } catch {
     return err('Search failed', 502);
   }
