@@ -20,7 +20,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Badge } from '@/components/ui/badge';
 import { toast } from '@/hooks/use-toast';
 import { appendWatchLog, removeFromWatchLog, saveMovieRating, ensureSignupDate } from '@/lib/badges';
-import { recordAddedAt } from '@/lib/media-id';
+import { recordAddedAt, recordWatchedAt } from '@/lib/media-id';
 import { logActivity, removeActivity, relativeTime } from '@/lib/activity';
 import { useAuth } from '@/contexts/auth-context';
 import { fetchWithAuth } from '@/lib/fetch-with-auth';
@@ -1120,6 +1120,9 @@ export default function MovieDetailPage() {
                     language: movie.originalLanguage ?? '',
                   });
                 }
+                // Stamp a watched date for everything (incl. shows) so watch history can
+                // sort it newest-first — the movie watch-log alone doesn't cover shows.
+                recordWatchedAt(id);
                 logActivity({ action: 'watched', contentId: id, contentTitle: movie.title, contentPoster: movie.poster, contentYear: movie.year });
               } else {
                 removeFromWatchLog(id, 'movie');
@@ -1170,6 +1173,7 @@ export default function MovieDetailPage() {
                       syncDb('POST', '/api/watched', { tmdbId: id, mediaType: movie?.type === 'show' ? 'SHOW' : 'MOVIE' });
                       if (movie) {
                         if (movie.type !== 'show') appendWatchLog({ id, type: 'movie', genre: movie.genre ?? '', language: movie.originalLanguage ?? '' });
+                        recordWatchedAt(id);
                         logActivity({ action: 'watched', contentId: id, contentTitle: movie.title, contentPoster: movie.poster, contentYear: movie.year });
                       }
                     }

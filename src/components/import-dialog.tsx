@@ -6,7 +6,7 @@ import { X, Upload, Loader2, CheckCircle, AlertCircle, ChevronRight, Film } from
 import { Button } from '@/components/ui/button';
 import { fetchWithAuth } from '@/lib/fetch-with-auth';
 import type { WatchEntry } from '@/lib/badges';
-import { recordAddedAt } from '@/lib/media-id';
+import { recordAddedAt, recordWatchedAt } from '@/lib/media-id';
 
 type Platform = 'letterboxd' | 'imdb';
 type Step = 'pick' | 'upload' | 'matching' | 'confirm' | 'importing' | 'done';
@@ -236,7 +236,7 @@ export function ImportDialog({ onClose }: { onClose: () => void }) {
         for (const item of toImport) {
           const meta = { id: item.tmdbId, title: item.matchedTitle, poster: item.poster ?? '', year: item.year, type: item.mediaType === 'SHOW' ? 'show' : 'movie', language: item.language, tmdbRating: item.tmdbRating };
           localStorage.setItem(`meta-${item.tmdbId}`, JSON.stringify(meta));
-          if (item.watchedAt) localStorage.setItem(`watched-${item.tmdbId}`, 'true');
+          if (item.watchedAt) { localStorage.setItem(`watched-${item.tmdbId}`, 'true'); recordWatchedAt(item.tmdbId, item.watchedAt); }
           if (item.inWatchlist) localStorage.setItem(`watchlist-${item.tmdbId}`, JSON.stringify({ id: item.tmdbId, title: item.matchedTitle, poster: item.poster ?? '', year: item.year, type: meta.type }));
           if (item.rating) localStorage.setItem(`movie-rating-${item.tmdbId}`, String(item.rating));
           if (item.inWatchlist || item.rating) recordAddedAt(item.tmdbId, item.watchedAt || undefined);

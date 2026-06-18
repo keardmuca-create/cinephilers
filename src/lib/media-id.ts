@@ -126,3 +126,41 @@ export function getAddedAt(id: string): number {
   const t = iso ? new Date(iso).getTime() : 0;
   return Number.isNaN(t) ? 0 : t;
 }
+
+// ─── "Watched at" index ────────────────────────────────────────────────────────
+// The movie watch-log only holds movies and episodes, so shows marked watched (and
+// any item synced down from the DB) have no local timestamp — they'd sort to 1970
+// in watch history. This index gives every watched item a date. Unlike the add
+// index, the LATEST timestamp wins, so re-watching bumps the item to the top.
+const WATCHED_AT_KEY = 'watched-at-index';
+
+function readWatchedAtMap(): Record<string, string> {
+  try {
+    const raw = localStorage.getItem(WATCHED_AT_KEY);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === 'object' ? parsed : {};
+  } catch { return {}; }
+}
+
+// Record when an item was watched. Pass an ISO string for known DB timestamps;
+// omit it to stamp "now". Latest wins, so a fresh watch pops to the top.
+export function recordWatchedAt(id: string, iso?: string): void {
+  try {
+    let next = iso ?? new Date().toISOString();
+    if (Number.isNaN(new Date(next).getTime())) next = new Date().toISOString();
+    const map = readWatchedAtMap();
+    const cid = canonicalId(id);
+    const existing = map[cid];
+    if (!existing || new Date(next).getTime() > new Date(existing).getTime()) {
+      map[cid] = next;
+      localStorage.setItem(WATCHED_AT_KEY, JSON.stringify(map));
+    }
+  } catch { /* ignore */ }
+}
+
+// ISO string for when an item was watched, or null if unknown. Used as the date
+// fallback in watch-history lists when there's no watch-log entry.
+export function getWatchedAtISO(id: string): string | null {
+  return readWatchedAtMap()[canonicalId(id)] ?? null;
+}

@@ -5,7 +5,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { Movie } from '@/lib/types';
 import { readUserStats, computeAllBadges, ensureSignupDate, ComputedBadge } from '@/lib/badges';
-import { normalizeLocalMediaIds, getAddedAt } from '@/lib/media-id';
+import { normalizeLocalMediaIds, getAddedAt, getWatchedAtISO } from '@/lib/media-id';
 import { BadgeCard, FeaturedSeasonalBadge, TierGuide } from '@/components/badge-card';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
@@ -669,14 +669,15 @@ export default function ProfilePage() {
           );
         };
 
-        // Movies and whole-show watched entries
+        // Movies and whole-show watched entries (shows aren't in the movie watch-log,
+        // so fall back to the watched-at index before giving up to epoch 0)
         for (const id of movieIds) {
-          resolveItem(id, logMap.get(id) ?? new Date(0).toISOString());
+          resolveItem(id, logMap.get(id) ?? getWatchedAtISO(id) ?? new Date(0).toISOString());
         }
 
         // Individual watched episodes
         for (const epId of episodeIds) {
-          resolveEpisode(epId, logMap.get(epId) ?? new Date(0).toISOString());
+          resolveEpisode(epId, logMap.get(epId) ?? getWatchedAtISO(epId) ?? new Date(0).toISOString());
         }
 
         if (fetchPromises.length > 0) await Promise.allSettled(fetchPromises);

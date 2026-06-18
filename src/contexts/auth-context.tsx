@@ -2,7 +2,7 @@
 
 import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
 import { fetchWithAuth } from '@/lib/fetch-with-auth';
-import { canonicalId, normalizeLocalMediaIds, recordAddedAt } from '@/lib/media-id';
+import { canonicalId, normalizeLocalMediaIds, recordAddedAt, recordWatchedAt } from '@/lib/media-id';
 
 const STORAGE_KEY = 'cinephilers_user';
 
@@ -139,6 +139,7 @@ async function restoreFromDb() {
     const dbWatchedIds = new Set(watched.map(w => w.tmdbId));
     for (const w of watched) {
       try { localStorage.setItem(`watched-${w.tmdbId}`, 'true'); } catch { /* ignore */ }
+      recordWatchedAt(w.tmdbId, w.watchedAt);
     }
     // Recover watched state from watch-log (survives even if watched-* keys were wiped)
     // and upload any items not yet in DB so they're safe on every device going forward
@@ -425,6 +426,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           k === 'watch-log' ||
           k === 'media-id-normalized-v1' ||
           k === 'added-at-index' ||
+          k === 'watched-at-index' ||
           k === 'user-favorites' ||
           k === 'user-lists' ||
           k.startsWith('movie-rating-') ||

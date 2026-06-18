@@ -6,7 +6,7 @@ import { History, Eye, Search, SlidersHorizontal, Check, X, Trash2, Film } from 
 import type { ItemMeta } from '@/app/api/meta/[id]/route';
 import { fetchWithAuth } from '@/lib/fetch-with-auth';
 import { removeFromWatchLog } from '@/lib/badges';
-import { legacyTwin, normalizeLocalMediaIds } from '@/lib/media-id';
+import { legacyTwin, normalizeLocalMediaIds, getWatchedAtISO } from '@/lib/media-id';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -50,7 +50,9 @@ function readLoggedAt(id: string, log: { id: string; loggedAt: string }[]): stri
   const entry = log
     .filter(e => e.id === id || e.id.startsWith(id + '-'))
     .sort((a, b) => new Date(b.loggedAt).getTime() - new Date(a.loggedAt).getTime())[0];
-  return entry?.loggedAt ?? new Date(0).toISOString();
+  // Shows and DB-synced items aren't in the movie watch-log; fall back to the
+  // watched-at index so they still sort by date instead of sinking to 1970.
+  return entry?.loggedAt ?? getWatchedAtISO(id) ?? new Date(0).toISOString();
 }
 
 function readMetaCache(id: string): ItemMeta | null {
