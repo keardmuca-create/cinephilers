@@ -280,8 +280,12 @@ export default function HistoryPage() {
   }, []);
 
   // ─── Initial load ──────────────────────────────────────────────────────────
-
-  useEffect(() => {
+  // Reads watched ids + dates from localStorage and (re)sorts newest-first.
+  // Runs on mount AND whenever the page becomes visible again — because Next's
+  // router cache can serve this page on back/forward WITHOUT remounting, which
+  // left a freshly-watched title (just written to localStorage on the movie
+  // page) stuck in its old position instead of popping to the top.
+  const loadFromStorage = useCallback(() => {
     normalizeLocalMediaIds();
     const ids = readAllWatchedIds();
 
@@ -290,15 +294,6 @@ export default function HistoryPage() {
     const dm = new Map<string, string>();
     for (const id of ids) dm.set(id, readLoggedAt(id, log));
     dateMapRef.current = dm;
-
-    const mm = new Map<string, ItemMeta>();
-    for (const id of ids) {
-      const m = readMetaCache(id);
-      if (m) {
-        mm.set(id, m);
-        if (m.tmdbRating !== undefined) fetchingRef.current.add(id);
-      }
-    }
 
     const ratings = new Map<string, number>();
     for (const id of ids) {
@@ -310,10 +305,39 @@ export default function HistoryPage() {
       (a, b) => new Date(dm.get(b) ?? 0).getTime() - new Date(dm.get(a) ?? 0).getTime()
     );
 
-    setMetaMap(mm);
+    setMetaMap(prev => {
+      // Merge any cached meta we don't already hold; keep what we've fetched.
+      const next = new Map(prev);
+      for (const id of ids) {
+        if (!next.has(id)) {
+          const m = readMetaCache(id);
+          if (m) {
+            next.set(id, m);
+            if (m.tmdbRating !== undefined) fetchingRef.current.add(id);
+          }
+        }
+      }
+      return next;
+    });
     setUserRatings(ratings);
     setAllIds(sorted);
   }, []);
+
+  useEffect(() => {
+    loadFromStorage();
+
+    const onVisible = () => { if (document.visibilityState === 'visible') loadFromStorage(); };
+    document.addEventListener('visibilitychange', onVisible);
+    window.addEventListener('focus', loadFromStorage);
+    window.addEventListener('cinephilers-db-restored', loadFromStorage);
+    window.addEventListener('cinephilers-watched-changed', loadFromStorage);
+    return () => {
+      document.removeEventListener('visibilitychange', onVisible);
+      window.removeEventListener('focus', loadFromStorage);
+      window.removeEventListener('cinephilers-db-restored', loadFromStorage);
+      window.removeEventListener('cinephilers-watched-changed', loadFromStorage);
+    };
+  }, [loadFromStorage]);
 
   // ─── Fetch metadata for all IDs in batches ────────────────────────────────
 
@@ -401,8 +425,11 @@ export default function HistoryPage() {
       ids.sort((a, b) => parseInt(metaMap.get(b)?.year ?? '0', 10) - parseInt(metaMap.get(a)?.year ?? '0', 10));
     } else if (sort === 'release-asc') {
       ids.sort((a, b) => parseInt(metaMap.get(a)?.year ?? '9999', 10) - parseInt(metaMap.get(b)?.year ?? '9999', 10));
+    } else {
+      // date-desc (default): sort explicitly so a freshly-watched title always
+      // lands first, rather than relying on allIds happening to be pre-sorted.
+      ids.sort((a, b) => new Date(dateMapRef.current.get(b) ?? 0).getTime() - new Date(dateMapRef.current.get(a) ?? 0).getTime());
     }
-    // date-desc: allIds is already sorted newest-first
 
     return ids;
   }, [allIds, sort, typeFilter, search, metaMap, yearFrom, yearTo]);

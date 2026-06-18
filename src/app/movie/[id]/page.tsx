@@ -1128,6 +1128,7 @@ export default function MovieDetailPage() {
                 removeFromWatchLog(id, 'movie');
                 removeActivity('watched', id);
               }
+              window.dispatchEvent(new Event('cinephilers-watched-changed'));
               toast({ title: next ? 'Marked as watched' : 'Removed from watched' });
             }}
           >
@@ -1176,6 +1177,7 @@ export default function MovieDetailPage() {
                         recordWatchedAt(id);
                         logActivity({ action: 'watched', contentId: id, contentTitle: movie.title, contentPoster: movie.poster, contentYear: movie.year });
                       }
+                      window.dispatchEvent(new Event('cinephilers-watched-changed'));
                     }
                   }} className="transition-all hover:scale-125 active:scale-90 p-0.5">
                     <Star className={`h-5 w-5 transition-colors ${userRating >= i ? 'fill-yellow-400 text-yellow-400' : 'text-foreground/25 hover:text-foreground/50'}`} />
