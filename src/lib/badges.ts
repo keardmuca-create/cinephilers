@@ -43,6 +43,7 @@ export interface WatchEntry {
   hour: number;
   genre: string;
   language: string;
+  source?: 'import';  // bulk-imported entries are excluded from day/week marathon badges
 }
 
 interface SeasonalWindow {
@@ -409,15 +410,18 @@ export function readUserStats(): UserStats {
   const friendsFollowing = parseInt(safeGetItem('following-count') ?? '0', 10) || 0;
   const signupDate       = safeGetItem('signup-date');
 
+  // Marathon/consistency badges reward real-time logging, so exclude bulk imports
+  const loggedMovieEntries = movieEntries.filter(e => e.source !== 'import');
+
   const dayMap = new Map<string, number>();
-  for (const e of movieEntries) {
+  for (const e of loggedMovieEntries) {
     const day = e.loggedAt.slice(0, 10);
     dayMap.set(day, (dayMap.get(day) ?? 0) + 1);
   }
   const maxMoviesInDay = dayMap.size > 0 ? Math.max(...dayMap.values()) : 0;
 
   const weekMap = new Map<string, number>();
-  for (const e of movieEntries) {
+  for (const e of loggedMovieEntries) {
     const d = new Date(e.loggedAt);
     const mon = new Date(d);
     mon.setDate(d.getDate() - ((d.getDay() + 6) % 7));

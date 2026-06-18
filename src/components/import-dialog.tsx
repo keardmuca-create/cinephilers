@@ -242,7 +242,7 @@ export function ImportDialog({ onClose }: { onClose: () => void }) {
           if (existing) {
             if (!existing.language) existing.language = item.language;
           } else if (item.watchedAt) {
-            const entry: WatchEntry = { id: item.tmdbId, type: 'movie', loggedAt: item.watchedAt, hour: 12, genre: '', language: item.language };
+            const entry: WatchEntry = { id: item.tmdbId, type: 'movie', loggedAt: item.watchedAt, hour: 12, genre: '', language: item.language, source: 'import' };
             log.push(entry);
             byId.set(item.tmdbId, entry);
           }
