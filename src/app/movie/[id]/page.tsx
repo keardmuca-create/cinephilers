@@ -20,6 +20,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Badge } from '@/components/ui/badge';
 import { toast } from '@/hooks/use-toast';
 import { appendWatchLog, removeFromWatchLog, saveMovieRating, ensureSignupDate } from '@/lib/badges';
+import { recordAddedAt } from '@/lib/media-id';
 import { logActivity, removeActivity, relativeTime } from '@/lib/activity';
 import { useAuth } from '@/contexts/auth-context';
 import { fetchWithAuth } from '@/lib/fetch-with-auth';
@@ -1059,6 +1060,7 @@ export default function MovieDetailPage() {
                     type: movie!.type,
                     tmdbRating: movie!.rating,
                   }));
+                  recordAddedAt(id);
                 } else {
                   localStorage.removeItem(`watchlist-${id}`);
                 }

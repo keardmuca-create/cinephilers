@@ -2,7 +2,7 @@
 
 import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
 import { fetchWithAuth } from '@/lib/fetch-with-auth';
-import { canonicalId, normalizeLocalMediaIds } from '@/lib/media-id';
+import { canonicalId, normalizeLocalMediaIds, recordAddedAt } from '@/lib/media-id';
 
 const STORAGE_KEY = 'cinephilers_user';
 
@@ -46,8 +46,8 @@ async function restoreFromDb() {
     if (!res.ok) return;
     const { data } = await res.json();
     const { ratings: ratingsRaw, watchlist: watchlistRaw, watched: watchedRaw, reviews: reviewsRaw, favorites: favoritesRaw, lists: listsRaw, hidden } = data as {
-      ratings: { tmdbId: string; mediaType: string; score: number; updatedAt: string }[];
-      watchlist: { tmdbId: string; mediaType: string }[];
+      ratings: { tmdbId: string; mediaType: string; score: number; createdAt: string; updatedAt: string }[];
+      watchlist: { tmdbId: string; mediaType: string; addedAt: string }[];
       watched: { tmdbId: string; mediaType: string; watchedAt: string }[];
       reviews: { tmdbId: string; mediaType: string; body: string; containsSpoiler: boolean; createdAt: string }[];
       favorites: { tmdbId: string; mediaType: string }[];
@@ -95,6 +95,7 @@ async function restoreFromDb() {
     const dbRatingIds = new Set(ratings.map(r => r.tmdbId));
     for (const r of ratings) {
       try { localStorage.setItem(`movie-rating-${r.tmdbId}`, String(r.score)); } catch { /* ignore */ }
+      recordAddedAt(r.tmdbId, r.createdAt);
     }
     try {
       for (let i = 0; i < localStorage.length; i++) {
@@ -121,6 +122,7 @@ async function restoreFromDb() {
           localStorage.setItem(`watchlist-${w.tmdbId}`, JSON.stringify({ id: w.tmdbId, type: w.mediaType === 'SHOW' ? 'show' : 'movie' }));
         }
       } catch { /* ignore */ }
+      recordAddedAt(w.tmdbId, w.addedAt);
     }
     try {
       for (let i = 0; i < localStorage.length; i++) {
@@ -422,6 +424,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           k === 'recently-viewed' ||
           k === 'watch-log' ||
           k === 'media-id-normalized-v1' ||
+          k === 'added-at-index' ||
           k === 'user-favorites' ||
           k === 'user-lists' ||
           k.startsWith('movie-rating-') ||

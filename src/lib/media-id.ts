@@ -87,3 +87,42 @@ export function normalizeLocalMediaIds(): void {
     localStorage.setItem(MIGRATION_FLAG, 'true');
   } catch { /* ignore */ }
 }
+
+// ─── "Added at" index ──────────────────────────────────────────────────────────
+// Ratings and watchlist entries don't store when they were added, so the profile
+// can't sort them newest-first on its own. We keep a single id→ISO-timestamp map
+// here, populated from DB timestamps on login-sync and at the client add points.
+const ADDED_AT_KEY = 'added-at-index';
+
+function readAddedAtMap(): Record<string, string> {
+  try {
+    const raw = localStorage.getItem(ADDED_AT_KEY);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === 'object' ? parsed : {};
+  } catch { return {}; }
+}
+
+// Record when an item was added. Pass an ISO string for known DB timestamps;
+// omit it to stamp "now". A later call only overwrites with an EARLIER date, so
+// the original add time wins over a re-sync that reports a newer updatedAt.
+export function recordAddedAt(id: string, iso?: string): void {
+  try {
+    let next = iso ?? new Date().toISOString();
+    if (Number.isNaN(new Date(next).getTime())) next = new Date().toISOString();
+    const map = readAddedAtMap();
+    const cid = canonicalId(id);
+    const existing = map[cid];
+    if (!existing || new Date(next).getTime() < new Date(existing).getTime()) {
+      map[cid] = next;
+      localStorage.setItem(ADDED_AT_KEY, JSON.stringify(map));
+    }
+  } catch { /* ignore */ }
+}
+
+// Epoch millis for an item's add time, or 0 if unknown (sorts such items last).
+export function getAddedAt(id: string): number {
+  const iso = readAddedAtMap()[canonicalId(id)];
+  const t = iso ? new Date(iso).getTime() : 0;
+  return Number.isNaN(t) ? 0 : t;
+}

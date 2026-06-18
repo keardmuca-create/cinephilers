@@ -1,6 +1,8 @@
 
 // Badge system — definitions, tier computation, localStorage helpers
 
+import { recordAddedAt } from '@/lib/media-id';
+
 export type BadgeTier = 'locked' | 'grey' | 'bronze' | 'silver' | 'gold';
 
 export const TIER_COLORS: Record<BadgeTier, string> = {
@@ -489,6 +491,7 @@ export function removeFromWatchLog(id: string, type: 'movie' | 'episode'): void 
 
 export function saveMovieRating(id: string, rating: number): void {
   try { localStorage.setItem(`movie-rating-${id}`, String(rating)); } catch { /* ignore */ }
+  recordAddedAt(id);
 }
 
 export function ensureSignupDate(): void {

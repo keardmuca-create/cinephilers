@@ -49,3 +49,28 @@ export async function POST(req: NextRequest) {
 
   return ok(review, 'Review saved', { status: 201 });
 }
+
+// Delete a review by tmdbId + mediaType. The profile list only knows the tmdbId
+// (not the DB review id), so it deletes here rather than via /api/reviews/[id].
+export async function DELETE(req: NextRequest) {
+  const auth = await getCurrentUser(req);
+  if (!auth) return err('Unauthorized', 401);
+
+  const url = new URL(req.url);
+  const tmdbId = url.searchParams.get('tmdbId');
+  const mediaType = url.searchParams.get('mediaType');
+  if (!tmdbId || !mediaType) return err('tmdbId and mediaType are required');
+  if (!['MOVIE', 'SHOW'].includes(mediaType)) return err('mediaType must be MOVIE or SHOW');
+
+  const { count } = await prisma.review.deleteMany({
+    where: { userId: auth.sub, tmdbId, mediaType: mediaType as MediaType },
+  });
+  if (count > 0) {
+    await prisma.user.update({
+      where: { id: auth.sub },
+      data: { reviewsCount: { decrement: count } },
+    });
+  }
+
+  return ok(null, 'Review deleted');
+}

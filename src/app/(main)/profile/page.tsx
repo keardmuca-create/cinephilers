@@ -5,7 +5,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { Movie } from '@/lib/types';
 import { readUserStats, computeAllBadges, ensureSignupDate, ComputedBadge } from '@/lib/badges';
-import { normalizeLocalMediaIds } from '@/lib/media-id';
+import { normalizeLocalMediaIds, getAddedAt } from '@/lib/media-id';
 import { BadgeCard, FeaturedSeasonalBadge, TierGuide } from '@/components/badge-card';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
@@ -545,6 +545,15 @@ export default function ProfilePage() {
     }
   }
 
+  const deleteReview = (movieId: string) => {
+    if (!window.confirm('Delete this review? This cannot be undone.')) return;
+    try { localStorage.removeItem(`review-${movieId}`); } catch { /* ignore */ }
+    setUserReviews(prev => prev.filter(r => r.movieId !== movieId));
+    const mediaType = movieId.startsWith('tmdb-tv-') ? 'SHOW' : 'MOVIE';
+    fetchWithAuth(`/api/reviews?tmdbId=${encodeURIComponent(movieId)}&mediaType=${mediaType}`, { method: 'DELETE' }).catch(() => {});
+    toast({ title: 'Review deleted' });
+  };
+
   const loadFromStorage = useCallback(() => {
     normalizeLocalMediaIds();
     ensureSignupDate();
@@ -718,7 +727,7 @@ export default function ProfilePage() {
           trivia: [],
         } as Movie);
       }
-      setWatchlist(wlItems);
+      setWatchlist(wlItems.sort((a, b) => getAddedAt(b.id) - getAddedAt(a.id)));
 
       // Fetch missing metadata in small parallel batches and append as results
       // arrive, so a freshly synced watchlist isn't invisible on the profile
@@ -761,7 +770,8 @@ export default function ProfilePage() {
             if (fetched.length > 0) {
               setWatchlist(prev => {
                 const seen = new Set(prev.map(p => p.id));
-                return [...prev, ...fetched.filter(f => !seen.has(f.id))];
+                return [...prev, ...fetched.filter(f => !seen.has(f.id))]
+                  .sort((a, b) => getAddedAt(b.id) - getAddedAt(a.id));
               });
             }
           }
@@ -838,7 +848,7 @@ export default function ProfilePage() {
         if (!title || !poster) { ratedMissing.push({ id, userRating }); continue; }
         rated.push({ id, title, poster, year: meta?.year ?? rv?.year ?? '', tmdbRating: meta?.tmdbRating ?? rv?.tmdbRating, userRating });
       }
-      setRatedItems(rated);
+      setRatedItems(rated.sort((a, b) => getAddedAt(b.id) - getAddedAt(a.id)));
 
       // Fetch missing metadata so freshly synced ratings appear without a manual refresh
       if (ratedMissing.length > 0) {
@@ -860,7 +870,8 @@ export default function ProfilePage() {
             if (fetched.length > 0) {
               setRatedItems(prev => {
                 const seen = new Set(prev.map(p => p.id));
-                return [...prev, ...fetched.filter(f => !seen.has(f.id))];
+                return [...prev, ...fetched.filter(f => !seen.has(f.id))]
+                  .sort((a, b) => getAddedAt(b.id) - getAddedAt(a.id));
               });
             }
           }
@@ -1336,6 +1347,7 @@ export default function ProfilePage() {
         <SectionHeader
           title="Reviews"
           icon={MessageSquare}
+          count={userReviews.length}
           seeAllContent={userReviews.length > 0 ? (
             <Link
               href="/reviews"
@@ -1348,7 +1360,7 @@ export default function ProfilePage() {
         {userReviews.length > 0 ? (
           <div className="space-y-4">
             {userReviews.slice(0, 3).map(r => (
-              <Link key={r.movieId} href={`/movie/${r.movieId}`} className="group flex gap-4 p-4 rounded-2xl border border-border hover:bg-muted/40 transition-colors">
+              <Link key={r.movieId} href={`/movie/${r.movieId}`} className="group relative flex gap-4 p-4 rounded-2xl border border-border hover:bg-muted/40 transition-colors">
                 <div className="w-14 shrink-0 aspect-[2/3] rounded-lg overflow-hidden bg-muted">
                   {r.moviePoster ? (
                     <img src={r.moviePoster} alt={r.movieTitle} className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
@@ -1370,6 +1382,13 @@ export default function ProfilePage() {
                   <p className="text-[10px] text-muted-foreground">{r.movieYear} · {r.date}</p>
                   <p className="text-xs text-foreground/80 italic line-clamp-2 leading-relaxed">&ldquo;{r.content}&rdquo;</p>
                 </div>
+                <button
+                  onClick={e => { e.preventDefault(); e.stopPropagation(); deleteReview(r.movieId); }}
+                  className="shrink-0 self-start opacity-0 group-hover:opacity-100 transition-opacity p-2 rounded-full hover:bg-red-500/20 text-muted-foreground hover:text-red-400"
+                  aria-label={`Delete review for ${r.movieTitle}`}
+                >
+                  <Trash2 className="h-4 w-4" />
+                </button>
               </Link>
             ))}
           </div>

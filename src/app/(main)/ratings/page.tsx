@@ -4,11 +4,12 @@ import React, { useState, useEffect, useRef, useMemo, Suspense } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Star, ChevronLeft, Search, SlidersHorizontal, Check, X, Film, Eye } from 'lucide-react';
-import { normalizeLocalMediaIds } from '@/lib/media-id';
+import { normalizeLocalMediaIds, getAddedAt } from '@/lib/media-id';
 
-type SortOption = 'rating-desc' | 'rating-asc' | 'title-asc' | 'title-desc' | 'release-desc' | 'release-asc';
+type SortOption = 'recent' | 'rating-desc' | 'rating-asc' | 'title-asc' | 'title-desc' | 'release-desc' | 'release-asc';
 
 const SORT_LABELS: Record<SortOption, string> = {
+  'recent':       'Recently Rated',
   'rating-desc':  'Rating: High to Low',
   'rating-asc':   'Rating: Low to High',
   'title-asc':    'Title A–Z',
@@ -82,10 +83,10 @@ function RatingsPageInner() {
   const router = useRouter();
   const [items, setItems]           = useState<RatedItem[]>([]);
   const [loading, setLoading]       = useState(true);
-  const [sort, setSort]             = useState<SortOption>(() => (typeof sessionStorage !== 'undefined' ? sessionStorage.getItem('ratings-sort') as SortOption : null) || 'rating-desc');
+  const [sort, setSort]             = useState<SortOption>(() => (typeof sessionStorage !== 'undefined' ? sessionStorage.getItem('ratings-sort') as SortOption : null) || 'recent');
   const [search, setSearch]         = useState('');
   const [refineOpen, setRefineOpen] = useState(false);
-  const [pendingSort, setPendingSort] = useState<SortOption>('rating-desc');
+  const [pendingSort, setPendingSort] = useState<SortOption>('recent');
   const [yearFrom, setYearFrom] = useState(() => (typeof sessionStorage !== 'undefined' ? sessionStorage.getItem('ratings-year-from') : null) || '');
   const [yearTo, setYearTo]     = useState(() => (typeof sessionStorage !== 'undefined' ? sessionStorage.getItem('ratings-year-to') : null) || '');
   const [pendingYearFrom, setPendingYearFrom] = useState('');
@@ -171,7 +172,8 @@ function RatingsPageInner() {
     const yTo   = yearTo   ? parseInt(yearTo,   10) : null;
     if (yFrom) result = result.filter(i => parseInt(i.year, 10) >= yFrom);
     if (yTo)   result = result.filter(i => parseInt(i.year, 10) <= yTo);
-    if (sort === 'title-asc')          result.sort((a, b) => a.title.localeCompare(b.title));
+    if (sort === 'recent')             result.sort((a, b) => getAddedAt(b.id) - getAddedAt(a.id));
+    else if (sort === 'title-asc')     result.sort((a, b) => a.title.localeCompare(b.title));
     else if (sort === 'title-desc')    result.sort((a, b) => b.title.localeCompare(a.title));
     else if (sort === 'rating-desc')   result.sort((a, b) => b.userRating - a.userRating);
     else if (sort === 'rating-asc')    result.sort((a, b) => a.userRating - b.userRating);
@@ -265,7 +267,7 @@ function RatingsPageInner() {
                 <span className="text-sm text-gray-500">{SORT_LABELS[pendingSort]}</span>
               </div>
               <div className="space-y-1">
-                {(['rating-desc', 'rating-asc', 'release-desc', 'release-asc', 'title-asc', 'title-desc'] as SortOption[]).map(s => (
+                {(['recent', 'rating-desc', 'rating-asc', 'release-desc', 'release-asc', 'title-asc', 'title-desc'] as SortOption[]).map(s => (
                   <button key={s} onClick={() => setPendingSort(s)} className="w-full flex items-center justify-between py-2.5 text-sm">
                     <span className={pendingSort === s ? 'font-semibold text-gray-900' : 'text-gray-500'}>{SORT_LABELS[s]}</span>
                     {pendingSort === s && <Check className="h-4 w-4 text-primary" />}

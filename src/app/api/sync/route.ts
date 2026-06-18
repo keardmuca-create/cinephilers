@@ -8,8 +8,8 @@ export async function GET(req: NextRequest) {
   if (!auth) return err('Unauthorized', 401);
 
   const [ratings, watchlist, watched, reviews, favorites, lists, hidden] = await Promise.all([
-    prisma.rating.findMany({ where: { userId: auth.sub }, select: { tmdbId: true, mediaType: true, score: true, updatedAt: true } }),
-    prisma.watchlistItem.findMany({ where: { userId: auth.sub }, select: { tmdbId: true, mediaType: true } }),
+    prisma.rating.findMany({ where: { userId: auth.sub }, select: { tmdbId: true, mediaType: true, score: true, createdAt: true, updatedAt: true } }),
+    prisma.watchlistItem.findMany({ where: { userId: auth.sub }, select: { tmdbId: true, mediaType: true, addedAt: true } }),
     prisma.watchedItem.findMany({ where: { userId: auth.sub }, select: { tmdbId: true, mediaType: true, watchedAt: true } }),
     prisma.review.findMany({
       where: { userId: auth.sub },

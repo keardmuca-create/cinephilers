@@ -6,6 +6,7 @@ import { X, Upload, Loader2, CheckCircle, AlertCircle, ChevronRight, Film } from
 import { Button } from '@/components/ui/button';
 import { fetchWithAuth } from '@/lib/fetch-with-auth';
 import type { WatchEntry } from '@/lib/badges';
+import { recordAddedAt } from '@/lib/media-id';
 
 type Platform = 'letterboxd' | 'imdb';
 type Step = 'pick' | 'upload' | 'matching' | 'confirm' | 'importing' | 'done';
@@ -238,6 +239,7 @@ export function ImportDialog({ onClose }: { onClose: () => void }) {
           if (item.watchedAt) localStorage.setItem(`watched-${item.tmdbId}`, 'true');
           if (item.inWatchlist) localStorage.setItem(`watchlist-${item.tmdbId}`, JSON.stringify({ id: item.tmdbId, title: item.matchedTitle, poster: item.poster ?? '', year: item.year, type: meta.type }));
           if (item.rating) localStorage.setItem(`movie-rating-${item.tmdbId}`, String(item.rating));
+          if (item.inWatchlist || item.rating) recordAddedAt(item.tmdbId, item.watchedAt || undefined);
         }
 
         // Append watched movies to the badge watch-log so badges like World Cinema count them.

@@ -4,10 +4,12 @@ import React, { useState, useEffect, useMemo } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Bookmark, ChevronLeft, Search, SlidersHorizontal, Check, X, Film } from 'lucide-react';
+import { getAddedAt } from '@/lib/media-id';
 
-type SortOption = 'title-asc' | 'title-desc' | 'release-desc' | 'release-asc';
+type SortOption = 'recent' | 'title-asc' | 'title-desc' | 'release-desc' | 'release-asc';
 
 const SORT_LABELS: Record<SortOption, string> = {
+  'recent':       'Recently Added',
   'title-asc':    'Title A–Z',
   'title-desc':   'Title Z–A',
   'release-desc': 'Release Date: Newest',
@@ -54,10 +56,10 @@ export default function WatchlistPage() {
   const router = useRouter();
   const [items, setItems]           = useState<WatchlistItem[]>([]);
   const [fetchingMeta, setFetchingMeta] = useState(false);
-  const [sort, setSort]             = useState<SortOption>(() => (typeof sessionStorage !== 'undefined' ? sessionStorage.getItem('watchlist-sort') as SortOption : null) || 'title-asc');
+  const [sort, setSort]             = useState<SortOption>(() => (typeof sessionStorage !== 'undefined' ? sessionStorage.getItem('watchlist-sort') as SortOption : null) || 'recent');
   const [search, setSearch]         = useState('');
   const [refineOpen, setRefineOpen] = useState(false);
-  const [pendingSort, setPendingSort] = useState<SortOption>('title-asc');
+  const [pendingSort, setPendingSort] = useState<SortOption>('recent');
   const [yearFrom, setYearFrom] = useState(() => (typeof sessionStorage !== 'undefined' ? sessionStorage.getItem('watchlist-year-from') : null) || '');
   const [yearTo, setYearTo]     = useState(() => (typeof sessionStorage !== 'undefined' ? sessionStorage.getItem('watchlist-year-to') : null) || '');
   const [pendingYearFrom, setPendingYearFrom] = useState('');
@@ -160,7 +162,8 @@ export default function WatchlistPage() {
     const yTo   = yearTo   ? parseInt(yearTo,   10) : null;
     if (yFrom) result = result.filter(i => parseInt(i.year, 10) >= yFrom);
     if (yTo)   result = result.filter(i => parseInt(i.year, 10) <= yTo);
-    if (sort === 'title-asc')         result.sort((a, b) => a.title.localeCompare(b.title));
+    if (sort === 'recent')            result.sort((a, b) => getAddedAt(b.id) - getAddedAt(a.id));
+    else if (sort === 'title-asc')    result.sort((a, b) => a.title.localeCompare(b.title));
     else if (sort === 'title-desc')   result.sort((a, b) => b.title.localeCompare(a.title));
     else if (sort === 'release-desc') result.sort((a, b) => parseInt(b.year, 10) - parseInt(a.year, 10));
     else if (sort === 'release-asc')  result.sort((a, b) => parseInt(a.year, 10) - parseInt(b.year, 10));
@@ -236,7 +239,7 @@ export default function WatchlistPage() {
                 <span className="text-sm text-gray-500">{SORT_LABELS[pendingSort]}</span>
               </div>
               <div className="space-y-1">
-                {(['release-desc', 'release-asc', 'title-asc', 'title-desc'] as SortOption[]).map(s => (
+                {(['recent', 'release-desc', 'release-asc', 'title-asc', 'title-desc'] as SortOption[]).map(s => (
                   <button key={s} onClick={() => setPendingSort(s)} className="w-full flex items-center justify-between py-2.5 text-sm">
                     <span className={pendingSort === s ? 'font-semibold text-gray-900' : 'text-gray-500'}>{SORT_LABELS[s]}</span>
                     {pendingSort === s && <Check className="h-4 w-4 text-primary" />}
