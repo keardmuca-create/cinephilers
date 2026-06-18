@@ -5,7 +5,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { Movie } from '@/lib/types';
 import { readUserStats, computeAllBadges, ensureSignupDate, ComputedBadge } from '@/lib/badges';
-import { normalizeLocalMediaIds, getAddedAt, getWatchedAtISO } from '@/lib/media-id';
+import { normalizeLocalMediaIds, getAddedAt, getWatchedAtISO, getManualWatchISO } from '@/lib/media-id';
 import { BadgeCard, FeaturedSeasonalBadge, TierGuide } from '@/components/badge-card';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
@@ -682,7 +682,17 @@ export default function ProfilePage() {
 
         if (fetchPromises.length > 0) await Promise.allSettled(fetchPromises);
 
-        items.sort((a, b) => new Date(b.loggedAt).getTime() - new Date(a.loggedAt).getTime());
+        // Two tiers, matching the history page: titles marked watched IN THE APP
+        // come first (newest first), then imported titles by date — so a hand-marked
+        // film always leads the strip instead of being buried under "today"-dated imports.
+        items.sort((a, b) => {
+          const am = getManualWatchISO(a.id);
+          const bm = getManualWatchISO(b.id);
+          if (am && !bm) return -1;
+          if (!am && bm) return 1;
+          if (am && bm) return new Date(bm).getTime() - new Date(am).getTime();
+          return new Date(b.loggedAt).getTime() - new Date(a.loggedAt).getTime();
+        });
         setRecentWatched(items.slice(0, 50));
       } catch { /* ignore */ }
     };
@@ -891,14 +901,26 @@ export default function ProfilePage() {
   // Refresh follower/following counts from DB on mount
   useEffect(() => { refetch(); }, [refetch]);
 
-  // Re-run stats AND watch history when DB restore finishes (new cross-device data just landed)
+  // Re-run stats AND watch history when DB restore finishes (new cross-device data
+  // just landed), when a title is marked watched in-app, and when the page becomes
+  // visible again — Next's router cache can serve this page without remounting, so a
+  // freshly-marked title wouldn't otherwise reach the top of the strip.
   useEffect(() => {
     const handler = () => {
       recomputeStats();
       loadFromStorage();
     };
+    const onVisible = () => { if (document.visibilityState === 'visible') handler(); };
     window.addEventListener('cinephilers-db-restored', handler);
-    return () => window.removeEventListener('cinephilers-db-restored', handler);
+    window.addEventListener('cinephilers-watched-changed', handler);
+    window.addEventListener('focus', handler);
+    document.addEventListener('visibilitychange', onVisible);
+    return () => {
+      window.removeEventListener('cinephilers-db-restored', handler);
+      window.removeEventListener('cinephilers-watched-changed', handler);
+      window.removeEventListener('focus', handler);
+      document.removeEventListener('visibilitychange', onVisible);
+    };
   }, [recomputeStats, loadFromStorage]);
 
   const ratingData = [1,2,3,4,5,6,7,8,9,10].map(n => ({
