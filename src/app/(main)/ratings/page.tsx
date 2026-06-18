@@ -1,8 +1,8 @@
 "use client"
 
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useMemo, Suspense } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { Star, ChevronLeft, Search, SlidersHorizontal, Check, X, Film, Eye } from 'lucide-react';
 
 type SortOption = 'rating-desc' | 'rating-asc' | 'title-asc' | 'title-desc' | 'release-desc' | 'release-asc';
@@ -77,7 +77,7 @@ function ItemCard({ item }: { item: RatedItem }) {
   );
 }
 
-export default function RatingsPage() {
+function RatingsPageInner() {
   const router = useRouter();
   const [items, setItems]           = useState<RatedItem[]>([]);
   const [loading, setLoading]       = useState(true);
@@ -89,13 +89,17 @@ export default function RatingsPage() {
   const [yearTo, setYearTo]     = useState(() => (typeof sessionStorage !== 'undefined' ? sessionStorage.getItem('ratings-year-to') : null) || '');
   const [pendingYearFrom, setPendingYearFrom] = useState('');
   const [pendingYearTo, setPendingYearTo]     = useState('');
-  const [ratingFilter, setRatingFilter] = useState<number | null>(() => {
-    if (typeof window === 'undefined') return null;
-    const v = new URLSearchParams(window.location.search).get('rating');
-    const n = v ? parseInt(v, 10) : NaN;
-    return Number.isFinite(n) && n >= 1 && n <= 10 ? n : null;
-  });
+  const searchParams = useSearchParams();
+  const [ratingFilter, setRatingFilter] = useState<number | null>(null);
   const fetchingRef = useRef(new Set<string>());
+
+  // Read the ?rating=N param reactively. The page doesn't remount when only the
+  // query changes (same route segment), so a useState initializer would go stale.
+  useEffect(() => {
+    const v = searchParams.get('rating');
+    const n = v ? parseInt(v, 10) : NaN;
+    setRatingFilter(Number.isFinite(n) && n >= 1 && n <= 10 ? n : null);
+  }, [searchParams]);
 
   useEffect(() => {
     const load = async () => {
@@ -184,7 +188,7 @@ export default function RatingsPage() {
         <h1 className="text-lg font-headline font-bold truncate flex-1">Ratings</h1>
         {ratingFilter !== null && (
           <button
-            onClick={() => setRatingFilter(null)}
+            onClick={() => { setRatingFilter(null); router.replace('/ratings'); }}
             className="flex items-center gap-1.5 text-xs font-bold text-blue-400 bg-blue-400/10 border border-blue-400/30 rounded-full px-3 py-1.5 hover:bg-blue-400/20 transition-colors"
           >
             ★ Rated {ratingFilter}/10 <X className="h-3 w-3" />
@@ -281,5 +285,13 @@ export default function RatingsPage() {
         </div>
       )}
     </main>
+  );
+}
+
+export default function RatingsPage() {
+  return (
+    <Suspense fallback={null}>
+      <RatingsPageInner />
+    </Suspense>
   );
 }
