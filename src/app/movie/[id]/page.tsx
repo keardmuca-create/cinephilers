@@ -455,7 +455,7 @@ function AddToListButton({ movie, onRequireAuth }: { movie: Movie; onRequireAuth
               <button
                 key={l.id}
                 onClick={() => addToList(l.id)}
-                className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-left transition-colors ${isInList(l.id) ? 'bg-primary/10 border border-primary/30' : 'hover:bg-muted border border-transparent'}`}
+                className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-left transition-colors border border-primary ${isInList(l.id) ? 'bg-primary/10' : 'hover:bg-primary/5'}`}
               >
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-semibold truncate">{l.title}</p>

@@ -327,6 +327,7 @@ export async function searchTmdb(query: string): Promise<{ results: Movie[]; peo
     results: (TmdbMovie & { media_type: string; profile_path?: string | null; known_for_department?: string })[]
   }>('/search/multi', { query });
 
+  const topPeople: CombinedSearchResult[] = [];     // actors/directors matching most of their name — ranked first
   const movieItems: CombinedSearchResult[] = [];
   const talentItems: CombinedSearchResult[] = [];   // actors + directors
   const crewItems: CombinedSearchResult[] = [];     // other crew — only shown on full-name match
@@ -349,19 +350,28 @@ export async function searchTmdb(query: string): Promise<{ results: Movie[]; peo
       };
       people.push(person);
 
+      // A strong name match: the query covers most/all of the person's name
+      // (e.g. "johnny depp"). Such people get promoted above movies so the
+      // actual person shows before documentaries/films about them.
+      const nameWords = person.name.toLowerCase().split(/\s+/).filter(Boolean);
+      const matchedWords = nameWords.filter(w => queryLower.includes(w)).length;
+      const isStrongMatch =
+        nameWords.length > 0 && matchedWords / nameWords.length >= 0.75 && matchedWords >= 1;
+
       const dept = person.department;
       if (MAIN_TALENT_DEPTS.has(dept)) {
-        talentItems.push({ kind: 'person', data: person });
+        if (isStrongMatch) topPeople.push({ kind: 'person', data: person });
+        else talentItems.push({ kind: 'person', data: person });
       } else {
         // Only include other crew if every word of their name appears in the query
-        const nameWords = person.name.toLowerCase().split(/\s+/).filter(Boolean);
         const isFullName = nameWords.length > 1 && nameWords.every(w => queryLower.includes(w));
         if (isFullName) crewItems.push({ kind: 'person', data: person });
       }
     }
   }
 
-  const combined: CombinedSearchResult[] = [...movieItems, ...talentItems, ...crewItems];
+  // Strongly-matched actors/directors lead, then movies, then weaker talent/crew.
+  const combined: CombinedSearchResult[] = [...topPeople, ...movieItems, ...talentItems, ...crewItems];
   return { results, people, combined };
 }
 
@@ -647,9 +657,14 @@ function buildCredit(item: TmdbMovie & { character?: string; job?: string }, rol
   };
 }
 
-function isUpcoming(year: string): boolean {
-  if (!year) return true;
-  return parseInt(year, 10) > new Date().getFullYear();
+// Upcoming = no release date yet (unannounced/TBA) or a date still in the future.
+// A film released earlier in the current year has a past date and is NOT upcoming.
+function isUpcoming(item: { release_date?: string; first_air_date?: string }): boolean {
+  const date = item.release_date ?? item.first_air_date ?? '';
+  if (!date) return true;
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  return new Date(date) > today;
 }
 
 export async function getPersonCredits(personId: number): Promise<{
@@ -679,7 +694,7 @@ export async function getPersonCredits(personId: number): Promise<{
     const title = item.title ?? item.name ?? '';
     if (!title) continue;
     const credit = buildCredit(item as TmdbMovie & { character?: string; job?: string });
-    const dest = isUpcoming(credit.year) ? byUpcoming : bySection;
+    const dest = isUpcoming(item) ? byUpcoming : bySection;
     add(dest, 'Actor', credit.id, credit);
   }
 
@@ -689,7 +704,7 @@ export async function getPersonCredits(personId: number): Promise<{
     if (!title) continue;
     const label = crewSectionLabel(item.job ?? '', item.department ?? '');
     const credit = buildCredit(item as TmdbMovie & { character?: string; job?: string }, item.job);
-    const dest = isUpcoming(credit.year) ? byUpcoming : bySection;
+    const dest = isUpcoming(item) ? byUpcoming : bySection;
     add(dest, label, credit.id, credit);
   }
 
