@@ -28,6 +28,8 @@ export async function POST(req: NextRequest) {
   const valid = await bcrypt.compare(password, user.passwordHash);
   if (!valid) return err('Invalid credentials', 401);
 
+  if (user.isBanned) return err('This account has been suspended.', 403);
+
   const payload = { sub: user.id, username: user.username, role: user.role };
   const [accessToken, refreshToken] = await Promise.all([
     signAccessToken(payload),

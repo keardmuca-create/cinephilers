@@ -79,14 +79,18 @@ export async function POST(req: NextRequest) {
       } catch { failed++; }
     }
 
-    // Rating
-    if (item.rating && !hasRating.has(key)) {
-      try {
-        await prisma.rating.create({
-          data: { userId, tmdbId: item.tmdbId, mediaType: item.mediaType, score: item.rating },
-        });
-        ratingsAdded++;
-      } catch { failed++; }
+    // Rating — only accept whole numbers 1-10
+    if (item.rating != null && !hasRating.has(key)) {
+      if (!Number.isInteger(item.rating) || item.rating < 1 || item.rating > 10) {
+        failed++;
+      } else {
+        try {
+          await prisma.rating.create({
+            data: { userId, tmdbId: item.tmdbId, mediaType: item.mediaType, score: item.rating },
+          });
+          ratingsAdded++;
+        } catch { failed++; }
+      }
     }
 
     // Review

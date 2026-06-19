@@ -43,9 +43,11 @@ export async function rateLimit(key: string, limit: number, windowMs: number): P
 }
 
 export function getIp(req: Request): string {
+  // Prefer x-real-ip: on Vercel it's a single value set by the platform and
+  // can't be spoofed by appending to a client-supplied x-forwarded-for chain.
   return (
-    req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ??
-    req.headers.get('x-real-ip') ??
+    req.headers.get('x-real-ip')?.trim() ||
+    req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ||
     'unknown'
   );
 }

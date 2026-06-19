@@ -2,7 +2,7 @@ import { NextRequest } from 'next/server';
 import crypto from 'crypto';
 import { prisma } from '@/lib/db';
 import { ok, err } from '@/lib/api-response';
-import { verifyRefreshToken, signAccessToken, signRefreshToken, setAuthCookies } from '@/lib/auth-utils';
+import { verifyRefreshToken, signAccessToken, signRefreshToken, setAuthCookies, clearAuthCookies } from '@/lib/auth-utils';
 
 export async function POST(req: NextRequest) {
   const refreshToken = req.cookies.get('refresh_token')?.value;
@@ -16,6 +16,11 @@ export async function POST(req: NextRequest) {
     where: { id: payload.sub, refreshTokenHash: refreshHash },
   });
   if (!user) return err('Refresh token revoked', 401);
+
+  if (user.isBanned) {
+    await clearAuthCookies();
+    return err('This account has been suspended.', 403);
+  }
 
   const newPayload = { sub: user.id, username: user.username, role: user.role };
   const [newAccess, newRefresh] = await Promise.all([

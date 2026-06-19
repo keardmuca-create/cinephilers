@@ -1,8 +1,12 @@
 import { NextRequest } from 'next/server';
 import { ok, err } from '@/lib/api-response';
 import { sendSupportEmail } from '@/lib/email';
+import { rateLimit, getIp } from '@/lib/rate-limit';
 
 export async function POST(req: NextRequest) {
+  const { allowed, retryAfter } = await rateLimit(`support:${getIp(req)}`, 3, 60_000);
+  if (!allowed) return err(`Too many messages. Try again in ${retryAfter}s`, 429);
+
   const body = await req.json().catch(() => null);
   if (!body) return err('Invalid JSON');
 
