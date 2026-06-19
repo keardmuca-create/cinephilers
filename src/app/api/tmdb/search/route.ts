@@ -157,12 +157,18 @@ export async function GET(req: NextRequest) {
     const releaseYear = (isTV ? (top.first_air_date ?? '') : (top.release_date ?? '')).slice(0, 4);
     const poster = top.poster_path ? `https://image.tmdb.org/t/p/w200${top.poster_path}` : null;
 
-    // Confident only when the title is (near-)identical AND the year lines up.
-    // Loose matches (subtitle/substring) or year gaps ≥ 2 are flagged for manual review
-    // so we don't silently import the wrong film.
     const sim = titleSimilarity(q, title);
     const yearGap = inputYear ? Math.abs(yearOf(top, isTV) - inputYear) : null;
-    const confident = sim >= 0.9 && (yearGap === null || yearGap <= 1);
+    // Ambiguous if multiple results across movie+tv share a similar title — can't auto-pick safely.
+    const titleMatchCount = [
+      ...movieResults.filter(r => titleMatches(q, r.title ?? '')),
+      ...tvResults.filter(r => titleMatches(q, r.name ?? '')),
+    ].length;
+    const confident =
+      sim >= 0.9 &&
+      (yearGap === null || yearGap <= 1) &&
+      (top.vote_count ?? 0) >= 20 &&
+      titleMatchCount <= 1;
 
     return ok({ tmdbId, mediaType, title, year: releaseYear, poster, language: top.original_language ?? '', rating: typeof top.vote_average === 'number' ? top.vote_average : undefined, confident });
   } catch {
