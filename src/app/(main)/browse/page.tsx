@@ -134,6 +134,7 @@ export default function SearchPage() {
   const [recentItems, setRecentItems] = useState<RecentItem[]>([]);
 
   const [comingSoonTab, setComingSoonTab] = useState<'movie' | 'show'>('movie');
+  const [searchTab, setSearchTab] = useState<'titles' | 'people'>('titles');
 
   const fallback = { movies: [], shows: [], trending: [] };
   const { data } = usePopularMovies(fallback);
@@ -205,15 +206,47 @@ export default function SearchPage() {
                 <Loader2 className="h-4 w-4 animate-spin" /> Searching…
               </div>
             ) : searchCombined.length > 0 ? (
-              <div className="divide-y divide-border">
-                {searchCombined.map((item, i) =>
-                  item.kind === 'person' ? (
-                    <PersonRow key={`person-${item.data.id}-${i}`} person={item.data} />
+              <>
+                <div className="flex w-full rounded-full border border-border p-1 mb-3">
+                  <button
+                    onClick={() => setSearchTab('titles')}
+                    className={`flex-1 rounded-full py-2 text-sm font-medium transition-colors ${searchTab === 'titles' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground'}`}
+                  >
+                    Movies &amp; Shows
+                  </button>
+                  <button
+                    onClick={() => setSearchTab('people')}
+                    className={`flex-1 rounded-full py-2 text-sm font-medium transition-colors ${searchTab === 'people' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground'}`}
+                  >
+                    People
+                  </button>
+                </div>
+                {searchTab === 'titles' ? (
+                  searchCombined.some(i => i.kind === 'movie') ? (
+                    <div className="divide-y divide-border">
+                      {searchCombined.map((item, i) =>
+                        item.kind === 'movie' ? (
+                          <ResultRow key={`movie-${item.data.id}-${i}`} id={item.data.id} poster={item.data.poster} title={item.data.title} sub={item.data.year} />
+                        ) : null
+                      )}
+                    </div>
                   ) : (
-                    <ResultRow key={`movie-${item.data.id}-${i}`} id={item.data.id} poster={item.data.poster} title={item.data.title} sub={item.data.year} />
+                    <p className="text-sm text-muted-foreground py-8 text-center">No movies or shows for &ldquo;{searchTerm}&rdquo;</p>
+                  )
+                ) : (
+                  searchCombined.some(i => i.kind === 'person') ? (
+                    <div className="divide-y divide-border">
+                      {searchCombined.map((item, i) =>
+                        item.kind === 'person' ? (
+                          <PersonRow key={`person-${item.data.id}-${i}`} person={item.data} />
+                        ) : null
+                      )}
+                    </div>
+                  ) : (
+                    <p className="text-sm text-muted-foreground py-8 text-center">No people for &ldquo;{searchTerm}&rdquo;</p>
                   )
                 )}
-              </div>
+              </>
             ) : (
               <p className="text-sm text-muted-foreground py-8 text-center">
                 No results for &ldquo;{searchTerm}&rdquo;

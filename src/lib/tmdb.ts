@@ -327,7 +327,6 @@ export async function searchTmdb(query: string): Promise<{ results: Movie[]; peo
     results: (TmdbMovie & { media_type: string; profile_path?: string | null; known_for_department?: string })[]
   }>('/search/multi', { query });
 
-  const topPeople: CombinedSearchResult[] = [];     // actors/directors matching most of their name — ranked first
   const movieItems: CombinedSearchResult[] = [];
   const talentItems: CombinedSearchResult[] = [];   // actors + directors
   const crewItems: CombinedSearchResult[] = [];     // other crew — only shown on full-name match
@@ -350,28 +349,19 @@ export async function searchTmdb(query: string): Promise<{ results: Movie[]; peo
       };
       people.push(person);
 
-      // A strong name match: the query covers most/all of the person's name
-      // (e.g. "johnny depp"). Such people get promoted above movies so the
-      // actual person shows before documentaries/films about them.
-      const nameWords = person.name.toLowerCase().split(/\s+/).filter(Boolean);
-      const matchedWords = nameWords.filter(w => queryLower.includes(w)).length;
-      const isStrongMatch =
-        nameWords.length > 0 && matchedWords / nameWords.length >= 0.75 && matchedWords >= 1;
-
       const dept = person.department;
       if (MAIN_TALENT_DEPTS.has(dept)) {
-        if (isStrongMatch) topPeople.push({ kind: 'person', data: person });
-        else talentItems.push({ kind: 'person', data: person });
+        talentItems.push({ kind: 'person', data: person });
       } else {
         // Only include other crew if every word of their name appears in the query
+        const nameWords = person.name.toLowerCase().split(/\s+/).filter(Boolean);
         const isFullName = nameWords.length > 1 && nameWords.every(w => queryLower.includes(w));
         if (isFullName) crewItems.push({ kind: 'person', data: person });
       }
     }
   }
 
-  // Strongly-matched actors/directors lead, then movies, then weaker talent/crew.
-  const combined: CombinedSearchResult[] = [...topPeople, ...movieItems, ...talentItems, ...crewItems];
+  const combined: CombinedSearchResult[] = [...movieItems, ...talentItems, ...crewItems];
   return { results, people, combined };
 }
 
