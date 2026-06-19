@@ -159,16 +159,12 @@ export async function GET(req: NextRequest) {
 
     const sim = titleSimilarity(q, title);
     const yearGap = inputYear ? Math.abs(yearOf(top, isTV) - inputYear) : null;
-    // Ambiguous if multiple results across movie+tv share a similar title — can't auto-pick safely.
-    const titleMatchCount = [
-      ...movieResults.filter(r => titleMatches(q, r.title ?? '')),
-      ...tvResults.filter(r => titleMatches(q, r.name ?? '')),
-    ].length;
+    // Confident only when title is near-identical, year lines up, and the match
+    // has enough votes to rule out obscure wrong films with the same name.
     const confident =
       sim >= 0.9 &&
       (yearGap === null || yearGap <= 1) &&
-      (top.vote_count ?? 0) >= 20 &&
-      titleMatchCount <= 1;
+      (top.vote_count ?? 0) >= 20;
 
     return ok({ tmdbId, mediaType, title, year: releaseYear, poster, language: top.original_language ?? '', rating: typeof top.vote_average === 'number' ? top.vote_average : undefined, confident });
   } catch {
