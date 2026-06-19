@@ -8,9 +8,10 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ t
   const auth = await getCurrentUser(req);
   if (!auth) return err('Unauthorized', 401);
 
-  const { tmdbId } = await params;
+  const { tmdbId: rawId } = await params;
   const mediaType = new URL(req.url).searchParams.get('mediaType') as MediaType | null;
   if (!mediaType || !['MOVIE', 'SHOW'].includes(mediaType)) return err('mediaType query param required');
+  const tmdbId = rawId.startsWith('tmdb-') ? rawId : `tmdb-${rawId}`;
 
   await prisma.watchedItem.deleteMany({ where: { userId: auth.sub, tmdbId, mediaType } });
   return ok(null, 'Removed from watched');
