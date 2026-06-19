@@ -2,6 +2,7 @@ import { NextRequest } from 'next/server';
 import { prisma } from '@/lib/db';
 import { ok, err } from '@/lib/api-response';
 import { getCurrentUser } from '@/lib/auth-utils';
+import { sanitizeText } from '@/lib/sanitize';
 
 export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const auth = await getCurrentUser(req);
@@ -16,12 +17,18 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
   if (!body) return err('Invalid JSON');
 
   const { body: reviewBody, containsSpoiler } = body as { body?: string; containsSpoiler?: boolean };
-  if (reviewBody && reviewBody.trim().length < 10) return err('Review must be at least 10 characters');
+
+  let cleanBody: string | undefined;
+  if (reviewBody !== undefined) {
+    cleanBody = sanitizeText(reviewBody);
+    if (cleanBody.length < 10) return err('Review must be at least 10 characters');
+    if (cleanBody.length > 5000) return err('Review must be under 5000 characters');
+  }
 
   const updated = await prisma.review.update({
     where: { id },
     data: {
-      ...(reviewBody && { body: reviewBody.trim() }),
+      ...(cleanBody !== undefined && { body: cleanBody }),
       ...(containsSpoiler !== undefined && { containsSpoiler }),
     },
   });
