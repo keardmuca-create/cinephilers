@@ -33,9 +33,9 @@ function buildCsp(nonce: string): string {
   return [
     "default-src 'self'",
     scriptSrc,
-    "style-src 'self' 'unsafe-inline'",
+    "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
     "img-src 'self' data: blob: https://image.tmdb.org https://picsum.photos https://placehold.co https://images.unsplash.com https://*.public.blob.vercel-storage.com",
-    "font-src 'self'",
+    "font-src 'self' https://fonts.gstatic.com",
     "frame-src 'self' https://www.youtube.com https://www.youtube-nocookie.com",
     "connect-src 'self' https://api.themoviedb.org https://*.ingest.sentry.io https://*.sentry.io",
     "media-src 'self' https://www.youtube.com",
