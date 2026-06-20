@@ -1,6 +1,7 @@
 
 import type { Metadata, Viewport } from 'next';
 import { headers } from 'next/headers';
+import { Analytics } from '@vercel/analytics/next';
 import './globals.css';
 import { Toaster } from '@/components/ui/toaster';
 import { AuthProvider } from '@/contexts/auth-context';
@@ -62,6 +63,7 @@ export default async function RootLayout({
           {children}
           <Toaster />
         </AuthProvider>
+        <Analytics />
       </body>
     </html>
   );
