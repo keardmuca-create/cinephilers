@@ -4,6 +4,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Plus, X, Search, Heart, RefreshCw, Film } from 'lucide-react';
 import Link from 'next/link';
 import { fetchWithAuth } from '@/lib/fetch-with-auth';
+import { batchFetchMeta } from '@/lib/meta-batch';
 import { useAuth } from '@/contexts/auth-context';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
@@ -57,18 +58,13 @@ export function FavoritesSection() {
         if (dbItems.length === 0) return;
         // local item.id === db.tmdbId — build merged list preserving local metadata
         const localByTmdbId = new Map(local.map(f => [f.id, f]));
-        const merged: FavoriteItem[] = await Promise.all(dbItems.map(async db => {
+        const missingIds = dbItems.filter(db => !localByTmdbId.has(db.tmdbId)).map(db => db.tmdbId);
+        const metaMap = missingIds.length > 0 ? await batchFetchMeta(missingIds) : {};
+        const merged: FavoriteItem[] = dbItems.map(db => {
           if (localByTmdbId.has(db.tmdbId)) return localByTmdbId.get(db.tmdbId)!;
-          // Not in localStorage — fetch meta from API
-          try {
-            const res = await fetch(`/api/meta/${db.tmdbId}`);
-            if (res.ok) {
-              const m = await res.json();
-              return { id: db.tmdbId, title: m.title ?? '', year: m.year ?? '', poster: m.poster ?? '', type: db.mediaType === 'SHOW' ? 'show' as const : 'movie' as const };
-            }
-          } catch { /* ignore */ }
-          return { id: db.tmdbId, title: '', year: '', poster: '', type: db.mediaType === 'SHOW' ? 'show' as const : 'movie' as const };
-        }));
+          const m = metaMap[db.tmdbId];
+          return { id: db.tmdbId, title: m?.title ?? '', year: m?.year ?? '', poster: m?.poster ?? '', type: db.mediaType === 'SHOW' ? 'show' as const : 'movie' as const };
+        });
         setFavorites(merged);
         saveFavorites(merged);
       })

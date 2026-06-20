@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button';
 import { useAuth } from '@/contexts/auth-context';
 import { relativeTime } from '@/lib/activity';
 import { fetchWithAuth } from '@/lib/fetch-with-auth';
+import { batchFetchMeta } from '@/lib/meta-batch';
 
 interface ProfileUser {
   id: string;
@@ -84,14 +85,19 @@ const metaCache: Record<string, { title: string; year: string; poster: string }>
 
 async function getMeta(tmdbId: string) {
   if (metaCache[tmdbId]) return metaCache[tmdbId];
-  try {
-    const res = await fetch(`/api/meta/${tmdbId}`);
-    if (!res.ok) return null;
-    const d = await res.json();
-    const m = { title: d.title ?? 'Unknown', year: d.year ?? '', poster: d.poster ?? '' };
-    metaCache[tmdbId] = m;
-    return m;
-  } catch { return null; }
+  const map = await batchFetchMeta([tmdbId]);
+  const d = map[tmdbId];
+  if (!d) return null;
+  const m = { title: d.title ?? 'Unknown', year: d.year ?? '', poster: d.poster ?? '' };
+  metaCache[tmdbId] = m;
+  return m;
+}
+
+async function prewarmMetaCache(ids: string[]) {
+  const map = await batchFetchMeta(ids);
+  for (const [id, m] of Object.entries(map)) {
+    metaCache[id] = { title: m.title, year: m.year, poster: m.poster };
+  }
 }
 
 function Avatar({ user, size = 80 }: { user: { username: string; displayName?: string | null; avatarUrl?: string | null }; size?: number }) {
@@ -228,11 +234,19 @@ export default function PublicProfilePage() {
         .catch(() => {});
       fetch(`/api/users/${p.username}/favorites`, { credentials: 'include' })
         .then(r => r.ok ? r.json() : null)
-        .then(json => { if (json?.data) setFavorites(json.data); })
+        .then(async json => {
+          if (!json?.data) return;
+          await prewarmMetaCache(json.data.map((f: { tmdbId: string }) => f.tmdbId));
+          setFavorites(json.data);
+        })
         .catch(() => {});
       fetch(`/api/users/${p.username}/reviews?limit=3`, { credentials: 'include' })
         .then(r => r.ok ? r.json() : null)
-        .then(json => { if (json?.data?.items) setReviews(json.data.items); })
+        .then(async json => {
+          if (!json?.data?.items) return;
+          await prewarmMetaCache(json.data.items.map((r: { tmdbId: string }) => r.tmdbId));
+          setReviews(json.data.items);
+        })
         .catch(() => {});
       fetch(`/api/users/${p.username}/badges`, { credentials: 'include' })
         .then(r => r.ok ? r.json() : null)
@@ -261,7 +275,9 @@ export default function PublicProfilePage() {
         }
       }
       items.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-      setRecentActivity(items.slice(0, 6));
+      const activityItems = items.slice(0, 6);
+      await prewarmMetaCache(activityItems.map(i => i.tmdbId));
+      setRecentActivity(activityItems);
     } catch { /* ignore */ }
   };
 

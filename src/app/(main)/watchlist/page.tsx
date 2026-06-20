@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Bookmark, ChevronLeft, Search, SlidersHorizontal, Check, X, Film } from 'lucide-react';
 import { getAddedAt } from '@/lib/media-id';
+import { batchFetchMeta } from '@/lib/meta-batch';
 
 type SortOption = 'recent' | 'title-asc' | 'title-desc' | 'release-desc' | 'release-asc';
 
@@ -105,41 +106,24 @@ export default function WatchlistPage() {
         return;
       }
       if (!cancelled) setFetchingMeta(true);
-      // Fetch metadata in small parallel batches and render as results arrive,
-      // so a large synced watchlist doesn't look empty while loading
-      const CONCURRENCY = 5;
-      for (let i = 0; i < missing.length; i += CONCURRENCY) {
-        if (cancelled) return;
-        const batch = missing.slice(i, i + CONCURRENCY);
-        const results = await Promise.all(batch.map(async (id): Promise<WatchlistItem | null> => {
+      if (!cancelled) {
+        const metaMap = await batchFetchMeta(missing);
+        const fetched: WatchlistItem[] = missing.flatMap(id => {
+          const m = metaMap[id];
+          if (!m?.title) return [];
           try {
-            const res = await fetch(`/api/meta/${id}`);
-            if (!res.ok) return null;
-            const m = await res.json();
-            if (!m?.title) return null;
-            const item: WatchlistItem = {
-              id,
-              title: m.title,
-              poster: m.poster ?? '',
-              year: m.year ?? '',
-              tmdbRating: typeof m.tmdbRating === 'number' ? m.tmdbRating : undefined,
-            };
-            try {
-              localStorage.setItem(`watchlist-${id}`, JSON.stringify({ id, title: item.title, poster: item.poster, year: item.year, type: m.type ?? 'movie' }));
-              localStorage.setItem(`meta-${id}`, JSON.stringify(m));
-            } catch { /* ignore */ }
-            return item;
-          } catch { return null; }
-        }));
-        const fetched = results.filter((x): x is WatchlistItem => x !== null);
+            localStorage.setItem(`watchlist-${id}`, JSON.stringify({ id, title: m.title, poster: m.poster ?? '', year: m.year ?? '', type: m.type ?? 'movie' }));
+          } catch { /* ignore */ }
+          return [{ id, title: m.title, poster: m.poster ?? '', year: m.year ?? '', tmdbRating: typeof m.tmdbRating === 'number' ? m.tmdbRating : undefined }];
+        });
         if (!cancelled && fetched.length > 0) {
           setItems(prev => {
             const seen = new Set(prev.map(p => p.id));
             return [...prev, ...fetched.filter(f => !seen.has(f.id))];
           });
         }
+        if (!cancelled) setFetchingMeta(false);
       }
-      if (!cancelled) setFetchingMeta(false);
     };
 
     load();

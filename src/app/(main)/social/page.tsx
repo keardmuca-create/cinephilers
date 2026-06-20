@@ -7,6 +7,7 @@ import { Heart, Star, Eye, Bookmark, Film, MoreHorizontal, Share2, Trash2, Users
 import { ActivityEntry, getFeed, toggleLike, removeActivity, dismissActivity, getDismissed, relativeTime } from '@/lib/activity';
 import { useAuth } from '@/contexts/auth-context';
 import { fetchWithAuth } from '@/lib/fetch-with-auth';
+import { batchFetchMeta } from '@/lib/meta-batch';
 import { Button } from '@/components/ui/button';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -389,7 +390,14 @@ export default function SocialPage() {
       const res = await fetchWithAuth('/api/feed?limit=30');
       if (res.ok) {
         const json = await res.json();
-        const feed = json.data ?? [];
+        const feed: FeedItem[] = json.data ?? [];
+        const ids = [...new Set(feed.map(f => f.tmdbId).filter(Boolean))];
+        if (ids.length > 0) {
+          const map = await batchFetchMeta(ids);
+          for (const [id, m] of Object.entries(map)) {
+            metaCache[id] = { title: m.title, year: m.year, poster: m.poster };
+          }
+        }
         setFriendFeed(feed);
         try { localStorage.setItem(FEED_CACHE_KEY, JSON.stringify(feed)); } catch { /* ignore */ }
       }
@@ -406,7 +414,19 @@ export default function SocialPage() {
       const res = await fetch('/api/notifications', { credentials: 'include' });
       if (res.ok) {
         const json = await res.json();
-        setNotifications(json.data?.notifications ?? []);
+        const notifs: NotificationItem[] = json.data?.notifications ?? [];
+        const reviewRefIds = [...new Set(
+          notifs
+            .filter(n => (n.type === 'review_like' || n.type === 'review_comment') && n.refId)
+            .map(n => n.refId as string)
+        )];
+        if (reviewRefIds.length > 0) {
+          const map = await batchFetchMeta(reviewRefIds);
+          for (const [id, m] of Object.entries(map)) {
+            metaCache[id] = { title: m.title, year: m.year, poster: m.poster };
+          }
+        }
+        setNotifications(notifs);
         setUnreadCount(json.data?.unreadCount ?? 0);
       }
     } catch { /* network error — keep current notifications */

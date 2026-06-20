@@ -3,6 +3,7 @@
 import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
 import { fetchWithAuth } from '@/lib/fetch-with-auth';
 import { canonicalId, normalizeLocalMediaIds, recordAddedAt, recordWatchedAt } from '@/lib/media-id';
+import { batchFetchMeta } from '@/lib/meta-batch';
 
 const STORAGE_KEY = 'cinephilers_user';
 
@@ -245,27 +246,12 @@ async function restoreFromDb() {
 
     // ── Favorites: always overwrite from DB — DB is the source of truth ─────────
     if (favorites.length > 0) {
-      const favsWithMeta = await Promise.all(
-        favorites.map(async (f) => {
-          // Try meta cache first
-          try {
-            const cached = localStorage.getItem(`meta-${f.tmdbId}`);
-            if (cached) {
-              const m = JSON.parse(cached);
-              return { id: f.tmdbId, title: m.title, year: m.year, poster: m.poster, type: (m.type ?? (f.mediaType === 'SHOW' ? 'show' : 'movie')) as 'movie' | 'show' };
-            }
-          } catch { /* ignore */ }
-          // Fetch from meta API
-          try {
-            const metaRes = await fetch(`/api/meta/${f.tmdbId}`);
-            if (metaRes.ok) {
-              const m = await metaRes.json();
-              return { id: f.tmdbId, title: m.title, year: m.year, poster: m.poster, type: (m.type ?? (f.mediaType === 'SHOW' ? 'show' : 'movie')) as 'movie' | 'show' };
-            }
-          } catch { /* ignore */ }
-          return null;
-        })
-      );
+      const metaMap = await batchFetchMeta(favorites.map(f => f.tmdbId));
+      const favsWithMeta = favorites.map(f => {
+        const m = metaMap[f.tmdbId];
+        if (!m) return null;
+        return { id: f.tmdbId, title: m.title, year: m.year, poster: m.poster, type: (m.type ?? (f.mediaType === 'SHOW' ? 'show' : 'movie')) as 'movie' | 'show' };
+      });
       const resolved = favsWithMeta.filter(Boolean);
       if (resolved.length > 0) {
         try { localStorage.setItem('user-favorites', JSON.stringify(resolved)); } catch { /* ignore */ }

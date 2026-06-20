@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Star, ChevronLeft, Search, SlidersHorizontal, Check, X, Film, Eye } from 'lucide-react';
 import { normalizeLocalMediaIds, getAddedAt } from '@/lib/media-id';
+import { batchFetchMeta } from '@/lib/meta-batch';
 
 type SortOption = 'recent' | 'rating-desc' | 'rating-asc' | 'title-asc' | 'title-desc' | 'release-desc' | 'release-asc';
 
@@ -31,15 +32,6 @@ function readMetaCache(id: string) {
   try { return JSON.parse(localStorage.getItem(`meta-${id}`) ?? 'null'); } catch { return null; }
 }
 
-async function fetchMeta(id: string) {
-  try {
-    const r = await fetch(`/api/meta/${id}`);
-    if (!r.ok) return null;
-    const m = await r.json();
-    try { localStorage.setItem(`meta-${id}`, JSON.stringify(m)); } catch { /* ignore */ }
-    return m;
-  } catch { return null; }
-}
 
 function ItemCard({ item }: { item: RatedItem }) {
   return (
@@ -138,16 +130,14 @@ function RatingsPageInner() {
 
       if (toFetch.length > 0) {
         toFetch.forEach(id => fetchingRef.current.add(id));
-        const results = await Promise.allSettled(toFetch.map(fetchMeta));
+        const metaMap = await batchFetchMeta(toFetch);
         setItems(prev => {
           const next = [...prev];
-          toFetch.forEach((id, i) => {
-            const r = results[i];
-            if (r.status === 'fulfilled' && r.value?.title) {
-              const idx = next.findIndex(x => x.id === id);
-              if (idx !== -1) next[idx] = { ...next[idx], title: r.value.title, poster: r.value.poster ?? '', year: r.value.year ?? '', tmdbRating: r.value.tmdbRating };
-            }
-          });
+          for (const [id, m] of Object.entries(metaMap)) {
+            if (!m?.title) continue;
+            const idx = next.findIndex(x => x.id === id);
+            if (idx !== -1) next[idx] = { ...next[idx], title: m.title, poster: m.poster ?? '', year: m.year ?? '', tmdbRating: m.tmdbRating };
+          }
           return next;
         });
       }

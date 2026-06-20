@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { ChevronLeft, Star, Film } from 'lucide-react';
+import { batchFetchMeta } from '@/lib/meta-batch';
 
 interface UserReview {
   movieId: string;
@@ -39,17 +40,17 @@ export default function ReviewsPage() {
       // Reviews synced from the DB on a new device have no title/poster — backfill from the meta API
       const missing = found.filter(r => !r.movieTitle || !r.moviePoster);
       if (missing.length === 0) return;
-      await Promise.allSettled(missing.map(async r => {
-        try {
-          const res = await fetch(`/api/meta/${r.movieId}`);
-          if (!res.ok) return;
-          const m = await res.json();
-          if (!m?.title) return;
-          const patched = { ...r, movieTitle: m.title, moviePoster: m.poster ?? '', movieYear: m.year ?? r.movieYear };
-          try { localStorage.setItem(`review-${r.movieId}`, JSON.stringify(patched)); } catch { /* ignore */ }
-          setReviews(prev => prev.map(p => p.movieId === r.movieId ? patched : p));
-        } catch { /* ignore */ }
-      }));
+      const metaMap = await batchFetchMeta(missing.map(r => r.movieId));
+      const patches = missing.flatMap(r => {
+        const m = metaMap[r.movieId];
+        if (!m?.title) return [];
+        const patched = { ...r, movieTitle: m.title, moviePoster: m.poster ?? '', movieYear: m.year ?? r.movieYear };
+        try { localStorage.setItem(`review-${r.movieId}`, JSON.stringify(patched)); } catch { /* ignore */ }
+        return [patched];
+      });
+      if (patches.length > 0) {
+        setReviews(prev => prev.map(p => patches.find(f => f.movieId === p.movieId) ?? p));
+      }
     };
     load();
     // Re-load once the login sync finishes writing DB reviews into localStorage

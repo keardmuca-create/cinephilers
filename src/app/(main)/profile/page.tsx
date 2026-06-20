@@ -20,6 +20,7 @@ import { Separator } from '@/components/ui/separator';
 import { Progress } from '@/components/ui/progress';
 import { toast } from '@/hooks/use-toast';
 import { fetchWithAuth } from '@/lib/fetch-with-auth';
+import { batchFetchMeta } from '@/lib/meta-batch';
 import { useAuth } from '@/contexts/auth-context';
 
 interface RatedItem { id: string; title: string; poster: string; year: string; tmdbRating?: number; userRating: number; }
@@ -605,7 +606,7 @@ export default function ProfilePage() {
         }
 
         const items: RecentItem[] = [];
-        const fetchPromises: Promise<void>[] = [];
+        const movieFetchIds: string[] = [];
 
         const resolveItem = (id: string, loggedAt: string) => {
           const raw = localStorage.getItem(`meta-${id}`);
@@ -623,64 +624,60 @@ export default function ProfilePage() {
               tmdbRating: typeof meta?.tmdbRating === 'number' ? meta.tmdbRating : rv?.tmdbRating,
             });
           } else {
-            fetchPromises.push(
-              fetch(`/api/movies/${id}`)
-                .then(r => r.json())
-                .then((data: { title?: string; poster?: string; year?: string; type?: string; rating?: number; tmdbRating?: number; error?: string }) => {
-                  if (data.error || !data.title) return;
-                  const cached = { title: data.title, poster: data.poster ?? '', year: data.year ?? '', type: data.type ?? 'movie', tmdbRating: data.rating ?? data.tmdbRating };
-                  try { localStorage.setItem(`meta-${id}`, JSON.stringify(cached)); } catch { /* ignore */ }
-                  items.push({ id, title: cached.title, poster: cached.poster, year: cached.year, loggedAt, rating: rating ? Number(rating) : undefined, tmdbRating: cached.tmdbRating });
-                })
-                .catch(() => { /* ignore */ })
-            );
+            movieFetchIds.push(id);
           }
         };
 
-        // One card per episode — title is the episode name, links back to the show
-        const resolveEpisode = (epId: string, loggedAt: string) => {
-          const m = epId.match(/^(.+)-S(\d+)E(\d+)$/);
-          if (!m) return;
-          const showId = m[1];
-          const season = parseInt(m[2], 10);
-          const episode = parseInt(m[3], 10);
-          const rating = localStorage.getItem(`movie-rating-${epId}`);
-          fetchPromises.push(
-            fetch(`/api/meta/${epId}`)
-              .then(r => r.json())
-              .then((data: { title?: string; poster?: string; year?: string; showName?: string; seasonNumber?: number; episodeNumber?: number; tmdbRating?: number; error?: string }) => {
-                if (data.error || !data.title) return;
-                items.push({
-                  id: epId,
-                  linkId: showId,
-                  title: data.title.replace(/^S\d+E\d+\s·\s/, ''),
-                  poster: data.poster ?? '',
-                  year: data.year ?? '',
-                  loggedAt,
-                  rating: rating ? Number(rating) : undefined,
-                  tmdbRating: data.tmdbRating,
-                  isEpisode: true,
-                  seasonNumber: data.seasonNumber ?? season,
-                  episodeNumber: data.episodeNumber ?? episode,
-                  showName: data.showName,
-                });
-              })
-              .catch(() => { /* ignore */ })
-          );
-        };
-
-        // Movies and whole-show watched entries (shows aren't in the movie watch-log,
-        // so fall back to the watched-at index before giving up to epoch 0)
+        // Movies and whole-show watched entries
         for (const id of movieIds) {
           resolveItem(id, logMap.get(id) ?? getWatchedAtISO(id) ?? new Date(0).toISOString());
         }
 
-        // Individual watched episodes
-        for (const epId of episodeIds) {
-          resolveEpisode(epId, logMap.get(epId) ?? getWatchedAtISO(epId) ?? new Date(0).toISOString());
+        // Fetch uncached movie metadata via /api/movies (preserves existing pattern)
+        if (movieFetchIds.length > 0) {
+          await Promise.allSettled(movieFetchIds.map(id =>
+            fetch(`/api/movies/${id}`)
+              .then(r => r.json())
+              .then((data: { title?: string; poster?: string; year?: string; type?: string; rating?: number; tmdbRating?: number; error?: string }) => {
+                if (data.error || !data.title) return;
+                const loggedAt = logMap.get(id) ?? getWatchedAtISO(id) ?? new Date(0).toISOString();
+                const rating = localStorage.getItem(`movie-rating-${id}`);
+                const cached = { title: data.title, poster: data.poster ?? '', year: data.year ?? '', type: data.type ?? 'movie', tmdbRating: data.rating ?? data.tmdbRating };
+                try { localStorage.setItem(`meta-${id}`, JSON.stringify(cached)); } catch { /* ignore */ }
+                items.push({ id, title: cached.title, poster: cached.poster, year: cached.year, loggedAt, rating: rating ? Number(rating) : undefined, tmdbRating: cached.tmdbRating });
+              })
+              .catch(() => { /* ignore */ })
+          ));
         }
 
-        if (fetchPromises.length > 0) await Promise.allSettled(fetchPromises);
+        // Individual watched episodes — batch-fetch metadata
+        if (episodeIds.length > 0) {
+          const epMetaMap = await batchFetchMeta(episodeIds);
+          for (const epId of episodeIds) {
+            const m = epId.match(/^(.+)-S(\d+)E(\d+)$/);
+            if (!m) continue;
+            const showId = m[1];
+            const season = parseInt(m[2], 10);
+            const episode = parseInt(m[3], 10);
+            const data = epMetaMap[epId];
+            if (!data?.title) continue;
+            const rating = localStorage.getItem(`movie-rating-${epId}`);
+            items.push({
+              id: epId,
+              linkId: showId,
+              title: data.title.replace(/^S\d+E\d+\s·\s/, ''),
+              poster: data.poster ?? '',
+              year: data.year ?? '',
+              loggedAt: logMap.get(epId) ?? getWatchedAtISO(epId) ?? new Date(0).toISOString(),
+              rating: rating ? Number(rating) : undefined,
+              tmdbRating: data.tmdbRating,
+              isEpisode: true,
+              seasonNumber: data.seasonNumber ?? season,
+              episodeNumber: data.episodeNumber ?? episode,
+              showName: data.showName,
+            });
+          }
+        }
 
         // Two tiers, matching the history page: titles marked watched IN THE APP
         // come first (newest first), then imported titles by date — so a hand-marked
@@ -740,51 +737,28 @@ export default function ProfilePage() {
       }
       setWatchlist(wlItems.sort((a, b) => getAddedAt(b.id) - getAddedAt(a.id)));
 
-      // Fetch missing metadata in small parallel batches and append as results
-      // arrive, so a freshly synced watchlist isn't invisible on the profile
       if (wlMissing.length > 0) {
         (async () => {
-          const CONCURRENCY = 5;
-          for (let i = 0; i < wlMissing.length; i += CONCURRENCY) {
-            const batch = wlMissing.slice(i, i + CONCURRENCY);
-            const results = await Promise.all(batch.map(async (id): Promise<Movie | null> => {
-              try {
-                const res = await fetch(`/api/meta/${id}`);
-                if (!res.ok) return null;
-                const m = await res.json();
-                if (!m?.title) return null;
-                try {
-                  localStorage.setItem(`watchlist-${id}`, JSON.stringify({ id, title: m.title, poster: m.poster ?? '', year: m.year ?? '', type: m.type ?? 'movie' }));
-                  localStorage.setItem(`meta-${id}`, JSON.stringify(m));
-                } catch { /* ignore */ }
-                return {
-                  id,
-                  title: m.title,
-                  poster: m.poster ?? '',
-                  backdrop: '',
-                  year: m.year ?? '',
-                  genre: m.genre ?? '',
-                  rating: typeof m.tmdbRating === 'number' ? m.tmdbRating : 0,
-                  description: '',
-                  type: (m.type as 'movie' | 'show') ?? 'movie',
-                  followingsRating: 0,
-                  votes: 0,
-                  director: '',
-                  cast: [],
-                  reviews: [],
-                  quotes: [],
-                  trivia: [],
-                } as Movie;
-              } catch { return null; }
-            }));
-            const fetched = results.filter((x): x is Movie => x !== null);
-            if (fetched.length > 0) {
-              setWatchlist(prev => {
-                const seen = new Set(prev.map(p => p.id));
-                return [...prev, ...fetched.filter(f => !seen.has(f.id))]
-                  .sort((a, b) => getAddedAt(b.id) - getAddedAt(a.id));
-              });
-            }
+          const metaMap = await batchFetchMeta(wlMissing);
+          const fetched: Movie[] = wlMissing.flatMap(id => {
+            const m = metaMap[id];
+            if (!m?.title) return [];
+            try {
+              localStorage.setItem(`watchlist-${id}`, JSON.stringify({ id, title: m.title, poster: m.poster ?? '', year: m.year ?? '', type: m.type ?? 'movie' }));
+            } catch { /* ignore */ }
+            return [{
+              id, title: m.title, poster: m.poster ?? '', backdrop: '', year: m.year ?? '',
+              genre: m.genre ?? '', rating: typeof m.tmdbRating === 'number' ? m.tmdbRating : 0,
+              description: '', type: (m.type as 'movie' | 'show') ?? 'movie',
+              followingsRating: 0, votes: 0, director: '', cast: [], reviews: [], quotes: [], trivia: [],
+            } as Movie];
+          });
+          if (fetched.length > 0) {
+            setWatchlist(prev => {
+              const seen = new Set(prev.map(p => p.id));
+              return [...prev, ...fetched.filter(f => !seen.has(f.id))]
+                .sort((a, b) => getAddedAt(b.id) - getAddedAt(a.id));
+            });
           }
         })();
       }
@@ -802,31 +776,19 @@ export default function ProfilePage() {
       }
       setUserReviews(reviews.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()));
 
-      // Backfill title/poster for reviews synced from the DB without metadata
       const reviewsMissing = reviews.filter(r => !r.movieTitle || !r.moviePoster);
       if (reviewsMissing.length > 0) {
         (async () => {
-          const CONCURRENCY = 5;
-          for (let i = 0; i < reviewsMissing.length; i += CONCURRENCY) {
-            const batch = reviewsMissing.slice(i, i + CONCURRENCY);
-            const results = await Promise.all(batch.map(async (r): Promise<UserReview | null> => {
-              try {
-                const res = await fetch(`/api/meta/${r.movieId}`);
-                if (!res.ok) return null;
-                const m = await res.json();
-                if (!m?.title) return null;
-                const updated = { ...r, movieTitle: m.title, moviePoster: m.poster ?? '', movieYear: m.year ?? '' };
-                try {
-                  localStorage.setItem(`review-${r.movieId}`, JSON.stringify(updated));
-                  localStorage.setItem(`meta-${r.movieId}`, JSON.stringify(m));
-                } catch { /* ignore */ }
-                return updated;
-              } catch { return null; }
-            }));
-            const fetched = results.filter((x): x is UserReview => x !== null);
-            if (fetched.length > 0) {
-              setUserReviews(prev => prev.map(p => fetched.find(f => f.movieId === p.movieId) ?? p));
-            }
+          const metaMap = await batchFetchMeta(reviewsMissing.map(r => r.movieId));
+          const patched: UserReview[] = reviewsMissing.flatMap(r => {
+            const m = metaMap[r.movieId];
+            if (!m?.title) return [];
+            const updated = { ...r, movieTitle: m.title, moviePoster: m.poster ?? '', movieYear: m.year ?? '' };
+            try { localStorage.setItem(`review-${r.movieId}`, JSON.stringify(updated)); } catch { /* ignore */ }
+            return [updated];
+          });
+          if (patched.length > 0) {
+            setUserReviews(prev => prev.map(p => patched.find(f => f.movieId === p.movieId) ?? p));
           }
         })();
       }
@@ -861,30 +823,20 @@ export default function ProfilePage() {
       }
       setRatedItems(rated.sort((a, b) => getAddedAt(b.id) - getAddedAt(a.id)));
 
-      // Fetch missing metadata so freshly synced ratings appear without a manual refresh
       if (ratedMissing.length > 0) {
         (async () => {
-          const CONCURRENCY = 5;
-          for (let i = 0; i < ratedMissing.length; i += CONCURRENCY) {
-            const batch = ratedMissing.slice(i, i + CONCURRENCY);
-            const results = await Promise.all(batch.map(async ({ id, userRating }): Promise<RatedItem | null> => {
-              try {
-                const res = await fetch(`/api/meta/${id}`);
-                if (!res.ok) return null;
-                const m = await res.json();
-                if (!m?.title) return null;
-                try { localStorage.setItem(`meta-${id}`, JSON.stringify(m)); } catch { /* ignore */ }
-                return { id, title: m.title, poster: m.poster ?? '', year: m.year ?? '', tmdbRating: typeof m.tmdbRating === 'number' ? m.tmdbRating : undefined, userRating };
-              } catch { return null; }
-            }));
-            const fetched = results.filter((x): x is RatedItem => x !== null);
-            if (fetched.length > 0) {
-              setRatedItems(prev => {
-                const seen = new Set(prev.map(p => p.id));
-                return [...prev, ...fetched.filter(f => !seen.has(f.id))]
-                  .sort((a, b) => getAddedAt(b.id) - getAddedAt(a.id));
-              });
-            }
+          const metaMap = await batchFetchMeta(ratedMissing.map(r => r.id));
+          const fetched: RatedItem[] = ratedMissing.flatMap(({ id, userRating }) => {
+            const m = metaMap[id];
+            if (!m?.title) return [];
+            return [{ id, title: m.title, poster: m.poster ?? '', year: m.year ?? '', tmdbRating: typeof m.tmdbRating === 'number' ? m.tmdbRating : undefined, userRating }];
+          });
+          if (fetched.length > 0) {
+            setRatedItems(prev => {
+              const seen = new Set(prev.map(p => p.id));
+              return [...prev, ...fetched.filter(f => !seen.has(f.id))]
+                .sort((a, b) => getAddedAt(b.id) - getAddedAt(a.id));
+            });
           }
         })();
       }

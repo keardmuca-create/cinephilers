@@ -7,6 +7,7 @@ import type { ItemMeta } from '@/app/api/meta/[id]/route';
 import { fetchWithAuth } from '@/lib/fetch-with-auth';
 import { removeFromWatchLog } from '@/lib/badges';
 import { legacyTwin, normalizeLocalMediaIds, getWatchedAtISO, getManualWatchISO } from '@/lib/media-id';
+import { batchFetchMeta } from '@/lib/meta-batch';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -82,16 +83,6 @@ function readUserRating(id: string): number | undefined {
     const r = localStorage.getItem(`movie-rating-${id}`);
     return r ? Number(r) : undefined;
   } catch { return undefined; }
-}
-
-async function fetchAndCacheMeta(id: string): Promise<ItemMeta | null> {
-  try {
-    const r = await fetch(`/api/meta/${id}`);
-    if (!r.ok) return null;
-    const m: ItemMeta = await r.json();
-    writeMetaCache(id, m);
-    return m;
-  } catch { return null; }
 }
 
 function getItemType(meta: ItemMeta): TypeFilter {
@@ -265,7 +256,6 @@ function HistoryCard({ id, meta, userRating, addedAt, onRemove }: {
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
-const FETCH_BATCH = 50; // how many metadata requests to fire at once
 
 export default function HistoryPage() {
   const [allIds, setAllIds]           = useState<string[]>([]);
@@ -360,15 +350,13 @@ export default function HistoryPage() {
     setFetching(true);
 
     const runBatches = async () => {
-      for (let i = 0; i < toFetch.length; i += FETCH_BATCH) {
-        const batch = toFetch.slice(i, i + FETCH_BATCH);
-        const results = await Promise.all(batch.map(fetchAndCacheMeta));
-        setMetaMap(prev => {
-          const next = new Map(prev);
-          batch.forEach((id, j) => { if (results[j]) next.set(id, results[j]!); });
-          return next;
-        });
-      }
+      const fetched = await batchFetchMeta(toFetch);
+      for (const [id, m] of Object.entries(fetched)) writeMetaCache(id, m);
+      setMetaMap(prev => {
+        const next = new Map(prev);
+        for (const [id, m] of Object.entries(fetched)) next.set(id, m);
+        return next;
+      });
       setFetching(false);
     };
 

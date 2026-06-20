@@ -1,0 +1,59 @@
+import type { ItemMeta } from './[id]/route';
+
+const BASE = 'https://api.themoviedb.org/3';
+const IMG  = 'https://image.tmdb.org/t/p';
+
+export async function fetchOneMeta(id: string, key: string): Promise<ItemMeta> {
+  const epMatch = id.match(/^(tmdb-tv-(\d+))-S(\d+)E(\d+)$/);
+  if (epMatch) {
+    const showId = epMatch[1];
+    const tvNum  = parseInt(epMatch[2], 10);
+    const season = parseInt(epMatch[3], 10);
+    const epNum  = parseInt(epMatch[4], 10);
+    const [showRes, epRes] = await Promise.all([
+      fetch(`${BASE}/tv/${tvNum}?api_key=${key}&language=en-US`, { next: { revalidate: 3600 } }),
+      fetch(`${BASE}/tv/${tvNum}/season/${season}/episode/${epNum}?api_key=${key}&language=en-US`, { next: { revalidate: 3600 } }),
+    ]);
+    const showData = await showRes.json();
+    const epData   = await epRes.json();
+    const poster   = showData.poster_path ? `${IMG}/w342${showData.poster_path}` : '';
+    const epTitle  = epData.name ?? `Episode ${epNum}`;
+    const airDate  = epData.air_date ?? showData.first_air_date ?? '';
+    const year     = airDate ? airDate.slice(0, 4) : '—';
+    return {
+      id, title: epTitle, year, poster,
+      type: 'show', showId, isEpisode: true,
+      showName: showData.name ?? undefined,
+      seasonNumber: season,
+      episodeNumber: epNum,
+      tmdbRating: typeof epData.vote_average === 'number' ? epData.vote_average : undefined,
+    };
+  }
+
+  const isShow = id.startsWith('tmdb-tv-');
+  const numStr = isShow ? id.replace('tmdb-tv-', '') : id.replace('tmdb-', '');
+  const num = parseInt(numStr, 10);
+  if (isNaN(num)) throw new Error('Invalid id');
+
+  const path = isShow ? `/tv/${num}` : `/movie/${num}`;
+  const res = await fetch(`${BASE}${path}?api_key=${key}&language=en-US`, { next: { revalidate: 3600 } });
+  if (!res.ok) throw new Error(`TMDB ${res.status}`);
+  const d = await res.json();
+
+  const poster = d.poster_path ? `${IMG}/w342${d.poster_path}` : '';
+  const title = d.title ?? d.name ?? 'Untitled';
+  const release = d.release_date ?? d.first_air_date ?? '';
+  const year = release ? release.slice(0, 4) : '—';
+  const genreNames: string[] = (d.genres ?? []).map((g: { name: string }) => g.name);
+
+  return {
+    id, title, year, poster,
+    type: isShow ? 'show' : 'movie',
+    genre: genreNames.join(', ') || undefined,
+    language: d.original_language ?? undefined,
+    showType: isShow ? (d.type ?? undefined) : undefined,
+    tmdbStatus: d.status ?? undefined,
+    totalEps: isShow ? (d.number_of_episodes ?? undefined) : undefined,
+    tmdbRating: typeof d.vote_average === 'number' ? d.vote_average : undefined,
+  };
+}
