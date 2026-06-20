@@ -1,5 +1,6 @@
 
 import type { Metadata, Viewport } from 'next';
+import { headers } from 'next/headers';
 import './globals.css';
 import { Toaster } from '@/components/ui/toaster';
 import { AuthProvider } from '@/contexts/auth-context';
@@ -36,11 +37,17 @@ export const viewport: Viewport = {
   viewportFit: 'cover',
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  // Reading the nonce header opts the whole app into per-request rendering, so
+  // every page receives a fresh CSP nonce (see middleware.ts). Without this,
+  // statically prerendered pages would ship scripts with no nonce and the
+  // strict CSP would block them.
+  await headers();
+
   return (
     <html lang="en" className="dark">
       <head>

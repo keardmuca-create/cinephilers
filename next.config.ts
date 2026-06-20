@@ -15,23 +15,8 @@ const securityHeaders = [
   { key: 'Strict-Transport-Security', value: 'max-age=63072000; includeSubDomains; preload' },
   // Prevent DNS prefetch leaking visited URLs
   { key: 'X-DNS-Prefetch-Control', value: 'on' },
-  // Content Security Policy — allows TMDB images, YouTube trailers, self-hosted assets
-  {
-    key: 'Content-Security-Policy',
-    value: [
-      "default-src 'self'",
-      "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
-      "style-src 'self' 'unsafe-inline'",
-      "img-src 'self' data: blob: https://image.tmdb.org https://picsum.photos https://placehold.co https://images.unsplash.com https://*.public.blob.vercel-storage.com",
-      "font-src 'self'",
-      "frame-src 'self' https://www.youtube.com https://www.youtube-nocookie.com",
-      "connect-src 'self' https://api.themoviedb.org https://*.ingest.sentry.io https://*.sentry.io",
-      "media-src 'self' https://www.youtube.com",
-      "object-src 'none'",
-      "base-uri 'self'",
-      "form-action 'self'",
-    ].join('; '),
-  },
+  // Note: Content-Security-Policy is set per-request in middleware.ts so it can
+  // carry a unique nonce for scripts (instead of 'unsafe-inline'/'unsafe-eval').
 ];
 
 const nextConfig: NextConfig = {
