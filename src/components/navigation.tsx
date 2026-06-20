@@ -17,17 +17,22 @@ export const BottomNav = () => {
   // Fetch once on mount + every 60s — not on every navigation
   useEffect(() => {
     if (!user) return;
+    let interval: ReturnType<typeof setInterval>;
     const check = async () => {
       try {
         const res = await fetch('/api/notifications', { credentials: 'include' });
         if (res.ok) {
           const json = await res.json();
           setUnread(json.data?.unreadCount ?? 0);
+        } else if (res.status === 401) {
+          // Session lapsed — stop polling so we don't spam the console. The auth
+          // context handles refresh/logout; we'll resume on the next mount.
+          clearInterval(interval);
         }
       } catch { /* ignore */ }
     };
     check();
-    const interval = setInterval(check, 60_000);
+    interval = setInterval(check, 60_000);
     return () => clearInterval(interval);
   }, [user]);
 
