@@ -83,6 +83,7 @@ model Rating {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([userId, tmdbId, mediaType])
+  @@index([tmdbId])
 }
 
 model Review {
@@ -101,6 +102,7 @@ model Review {
   comments ReviewComment[]
 
   @@unique([userId, tmdbId, mediaType])
+  @@index([tmdbId])
 }
 
 model ReviewLike {
@@ -202,6 +204,7 @@ model Follow {
   following User @relation("Following", fields: [followingId], references: [id], onDelete: Cascade)
 
   @@id([followerId, followingId])
+  @@index([followingId])
 }
 
 model Badge {
@@ -211,6 +214,8 @@ model Badge {
   awardedAt DateTime  @default(now())
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
 }
 
 model Notification {
@@ -224,6 +229,8 @@ model Notification {
 
   user User @relation("NotificationRecipient", fields: [userId], references: [id], onDelete: Cascade)
   from User @relation("NotificationSender", fields: [fromId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
 }
 
 model FollowRequest {
@@ -236,6 +243,7 @@ model FollowRequest {
   target    User @relation("ReceivedRequests", fields: [targetId], references: [id], onDelete: Cascade)
 
   @@unique([requesterId, targetId])
+  @@index([targetId])
 }
 
 model ReviewComment {
@@ -247,6 +255,8 @@ model ReviewComment {
 
   review Review @relation(fields: [reviewId], references: [id], onDelete: Cascade)
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([reviewId])
 }
 
 model ImportActivity {
@@ -257,6 +267,8 @@ model ImportActivity {
   createdAt DateTime @default(now())
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
 }
 
 model HiddenActivity {
