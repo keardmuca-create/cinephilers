@@ -49,6 +49,7 @@ model User {
   passwordResetToken       String?
   passwordResetExpires     DateTime?
   refreshTokenHash         String?
+  tokenVersion             Int       @default(0)
 
   ratings          Rating[]
   reviews          Review[]

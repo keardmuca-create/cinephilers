@@ -1,6 +1,5 @@
 import { NextRequest } from 'next/server';
 import bcrypt from 'bcryptjs';
-import crypto from 'crypto';
 import { prisma } from '@/lib/db';
 import { ok, err } from '@/lib/api-response';
 import { signAccessToken, signRefreshToken, setAuthCookies } from '@/lib/auth-utils';
@@ -33,15 +32,8 @@ export async function POST(req: NextRequest) {
   const payload = { sub: user.id, username: user.username, role: user.role };
   const [accessToken, refreshToken] = await Promise.all([
     signAccessToken(payload),
-    signRefreshToken(payload),
+    signRefreshToken({ ...payload, ver: user.tokenVersion }),
   ]);
-
-  // Store hashed refresh token
-  const refreshHash = crypto.createHash('sha256').update(refreshToken).digest('hex');
-  await prisma.user.update({
-    where: { id: user.id },
-    data: { refreshTokenHash: refreshHash },
-  });
 
   await setAuthCookies(accessToken, refreshToken);
 

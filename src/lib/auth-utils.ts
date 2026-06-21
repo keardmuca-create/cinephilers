@@ -18,12 +18,17 @@ function getRefreshSecret() {
 }
 
 const ACCESS_EXPIRES = process.env.JWT_ACCESS_EXPIRES ?? '15m';
-const REFRESH_EXPIRES = process.env.JWT_REFRESH_EXPIRES ?? '7d';
+// Long-lived so active users effectively never see a login screen. The refresh
+// token rotates on every use, so this window resets each time the app is opened.
+// MUST stay in sync with the refresh cookie maxAge in setAuthCookies below.
+const REFRESH_EXPIRES = process.env.JWT_REFRESH_EXPIRES ?? '90d';
+const REFRESH_MAX_AGE = 60 * 60 * 24 * 90; // 90 days, in seconds
 
 export interface JwtPayload {
   sub: string;   // userId
   username: string;
   role: string;
+  ver?: number;  // tokenVersion — present on refresh tokens only; bumped to revoke all sessions
 }
 
 export async function signAccessToken(payload: JwtPayload): Promise<string> {
@@ -70,7 +75,7 @@ const COOKIE_OPTS = {
 export async function setAuthCookies(accessToken: string, refreshToken: string) {
   const jar = await cookies();
   jar.set('access_token', accessToken, { ...COOKIE_OPTS, maxAge: 60 * 15 });
-  jar.set('refresh_token', refreshToken, { ...COOKIE_OPTS, maxAge: 60 * 60 * 24 * 7 });
+  jar.set('refresh_token', refreshToken, { ...COOKIE_OPTS, maxAge: REFRESH_MAX_AGE });
 }
 
 export async function clearAuthCookies() {

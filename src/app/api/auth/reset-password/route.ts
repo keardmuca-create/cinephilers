@@ -31,7 +31,7 @@ export async function POST(req: NextRequest) {
       passwordHash,
       passwordResetToken: null,
       passwordResetExpires: null,
-      refreshTokenHash: null, // invalidate all sessions
+      tokenVersion: { increment: 1 }, // invalidate all existing sessions
     },
   });
 
