@@ -410,7 +410,8 @@ export function FeaturedSeasonalBadge({ badge }: FeaturedSeasonalBadgeProps) {
   const [modalOpen, setModalOpen] = useState(false);
   const color = TIER_COLORS[badge.tier];
   const isLocked = badge.tier === 'locked';
-  const countdown = useCountdown(badge.seasonEndDate);
+  const countdown = useCountdown(badge.isSeasonal ? badge.seasonEndDate : undefined);
+  const categoryLabel = badge.isSpecial ? 'Founder' : 'Seasonal';
 
   return (
     <>
@@ -425,9 +426,9 @@ export function FeaturedSeasonalBadge({ badge }: FeaturedSeasonalBadgeProps) {
             className="text-[10px] font-bold uppercase tracking-widest px-2 py-0.5 rounded-full"
             style={{ color, backgroundColor: `${color}20`, border: `1px solid ${color}44` }}
           >
-            Seasonal
+            {categoryLabel}
           </span>
-          {countdown && (
+          {badge.isSeasonal && countdown && (
             <span className="text-[10px] font-bold tabular-nums" style={{ color }}>
               {countdown} remaining
             </span>
@@ -472,6 +473,10 @@ export function FeaturedSeasonalBadge({ badge }: FeaturedSeasonalBadgeProps) {
                   <span className="text-muted-foreground font-normal"> / {badge.nextThreshold?.toLocaleString() ?? '—'}</span>
                 </span>
               </div>
+            )}
+
+            {badge.isSpecial && badge.memberSince && (
+              <p className="text-[11px] font-bold" style={{ color }}>Member since {badge.memberSince}</p>
             )}
 
             {badge.seasonWindowText && (

@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation';
 import { Movie } from '@/lib/types';
 import { readUserStats, computeAllBadges, ensureSignupDate, ComputedBadge } from '@/lib/badges';
 import { normalizeLocalMediaIds, getAddedAt, getWatchedAtISO, getManualWatchISO } from '@/lib/media-id';
-import { BadgeCard, FeaturedSeasonalBadge, TierGuide } from '@/components/badge-card';
+import { BadgeCard, FeaturedSeasonalBadge } from '@/components/badge-card';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { MovieCard } from '@/components/movie-card';
@@ -883,7 +883,9 @@ export default function ProfilePage() {
   const yDomainMax = Math.ceil(maxRatingCount / 0.65);
 
   const activeSeasonal = badges.filter(b => b.isSeasonal && b.isSeasonActive);
-  const otherBadges = badges.filter(b => !(b.isSeasonal && b.isSeasonActive));
+  const founderBadge = badges.find(b => b.isSpecial);
+  // Founder is promoted to its own featured card, so keep it out of the carousel.
+  const otherBadges = badges.filter(b => !(b.isSeasonal && b.isSeasonActive) && !b.isSpecial);
 
   if (guestView) return guestView;
 
@@ -1387,8 +1389,8 @@ export default function ProfilePage() {
           ) : undefined}
         />
 
-        {/* Tier guide */}
-        <TierGuide />
+        {/* Founder — full-width featured hero card */}
+        {founderBadge && <FeaturedSeasonalBadge badge={founderBadge} />}
 
         {/* Active seasonal badges — full-width featured cards */}
         {activeSeasonal.length > 0 && (
