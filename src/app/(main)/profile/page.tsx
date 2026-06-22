@@ -1400,12 +1400,12 @@ export default function ProfilePage() {
           </div>
         )}
 
-        {/* All-time badges — 3-column grid */}
-        {otherBadges.slice(0, 3).length > 0 && (
+        {/* All-time badges — horizontal scroll carousel (matches Ratings row) */}
+        {otherBadges.slice(0, 5).length > 0 && (
           <div className="space-y-3">
             <div className="flex items-center justify-between">
               <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground">All Time</p>
-              {otherBadges.length > 3 && (
+              {otherBadges.length > 5 && (
                 <Link
                   href="/badges"
                   className="text-xs text-primary border border-primary/30 rounded-full px-3 py-1 hover:bg-primary/10 transition-colors font-semibold flex items-center gap-1"
@@ -1414,9 +1414,11 @@ export default function ProfilePage() {
                 </Link>
               )}
             </div>
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-              {otherBadges.slice(0, 3).map(badge => (
-                <BadgeCard key={badge.id} badge={badge} />
+            <div className="flex overflow-x-auto gap-4 pb-4 no-scrollbar -mx-6 px-6">
+              {otherBadges.slice(0, 5).map(badge => (
+                <div key={badge.id} className="shrink-0 w-44">
+                  <BadgeCard badge={badge} />
+                </div>
               ))}
             </div>
           </div>
