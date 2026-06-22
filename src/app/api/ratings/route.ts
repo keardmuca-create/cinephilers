@@ -27,6 +27,23 @@ export async function POST(req: NextRequest) {
     update: { score },
   });
 
+  // Keep the Cinephilers aggregate (count + sum) in sync. New rating adds one
+  // vote; a score change shifts the sum by the delta. Atomic increments so
+  // concurrent raters never clobber each other.
+  if (!existing) {
+    await prisma.movieRating.upsert({
+      where: { tmdbId_mediaType: { tmdbId, mediaType: mediaType as MediaType } },
+      create: { tmdbId, mediaType: mediaType as MediaType, count: 1, sum: score },
+      update: { count: { increment: 1 }, sum: { increment: score } },
+    });
+  } else if (existing.score !== score) {
+    await prisma.movieRating.upsert({
+      where: { tmdbId_mediaType: { tmdbId, mediaType: mediaType as MediaType } },
+      create: { tmdbId, mediaType: mediaType as MediaType, count: 1, sum: score },
+      update: { sum: { increment: score - existing.score } },
+    });
+  }
+
   if (!existing) {
     const user = await prisma.user.update({
       where: { id: auth.sub },

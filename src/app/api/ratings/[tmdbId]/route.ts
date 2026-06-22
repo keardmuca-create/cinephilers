@@ -12,6 +12,13 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ t
   const mediaType = new URL(req.url).searchParams.get('mediaType') as MediaType | null;
   if (!mediaType || !['MOVIE', 'SHOW'].includes(mediaType)) return err('mediaType query param required (MOVIE or SHOW)');
 
+  // Read the score before deleting so we know how much to subtract from the
+  // Cinephilers aggregate.
+  const existing = await prisma.rating.findUnique({
+    where: { userId_tmdbId_mediaType: { userId: auth.sub, tmdbId, mediaType } },
+    select: { score: true },
+  });
+
   const deleted = await prisma.rating.deleteMany({
     where: { userId: auth.sub, tmdbId, mediaType },
   });
@@ -21,6 +28,13 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ t
       where: { id: auth.sub },
       data: { ratingsCount: { decrement: 1 } },
     });
+    if (existing) {
+      // updateMany (not update) so a missing aggregate row never throws.
+      await prisma.movieRating.updateMany({
+        where: { tmdbId, mediaType },
+        data: { count: { decrement: 1 }, sum: { decrement: existing.score } },
+      });
+    }
   }
 
   return ok(null, 'Rating removed');

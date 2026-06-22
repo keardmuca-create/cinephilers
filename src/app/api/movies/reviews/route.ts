@@ -9,8 +9,24 @@ export async function GET(req: NextRequest) {
 
   const auth = await getCurrentUser(req);
 
+  // Respect account privacy: a private user's reviews are only visible to
+  // themselves and their accepted followers — never to anonymous visitors or
+  // non-followers. Their *rating* still counts toward the movie's aggregate
+  // (ratings are anonymous in aggregate); hiding the review is what removes the
+  // name-to-number link, matching the IMDb model.
   const reviews = await prisma.review.findMany({
-    where: { tmdbId },
+    where: {
+      tmdbId,
+      OR: [
+        { user: { isPrivate: false } },
+        ...(auth
+          ? [
+              { userId: auth.sub },
+              { user: { followers: { some: { followerId: auth.sub } } } },
+            ]
+          : []),
+      ],
+    },
     orderBy: { createdAt: 'desc' },
     include: {
       user: {

@@ -25,6 +25,7 @@ import { logActivity, removeActivity, relativeTime } from '@/lib/activity';
 import { useAuth } from '@/contexts/auth-context';
 import { fetchWithAuth } from '@/lib/fetch-with-auth';
 import { AuthGateModal } from '@/components/auth-gate-modal';
+import { CinephilersRating } from '@/lib/cinephilers-rating';
 
 // ─── Skeleton ─────────────────────────────────────────────────────────────────
 
@@ -809,6 +810,7 @@ export default function MovieDetailPage() {
   const [writeReviewOpen, setWriteReviewOpen] = useState(false);
   const [myReview, setMyReview] = useState<UserReview | null>(null);
   const [authGate, setAuthGate] = useState<string | null>(null);
+  const [cineRating, setCineRating] = useState<CinephilersRating | null>(null);
 
   const { user: authUser } = useAuth();
 
@@ -819,6 +821,13 @@ export default function MovieDetailPage() {
       body: body ? JSON.stringify(body) : undefined,
     }).catch(() => { /* background sync — ignore errors */ });
   }, []);
+
+  const loadCineRating = useCallback((mediaType: 'MOVIE' | 'SHOW') => {
+    fetch(`/api/movies/rating?tmdbId=${encodeURIComponent(id)}&mediaType=${mediaType}`)
+      .then(r => r.ok ? r.json() : null)
+      .then(json => { if (json?.data) setCineRating(json.data as CinephilersRating); })
+      .catch(() => { /* ignore */ });
+  }, [id]);
 
   useEffect(() => {
     if (!id) return;
@@ -858,6 +867,7 @@ export default function MovieDetailPage() {
       .then((data: Movie & { error?: string }) => {
         if (!data.error) {
           setMovie(data);
+          loadCineRating(data.type === 'show' ? 'SHOW' : 'MOVIE');
           // Cache metadata for profile/watchlist lookups
           try {
             localStorage.setItem(`meta-${data.id}`, JSON.stringify({
@@ -887,7 +897,16 @@ export default function MovieDetailPage() {
       })
       .catch(() => setMovie(null))
       .finally(() => setLoading(false));
-  }, [id]);
+  }, [id, loadCineRating]);
+
+  // Refetch the Cinephilers aggregate whenever this user rates/unrates, so the
+  // displayed score reflects their own just-cast vote without a page reload.
+  useEffect(() => {
+    if (!movie) return;
+    const handler = () => loadCineRating(movie.type === 'show' ? 'SHOW' : 'MOVIE');
+    window.addEventListener('cinephilers-rating-changed', handler);
+    return () => window.removeEventListener('cinephilers-rating-changed', handler);
+  }, [movie, loadCineRating]);
 
   // ─── Episode watch helpers ─────────────────────────────────────────────────
 
@@ -1143,20 +1162,30 @@ export default function MovieDetailPage() {
 
         {/* Ratings */}
         <section className="grid grid-cols-1 md:grid-cols-2 gap-8 bg-muted p-8 rounded-[2.5rem] border border-border">
-          <div className="space-y-4">
-            <h3 className="text-sm font-bold uppercase tracking-widest text-muted-foreground">TMDB Rating</h3>
-            <div className="flex items-center gap-4">
-              <div className="text-5xl font-black font-headline text-foreground">{movie.rating.toFixed(1)}</div>
-              <div className="space-y-1">
-                <div className="flex gap-0.5">
-                  {Array(5).fill(0).map((_, i) => (
-                    <Star key={i} className={`h-4 w-4 fill-current ${i < Math.floor(movie.rating / 2) ? 'fill-yellow-400 text-yellow-400' : 'text-foreground/20'}`} />
-                  ))}
+          {(() => {
+            // Once a title has enough community votes, show the Cinephilers
+            // aggregate in place of the TMDB rating. Both use a 0–10 scale, so
+            // the star math (score / 2) is identical.
+            const useCine = cineRating?.hasEnough && cineRating.average !== null;
+            const score = useCine ? cineRating!.average! : movie.rating;
+            const count = useCine ? cineRating!.count : movie.votes;
+            return (
+              <div className="space-y-4">
+                <h3 className="text-sm font-bold uppercase tracking-widest text-muted-foreground">{useCine ? 'Cinephilers Rating' : 'TMDB Rating'}</h3>
+                <div className="flex items-center gap-4">
+                  <div className="text-5xl font-black font-headline text-foreground">{score.toFixed(1)}</div>
+                  <div className="space-y-1">
+                    <div className="flex gap-0.5">
+                      {Array(5).fill(0).map((_, i) => (
+                        <Star key={i} className={`h-4 w-4 fill-current ${i < Math.floor(score / 2) ? 'fill-yellow-400 text-yellow-400' : 'text-foreground/20'}`} />
+                      ))}
+                    </div>
+                    <div className="text-xs text-muted-foreground font-bold">{count.toLocaleString()} ratings</div>
+                  </div>
                 </div>
-                <div className="text-xs text-muted-foreground font-bold">{movie.votes.toLocaleString()} ratings</div>
               </div>
-            </div>
-          </div>
+            );
+          })()}
           <div className="space-y-4">
             <h3 className="text-sm font-bold uppercase tracking-widest text-muted-foreground">Rate This</h3>
             <div className="flex flex-col gap-2">

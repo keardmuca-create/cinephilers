@@ -87,6 +87,20 @@ model Rating {
   @@index([tmdbId])
 }
 
+// Per-title rating aggregate (the "Cinephilers score"). Stores only count + sum
+// so updates are race-safe atomic increments; the average is derived (sum/count)
+// at read time. Maintained by the rating mutation routes; seeded by a one-time
+// backfill from the Rating table.
+model MovieRating {
+  tmdbId    String
+  mediaType MediaType
+  count     Int      @default(0)
+  sum       Int      @default(0)
+  updatedAt DateTime @updatedAt
+
+  @@id([tmdbId, mediaType])
+}
+
 model Review {
   id              String    @id @default(uuid())
   userId          String
