@@ -1,6 +1,7 @@
 import { Redis } from '@upstash/redis';
 import type { Movie } from '@/lib/types';
 import { WEEK_MS } from '@/lib/seed-shuffle';
+import { isExcludedLanguage } from '@/lib/tmdb';
 
 const redisUrl = process.env.UPSTASH_REDIS_REST_URL ?? process.env.KV_REST_API_URL;
 const redisToken = process.env.UPSTASH_REDIS_REST_TOKEN ?? process.env.KV_REST_API_TOKEN;
@@ -40,15 +41,26 @@ export async function buildHomePool(): Promise<Movie[]> {
   const key = process.env.TMDB_API_KEY ?? '';
   if (!key) return [];
 
-  const [mp1, mp2, sp1, sp2] = await Promise.all([
+  const [mp1, mp2, sp1, sp2, mp3, sp3] = await Promise.all([
     fetchPage('/movie/popular', 1, key),
     fetchPage('/movie/popular', 2, key),
     fetchPage('/tv/popular',    1, key),
     fetchPage('/tv/popular',    2, key),
+    fetchPage('/movie/popular', 3, key),
+    fetchPage('/tv/popular',    3, key),
   ]);
 
-  const movies: Movie[] = [...mp1, ...mp2].map(m => toMovie(m, 'movie'));
-  const shows:  Movie[] = [...sp1, ...sp2].map(m => toMovie(m, 'show'));
+  // Keep the home screen clean: drop zero/low-signal titles (a "Top 10" entry
+  // with 0.0 and no votes looks broken) and excluded-language titles. The extra
+  // page per type backfills the slots these filters remove. Search is unaffected.
+  const keep = (m: Record<string, unknown>) =>
+    Number(m.vote_count ?? 0) >= 50 &&
+    Number(m.vote_average ?? 0) > 0 &&
+    !!m.poster_path &&
+    !isExcludedLanguage({ original_language: m.original_language as string | undefined });
+
+  const movies: Movie[] = [...mp1, ...mp2, ...mp3].filter(keep).map(m => toMovie(m, 'movie'));
+  const shows:  Movie[] = [...sp1, ...sp2, ...sp3].filter(keep).map(m => toMovie(m, 'show'));
 
   const seen = new Set<string>();
   const pool: Movie[] = [];
@@ -84,12 +96,16 @@ async function frozenPool(key: string, ttlSeconds: number): Promise<Movie[]> {
   return pool;
 }
 
+// Bump the version suffix whenever the pool's contents/filters change so stale
+// frozen pools are abandoned and a fresh one is built immediately.
+const POOL_VERSION = 'v2';
+
 export async function getDailyPool(): Promise<Movie[]> {
   const day = new Date().toISOString().slice(0, 10);
-  return frozenPool(`home-pool:day:${day}`, 2 * 86_400);
+  return frozenPool(`home-pool:${POOL_VERSION}:day:${day}`, 2 * 86_400);
 }
 
 export async function getWeeklyPool(): Promise<Movie[]> {
   const week = Math.floor(Date.now() / WEEK_MS);
-  return frozenPool(`home-pool:week:${week}`, 9 * 86_400);
+  return frozenPool(`home-pool:${POOL_VERSION}:week:${week}`, 9 * 86_400);
 }

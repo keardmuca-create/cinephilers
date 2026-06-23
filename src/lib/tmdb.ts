@@ -38,6 +38,7 @@ interface TmdbMovie {
   poster_path: string | null;
   backdrop_path: string | null;
   media_type?: 'movie' | 'tv';
+  original_language?: string;
 }
 
 interface TmdbCredits {
@@ -222,14 +223,49 @@ export function tmdbToMovie(raw: TmdbMovie, credits?: TmdbCredits): Movie {
   };
 }
 
+// ─── Discovery feed filters ───────────────────────────────────────────────────
+// These keep low-quality / regionally-skewed titles out of the home screen and
+// suggestion rows. SEARCH intentionally does NOT use them — searched titles must
+// always be findable.
+
+// Original languages excluded from discovery/home feeds (still fully searchable).
+// Covers the major Indian film industries.
+const EXCLUDED_ORIGINAL_LANGUAGES = new Set([
+  'hi', 'ta', 'te', 'ml', 'kn', 'bn', 'mr', 'pa', 'gu',
+]);
+
+export function isExcludedLanguage(m: { original_language?: string }): boolean {
+  return !!m.original_language && EXCLUDED_ORIGINAL_LANGUAGES.has(m.original_language);
+}
+
+// Drops the zero/low-signal titles that look broken on the home screen
+// (e.g. a "Top 10" entry with 0.0 and no votes).
+function passesQualityFloor(m: TmdbMovie): boolean {
+  return m.vote_count >= 50 && m.vote_average > 0 && !!m.poster_path;
+}
+
+// Full filter for rated discovery rows: language exclusion + quality floor.
+function ratedFeedFilter(m: TmdbMovie): boolean {
+  return !isExcludedLanguage(m) && passesQualityFloor(m);
+}
+
+// Language-only filter — for feeds where a quality floor doesn't apply
+// (e.g. unreleased/upcoming titles legitimately have 0 votes).
+function languageOnlyFilter(m: TmdbMovie): boolean {
+  return !isExcludedLanguage(m);
+}
+
 // ─── Multi-page helper ────────────────────────────────────────────────────────
 
 async function fetchManyPages(
   path: string,
   count: number,
   extraParams: Record<string, string> = {},
+  filter?: (m: TmdbMovie) => boolean,
 ): Promise<TmdbMovie[]> {
-  const pagesNeeded = Math.ceil(count / 20);
+  // When filtering, over-fetch so post-filter results still reach `count`.
+  const basePages = Math.ceil(count / 20);
+  const pagesNeeded = filter ? Math.min(basePages * 2 + 1, 10) : basePages;
   const pageData = await Promise.all(
     Array.from({ length: pagesNeeded }, (_, i) =>
       tmdbFetch<{ results: TmdbMovie[] }>(path, { ...extraParams, page: String(i + 1) }),
@@ -239,10 +275,10 @@ async function fetchManyPages(
   const seen = new Set<number>();
   const deduped: TmdbMovie[] = [];
   for (const item of pageData.flatMap(d => d.results)) {
-    if (!seen.has(item.id)) {
-      seen.add(item.id);
-      deduped.push(item);
-    }
+    if (seen.has(item.id)) continue;
+    if (filter && !filter(item)) continue;
+    seen.add(item.id);
+    deduped.push(item);
   }
   return deduped.slice(0, count);
 }
@@ -251,31 +287,31 @@ async function fetchManyPages(
 
 export async function getPopularMovies(page = 1): Promise<Movie[]> {
   const data = await tmdbFetch<{ results: TmdbMovie[] }>('/movie/popular', { page: String(page) });
-  return data.results.map(m => tmdbToMovie(m));
+  return data.results.filter(ratedFeedFilter).map(m => tmdbToMovie(m));
 }
 
 export async function getPopularShows(page = 1): Promise<Movie[]> {
   const data = await tmdbFetch<{ results: TmdbMovie[] }>('/tv/popular', { page: String(page) });
-  return data.results.map(m => tmdbToMovie({ ...m, media_type: 'tv' }));
+  return data.results.filter(ratedFeedFilter).map(m => tmdbToMovie({ ...m, media_type: 'tv' }));
 }
 
 export async function getTrending(): Promise<Movie[]> {
   const data = await tmdbFetch<{ results: TmdbMovie[] }>('/trending/all/week');
-  return data.results.map(m => tmdbToMovie(m));
+  return data.results.filter(ratedFeedFilter).map(m => tmdbToMovie(m));
 }
 
 export async function getPopularMoviesPaged(count = 25): Promise<Movie[]> {
-  const results = await fetchManyPages('/movie/popular', count);
+  const results = await fetchManyPages('/movie/popular', count, {}, ratedFeedFilter);
   return results.map(m => tmdbToMovie(m));
 }
 
 export async function getPopularShowsPaged(count = 25): Promise<Movie[]> {
-  const results = await fetchManyPages('/tv/popular', count);
+  const results = await fetchManyPages('/tv/popular', count, {}, ratedFeedFilter);
   return results.map(m => tmdbToMovie({ ...m, media_type: 'tv' }));
 }
 
 export async function getTrendingPaged(count = 25): Promise<Movie[]> {
-  const results = await fetchManyPages('/trending/all/week', count);
+  const results = await fetchManyPages('/trending/all/week', count, {}, ratedFeedFilter);
   return results.map(m => tmdbToMovie(m));
 }
 
@@ -524,7 +560,7 @@ export async function getTopRatedMovies(count = 25): Promise<Movie[]> {
     sort_by: 'vote_average.desc',
     'vote_count.gte': '1000',
     include_adult: 'false',
-  });
+  }, languageOnlyFilter);
   return results.map(m => tmdbToMovie(m));
 }
 
@@ -533,7 +569,7 @@ export async function getTopRatedShows(count = 25): Promise<Movie[]> {
     sort_by: 'vote_average.desc',
     'vote_count.gte': '200',
     include_adult: 'false',
-  });
+  }, languageOnlyFilter);
   return results.map(m => tmdbToMovie({ ...m, media_type: 'tv' }));
 }
 
@@ -546,16 +582,16 @@ export async function getUpcomingMovies(count = 25): Promise<Movie[]> {
     'primary_release_date.gte': tomorrowDate(),
     sort_by: 'popularity.desc',
     include_adult: 'false',
-  });
-  return results.filter(m => m.poster_path).map(m => tmdbToMovie(m));
+  }, m => languageOnlyFilter(m) && !!m.poster_path);
+  return results.map(m => tmdbToMovie(m));
 }
 
 export async function getUpcomingShows(count = 25): Promise<Movie[]> {
   const results = await fetchManyPages('/discover/tv', count, {
     'first_air_date.gte': tomorrowDate(),
     sort_by: 'popularity.desc',
-  });
-  return results.filter(m => m.poster_path).map(m => tmdbToMovie({ ...m, media_type: 'tv' }));
+  }, m => languageOnlyFilter(m) && !!m.poster_path);
+  return results.map(m => tmdbToMovie({ ...m, media_type: 'tv' }));
 }
 
 export async function getMovieGenres(): Promise<TmdbGenre[]> {
@@ -573,7 +609,7 @@ export async function getMoviesByGenre(genreId: number, count = 25): Promise<Mov
     with_genres: String(genreId),
     sort_by: 'popularity.desc',
     include_adult: 'false',
-  });
+  }, ratedFeedFilter);
   return results.map(m => tmdbToMovie(m));
 }
 
@@ -582,7 +618,7 @@ export async function getShowsByGenre(genreId: number, count = 25): Promise<Movi
     with_genres: String(genreId),
     sort_by: 'popularity.desc',
     include_adult: 'false',
-  });
+  }, ratedFeedFilter);
   return results.map(m => tmdbToMovie({ ...m, media_type: 'tv' }));
 }
 

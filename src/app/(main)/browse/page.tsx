@@ -140,6 +140,20 @@ export default function SearchPage() {
   const { data } = usePopularMovies(fallback);
   const { combined: searchCombined, loading: searchLoading } = useSearch(searchTerm, []);
 
+  // Top Movies / Top Shows rows are ranked by rating (same source the
+  // Top-100 "See All" pages use), so the preview matches the full list.
+  const [topMovies, setTopMovies] = useState<Movie[]>([]);
+  const [topShows, setTopShows] = useState<Movie[]>([]);
+  useEffect(() => {
+    fetch('/api/discover/browse')
+      .then(r => r.json())
+      .then((d: { topMovies?: Movie[]; topShows?: Movie[] }) => {
+        setTopMovies(d.topMovies ?? []);
+        setTopShows(d.topShows ?? []);
+      })
+      .catch(() => {});
+  }, []);
+
   const comingSoonMovies = useMemo(() => data.movies.slice().reverse(), [data.movies]);
   const comingSoonShows  = useMemo(() => data.shows.slice().reverse(),  [data.shows]);
   const comingSoonList   = comingSoonTab === 'movie' ? comingSoonMovies : comingSoonShows;
@@ -283,16 +297,16 @@ export default function SearchPage() {
         /* ── Default: Top Movies, Top Shows, Coming Soon ── */
         <div className="space-y-10">
           <div className="space-y-4">
-            <SectionHeader title="Top Movies" seeAllHref="/see-all/popular-movies?title=Top+Movies" />
+            <SectionHeader title="Top Movies" seeAllHref="/see-all/top-rated-movies?title=Top+100+Movies" />
             <div className="flex overflow-x-auto gap-4 px-6 pb-4 no-scrollbar">
-              {data.movies.slice(0, 10).map(movie => <MovieCard key={movie.id} movie={movie} />)}
+              {topMovies.slice(0, 10).map(movie => <MovieCard key={movie.id} movie={movie} />)}
             </div>
           </div>
           <div className="space-y-4">
-            <SectionHeader title="Top Shows" seeAllHref="/see-all/popular-shows?title=Top+Shows" />
-            {data.shows.length > 0 ? (
+            <SectionHeader title="Top Shows" seeAllHref="/see-all/top-rated-shows?title=Top+100+Shows" />
+            {topShows.length > 0 ? (
               <div className="flex overflow-x-auto gap-4 px-6 pb-4 no-scrollbar">
-                {data.shows.slice(0, 10).map(movie => <MovieCard key={movie.id} movie={movie} />)}
+                {topShows.slice(0, 10).map(movie => <MovieCard key={movie.id} movie={movie} />)}
               </div>
             ) : (
               <EmptyState message="No shows yet. Check back soon." />

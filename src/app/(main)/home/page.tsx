@@ -12,10 +12,21 @@ import { RecentlyViewed } from '@/components/recently-viewed';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { usePopularMovies } from '@/hooks/use-movies';
-import { seededShuffle, WEEK_MS } from '@/lib/seed-shuffle';
+import { seededShuffle } from '@/lib/seed-shuffle';
 import { useAuth } from '@/contexts/auth-context';
 
 const EMPTY = { movies: [] as Movie[], shows: [] as Movie[], trending: [] as Movie[] };
+
+// IMDb-style weighted rating so "Top 10" needs both a high score AND enough
+// votes — a 9.0 with 12 votes won't outrank an 8.2 with 50k.
+const WEIGHTED_MIN_VOTES = 100;
+const GLOBAL_MEAN_RATING = 6.5;
+function weightedScore(m: Movie): number {
+  const v = m.votes ?? 0;
+  const r = m.rating ?? 0;
+  return (v / (v + WEIGHTED_MIN_VOTES)) * r
+    + (WEIGHTED_MIN_VOTES / (v + WEIGHTED_MIN_VOTES)) * GLOBAL_MEAN_RATING;
+}
 
 const SectionHeader = ({ title, seeAllSection }: { title: string; seeAllSection?: string }) => (
   <div className="flex items-center justify-between px-6">
@@ -74,17 +85,16 @@ export default function HomePage() {
 
     const now = new Date();
     const daySeed = now.getFullYear() * 10000 + (now.getMonth() + 1) * 100 + now.getDate();
-    const dayOfWeek = now.getDay();
-    const daysSinceMonday = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
-    const localMonday = new Date(now.getFullYear(), now.getMonth(), now.getDate() - daysSinceMonday);
-    const weekSeed = Math.floor(localMonday.getTime() / WEEK_MS) + 99_999;
 
-    const dailyPool  = seededShuffle(stablePool.daily, daySeed);
-    const weeklyPool = seededShuffle(stablePool.weekly, weekSeed);
+    const dailyPool = seededShuffle(stablePool.daily, daySeed);
 
     const hero = dailyPool.find(m => m.type === 'movie') ?? null;
     const feat = dailyPool.slice(1, 16);
-    const t10 = weeklyPool.slice(0, 10);
+    // Genuine top 10 by weighted rating (not a random slice). The weekly pool
+    // changes each week, so the ranking still rotates over time.
+    const t10 = [...stablePool.weekly]
+      .sort((a, b) => weightedScore(b) - weightedScore(a))
+      .slice(0, 10);
 
     return { heroMovie: hero, featured: feat, top10: t10 };
   }, [stablePool]);
