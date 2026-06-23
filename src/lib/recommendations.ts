@@ -40,6 +40,45 @@ async function topRatedFallback(limit: number): Promise<Recommendations> {
   return { topMovies, topShows, personalized: false };
 }
 
+// Tops a single media type up to `limit`, keeping the personalized picks first
+// and filling gaps from favorite-genre titles then top-rated. Without this a
+// movie-heavy user (whose seeds only yield movie recs) gets an empty Shows tab.
+async function backfillType(
+  existing: Movie[],
+  type: 'movie' | 'show',
+  limit: number,
+  seen: Set<string>,
+  favoriteGenres: string[] | undefined,
+): Promise<Movie[]> {
+  const out = new Map<string, Movie>();
+  for (const m of existing) out.set(m.id, m);
+
+  const add = (list: Movie[]) => {
+    for (const m of list) {
+      if (out.size >= limit) break;
+      if (out.has(m.id) || seen.has(libraryKey(m))) continue;
+      out.set(m.id, m);
+    }
+  };
+
+  if (out.size < limit && favoriteGenres?.length) {
+    const ids = favoriteGenres
+      .map(genreNameToId)
+      .filter((x): x is number => typeof x === 'number')
+      .slice(0, 3);
+    const lists = await Promise.all(
+      ids.map(id => (type === 'movie' ? getMoviesByGenre(id, 20) : getShowsByGenre(id, 20))),
+    );
+    add(lists.flat().sort((a, b) => weightedScore(b) - weightedScore(a)));
+  }
+
+  if (out.size < limit) {
+    add(type === 'movie' ? await getTopRatedMovies(limit + 20) : await getTopRatedShows(limit + 20));
+  }
+
+  return [...out.values()].slice(0, limit);
+}
+
 // Builds personalized Top Picks for the authed user, falling back to generic
 // top-rated when there's no usable history. `limit` caps each list.
 export async function getRecommendations(req: NextRequest, limit = 20): Promise<Recommendations> {
@@ -74,18 +113,6 @@ export async function getRecommendations(req: NextRequest, limit = 20): Promise<
     pool = lists.flat();
   }
 
-  // Thin/cold pool — top it up from the user's favorite genres.
-  if (pool.length < 10 && user?.favoriteGenres?.length) {
-    const ids = user.favoriteGenres
-      .map(genreNameToId)
-      .filter((x): x is number => typeof x === 'number')
-      .slice(0, 3);
-    const genreLists = await Promise.all(
-      ids.flatMap(id => [getMoviesByGenre(id, 20), getShowsByGenre(id, 20)]),
-    );
-    pool = [...pool, ...genreLists.flat()];
-  }
-
   // Dedupe by id, drop anything already in the user's library.
   const byId = new Map<string, Movie>();
   for (const m of pool) {
@@ -98,8 +125,14 @@ export async function getRecommendations(req: NextRequest, limit = 20): Promise<
   if (recs.length === 0) return topRatedFallback(limit);
 
   recs.sort((a, b) => weightedScore(b) - weightedScore(a));
-  const topMovies = recs.filter(m => m.type === 'movie').slice(0, limit);
-  const topShows = recs.filter(m => m.type === 'show').slice(0, limit);
+  const movieRecs = recs.filter(m => m.type === 'movie');
+  const showRecs = recs.filter(m => m.type === 'show');
+
+  // Backfill each type independently so neither tab is ever empty.
+  const [topMovies, topShows] = await Promise.all([
+    backfillType(movieRecs, 'movie', limit, seen, user?.favoriteGenres),
+    backfillType(showRecs, 'show', limit, seen, user?.favoriteGenres),
+  ]);
 
   return { topMovies, topShows, personalized: true };
 }
