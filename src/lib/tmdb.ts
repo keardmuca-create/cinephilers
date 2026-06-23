@@ -713,11 +713,11 @@ function buildCredit(item: TmdbMovie & { character?: string; job?: string }, rol
   };
 }
 
-// Upcoming = no release date yet (unannounced/TBA) or a date still in the future.
-// A film released earlier in the current year has a past date and is NOT upcoming.
+// Upcoming = a confirmed future release date. No date = treat as released to avoid
+// misclassifying old films where TMDB omits the date in combined_credits.
 function isUpcoming(item: { release_date?: string; first_air_date?: string }): boolean {
   const date = item.release_date ?? item.first_air_date ?? '';
-  if (!date) return true;
+  if (!date) return false;
   const today = new Date();
   today.setHours(0, 0, 0, 0);
   return new Date(date) > today;
