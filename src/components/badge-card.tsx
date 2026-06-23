@@ -2,7 +2,7 @@
 "use client"
 
 import React, { useEffect, useState } from 'react';
-import { Check, Lock } from 'lucide-react';
+import { Check, Lock, Star } from 'lucide-react';
 import {
   ComputedBadge,
   TIER_COLORS, TIER_LABELS, TIER_ORDER, EARNED_TIERS,
@@ -500,9 +500,10 @@ export function FounderFlairChip({ badge }: { badge: ComputedBadge }) {
       <button
         type="button"
         onClick={() => setModalOpen(true)}
-        className="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-sm font-bold transition-transform active:scale-95"
-        style={{ color: '#8a6d00', backgroundColor: `${color}1f`, border: `1px solid ${color}80` }}
+        className="inline-flex items-center gap-1.5 text-sm font-bold transition-transform active:scale-95"
+        style={{ color: '#8a6d00' }}
       >
+        <Star className="h-4 w-4 shrink-0" style={{ fill: color, stroke: '#8a6d00' }} />
         Founding Member · since {badge.memberSince}
       </button>
 
