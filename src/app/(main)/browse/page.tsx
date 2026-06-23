@@ -1,12 +1,12 @@
 
 "use client"
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { Search, X, ChevronRight, Film, Loader2, User } from 'lucide-react';
 import { Movie } from '@/lib/mock-data';
 import { MovieCard } from '@/components/movie-card';
-import { useSearch, usePopularMovies, PersonResult } from '@/hooks/use-movies';
+import { useSearch, PersonResult } from '@/hooks/use-movies';
 
 interface RecentItem {
   id: string;
@@ -136,27 +136,27 @@ export default function SearchPage() {
   const [comingSoonTab, setComingSoonTab] = useState<'movie' | 'show'>('movie');
   const [searchTab, setSearchTab] = useState<'titles' | 'people'>('titles');
 
-  const fallback = { movies: [], shows: [], trending: [] };
-  const { data } = usePopularMovies(fallback);
   const { combined: searchCombined, loading: searchLoading } = useSearch(searchTerm, []);
 
   // Top Movies / Top Shows rows are ranked by rating (same source the
   // Top-100 "See All" pages use), so the preview matches the full list.
   const [topMovies, setTopMovies] = useState<Movie[]>([]);
   const [topShows, setTopShows] = useState<Movie[]>([]);
+  const [upcomingMovies, setUpcomingMovies] = useState<Movie[]>([]);
+  const [upcomingShows, setUpcomingShows] = useState<Movie[]>([]);
   useEffect(() => {
     fetch('/api/discover/browse')
       .then(r => r.json())
-      .then((d: { topMovies?: Movie[]; topShows?: Movie[] }) => {
+      .then((d: { topMovies?: Movie[]; topShows?: Movie[]; upcoming?: Movie[]; upcomingShows?: Movie[] }) => {
         setTopMovies(d.topMovies ?? []);
         setTopShows(d.topShows ?? []);
+        setUpcomingMovies(d.upcoming ?? []);
+        setUpcomingShows(d.upcomingShows ?? []);
       })
       .catch(() => {});
   }, []);
 
-  const comingSoonMovies = useMemo(() => data.movies.slice().reverse(), [data.movies]);
-  const comingSoonShows  = useMemo(() => data.shows.slice().reverse(),  [data.shows]);
-  const comingSoonList   = comingSoonTab === 'movie' ? comingSoonMovies : comingSoonShows;
+  const comingSoonList   = comingSoonTab === 'movie' ? upcomingMovies : upcomingShows;
   const isSearching = searchTerm.trim().length > 0;
   const showOverlay  = focused || isSearching; // search bar active
 

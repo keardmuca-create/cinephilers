@@ -1,0 +1,97 @@
+import { NextRequest, NextResponse } from 'next/server';
+import { prisma } from '@/lib/db';
+import { getCurrentUser } from '@/lib/auth-utils';
+import {
+  getRecommendationsFor,
+  getMoviesByGenre,
+  getShowsByGenre,
+  getTopRatedMovies,
+  getTopRatedShows,
+  genreNameToId,
+} from '@/lib/tmdb';
+import type { Movie } from '@/lib/types';
+
+const WEIGHTED_MIN_VOTES = 100;
+const GLOBAL_MEAN_RATING = 6.5;
+function weightedScore(m: Movie): number {
+  const v = m.votes ?? 0;
+  const r = m.rating ?? 0;
+  return (v / (v + WEIGHTED_MIN_VOTES)) * r
+    + (WEIGHTED_MIN_VOTES / (v + WEIGHTED_MIN_VOTES)) * GLOBAL_MEAN_RATING;
+}
+
+// "MOVIE"/"SHOW" key from a Movie's id ("tmdb-123" / "tmdb-tv-456").
+function libraryKey(m: Movie): string {
+  const numeric = m.id.replace(/^tmdb-(?:tv-)?/, '');
+  return `${m.type === 'show' ? 'SHOW' : 'MOVIE'}:${numeric}`;
+}
+
+async function topRatedFallback() {
+  const [topMovies, topShows] = await Promise.all([
+    getTopRatedMovies(20),
+    getTopRatedShows(20),
+  ]);
+  return NextResponse.json({ topMovies, topShows, personalized: false });
+}
+
+export async function GET(req: NextRequest) {
+  const auth = await getCurrentUser(req);
+  if (!auth) return topRatedFallback();
+  const userId = auth.sub;
+
+  const [ratings, watched, watchlist, favorites, user] = await Promise.all([
+    prisma.rating.findMany({ where: { userId }, orderBy: { score: 'desc' }, take: 50 }),
+    prisma.watchedItem.findMany({ where: { userId }, orderBy: { watchedAt: 'desc' }, take: 50, select: { tmdbId: true, mediaType: true } }),
+    prisma.watchlistItem.findMany({ where: { userId }, select: { tmdbId: true, mediaType: true } }),
+    prisma.favorite.findMany({ where: { userId }, select: { tmdbId: true, mediaType: true } }),
+    prisma.user.findUnique({ where: { id: userId }, select: { favoriteGenres: true } }),
+  ]);
+
+  // Everything the user has already engaged with — never recommend these back.
+  const seen = new Set<string>();
+  for (const arr of [ratings, watched, watchlist, favorites]) {
+    for (const x of arr) seen.add(`${x.mediaType}:${x.tmdbId}`);
+  }
+
+  // Seeds: titles the user liked. Prefer high ratings, then any rating, then
+  // recently watched. Cap so we make at most ~6 TMDB recommendation calls.
+  const highRated = ratings.filter(r => r.score >= 7);
+  const seeds = (highRated.length ? highRated : ratings.length ? ratings : watched).slice(0, 6);
+
+  let pool: Movie[] = [];
+  if (seeds.length) {
+    const lists = await Promise.all(seeds.map(s =>
+      getRecommendationsFor(parseInt(s.tmdbId, 10), s.mediaType === 'SHOW' ? 'tv' : 'movie', 20),
+    ));
+    pool = lists.flat();
+  }
+
+  // Thin/cold pool — top it up from the user's favorite genres.
+  if (pool.length < 10 && user?.favoriteGenres?.length) {
+    const ids = user.favoriteGenres
+      .map(genreNameToId)
+      .filter((x): x is number => typeof x === 'number')
+      .slice(0, 3);
+    const genreLists = await Promise.all(
+      ids.flatMap(id => [getMoviesByGenre(id, 20), getShowsByGenre(id, 20)]),
+    );
+    pool = [...pool, ...genreLists.flat()];
+  }
+
+  // Dedupe by id, drop anything already in the user's library.
+  const byId = new Map<string, Movie>();
+  for (const m of pool) {
+    if (seen.has(libraryKey(m))) continue;
+    if (!byId.has(m.id)) byId.set(m.id, m);
+  }
+  const recs = [...byId.values()];
+
+  // No usable history at all → generic top-rated.
+  if (recs.length === 0) return topRatedFallback();
+
+  recs.sort((a, b) => weightedScore(b) - weightedScore(a));
+  const topMovies = recs.filter(m => m.type === 'movie').slice(0, 20);
+  const topShows = recs.filter(m => m.type === 'show').slice(0, 20);
+
+  return NextResponse.json({ topMovies, topShows, personalized: true });
+}

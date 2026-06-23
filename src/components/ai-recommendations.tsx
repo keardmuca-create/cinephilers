@@ -16,7 +16,7 @@ export const AIRecommendations = () => {
   const [tab, setTab] = useState<Tab>('movies');
 
   useEffect(() => {
-    fetch('/api/discover/browse')
+    fetch('/api/recommendations')
       .then(r => r.json())
       .then((data: { topMovies?: Movie[]; topShows?: Movie[] }) => {
         setMovies(data.topMovies ?? []);

@@ -622,6 +622,36 @@ export async function getShowsByGenre(genreId: number, count = 25): Promise<Movi
   return results.map(m => tmdbToMovie({ ...m, media_type: 'tv' }));
 }
 
+// "Because you liked X" — TMDB's own recommendations for a single title.
+// Used to build genuinely personalized Top Picks from a user's rated history.
+export async function getRecommendationsFor(
+  tmdbId: number,
+  mediaType: 'movie' | 'tv',
+  count = 20,
+): Promise<Movie[]> {
+  const path = mediaType === 'tv'
+    ? `/tv/${tmdbId}/recommendations`
+    : `/movie/${tmdbId}/recommendations`;
+  try {
+    const data = await tmdbFetch<{ results: TmdbMovie[] }>(path, { page: '1' });
+    const results = (data.results ?? []).filter(ratedFeedFilter);
+    const mapped = mediaType === 'tv'
+      ? results.map(m => tmdbToMovie({ ...m, media_type: 'tv' }))
+      : results.map(m => tmdbToMovie(m));
+    return mapped.slice(0, count);
+  } catch {
+    return [];
+  }
+}
+
+// Map a genre NAME (as stored in User.favoriteGenres) to its TMDB id.
+const GENRE_NAME_TO_ID: Record<string, number> = Object.fromEntries(
+  Object.entries(GENRE_MAP).map(([id, name]) => [name.toLowerCase(), Number(id)]),
+);
+export function genreNameToId(name: string): number | undefined {
+  return GENRE_NAME_TO_ID[name.trim().toLowerCase()];
+}
+
 // ─── Person filmography ────────────────────────────────────────────────────────
 
 export interface PersonCreditItem {
