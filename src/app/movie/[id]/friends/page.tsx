@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { ChevronLeft, MessageSquare, Star, Users, Loader2, Search, X } from 'lucide-react';
+import { ChevronLeft, Eye, MessageSquare, Star, Users, Loader2, Search, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/contexts/auth-context';
 import { fetchWithAuth } from '@/lib/fetch-with-auth';
@@ -145,6 +145,11 @@ export default function MovieFriendsPage() {
 
               {/* Activity icons + rating */}
               <div className="flex items-center gap-3 shrink-0">
+                {e.watched && (
+                  <div className="flex items-center gap-1 text-blue-400">
+                    <Eye className="h-4 w-4" />
+                  </div>
+                )}
                 {e.reviewed && (
                   <div className="flex items-center gap-1 text-green-400">
                     <MessageSquare className="h-4 w-4" />
