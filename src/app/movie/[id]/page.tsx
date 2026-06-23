@@ -51,12 +51,12 @@ function DetailSkeleton() {
 
 function PersonCard({ actor }: { actor: Actor }) {
   return (
-    <Link href={`/person/${actor.id}`} className="shrink-0 w-28 group cursor-pointer block">
-      <div className="relative aspect-square rounded-2xl overflow-hidden mb-2 group-hover:ring-2 ring-primary ring-offset-2 ring-offset-background transition-all bg-muted flex items-center justify-center">
+    <Link href={`/person/${actor.id}`} className="shrink-0 w-36 group cursor-pointer block">
+      <div className="relative aspect-[2/3] rounded-2xl overflow-hidden mb-2 group-hover:ring-2 ring-primary ring-offset-2 ring-offset-background transition-all bg-muted flex items-center justify-center">
         {actor.profileImage ? (
-          <Image src={actor.profileImage} alt={actor.name} fill className="object-cover" />
+          <Image src={actor.profileImage} alt={actor.name} fill className="object-cover" sizes="144px" />
         ) : (
-          <User className="h-10 w-10 text-muted-foreground/40" />
+          <User className="h-12 w-12 text-muted-foreground/40" />
         )}
       </div>
       <h4 className="text-xs font-bold font-headline line-clamp-1">{actor.name}</h4>
@@ -1260,38 +1260,43 @@ export default function MovieDetailPage() {
               </Link>
             </div>
             <div className="bg-muted rounded-3xl p-6 border border-border space-y-6">
-              {/* Key crew */}
-              {movie.crew && movie.crew.length > 0 && (
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 pb-4">
-                  {movie.director && (
-                    <div>
-                      <p className="text-[10px] font-bold uppercase tracking-widest text-primary mb-1">Director</p>
-                      <p className="text-sm font-bold font-headline">{movie.director}</p>
-                    </div>
-                  )}
-                  {movie.crew.filter(c => c.job !== 'Director').slice(0, 5).map(c => (
-                    <div key={`${c.name}-${c.job}`}>
-                      <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-1">{c.job}</p>
-                      <p className="text-sm font-bold font-headline">{c.name}</p>
-                    </div>
-                  ))}
-                </div>
-              )}
-              {movie.director && (!movie.crew || movie.crew.length === 0) && (
-                <div>
-                  <p className="text-[10px] font-bold uppercase tracking-widest text-primary mb-1">Director</p>
-                  <p className="text-xl font-bold font-headline">{movie.director}</p>
-                </div>
-              )}
-              <Separator className="bg-muted" />
               {/* Cast */}
               {movie.cast.length > 0 && (
                 <ScrollArea className="w-full">
                   <div className="flex gap-5 pb-4">
-                    {movie.cast.map(actor => <PersonCard key={actor.id} actor={actor} />)}
+                    {movie.cast.slice(0, 12).map(actor => <PersonCard key={actor.id} actor={actor} />)}
                   </div>
                   <ScrollBar orientation="horizontal" />
                 </ScrollArea>
+              )}
+              {/* Key crew */}
+              {movie.crew && movie.crew.length > 0 && (
+                <>
+                  {movie.cast.length > 0 && <Separator className="bg-muted" />}
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+                    {movie.director && (
+                      <div>
+                        <p className="text-[10px] font-bold uppercase tracking-widest text-primary mb-1">Director</p>
+                        <p className="text-sm font-bold font-headline">{movie.director}</p>
+                      </div>
+                    )}
+                    {movie.crew.filter(c => c.job !== 'Director').slice(0, 5).map(c => (
+                      <div key={`${c.name}-${c.job}`}>
+                        <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-1">{c.job}</p>
+                        <p className="text-sm font-bold font-headline">{c.name}</p>
+                      </div>
+                    ))}
+                  </div>
+                </>
+              )}
+              {movie.director && (!movie.crew || movie.crew.length === 0) && (
+                <>
+                  {movie.cast.length > 0 && <Separator className="bg-muted" />}
+                  <div>
+                    <p className="text-[10px] font-bold uppercase tracking-widest text-primary mb-1">Director</p>
+                    <p className="text-xl font-bold font-headline">{movie.director}</p>
+                  </div>
+                </>
               )}
             </div>
           </section>

@@ -138,7 +138,7 @@ function isShowItem(raw: TmdbMovie): boolean {
 }
 
 function buildCast(credits?: TmdbCredits): Actor[] {
-  return (credits?.cast ?? []).slice(0, 12).map(a => ({
+  return (credits?.cast ?? []).slice(0, 50).map(a => ({
     id: String(a.id),
     name: a.name,
     role: a.character,
