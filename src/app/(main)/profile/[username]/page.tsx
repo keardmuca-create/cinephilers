@@ -4,7 +4,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { useParams, useRouter } from 'next/navigation';
-import { Star, Film, Eye, UserPlus, UserCheck, Loader2, Lock, User, MessageSquare, List, ChevronRight, Clock, Heart, Award } from 'lucide-react';
+import { Star, Film, Eye, UserPlus, UserCheck, Loader2, Lock, User, MessageSquare, List, ChevronRight, Clock, Heart } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/contexts/auth-context';
 import { relativeTime } from '@/lib/activity';
@@ -28,13 +28,6 @@ interface ProfileUser {
   isPendingRequest: boolean;
   isOwner: boolean;
 }
-
-const TIER_COLORS: Record<string, string> = {
-  GREY: '#9ca3af', BRONZE: '#cd7f32', SILVER: '#c0c0c0', GOLD: '#ffd700',
-};
-const TIER_LABELS: Record<string, string> = {
-  GREY: 'Grey', BRONZE: 'Bronze', SILVER: 'Silver', GOLD: 'Gold',
-};
 
 interface BadgeData {
   currentTier: string;
@@ -388,6 +381,14 @@ export default function PublicProfilePage() {
                 {profile.isPrivate && <Lock className="h-3.5 w-3.5 text-muted-foreground shrink-0" />}
               </div>
               <p className="text-sm text-muted-foreground">@{profile.username}</p>
+              {badgeData?.memberSince && (
+                <span
+                  className="mt-1.5 inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-bold"
+                  style={{ color: '#8a6d00', backgroundColor: '#ffd7001f', border: '1px solid #ffd70080' }}
+                >
+                  Founding Member · since {new Date(badgeData.memberSince).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}
+                </span>
+              )}
               {profile.bio && isVisible && <p className="text-sm text-foreground/80 leading-relaxed mt-1">{profile.bio}</p>}
             </div>
             {me && (
@@ -437,58 +438,6 @@ export default function PublicProfilePage() {
           <div className="grid grid-cols-5 gap-2">
             {favorites.map(f => <FavoritePoster key={f.id} tmdbId={f.tmdbId} />)}
           </div>
-        </section>
-      )}
-
-      {/* Badges */}
-      {isVisible && badgeData && (
-        <section className="space-y-3">
-          <h2 className="text-lg font-headline font-bold flex items-center gap-2">
-            <Award className="h-5 w-5 text-primary" />Badges
-          </h2>
-
-          {/* Founder badge — full-width hero card */}
-          {(() => {
-            const color = '#ffd700';
-            const memberSinceLabel = new Date(badgeData.memberSince).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
-            return (
-              <div
-                className="w-full rounded-3xl border overflow-hidden"
-                style={{ borderColor: `${color}44`, background: `linear-gradient(135deg, ${color}12 0%, ${color}06 100%)` }}
-              >
-                <div className="flex items-center justify-between px-5 pt-4 pb-2">
-                  <span className="text-[10px] font-bold uppercase tracking-widest px-2 py-0.5 rounded-full"
-                    style={{ color, backgroundColor: `${color}20`, border: `1px solid ${color}44` }}>
-                    Founder
-                  </span>
-                </div>
-                <div className="flex items-center gap-5 px-5 pb-5">
-                  <div className="shrink-0">
-                    <svg width="64" height="64" viewBox="0 0 24 24" fill="none">
-                      <rect x="9" y="1.5" width="2.2" height="7" rx="1.1" fill={color} fillOpacity="0.75" />
-                      <rect x="12.8" y="1.5" width="2.2" height="7" rx="1.1" fill={color} fillOpacity="0.75" />
-                      <circle cx="12" cy="16" r="6.5" fill={color} fillOpacity="0.12" stroke={color} strokeWidth="1.5" />
-                      <circle cx="12" cy="16" r="3.5" fill={color} fillOpacity="0.3" />
-                    </svg>
-                  </div>
-                  <div className="flex-1 min-w-0 space-y-2">
-                    <div>
-                      <div className="flex items-center gap-2 mb-1">
-                        <h4 className="text-lg font-bold font-headline leading-tight">Founder</h4>
-                        <span className="text-[9px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded-full shrink-0"
-                          style={{ color, backgroundColor: `${color}18`, border: `1px solid ${color}33` }}>
-                          Gold
-                        </span>
-                      </div>
-                      <p className="text-xs text-muted-foreground leading-snug">Awarded to everyone who joins the community.</p>
-                    </div>
-                    <p className="text-xs font-medium" style={{ color }}>Member since {memberSinceLabel}</p>
-                  </div>
-                </div>
-              </div>
-            );
-          })()}
-
         </section>
       )}
 
