@@ -410,8 +410,7 @@ export function FeaturedSeasonalBadge({ badge }: FeaturedSeasonalBadgeProps) {
   const [modalOpen, setModalOpen] = useState(false);
   const color = TIER_COLORS[badge.tier];
   const isLocked = badge.tier === 'locked';
-  const countdown = useCountdown(badge.isSeasonal ? badge.seasonEndDate : undefined);
-  const categoryLabel = badge.isSpecial ? 'Founder' : 'Seasonal';
+  const countdown = useCountdown(badge.seasonEndDate);
 
   return (
     <>
@@ -426,9 +425,9 @@ export function FeaturedSeasonalBadge({ badge }: FeaturedSeasonalBadgeProps) {
             className="text-[10px] font-bold uppercase tracking-widest px-2 py-0.5 rounded-full"
             style={{ color, backgroundColor: `${color}20`, border: `1px solid ${color}44` }}
           >
-            {categoryLabel}
+            Seasonal
           </span>
-          {badge.isSeasonal && countdown && (
+          {countdown && (
             <span className="text-[10px] font-bold tabular-nums" style={{ color }}>
               {countdown} remaining
             </span>
@@ -475,15 +474,36 @@ export function FeaturedSeasonalBadge({ badge }: FeaturedSeasonalBadgeProps) {
               </div>
             )}
 
-            {badge.isSpecial && badge.memberSince && (
-              <p className="text-[11px] font-bold" style={{ color }}>Member since {badge.memberSince}</p>
-            )}
-
             {badge.seasonWindowText && (
               <p className="text-[10px] text-muted-foreground">Active: {badge.seasonWindowText}</p>
             )}
           </div>
         </div>
+      </button>
+
+      <BadgeDetailModal badge={badge} open={modalOpen} onClose={() => setModalOpen(false)} />
+    </>
+  );
+}
+
+// ─── Founder flair chip ────────────────────────────────────────────────────────
+
+// Status flair shown under the username (not in the badge grid). Gold pill,
+// tap to open the full Founder badge detail.
+export function FounderFlairChip({ badge }: { badge: ComputedBadge }) {
+  const [modalOpen, setModalOpen] = useState(false);
+  const color = TIER_COLORS[badge.tier];
+  if (!badge.memberSince) return null;
+
+  return (
+    <>
+      <button
+        type="button"
+        onClick={() => setModalOpen(true)}
+        className="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-sm font-bold transition-transform active:scale-95"
+        style={{ color: '#8a6d00', backgroundColor: `${color}1f`, border: `1px solid ${color}80` }}
+      >
+        Founding Member · since {badge.memberSince}
       </button>
 
       <BadgeDetailModal badge={badge} open={modalOpen} onClose={() => setModalOpen(false)} />

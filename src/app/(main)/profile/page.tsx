@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation';
 import { Movie } from '@/lib/types';
 import { readUserStats, computeAllBadges, ensureSignupDate, ComputedBadge } from '@/lib/badges';
 import { normalizeLocalMediaIds, getAddedAt, getWatchedAtISO, getManualWatchISO } from '@/lib/media-id';
-import { BadgeCard, FeaturedSeasonalBadge } from '@/components/badge-card';
+import { BadgeCard, FeaturedSeasonalBadge, FounderFlairChip } from '@/components/badge-card';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { MovieCard } from '@/components/movie-card';
@@ -1141,6 +1141,11 @@ export default function ProfilePage() {
             {authUser?.displayName ?? authUser?.username ?? 'Your Profile'}
           </h1>
           <p className="text-muted-foreground text-lg">@{authUser?.username ?? 'username'}</p>
+          {founderBadge && (
+            <div className="mt-2">
+              <FounderFlairChip badge={founderBadge} />
+            </div>
+          )}
         </div>
         <p className="text-lg text-foreground/70 leading-relaxed max-w-md">
           {authUser?.bio ?? 'Set up your profile to track movies and connect with friends.'}
@@ -1388,9 +1393,6 @@ export default function ProfilePage() {
             </Link>
           ) : undefined}
         />
-
-        {/* Founder — full-width featured hero card */}
-        {founderBadge && <FeaturedSeasonalBadge badge={founderBadge} />}
 
         {/* Active seasonal badges — full-width featured cards */}
         {activeSeasonal.length > 0 && (
