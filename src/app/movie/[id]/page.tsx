@@ -768,22 +768,17 @@ function FriendsRatings({ tmdbId }: { tmdbId: string }) {
       <div className="flex gap-3">
         {visible.map(e => (
           <Link key={e.user.id} href={`/profile/${e.user.username}`} className="shrink-0 group">
-            <div className="relative h-12 w-12 rounded-2xl bg-primary/20 overflow-hidden flex items-center justify-center">
+            <div className="relative h-16 w-16 rounded-2xl bg-primary/20 overflow-hidden flex items-center justify-center">
               {e.user.avatarUrl
                 ? <img src={e.user.avatarUrl} alt={e.user.username} className="w-full h-full object-cover" />
                 : <span className="text-primary font-bold text-sm">{(e.user.displayName ?? e.user.username).slice(0, 2).toUpperCase()}</span>
               }
-              {e.watched && (
-                <div className="absolute bottom-0 right-0 h-4 w-4 bg-blue-500 rounded-full flex items-center justify-center">
-                  <Eye className="h-2.5 w-2.5 text-white" />
-                </div>
-              )}
             </div>
           </Link>
         ))}
         {entries.length > FRIENDS_VISIBLE && (
           <Link href={`/movie/${tmdbId}/friends`} className="shrink-0">
-            <div className="h-12 w-12 rounded-2xl bg-muted border border-border flex items-center justify-center">
+            <div className="h-16 w-16 rounded-2xl bg-muted border border-border flex items-center justify-center">
               <span className="text-xs font-bold text-muted-foreground">+{entries.length - FRIENDS_VISIBLE}</span>
             </div>
           </Link>

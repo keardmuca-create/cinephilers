@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { ChevronLeft, Eye, MessageSquare, Star, Users, Loader2, Search, X } from 'lucide-react';
+import { ChevronLeft, MessageSquare, Star, Users, Loader2, Search, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/contexts/auth-context';
 import { fetchWithAuth } from '@/lib/fetch-with-auth';
@@ -145,20 +145,15 @@ export default function MovieFriendsPage() {
 
               {/* Activity icons + rating */}
               <div className="flex items-center gap-3 shrink-0">
-                {e.watched && (
-                  <div className="flex items-center gap-1 text-blue-400">
-                    <Eye className="h-4 w-4" />
-                  </div>
-                )}
                 {e.reviewed && (
                   <div className="flex items-center gap-1 text-green-400">
                     <MessageSquare className="h-4 w-4" />
                   </div>
                 )}
                 {e.rating !== null ? (
-                  <div className="flex items-center gap-1 bg-yellow-400/10 px-2.5 py-1 rounded-full">
+                  <div className="flex items-center gap-1">
                     <Star className="h-3.5 w-3.5 fill-yellow-400 text-yellow-400" />
-                    <span className="text-sm font-black text-yellow-400">{e.rating}/10</span>
+                    <span className="text-sm font-bold text-foreground">{e.rating}</span>
                   </div>
                 ) : (
                   <span className="text-sm text-muted-foreground/50">—</span>
