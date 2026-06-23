@@ -18,6 +18,8 @@ const SECTION_TITLES: Record<string, string> = {
   'top-rated-shows': 'Top 100 TV Shows',
   'coming-soon': 'Coming Soon — Movies',
   'coming-soon-shows': 'Coming Soon — Shows',
+  'top-picks-movies': 'Top Picks For You — Movies',
+  'top-picks-shows': 'Top Picks For You — Shows',
 };
 
 function getSectionTitle(section: string, titleParam: string | null): string {

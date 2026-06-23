@@ -29,7 +29,7 @@ export const AIRecommendations = () => {
   if (!loading && movies.length === 0 && shows.length === 0) return null;
 
   const displayed = tab === 'movies' ? movies : shows;
-  const seeAllHref = tab === 'movies' ? '/see-all/top-rated-movies' : '/see-all/top-rated-shows';
+  const seeAllHref = tab === 'movies' ? '/see-all/top-picks-movies' : '/see-all/top-picks-shows';
 
   return (
     <section className="space-y-4">

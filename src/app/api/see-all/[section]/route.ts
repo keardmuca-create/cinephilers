@@ -13,9 +13,10 @@ import {
 import type { Movie } from '@/lib/types';
 import { seededShuffle, dedup, WEEK_MS } from '@/lib/seed-shuffle';
 import { getDailyPool } from '@/lib/home-pool';
+import { getRecommendations } from '@/lib/recommendations';
 
 export async function GET(
-  _req: NextRequest,
+  req: NextRequest,
   { params }: { params: Promise<{ section: string }> },
 ) {
   const { section } = await params;
@@ -78,6 +79,16 @@ export async function GET(
       case 'coming-soon-shows':
         items = await getUpcomingShows(100);
         break;
+      case 'top-picks-movies': {
+        const recs = await getRecommendations(req, 100);
+        items = recs.topMovies;
+        break;
+      }
+      case 'top-picks-shows': {
+        const recs = await getRecommendations(req, 100);
+        items = recs.topShows;
+        break;
+      }
       default:
         return NextResponse.json({ error: 'Unknown section' }, { status: 404 });
     }
