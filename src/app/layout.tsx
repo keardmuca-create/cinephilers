@@ -25,11 +25,8 @@ export const metadata: Metadata = {
   verification: {
     google: 'iXOrHwM2YB_g3HVEb6FnHIISh0He81e5DUdazpKHsvk',
   },
-  icons: {
-    icon: '/favicon.svg',
-    shortcut: '/favicon.svg',
-    apple: '/apple-touch-icon.png',
-  },
+  // Icons are provided by App Router file conventions:
+  // src/app/favicon.ico, src/app/icon.svg, src/app/apple-icon.png
 };
 
 export const viewport: Viewport = {
@@ -55,8 +52,6 @@ export default async function RootLayout({
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
         <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet" />
-        <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-        <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
       </head>
       <body className="font-body antialiased bg-background text-foreground overflow-x-hidden">
         <AuthProvider>
