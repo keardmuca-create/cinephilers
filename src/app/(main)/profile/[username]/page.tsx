@@ -383,9 +383,10 @@ export default function PublicProfilePage() {
               <p className="text-sm text-muted-foreground">@{profile.username}</p>
               {badgeData?.memberSince && (
                 <span
-                  className="mt-1.5 inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-bold"
-                  style={{ color: '#8a6d00', backgroundColor: '#ffd7001f', border: '1px solid #ffd70080' }}
+                  className="mt-1.5 inline-flex items-center gap-1.5 text-xs font-bold"
+                  style={{ color: '#8a6d00' }}
                 >
+                  <Star className="h-3.5 w-3.5 shrink-0" style={{ fill: '#ffd700', stroke: '#8a6d00' }} />
                   Founding Member · since {new Date(badgeData.memberSince).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}
                 </span>
               )}
