@@ -363,7 +363,6 @@ export async function searchTmdb(query: string): Promise<{ results: Movie[]; peo
     results: (TmdbMovie & { media_type: string; profile_path?: string | null; known_for_department?: string })[]
   }>('/search/multi', { query });
 
-  const movieItems: CombinedSearchResult[] = [];
   const talentItems: CombinedSearchResult[] = [];   // actors + directors
   const crewItems: CombinedSearchResult[] = [];     // other crew — only shown on full-name match
   const results: Movie[] = [];
@@ -375,7 +374,6 @@ export async function searchTmdb(query: string): Promise<{ results: Movie[]; peo
     if (item.media_type === 'movie' || item.media_type === 'tv') {
       const movie = tmdbToMovie(item as TmdbMovie);
       results.push(movie);
-      movieItems.push({ kind: 'movie', data: movie });
     } else if (item.media_type === 'person') {
       const person: PersonResult = {
         id: String(item.id),
@@ -397,8 +395,28 @@ export async function searchTmdb(query: string): Promise<{ results: Movie[]; peo
     }
   }
 
+  // Among results sharing the same title, surface the one with more votes first
+  // (the popular/iconic title users usually mean). TMDB's relevance order is
+  // preserved across different titles — votes only break ties within a title.
+  const firstIdxByTitle = new Map<string, number>();
+  results.forEach((m, i) => {
+    const key = m.title.toLowerCase().trim();
+    if (!firstIdxByTitle.has(key)) firstIdxByTitle.set(key, i);
+  });
+  const orderedResults = results
+    .map((m, i) => ({ m, i }))
+    .sort((a, b) => {
+      const ga = firstIdxByTitle.get(a.m.title.toLowerCase().trim())!;
+      const gb = firstIdxByTitle.get(b.m.title.toLowerCase().trim())!;
+      if (ga !== gb) return ga - gb;
+      if (b.m.votes !== a.m.votes) return b.m.votes - a.m.votes;
+      return a.i - b.i;
+    })
+    .map(x => x.m);
+
+  const movieItems: CombinedSearchResult[] = orderedResults.map(m => ({ kind: 'movie', data: m }));
   const combined: CombinedSearchResult[] = [...movieItems, ...talentItems, ...crewItems];
-  return { results, people, combined };
+  return { results: orderedResults, people, combined };
 }
 
 // ─── Detail endpoints (full extended data) ────────────────────────────────────
