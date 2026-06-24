@@ -386,7 +386,6 @@ export default function PublicProfilePage() {
                   className="mt-1.5 inline-flex items-center gap-1.5 text-xs font-bold"
                   style={{ color: '#8a6d00' }}
                 >
-                  <Star className="h-3.5 w-3.5 shrink-0" style={{ fill: '#ffd700', stroke: '#8a6d00' }} />
                   Founding Member · since {new Date(badgeData.memberSince).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}
                 </span>
               )}

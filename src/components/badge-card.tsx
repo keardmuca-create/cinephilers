@@ -2,7 +2,7 @@
 "use client"
 
 import React, { useEffect, useState } from 'react';
-import { Check, Lock, Star } from 'lucide-react';
+import { Check, Lock } from 'lucide-react';
 import {
   ComputedBadge,
   TIER_COLORS, TIER_LABELS, TIER_ORDER, EARNED_TIERS,
@@ -492,7 +492,6 @@ export function FeaturedSeasonalBadge({ badge }: FeaturedSeasonalBadgeProps) {
 // tap to open the full Founder badge detail.
 export function FounderFlairChip({ badge }: { badge: ComputedBadge }) {
   const [modalOpen, setModalOpen] = useState(false);
-  const color = TIER_COLORS[badge.tier];
   if (!badge.memberSince) return null;
 
   return (
@@ -503,7 +502,6 @@ export function FounderFlairChip({ badge }: { badge: ComputedBadge }) {
         className="inline-flex items-center gap-1.5 text-sm font-bold transition-transform active:scale-95"
         style={{ color: '#8a6d00' }}
       >
-        <Star className="h-4 w-4 shrink-0" style={{ fill: color, stroke: '#8a6d00' }} />
         Founding Member · since {badge.memberSince}
       </button>
 
