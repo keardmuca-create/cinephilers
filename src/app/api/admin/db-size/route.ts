@@ -26,6 +26,13 @@ export async function GET(req: NextRequest) {
       SELECT pg_size_pretty(pg_database_size(current_database())) AS pretty,
              pg_database_size(current_database())::float8 AS bytes
     `;
+    // Sum of every app table (all of them, not just the top 12 shown below) —
+    // this is the "your data" figure vs the whole database total.
+    const usedRows = await prisma.$queryRaw<{ pretty: string; bytes: number }[]>`
+      SELECT pg_size_pretty(COALESCE(SUM(pg_total_relation_size(relid)), 0)) AS pretty,
+             COALESCE(SUM(pg_total_relation_size(relid)), 0)::float8 AS bytes
+      FROM pg_catalog.pg_statio_user_tables
+    `;
     const tableRows = await prisma.$queryRaw<{ name: string; pretty: string; bytes: number }[]>`
       SELECT relname AS name,
              pg_size_pretty(pg_total_relation_size(relid)) AS pretty,
@@ -38,6 +45,8 @@ export async function GET(req: NextRequest) {
     return ok({
       total: totalRows[0]?.pretty ?? 'unknown',
       totalBytes: totalRows[0]?.bytes ?? 0,
+      used: usedRows[0]?.pretty ?? 'unknown',
+      usedBytes: usedRows[0]?.bytes ?? 0,
       tables: tableRows.map(t => ({ name: t.name, size: t.pretty, bytes: t.bytes })),
     });
   } catch (e) {

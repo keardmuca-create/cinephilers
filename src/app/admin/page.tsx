@@ -40,6 +40,8 @@ interface AdminStats {
 interface DbSize {
   total: string;
   totalBytes: number;
+  used: string;
+  usedBytes: number;
   tables: { name: string; size: string; bytes: number }[];
 }
 
@@ -219,8 +221,8 @@ export default function AdminPage() {
               <Database className="h-4 w-4" />
             </div>
             <div>
-              <p className="text-lg font-bold leading-tight">{dbSize.total}</p>
-              <p className="text-xs text-muted-foreground">Total database size</p>
+              <p className="text-lg font-bold leading-tight">{dbSize.used} <span className="text-muted-foreground font-normal">/ {dbSize.total}</span></p>
+              <p className="text-xs text-muted-foreground">App data (all users) / total database size</p>
             </div>
           </div>
           {dbSize.tables.length > 0 && (

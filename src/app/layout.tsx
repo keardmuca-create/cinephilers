@@ -67,6 +67,14 @@ export default async function RootLayout({
         <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet" />
       </head>
       <body className="font-body antialiased bg-background text-foreground overflow-x-hidden">
+        {/* Solid band behind the iOS status bar in standalone PWA mode, so the
+            clock/Wi-Fi/battery sit on a clean background instead of overlapping
+            the hero poster. Zero-height (invisible) in normal browsers. */}
+        <div
+          aria-hidden
+          className="fixed top-0 inset-x-0 z-[100] bg-background pointer-events-none"
+          style={{ height: 'env(safe-area-inset-top)' }}
+        />
         <AuthProvider>
           {children}
           <Toaster />
