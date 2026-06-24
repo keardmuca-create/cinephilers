@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
-import { Flag, Trash2, Check, X, Loader2, ShieldAlert, Users, Search, Ban, ShieldCheck, ChevronUp, ChevronDown } from 'lucide-react';
+import { Flag, Trash2, Check, X, Loader2, ShieldAlert, Users, Search, Ban, ShieldCheck, ChevronUp, ChevronDown, Database } from 'lucide-react';
 import { useAuth } from '@/contexts/auth-context';
 import { fetchWithAuth } from '@/lib/fetch-with-auth';
 import { relativeTime } from '@/lib/activity';
@@ -37,6 +37,12 @@ interface AdminStats {
   bannedUsers: number;
 }
 
+interface DbSize {
+  total: string;
+  totalBytes: number;
+  tables: { name: string; size: string; bytes: number }[];
+}
+
 const STATUS_COLOURS: Record<string, string> = {
   pending: 'bg-yellow-500/10 text-yellow-400',
   reviewed: 'bg-green-500/10 text-green-400',
@@ -65,6 +71,7 @@ export default function AdminPage() {
 
   // Stats state
   const [stats, setStats] = useState<AdminStats | null>(null);
+  const [dbSize, setDbSize] = useState<DbSize | null>(null);
 
   useEffect(() => {
     if (authLoading) return;
@@ -81,6 +88,11 @@ export default function AdminPage() {
     fetchWithAuth('/api/admin/stats')
       .then(r => r.ok ? r.json() : null)
       .then(json => { if (json?.data) setStats(json.data); })
+      .catch(() => {});
+
+    fetchWithAuth('/api/admin/db-size')
+      .then(r => r.ok ? r.json() : null)
+      .then(json => { if (json?.data) setDbSize(json.data); })
       .catch(() => {});
   }, [user, authLoading, router]);
 
@@ -196,6 +208,39 @@ export default function AdminPage() {
               </div>
             </div>
           ))}
+        </div>
+      )}
+
+      {/* Database storage */}
+      {dbSize && (
+        <div className="bg-card border border-border rounded-2xl p-5 space-y-4">
+          <div className="flex items-center gap-3">
+            <div className="h-8 w-8 rounded-xl bg-primary/10 flex items-center justify-center text-primary shrink-0">
+              <Database className="h-4 w-4" />
+            </div>
+            <div>
+              <p className="text-lg font-bold leading-tight">{dbSize.total}</p>
+              <p className="text-xs text-muted-foreground">Total database size</p>
+            </div>
+          </div>
+          {dbSize.tables.length > 0 && (
+            <div className="space-y-1.5">
+              {dbSize.tables.map(t => {
+                const pct = dbSize.totalBytes > 0 ? (t.bytes / dbSize.totalBytes) * 100 : 0;
+                return (
+                  <div key={t.name} className="space-y-1">
+                    <div className="flex items-center justify-between gap-3 text-xs">
+                      <span className="font-medium truncate">{t.name}</span>
+                      <span className="text-muted-foreground shrink-0">{t.size}</span>
+                    </div>
+                    <div className="h-1.5 rounded-full bg-muted overflow-hidden">
+                      <div className="h-full bg-primary/60 rounded-full" style={{ width: `${pct}%` }} />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
       )}
 
