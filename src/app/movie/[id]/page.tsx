@@ -12,7 +12,7 @@ import {
   Info, Film, Calendar, Clock, Globe, Building2, Tv, ChevronDown, ChevronUp,
   DollarSign, Images, Clapperboard, PenLine, Eye, ChevronRight, User, Users, MessageSquare, Trash2,
 } from 'lucide-react';
-import { Avatar, AvatarImage } from '@/components/ui/avatar';
+import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Separator } from '@/components/ui/separator';
@@ -681,7 +681,10 @@ function ReviewsSection({ movie, writeOpen, setWriteOpen, myReview, setMyReview 
             <div key={r.id} className="bg-muted/50 p-5 rounded-2xl border border-border space-y-3">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
-                  <Avatar className="h-8 w-8"><AvatarImage src={r.userAvatar} /></Avatar>
+                  <Avatar className="h-8 w-8">
+                    <AvatarImage src={r.userAvatar} />
+                    <AvatarFallback className="bg-primary/20 text-primary text-xs font-bold">{r.userName.charAt(0).toUpperCase()}</AvatarFallback>
+                  </Avatar>
                   <div>
                     <span className="text-sm font-bold font-headline block">{r.userName}</span>
                     <span className="text-[10px] text-muted-foreground font-bold">{r.date}</span>

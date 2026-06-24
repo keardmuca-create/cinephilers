@@ -4,7 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { Movie } from '@/lib/types';
 import { Button } from '@/components/ui/button';
-import { Avatar, AvatarImage } from '@/components/ui/avatar';
+import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
 import { Separator } from '@/components/ui/separator';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ChevronLeft, Star } from 'lucide-react';
@@ -65,7 +65,10 @@ export default function CommunityReviewsPage() {
             <div key={r.id} className="space-y-3">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
-                  <Avatar className="h-9 w-9"><AvatarImage src={r.userAvatar} /></Avatar>
+                  <Avatar className="h-9 w-9">
+                    <AvatarImage src={r.userAvatar} />
+                    <AvatarFallback className="bg-primary/20 text-primary text-xs font-bold">{r.userName.charAt(0).toUpperCase()}</AvatarFallback>
+                  </Avatar>
                   <div>
                     <span className="text-sm font-bold font-headline block">{r.userName}</span>
                     <span className="text-[10px] text-muted-foreground uppercase tracking-widest font-bold">{r.date}</span>

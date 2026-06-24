@@ -150,7 +150,7 @@ function buildCast(credits?: TmdbCredits): Actor[] {
 
 function parseReviews(results: TmdbReview[]): Review[] {
   return results.slice(0, 6).map(r => {
-    let avatarUrl = `https://picsum.photos/seed/${r.id}/100/100`;
+    let avatarUrl = '';
     if (r.author_details.avatar_path) {
       const ap = r.author_details.avatar_path;
       avatarUrl = ap.startsWith('/https') ? ap.slice(1) : `${IMAGE_BASE}/w185${ap}`;
