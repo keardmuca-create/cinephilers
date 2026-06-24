@@ -7,10 +7,17 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ user
   const { username } = await params;
   const auth = await getCurrentUser(req);
 
-  const user = await prisma.user.findUnique({ where: { username: username.toLowerCase() }, select: { id: true } });
+  const user = await prisma.user.findUnique({ where: { username: username.toLowerCase() }, select: { id: true, isPrivate: true } });
   if (!user) return err('User not found', 404);
 
   const isOwner = auth?.sub === user.id;
+
+  if (user.isPrivate && !isOwner) {
+    if (!auth) return err('This account is private', 403);
+    const follow = await prisma.follow.findUnique({ where: { followerId_followingId: { followerId: auth.sub, followingId: user.id } } });
+    if (!follow) return err('This account is private', 403);
+  }
+
   const limitParam = req.nextUrl.searchParams.get('limit');
   const take = limitParam ? Math.min(100, parseInt(limitParam, 10)) : undefined;
   const lists = await prisma.customList.findMany({
