@@ -50,7 +50,7 @@ export async function GET(req: NextRequest) {
       tables: tableRows.map(t => ({ name: t.name, size: t.pretty, bytes: t.bytes })),
     });
   } catch (e) {
-    const message = e instanceof Error ? e.message : 'Query failed';
-    return err(`Could not read database size: ${message}`, 500);
+    console.error('admin/db-size query failed', e);
+    return err('Could not read database size', 500);
   }
 }

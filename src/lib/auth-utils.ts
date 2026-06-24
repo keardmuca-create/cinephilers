@@ -5,7 +5,11 @@ import { NextRequest } from 'next/server';
 function requireSecret(name: string): string {
   const s = process.env[name];
   if (!s) {
-    if (process.env.NODE_ENV === 'production') throw new Error(`${name} must be set in production`);
+    // Any deployed environment (prod, preview, staging) must supply real
+    // secrets — never fall back to a predictable constant a forger could use.
+    // The fallback is only for local `next dev`.
+    const isDeployed = process.env.NODE_ENV === 'production' || process.env.VERCEL === '1';
+    if (isDeployed) throw new Error(`${name} must be set in deployed environments`);
     return `dev-${name.toLowerCase()}-change-me`;
   }
   return s;
@@ -49,7 +53,7 @@ export async function signRefreshToken(payload: JwtPayload): Promise<string> {
 
 export async function verifyAccessToken(token: string): Promise<JwtPayload | null> {
   try {
-    const { payload } = await jwtVerify(token, getAccessSecret());
+    const { payload } = await jwtVerify(token, getAccessSecret(), { algorithms: ['HS256'] });
     return payload as unknown as JwtPayload;
   } catch {
     return null;
@@ -58,7 +62,7 @@ export async function verifyAccessToken(token: string): Promise<JwtPayload | nul
 
 export async function verifyRefreshToken(token: string): Promise<JwtPayload | null> {
   try {
-    const { payload } = await jwtVerify(token, getRefreshSecret());
+    const { payload } = await jwtVerify(token, getRefreshSecret(), { algorithms: ['HS256'] });
     return payload as unknown as JwtPayload;
   } catch {
     return null;

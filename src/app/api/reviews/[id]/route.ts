@@ -43,7 +43,12 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
   const { id } = await params;
   const review = await prisma.review.findUnique({ where: { id }, select: { userId: true } });
   if (!review) return err('Review not found', 404);
-  if (review.userId !== auth.sub && auth.role !== 'ADMIN') return err('Forbidden', 403);
+  if (review.userId !== auth.sub) {
+    // Re-read role from the DB rather than trusting the (up to 15-min stale)
+    // access-token claim, so a just-demoted admin can't delete others' reviews.
+    const me = await prisma.user.findUnique({ where: { id: auth.sub }, select: { role: true } });
+    if (me?.role !== 'ADMIN') return err('Forbidden', 403);
+  }
 
   await prisma.review.delete({ where: { id } });
   await prisma.user.update({

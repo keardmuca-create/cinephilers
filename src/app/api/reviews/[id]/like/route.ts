@@ -2,6 +2,7 @@ import { NextRequest } from 'next/server';
 import { prisma } from '@/lib/db';
 import { ok, err } from '@/lib/api-response';
 import { getCurrentUser } from '@/lib/auth-utils';
+import { canViewUserContent } from '@/lib/privacy';
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const auth = await getCurrentUser(req);
@@ -10,6 +11,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const { id: reviewId } = await params;
   const review = await prisma.review.findUnique({ where: { id: reviewId }, select: { id: true, userId: true, tmdbId: true } });
   if (!review) return err('Review not found', 404);
+  if (!(await canViewUserContent(auth.sub, review.userId))) return err('This account is private', 403);
 
   const existing = await prisma.reviewLike.findUnique({
     where: { userId_reviewId: { userId: auth.sub, reviewId } },

@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { jwtVerify } from 'jose';
 
-if (!process.env.JWT_ACCESS_SECRET && process.env.NODE_ENV === 'production') {
-  throw new Error('JWT_ACCESS_SECRET must be set in production');
+const IS_DEPLOYED = process.env.NODE_ENV === 'production' || process.env.VERCEL === '1';
+if (!process.env.JWT_ACCESS_SECRET && IS_DEPLOYED) {
+  throw new Error('JWT_ACCESS_SECRET must be set in deployed environments');
 }
 const ACCESS_SECRET = new TextEncoder().encode(
   process.env.JWT_ACCESS_SECRET ?? 'dev-access-secret-change-me'
@@ -13,7 +14,7 @@ const AUTH_ONLY = ['/login', '/signup', '/forgot-password', '/reset-password', '
 
 async function verifyToken(token: string): Promise<boolean> {
   try {
-    await jwtVerify(token, ACCESS_SECRET);
+    await jwtVerify(token, ACCESS_SECRET, { algorithms: ['HS256'] });
     return true;
   } catch {
     return false;
