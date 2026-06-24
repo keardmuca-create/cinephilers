@@ -25,6 +25,19 @@ export const metadata: Metadata = {
   verification: {
     google: 'iXOrHwM2YB_g3HVEb6FnHIISh0He81e5DUdazpKHsvk',
   },
+  // iOS ignores the manifest's display:standalone, so this emits
+  // <meta name="apple-mobile-web-app-capable"> to launch the home-screen
+  // icon full-screen without the Safari address bar.
+  appleWebApp: {
+    capable: true,
+    title: 'Cinephilers',
+    statusBarStyle: 'black-translucent',
+  },
+  // Next only emits the modern `mobile-web-app-capable`; iOS < 16.4 needs
+  // the legacy apple-prefixed tag to launch standalone.
+  other: {
+    'apple-mobile-web-app-capable': 'yes',
+  },
   // Icons are provided by App Router file conventions:
   // src/app/favicon.ico, src/app/icon.svg, src/app/apple-icon.png
 };
