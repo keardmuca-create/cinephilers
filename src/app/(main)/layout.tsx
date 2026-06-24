@@ -7,7 +7,7 @@ export default function MainLayout({
   children: React.ReactNode;
 }) {
   return (
-    <div className="min-h-screen pb-32">
+    <div className="min-h-screen pb-32 pt-[env(safe-area-inset-top)]">
       {children}
       <BottomNav />
     </div>
