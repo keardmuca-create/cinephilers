@@ -8,6 +8,7 @@ import { usePathname } from 'next/navigation';
 import { Home, Search as SearchIcon, Users, User } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/contexts/auth-context';
+import { fetchWithAuth } from '@/lib/fetch-with-auth';
 
 export const BottomNav = () => {
   const pathname = usePathname();
@@ -20,13 +21,13 @@ export const BottomNav = () => {
     let interval: ReturnType<typeof setInterval>;
     const check = async () => {
       try {
-        const res = await fetch('/api/notifications', { credentials: 'include' });
+        const res = await fetchWithAuth('/api/notifications');
         if (res.ok) {
           const json = await res.json();
           setUnread(json.data?.unreadCount ?? 0);
         } else if (res.status === 401) {
-          // Session lapsed — stop polling so we don't spam the console. The auth
-          // context handles refresh/logout; we'll resume on the next mount.
+          // Refresh failed — session is dead. Stop polling; the auth context
+          // handles logout and we'll resume on the next mount.
           clearInterval(interval);
         }
       } catch { /* ignore */ }

@@ -411,7 +411,7 @@ export default function SocialPage() {
     if (!user) return;
     setNotifLoading(true);
     try {
-      const res = await fetch('/api/notifications', { credentials: 'include' });
+      const res = await fetchWithAuth('/api/notifications');
       if (res.ok) {
         const json = await res.json();
         const notifs: NotificationItem[] = json.data?.notifications ?? [];
@@ -452,7 +452,7 @@ export default function SocialPage() {
   // Mark notifications as read when tab is opened
   useEffect(() => {
     if (tab === 'notifications' && unreadCount > 0) {
-      fetch('/api/notifications/read', { method: 'PATCH', credentials: 'include' })
+      fetchWithAuth('/api/notifications/read', { method: 'PATCH' })
         .then(() => {
           setUnreadCount(0);
           setNotifications(prev => prev.map(n => ({ ...n, read: true })));
