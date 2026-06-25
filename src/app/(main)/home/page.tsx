@@ -42,11 +42,6 @@ function Top10Card({ movie, index }: { movie: Movie; index: number }) {
     <Link href={`/movie/${movie.id}`} className="group shrink-0 w-44">
       <div className="relative aspect-[2/3] w-44 rounded-xl overflow-hidden shadow-xl movie-card-hover border border-border mb-3">
         <Image src={movie.poster} alt={movie.title} fill className="object-cover transition-transform group-hover:scale-110" />
-        {(watched || userRating !== undefined) && (
-          <div className="absolute top-2 right-2 rounded-full bg-black/60 backdrop-blur-sm p-1.5">
-            <Eye className="h-4 w-4 text-blue-400" />
-          </div>
-        )}
         {/* Rank number overlaid inside the poster, bottom-left */}
         <span
           className="absolute bottom-0 left-1 text-[72px] leading-none font-headline font-black text-transparent pointer-events-none select-none"
@@ -70,6 +65,9 @@ function Top10Card({ movie, index }: { movie: Movie; index: number }) {
                 <Star className="h-3 w-3 fill-blue-400 text-blue-400" />
                 <span className="text-[10px] font-bold text-blue-400">{userRating}</span>
               </div>
+            )}
+            {(watched || userRating !== undefined) && (
+              <Eye className="h-4 w-4 text-blue-400" />
             )}
           </div>
         </div>

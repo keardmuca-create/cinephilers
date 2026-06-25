@@ -1263,6 +1263,7 @@ export default function ProfilePage() {
                     <span className="text-xs text-blue-400 font-bold">★</span>
                     <span className="text-xs font-bold text-blue-400">{item.userRating}</span>
                   </div>
+                  <Eye className="h-3.5 w-3.5 text-blue-400" />
                 </div>
                 <p className="text-xs font-semibold font-headline line-clamp-2 group-hover:text-primary transition-colors leading-snug">
                   {item.title} {item.year ? `(${item.year})` : ''}
