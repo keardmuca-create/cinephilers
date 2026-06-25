@@ -2,6 +2,7 @@ import { NextRequest } from 'next/server';
 import { prisma } from '@/lib/db';
 import { ok, err } from '@/lib/api-response';
 import { getCurrentUser } from '@/lib/auth-utils';
+import { sanitizeText } from '@/lib/sanitize';
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -31,12 +32,14 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
 
   const { name, description, isPublic } = body as { name?: string; description?: string; isPublic?: boolean };
   if (name !== undefined && name.trim().length === 0) return err('List name cannot be empty');
+  if (name !== undefined && name.trim().length > 100) return err('List name must be 100 characters or less');
+  if (description && description.length > 500) return err('Description must be 500 characters or less');
 
   const updated = await prisma.customList.update({
     where: { id },
     data: {
-      ...(name && { name: name.trim() }),
-      ...(description !== undefined && { description: description?.trim() || null }),
+      ...(name && { name: sanitizeText(name) }),
+      ...(description !== undefined && { description: description ? sanitizeText(description) : null }),
       ...(isPublic !== undefined && { isPublic }),
     },
   });

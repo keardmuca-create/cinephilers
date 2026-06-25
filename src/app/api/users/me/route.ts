@@ -54,6 +54,18 @@ export async function PUT(req: NextRequest) {
   if (bio && typeof bio === 'string' && bio.length > 300)
     return err('Bio must be 300 characters or less');
 
+  if (favoriteGenres !== undefined) {
+    if (!Array.isArray(favoriteGenres) || favoriteGenres.some(g => typeof g !== 'string'))
+      return err('Favorite genres must be a list of strings');
+    if (favoriteGenres.length > 30) return err('Too many favorite genres (max 30)');
+    if ((favoriteGenres as string[]).some(g => g.length > 50))
+      return err('Genre names must be 50 characters or less');
+  }
+  if (country !== undefined && country !== null) {
+    if (typeof country !== 'string') return err('Invalid country');
+    if (country.length > 100) return err('Country must be 100 characters or less');
+  }
+
   if (avatarUrl !== undefined && avatarUrl !== null) {
     if (typeof avatarUrl !== 'string') return err('Invalid avatar URL');
     const isHttps = avatarUrl.startsWith('https://') && avatarUrl.length <= 2000;
@@ -83,7 +95,7 @@ export async function PUT(req: NextRequest) {
       ...(bio !== undefined && { bio: bio ? sanitizeText(bio as string) : null }),
       ...(avatarUrl !== undefined && { avatarUrl: finalAvatarUrl ?? null }),
       ...(favoriteGenres !== undefined && { favoriteGenres: favoriteGenres as string[] }),
-      ...(country !== undefined && { country: country as string | null }),
+      ...(country !== undefined && { country: country ? sanitizeText(country as string) : null }),
       ...(isPrivate !== undefined && { isPrivate: isPrivate as boolean }),
     },
     select: {

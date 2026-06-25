@@ -12,8 +12,11 @@ export async function POST(req: NextRequest) {
 
   const { name, email, subject, message } = body as Record<string, string>;
   if (!name?.trim()) return err('Name is required');
+  if (name.length > 100) return err('Name must be under 100 characters');
   if (!email?.trim() || !email.includes('@')) return err('Valid email is required');
+  if (email.length > 200) return err('Email must be under 200 characters');
   if (!subject?.trim()) return err('Subject is required');
+  if (subject.length > 200) return err('Subject must be under 200 characters');
   if (!message?.trim()) return err('Message is required');
   if (message.length > 2000) return err('Message must be under 2000 characters');
 
