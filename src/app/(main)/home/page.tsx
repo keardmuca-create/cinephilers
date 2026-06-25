@@ -4,7 +4,7 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
-import { Play, Star, ChevronRight, Info } from 'lucide-react';
+import { Play, Star, ChevronRight, Info, Eye } from 'lucide-react';
 import { Movie } from '@/lib/types';
 import { MovieCard } from '@/components/movie-card';
 import { AIRecommendations } from '@/components/ai-recommendations';
@@ -16,6 +16,68 @@ import { seededShuffle } from '@/lib/seed-shuffle';
 import { useAuth } from '@/contexts/auth-context';
 
 const EMPTY = { movies: [] as Movie[], shows: [] as Movie[], trending: [] as Movie[] };
+
+function Top10Card({ movie, index }: { movie: Movie; index: number }) {
+  const [watched, setWatched] = useState(false);
+  const [userRating, setUserRating] = useState<number | undefined>(undefined);
+
+  useEffect(() => {
+    try {
+      if (localStorage.getItem(`watched-${movie.id}`) === 'true') setWatched(true);
+      const r = localStorage.getItem(`movie-rating-${movie.id}`);
+      if (r) setUserRating(parseInt(r, 10));
+    } catch { /* ignore */ }
+  }, [movie.id]);
+
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const { id, rating } = (e as CustomEvent<{ id: string; rating: number | null }>).detail;
+      if (id === movie.id) setUserRating(rating ?? undefined);
+    };
+    window.addEventListener('cinephilers-rating-changed', handler);
+    return () => window.removeEventListener('cinephilers-rating-changed', handler);
+  }, [movie.id]);
+
+  return (
+    <Link href={`/movie/${movie.id}`} className="group shrink-0 w-44">
+      <div className="relative aspect-[2/3] w-44 rounded-xl overflow-hidden shadow-xl movie-card-hover border border-border mb-3">
+        <Image src={movie.poster} alt={movie.title} fill className="object-cover transition-transform group-hover:scale-110" />
+        {watched && (
+          <div className="absolute top-2 right-2 rounded-full bg-black/60 backdrop-blur-sm p-1.5">
+            <Eye className="h-4 w-4 text-blue-400" />
+          </div>
+        )}
+        {/* Rank number overlaid inside the poster, bottom-left */}
+        <span
+          className="absolute bottom-0 left-1 text-[72px] leading-none font-headline font-black text-transparent pointer-events-none select-none"
+          style={{ WebkitTextStroke: '2px rgba(255,255,255,0.35)' }}
+        >
+          {index + 1}
+        </span>
+      </div>
+      <div className="space-y-1 px-1">
+        <div className="flex items-start justify-between gap-1">
+          <h3 className="text-sm font-semibold font-headline line-clamp-2 group-hover:text-primary transition-colors leading-snug">
+            {movie.title}
+          </h3>
+          <div className="flex flex-col items-end gap-0.5 shrink-0">
+            <div className="flex items-center gap-0.5">
+              <Star className="h-3 w-3 fill-yellow-400 text-yellow-400" />
+              <span className="text-xs font-bold text-foreground">{movie.rating.toFixed(1)}</span>
+            </div>
+            {userRating !== undefined && (
+              <div className="flex items-center gap-0.5">
+                <Star className="h-3 w-3 fill-blue-400 text-blue-400" />
+                <span className="text-[10px] font-bold text-blue-400">{userRating}</span>
+              </div>
+            )}
+          </div>
+        </div>
+        <p className="text-xs text-muted-foreground">{movie.year}</p>
+      </div>
+    </Link>
+  );
+}
 
 // IMDb-style weighted rating so "Top 10" needs both a high score AND enough
 // votes — a 9.0 with 12 votes won't outrank an 8.2 with 50k.
@@ -190,30 +252,7 @@ export default function HomePage() {
           <SectionHeader title="Top 10 on Cinephilers This Week" />
           <div className="flex overflow-x-auto gap-4 px-6 pb-6 no-scrollbar">
             {top10.map((movie, index) => (
-              <Link href={`/movie/${movie.id}`} key={movie.id} className="group shrink-0 w-44">
-                <div className="relative aspect-[2/3] w-44 rounded-xl overflow-hidden shadow-xl movie-card-hover border border-border mb-3">
-                  <Image src={movie.poster} alt={movie.title} fill className="object-cover transition-transform group-hover:scale-110" />
-                  {/* Rank number overlaid inside the poster, bottom-left */}
-                  <span
-                    className="absolute bottom-0 left-1 text-[72px] leading-none font-headline font-black text-transparent pointer-events-none select-none"
-                    style={{ WebkitTextStroke: '2px rgba(255,255,255,0.35)' }}
-                  >
-                    {index + 1}
-                  </span>
-                </div>
-                <div className="space-y-1 px-1">
-                  <div className="flex items-start justify-between gap-1">
-                    <h3 className="text-sm font-semibold font-headline line-clamp-2 group-hover:text-primary transition-colors leading-snug">
-                      {movie.title}
-                    </h3>
-                    <div className="flex items-center gap-0.5 shrink-0">
-                      <Star className="h-3 w-3 fill-yellow-400 text-yellow-400" />
-                      <span className="text-xs font-bold text-foreground">{movie.rating.toFixed(1)}</span>
-                    </div>
-                  </div>
-                  <p className="text-xs text-muted-foreground">{movie.year}</p>
-                </div>
-              </Link>
+              <Top10Card key={movie.id} movie={movie} index={index} />
             ))}
           </div>
         </section>

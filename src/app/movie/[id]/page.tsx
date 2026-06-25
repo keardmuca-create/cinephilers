@@ -973,7 +973,7 @@ export default function MovieDetailPage() {
         {movie.backdrop && <Image src={movie.backdrop} alt={movie.title} fill className="object-cover opacity-60" priority />}
         <div className="absolute inset-0 bg-gradient-to-t from-background via-transparent to-transparent" />
 
-        <header className="absolute top-0 left-0 right-0 p-6 flex justify-between items-center z-20">
+        <header className="absolute top-0 left-0 right-0 px-6 pb-6 pt-[calc(env(safe-area-inset-top)+1.5rem)] flex justify-between items-center z-20">
           <Button variant="outline" size="icon" className="rounded-full bg-white text-black border-white/80 hover:bg-white/90" onClick={() => router.back()}>
             <ChevronLeft className="h-6 w-6" />
           </Button>

@@ -96,55 +96,43 @@ function CreditRow({ credit, watched, userRating }: {
   );
 }
 
-function SectionBlock({ section, upcomingSection, watchedMap, ratingsMap }: {
+function SectionBlock({ section, upcomingSection, watchedMap, ratingsMap, tab, headerTop }: {
   section: PersonCreditSection;
   upcomingSection?: PersonCreditSection;
   watchedMap: Record<string, boolean>;
   ratingsMap: Record<string, number>;
+  tab: 'released' | 'upcoming';
+  headerTop: string;
 }) {
   const hasReleased = section.credits.length > 0;
   const hasUpcoming = !!(upcomingSection && upcomingSection.credits.length > 0);
-  const showToggle = hasReleased && hasUpcoming;
-  const [tab, setTab] = useState<'released' | 'upcoming'>(hasReleased ? 'released' : 'upcoming');
 
-  const activeCredits = tab === 'upcoming' && hasUpcoming ? upcomingSection!.credits : section.credits;
-  const isUpcomingView = tab === 'upcoming' || (!hasReleased && hasUpcoming);
+  const showUpcoming = tab === 'upcoming' && hasUpcoming;
+  const activeCredits = showUpcoming ? upcomingSection!.credits : section.credits;
+
+  // In the Upcoming view, hide sections that have no upcoming credits entirely.
+  if (tab === 'upcoming' && !hasUpcoming) return null;
+  if (tab === 'released' && !hasReleased) return null;
+
+  const isUpcomingView = showUpcoming;
 
   const watchedCount = section.credits.filter(c => watchedMap[c.id]).length;
   const pct = section.credits.length > 0 ? Math.round((watchedCount / section.credits.length) * 100) : 0;
 
   return (
     <div>
-      <div className="sticky top-[73px] z-[5] bg-background/95 backdrop-blur-sm px-6 py-2.5 border-b border-border flex items-center justify-between">
+      <div className="sticky z-[5] bg-background/95 backdrop-blur-sm px-6 py-2.5 border-b border-border flex items-center justify-between" style={{ top: headerTop }}>
         <div className="flex items-center gap-2">
           <div className={`w-1 h-4 rounded-full ${isUpcomingView ? 'bg-orange-400' : 'bg-primary'}`} />
           <span className="text-sm font-bold font-headline">{section.label}</span>
           <span className="text-xs text-muted-foreground">({activeCredits.length})</span>
         </div>
-        <div className="flex items-center gap-2">
-          {!isUpcomingView && section.credits.length > 0 && (
-            <div className="flex items-center gap-1">
-              <Eye className="h-3 w-3 text-blue-400" />
-              <span className="text-xs font-bold text-blue-400">{pct}%</span>
-            </div>
-          )}
-          {showToggle && (
-            <div className="flex rounded-full overflow-hidden border border-border text-[10px] font-bold">
-              <button
-                onClick={() => setTab('released')}
-                className={`px-2.5 py-1 transition-colors ${tab === 'released' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground'}`}
-              >
-                Released
-              </button>
-              <button
-                onClick={() => setTab('upcoming')}
-                className={`px-2.5 py-1 transition-colors ${tab === 'upcoming' ? 'bg-orange-400 text-white' : 'text-muted-foreground hover:text-foreground'}`}
-              >
-                Upcoming
-              </button>
-            </div>
-          )}
-        </div>
+        {!isUpcomingView && section.credits.length > 0 && (
+          <div className="flex items-center gap-1">
+            <Eye className="h-3 w-3 text-blue-400" />
+            <span className="text-xs font-bold text-blue-400">{pct}%</span>
+          </div>
+        )}
       </div>
       {activeCredits.map(credit => (
         <CreditRow
@@ -165,6 +153,7 @@ export default function PersonPage() {
   const [loading, setLoading] = useState(true);
   const [watchedMap, setWatchedMap] = useState<Record<string, boolean>>({});
   const [ratingsMap, setRatingsMap] = useState<Record<string, number>>({});
+  const [tab, setTab] = useState<'released' | 'upcoming'>('released');
 
   useEffect(() => {
     if (!id) return;
@@ -201,7 +190,7 @@ export default function PersonPage() {
 
   return (
     <main className="min-h-screen pb-24 bg-background">
-      <header className="sticky top-0 z-10 bg-background/90 backdrop-blur-xl border-b border-border px-4 py-4 flex items-center gap-3">
+      <header className="sticky top-0 z-10 bg-background/90 backdrop-blur-xl border-b border-border px-4 pb-4 pt-[calc(env(safe-area-inset-top)+1rem)] flex items-center gap-3">
         <Button variant="ghost" size="icon" className="rounded-full shrink-0" onClick={() => router.back()}>
           <ChevronLeft className="h-5 w-5" />
         </Button>
@@ -234,8 +223,30 @@ export default function PersonPage() {
           {(() => {
             const upcomingByLabel = new Map((data.upcoming ?? []).map(s => [s.label, s]));
             const upcomingOnlySections = (data.upcoming ?? []).filter(us => !data.sections.find(s => s.label === us.label));
+            const hasAnyUpcoming = (data.upcoming ?? []).some(s => s.credits.length > 0);
+            const headerTop = hasAnyUpcoming
+              ? 'calc(env(safe-area-inset-top) + 73px + 49px)'
+              : 'calc(env(safe-area-inset-top) + 73px)';
             return (
               <>
+                {hasAnyUpcoming && (
+                  <div className="sticky top-[calc(env(safe-area-inset-top)+73px)] z-[6] bg-background/95 backdrop-blur-sm px-6 py-2.5 border-b border-border flex justify-center">
+                    <div className="flex rounded-full overflow-hidden border border-border text-xs font-bold">
+                      <button
+                        onClick={() => setTab('released')}
+                        className={`px-4 py-1.5 transition-colors ${tab === 'released' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground'}`}
+                      >
+                        Released
+                      </button>
+                      <button
+                        onClick={() => setTab('upcoming')}
+                        className={`px-4 py-1.5 transition-colors ${tab === 'upcoming' ? 'bg-orange-400 text-white' : 'text-muted-foreground hover:text-foreground'}`}
+                      >
+                        Upcoming
+                      </button>
+                    </div>
+                  </div>
+                )}
                 {data.sections.map(section => (
                   <SectionBlock
                     key={section.label}
@@ -243,6 +254,8 @@ export default function PersonPage() {
                     upcomingSection={upcomingByLabel.get(section.label)}
                     watchedMap={watchedMap}
                     ratingsMap={ratingsMap}
+                    tab={tab}
+                    headerTop={headerTop}
                   />
                 ))}
                 {upcomingOnlySections.map(upSection => (
@@ -252,6 +265,8 @@ export default function PersonPage() {
                     upcomingSection={upSection}
                     watchedMap={watchedMap}
                     ratingsMap={ratingsMap}
+                    tab={tab}
+                    headerTop={headerTop}
                   />
                 ))}
               </>
