@@ -970,7 +970,7 @@ export default function MovieDetailPage() {
     <main className="min-h-screen pb-32 bg-background">
       {/* Backdrop */}
       <section className="relative w-full h-[50vh] bg-black">
-        {movie.backdrop && <Image src={movie.backdrop} alt={movie.title} fill className="object-cover opacity-60" priority />}
+        {movie.backdrop && <Image src={movie.backdrop} alt={movie.title} fill className="object-cover opacity-60" />}
         <div className="absolute inset-0 bg-gradient-to-t from-background via-transparent to-transparent" />
 
         <header className="absolute top-0 left-0 right-0 px-6 pb-6 pt-[calc(env(safe-area-inset-top)+1.5rem)] flex justify-between items-center z-20">

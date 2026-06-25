@@ -192,7 +192,6 @@ export default function HomePage() {
               alt={heroMovie.title}
               fill
               className="object-cover transition-transform duration-1000 group-hover:scale-105"
-              priority
             />
             <div className="absolute inset-0 cinematic-gradient" />
 
