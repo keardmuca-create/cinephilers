@@ -42,7 +42,7 @@ function Top10Card({ movie, index }: { movie: Movie; index: number }) {
     <Link href={`/movie/${movie.id}`} className="group shrink-0 w-44">
       <div className="relative aspect-[2/3] w-44 rounded-xl overflow-hidden shadow-xl movie-card-hover border border-border mb-3">
         <Image src={movie.poster} alt={movie.title} fill className="object-cover transition-transform group-hover:scale-110" />
-        {watched && (
+        {(watched || userRating !== undefined) && (
           <div className="absolute top-2 right-2 rounded-full bg-black/60 backdrop-blur-sm p-1.5">
             <Eye className="h-4 w-4 text-blue-400" />
           </div>
