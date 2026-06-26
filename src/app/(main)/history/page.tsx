@@ -316,11 +316,14 @@ export default function HistoryPage() {
           const m = readMetaCache(id);
           if (m) {
             next.set(id, m);
-            // A movie cached before runtime tracking has no runtime — leave it out
-            // of the fetched set so the batch fetch refreshes it and shorts (<=40
-            // min) reclassify instead of staying stuck as "movie".
-            const needsRuntime = m.type === 'movie' && !m.isEpisode && m.runtime === undefined;
-            if (m.tmdbRating !== undefined && !needsRuntime) fetchingRef.current.add(id);
+            // An entry cached before runtime/showType tracking is missing the field
+            // its type is classified by — leave it out of the fetched set so the batch
+            // fetch refreshes it (movie shorts by runtime, mini-series by showType)
+            // instead of staying stuck as plain "movie"/"tv-series".
+            const needsRefresh =
+              (m.type === 'movie' && !m.isEpisode && m.runtime === undefined) ||
+              (m.type === 'show'  && !m.isEpisode && m.showType === undefined);
+            if (m.tmdbRating !== undefined && !needsRefresh) fetchingRef.current.add(id);
           }
         }
       }
