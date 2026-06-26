@@ -4,6 +4,7 @@ import React, { createContext, useContext, useEffect, useState, useCallback } fr
 import { fetchWithAuth } from '@/lib/fetch-with-auth';
 import { canonicalId, normalizeLocalMediaIds, recordAddedAt, recordWatchedAt } from '@/lib/media-id';
 import { batchFetchMeta } from '@/lib/meta-batch';
+import { clearUserData } from '@/lib/clear-user-data';
 
 const STORAGE_KEY = 'cinephilers_user';
 
@@ -136,29 +137,15 @@ async function restoreFromDb() {
       }
     } catch { /* ignore */ }
 
-    // ── Watched: write DB items to local; recover from watch-log + upload ────
-    const dbWatchedIds = new Set(watched.map(w => w.tmdbId));
+    // ── Watched: the DB is the source of truth. Write DB items to local only. ──
+    // We deliberately do NOT recover from watch-log or upload local-only watched
+    // items here: doing so let a shared-browser session leak one account's watched
+    // movies into another account's DB (stamped watchedAt=now) and resurrected
+    // deleted/unchecked-import titles. Watched state syncs one way: DB → local.
     for (const w of watched) {
       try { localStorage.setItem(`watched-${w.tmdbId}`, 'true'); } catch { /* ignore */ }
       recordWatchedAt(w.tmdbId, w.watchedAt);
     }
-    // Recover watched state from watch-log (survives even if watched-* keys were wiped)
-    // and upload any items not yet in DB so they're safe on every device going forward
-    try {
-      const watchLog: { id: string; type?: string }[] = JSON.parse(localStorage.getItem('watch-log') ?? '[]');
-      for (const entry of watchLog) {
-        if (!entry.id) continue;
-        // Episodes live in the watchedEpisode table — never treat them as a watched
-        // movie/show here, or they pollute history and the movie badge.
-        if (entry.type === 'episode' || isEpisodeId(entry.id)) continue;
-        try { localStorage.setItem(`watched-${entry.id}`, 'true'); } catch { /* ignore */ }
-        if (!dbWatchedIds.has(entry.id)) {
-          const mediaType = entry.id.startsWith('tmdb-tv-') ? 'SHOW' : 'MOVIE';
-          fetchWithAuth('/api/watched', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ tmdbId: entry.id, mediaType }) }).catch(() => {});
-          dbWatchedIds.add(entry.id); // prevent duplicate uploads within this loop
-        }
-      }
-    } catch { /* ignore */ }
 
     // ── Reviews: write DB reviews to local; upload any local-only reviews to DB
     const dbReviewIds = new Set(reviews.map(r => r.tmdbId));
@@ -400,33 +387,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const logout = useCallback(async () => {
     await fetch('/api/auth/logout', { method: 'POST' });
     setUser(null);
-    // Clear all user data from localStorage
-    try {
-      const keysToRemove: string[] = [];
-      for (let i = 0; i < localStorage.length; i++) {
-        const k = localStorage.key(i);
-        if (!k) continue;
-        if (
-          k === STORAGE_KEY ||
-          k === 'recently-viewed' ||
-          k === 'watch-log' ||
-          k === 'media-id-normalized-v1' ||
-          k === 'added-at-index' ||
-          k === 'watched-at-index' ||
-          k === 'manual-watched-index' ||
-          k === 'user-favorites' ||
-          k === 'user-lists' ||
-          k.startsWith('movie-rating-') ||
-          k.startsWith('watchlist-') ||
-          k.startsWith('watched-') ||
-          k.startsWith('meta-') ||
-          k.startsWith('review-')
-        ) {
-          keysToRemove.push(k);
-        }
-      }
-      keysToRemove.forEach(k => localStorage.removeItem(k));
-    } catch { /* ignore */ }
+    clearUserData();
     window.location.href = '/login';
   }, []);
 

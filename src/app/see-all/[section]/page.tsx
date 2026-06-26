@@ -119,7 +119,7 @@ export default function SeeAllPage() {
 
   return (
     <main className="min-h-screen pb-20 bg-background">
-      <header className="sticky top-0 z-10 bg-background/90 backdrop-blur-xl border-b border-border px-4 py-4 flex items-center gap-3">
+      <header className="sticky top-0 z-10 bg-background/90 backdrop-blur-xl border-b border-border px-4 pb-4 pt-[calc(env(safe-area-inset-top)+1rem)] flex items-center gap-3">
         <Button
           variant="ghost"
           size="icon"

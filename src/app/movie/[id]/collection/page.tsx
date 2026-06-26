@@ -94,7 +94,7 @@ export default function CollectionPage() {
   return (
     <main className="pb-32">
       {/* Header */}
-      <div className="px-6 pt-12 pb-4 flex items-center gap-3">
+      <div className="px-6 pt-[calc(env(safe-area-inset-top)+3rem)] pb-4 flex items-center gap-3">
         <Button variant="ghost" size="icon" className="rounded-full shrink-0 -ml-2" onClick={() => router.back()}>
           <ChevronLeft className="h-5 w-5" />
         </Button>

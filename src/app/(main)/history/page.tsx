@@ -145,51 +145,59 @@ function HistoryCard({ id, meta, userRating, addedAt, onRemove }: {
     ? `S${epSeason}·E${epNumber}${meta.showName ? ` · ${meta.showName}` : ''}`
     : null;
 
-  const handleRemove = (e: React.MouseEvent) => {
+  const handleRemove = async (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
     const epMatch = id.match(/^(tmdb-tv-\d+)-S(\d+)E(\d+)$/);
-    if (epMatch) {
-      // Episode: clean the local key, the per-show index, and the watch-log,
-      // then delete on the server via the episodes endpoint. Hitting /api/watched
-      // here (the movie endpoint) left the DB record alive, so it re-synced back.
-      const [, showId, sStr, eStr] = epMatch;
-      const season = parseInt(sStr, 10);
-      const episode = parseInt(eStr, 10);
-      const epKey = `S${season}E${episode}`;
-      try {
-        localStorage.removeItem(`watched-ep-${id}`);
-        // Phantom key from an earlier sync bug that stored episode ids as watched-<id>
-        localStorage.removeItem(`watched-${id}`);
-        const idxRaw = localStorage.getItem(`watched-eps-index-${showId}`);
-        if (idxRaw) {
-          const idx = JSON.parse(idxRaw) as string[];
-          localStorage.setItem(`watched-eps-index-${showId}`, JSON.stringify(idx.filter(k => k !== epKey)));
+    // Await the server delete(s). A failed delete leaves the DB row alive, which the
+    // next DB→local sync resurrects — so we only drop it from the UI once the server
+    // confirms. On failure we surface it and leave the row in place.
+    const ensureOk = async (res: Response) => { if (!res.ok) throw new Error(`delete failed: ${res.status}`); };
+    try {
+      if (epMatch) {
+        // Episode: clean the local key, the per-show index, and the watch-log,
+        // then delete on the server via the episodes endpoint. Hitting /api/watched
+        // here (the movie endpoint) left the DB record alive, so it re-synced back.
+        const [, showId, sStr, eStr] = epMatch;
+        const season = parseInt(sStr, 10);
+        const episode = parseInt(eStr, 10);
+        const epKey = `S${season}E${episode}`;
+        try {
+          localStorage.removeItem(`watched-ep-${id}`);
+          // Phantom key from an earlier sync bug that stored episode ids as watched-<id>
+          localStorage.removeItem(`watched-${id}`);
+          const idxRaw = localStorage.getItem(`watched-eps-index-${showId}`);
+          if (idxRaw) {
+            const idx = JSON.parse(idxRaw) as string[];
+            localStorage.setItem(`watched-eps-index-${showId}`, JSON.stringify(idx.filter(k => k !== epKey)));
+          }
+        } catch { /* ignore */ }
+        removeFromWatchLog(id, 'episode');
+        await fetchWithAuth('/api/watched/episodes', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ showTmdbId: showId, season, episode, watched: false }),
+        }).then(ensureOk);
+        // Remove any phantom row this episode left in the movie/show watched table.
+        // This one is best-effort cleanup, not the primary delete, so don't fail on it.
+        await fetchWithAuth(`/api/watched/${id}?mediaType=SHOW`, { method: 'DELETE' }).catch(() => {});
+      } else {
+        // Movie or whole show.
+        try { localStorage.removeItem(`watched-${id}`); } catch { /* ignore */ }
+        removeFromWatchLog(id, 'movie');
+        await fetchWithAuth(`/api/watched/${id}?mediaType=${mediaType}`, { method: 'DELETE' }).then(ensureOk);
+        // Also clear any legacy bare-numeric twin (older imports stored "262504" instead
+        // of "tmdb-262504"); without this, the leftover row syncs back as a duplicate.
+        const twin = legacyTwin(id);
+        if (twin) {
+          try { localStorage.removeItem(`watched-${twin}`); } catch { /* ignore */ }
+          removeFromWatchLog(twin, 'movie');
+          await fetchWithAuth(`/api/watched/${twin}?mediaType=${mediaType}`, { method: 'DELETE' }).catch(() => {});
         }
-      } catch { /* ignore */ }
-      removeFromWatchLog(id, 'episode');
-      fetchWithAuth('/api/watched/episodes', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ showTmdbId: showId, season, episode, watched: false }),
-      }).catch(() => {});
-      // Remove any phantom row this episode left in the movie/show watched table
-      fetchWithAuth(`/api/watched/${id}?mediaType=SHOW`, { method: 'DELETE' }).catch(() => {});
-    } else {
-      // Movie or whole show. The watch-log must be cleared too — otherwise the login
-      // sync's watch-log recovery re-creates watched-<id> and re-uploads it on the next
-      // load, resurrecting the item the user just deleted.
-      try { localStorage.removeItem(`watched-${id}`); } catch { /* ignore */ }
-      removeFromWatchLog(id, 'movie');
-      fetchWithAuth(`/api/watched/${id}?mediaType=${mediaType}`, { method: 'DELETE' }).catch(() => {});
-      // Also clear any legacy bare-numeric twin (older imports stored "262504" instead
-      // of "tmdb-262504"); without this, the leftover row syncs back as a duplicate.
-      const twin = legacyTwin(id);
-      if (twin) {
-        try { localStorage.removeItem(`watched-${twin}`); } catch { /* ignore */ }
-        removeFromWatchLog(twin, 'movie');
-        fetchWithAuth(`/api/watched/${twin}?mediaType=${mediaType}`, { method: 'DELETE' }).catch(() => {});
       }
+    } catch {
+      alert("Couldn't delete this on the server — please check your connection and try again.");
+      return;
     }
     onRemove();
   };

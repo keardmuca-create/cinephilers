@@ -7,6 +7,7 @@ import { Eye, EyeOff, LogIn } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { clearUserData } from '@/lib/clear-user-data';
 
 export default function LoginPage() {
   const router = useRouter();
@@ -33,6 +34,15 @@ export default function LoginPage() {
       setError(data.message ?? 'Login failed');
       return;
     }
+
+    // If a different account was previously signed in on this browser, wipe its
+    // local data first so the two accounts can't share watched/activity/list
+    // state (the phantom-watch leak came from this exact shared-session path).
+    try {
+      const prevRaw = localStorage.getItem('cinephilers_user');
+      const prev = prevRaw ? JSON.parse(prevRaw) : null;
+      if (prev?.id && prev.id !== data.data?.id) clearUserData();
+    } catch { /* ignore */ }
 
     // Persist basic user info so profile shows immediately even after cold starts
     try { localStorage.setItem('cinephilers_user', JSON.stringify(data.data)); } catch { /* ignore */ }

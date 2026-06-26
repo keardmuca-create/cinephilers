@@ -185,7 +185,7 @@ export default function ListDetailPage() {
   return (
     <main className="max-w-xl mx-auto pb-32">
       {/* Header */}
-      <div className="sticky top-0 z-10 bg-background/90 backdrop-blur-xl border-b border-border px-4 py-4 flex items-center gap-3">
+      <div className="sticky top-[env(safe-area-inset-top)] z-10 bg-background/90 backdrop-blur-xl border-b border-border px-4 py-4 flex items-center gap-3">
         <Button variant="ghost" size="icon" className="rounded-full shrink-0" onClick={() => router.back()}>
           <ChevronLeft className="h-5 w-5" />
         </Button>

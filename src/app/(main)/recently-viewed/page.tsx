@@ -75,7 +75,7 @@ export default function RecentlyViewedPage() {
 
   return (
     <main className="pb-32">
-      <div className="sticky top-0 z-10 bg-background/90 backdrop-blur-xl border-b border-border px-4 py-4 flex items-center gap-3">
+      <div className="sticky top-[env(safe-area-inset-top)] z-10 bg-background/90 backdrop-blur-xl border-b border-border px-4 py-4 flex items-center gap-3">
         <button onClick={() => router.back()} className="rounded-full p-1 hover:bg-muted/60 transition-colors">
           <ChevronLeft className="h-5 w-5" />
         </button>

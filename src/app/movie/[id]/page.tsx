@@ -80,7 +80,7 @@ function CollectionCard({ part }: { part: CollectionItem }) {
 
   const inner = (
     <>
-      <div className={`relative aspect-[2/3] overflow-hidden rounded-xl bg-muted shadow-md ${part.isCurrent ? 'ring-2 ring-primary' : 'border border-border'}`}>
+      <div className={`relative w-full h-[165px] overflow-hidden rounded-xl bg-muted shadow-md ${part.isCurrent ? 'ring-2 ring-primary' : 'border border-border'}`}>
         {part.poster ? (
           <img src={part.poster} alt={part.title} className="w-full h-full object-cover transition-transform group-hover:scale-105" loading="lazy" />
         ) : (
@@ -92,16 +92,20 @@ function CollectionCard({ part }: { part: CollectionItem }) {
           <span className="absolute top-1 left-1 bg-amber-500/90 text-white text-[10px] font-bold rounded px-1.5 py-0.5">Soon</span>
         ) : null}
       </div>
-      <div className="flex items-start justify-between gap-1.5 mt-2">
-        <p className="text-sm font-semibold font-headline line-clamp-2 leading-snug">{part.title}</p>
-        {!isUpcoming && isWatched && <Eye className="h-3.5 w-3.5 text-blue-400 shrink-0 mt-0.5" />}
-      </div>
-      <div className="flex items-center justify-between gap-1.5">
-        <p className="text-xs text-muted-foreground">{isUpcoming ? `Coming ${comingLabel}` : part.year}</p>
-        {!isUpcoming && userRating !== undefined && (
-          <div className="flex items-center gap-0.5">
-            <span className="text-xs text-blue-400 font-bold">★</span>
-            <span className="text-xs font-bold text-blue-400">{userRating}</span>
+      <div className="flex justify-between gap-1.5 mt-2">
+        <div className="min-w-0 flex-1">
+          <p className="text-sm font-semibold font-headline line-clamp-2 leading-snug">{part.title}</p>
+          <p className="text-xs text-muted-foreground mt-0.5">{isUpcoming ? `Coming ${comingLabel}` : part.year}</p>
+        </div>
+        {!isUpcoming && (isWatched || userRating !== undefined) && (
+          <div className="flex flex-col items-end gap-0.5 shrink-0">
+            {isWatched && <Eye className="h-3.5 w-3.5 text-blue-400" />}
+            {userRating !== undefined && (
+              <div className="flex items-center gap-0.5">
+                <span className="text-xs text-blue-400 font-bold">★</span>
+                <span className="text-xs font-bold text-blue-400">{userRating}</span>
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -138,7 +142,7 @@ function CollectionSection({ collection, movieId }: { collection: MovieCollectio
         )}
       </div>
       <ScrollArea className="w-full">
-        <div className="flex gap-4 pb-4">
+        <div className="flex items-start gap-4 pb-4">
           {parts.map(part => <CollectionCard key={part.id} part={part} />)}
         </div>
         <ScrollBar orientation="horizontal" />
