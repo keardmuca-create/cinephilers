@@ -4,7 +4,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Image from 'next/image';
 import Link from 'next/link';
-import { Movie, Actor, TvEpisode, TvSeason } from '@/lib/types';
+import { Movie, Actor, TvEpisode, TvSeason, MovieCollection, CollectionItem } from '@/lib/types';
 import { EpisodeModal } from '@/components/episode-modal';
 import { Button } from '@/components/ui/button';
 import {
@@ -62,6 +62,88 @@ function PersonCard({ actor }: { actor: Actor }) {
       <h4 className="text-xs font-bold font-headline line-clamp-1">{actor.name}</h4>
       <p className="text-[10px] text-muted-foreground line-clamp-1">{actor.role}</p>
     </Link>
+  );
+}
+
+// ─── Collection section ───────────────────────────────────────────────────────
+// Other films in the same franchise (Dune 1/2/3, the Dark Knight trilogy, …),
+// shown in release order so viewers can discover earlier/later entries.
+
+function CollectionCard({ part }: { part: CollectionItem }) {
+  const isWatched = typeof window !== 'undefined' && localStorage.getItem(`watched-${part.id}`) === 'true';
+  const ratingRaw = typeof window !== 'undefined' ? localStorage.getItem(`movie-rating-${part.id}`) : null;
+  const userRating = ratingRaw ? Number(ratingRaw) : undefined;
+  const isUpcoming = part.releaseDate ? new Date(part.releaseDate).getTime() > Date.now() : false;
+  const comingLabel = isUpcoming && part.releaseDate
+    ? new Date(part.releaseDate).toLocaleDateString('en-US', { month: 'short', year: 'numeric' })
+    : '';
+
+  const inner = (
+    <>
+      <div className={`relative aspect-[2/3] overflow-hidden rounded-xl bg-muted shadow-md ${part.isCurrent ? 'ring-2 ring-primary' : 'border border-border'}`}>
+        {part.poster ? (
+          <img src={part.poster} alt={part.title} className="w-full h-full object-cover transition-transform group-hover:scale-105" loading="lazy" />
+        ) : (
+          <div className="w-full h-full flex items-center justify-center"><Film className="h-7 w-7 text-primary/60" /></div>
+        )}
+        {part.isCurrent ? (
+          <span className="absolute bottom-1 inset-x-1 bg-primary text-white text-[10px] font-bold text-center rounded py-0.5">You're here</span>
+        ) : isUpcoming ? (
+          <span className="absolute top-1 left-1 bg-amber-500/90 text-white text-[10px] font-bold rounded px-1.5 py-0.5">Soon</span>
+        ) : null}
+      </div>
+      <div className="flex items-start justify-between gap-1.5 mt-2">
+        <p className="text-sm font-semibold font-headline line-clamp-2 leading-snug">{part.title}</p>
+        {!isUpcoming && isWatched && <Eye className="h-3.5 w-3.5 text-blue-400 shrink-0 mt-0.5" />}
+      </div>
+      <div className="flex items-center justify-between gap-1.5">
+        <p className="text-xs text-muted-foreground">{isUpcoming ? `Coming ${comingLabel}` : part.year}</p>
+        {!isUpcoming && userRating !== undefined && (
+          <div className="flex items-center gap-0.5">
+            <span className="text-xs text-blue-400 font-bold">★</span>
+            <span className="text-xs font-bold text-blue-400">{userRating}</span>
+          </div>
+        )}
+      </div>
+    </>
+  );
+
+  if (part.isCurrent) {
+    return <div className="group w-[110px] shrink-0">{inner}</div>;
+  }
+  return (
+    <Link href={`/movie/${part.id}`} className="group w-[110px] shrink-0">{inner}</Link>
+  );
+}
+
+const COLLECTION_PREVIEW = 6;
+
+function CollectionSection({ collection, movieId }: { collection: MovieCollection; movieId: string }) {
+  const showSeeAll = collection.parts.length > COLLECTION_PREVIEW;
+  const parts = showSeeAll ? collection.parts.slice(0, COLLECTION_PREVIEW) : collection.parts;
+  return (
+    <section className="space-y-6">
+      <div className="flex items-center justify-between gap-3">
+        <h3 className="text-2xl font-headline font-bold flex items-center gap-2 min-w-0">
+          <span className="truncate">{collection.name}</span>
+          <span className="text-2xl font-bold text-muted-foreground shrink-0">{collection.parts.length}</span>
+        </h3>
+        {showSeeAll && (
+          <Link
+            href={`/movie/${movieId}/collection`}
+            className="text-xs text-primary border border-primary/30 rounded-full px-3 py-1 hover:bg-primary/10 transition-colors font-semibold flex items-center gap-1 shrink-0"
+          >
+            See All <ChevronRight className="h-3 w-3" />
+          </Link>
+        )}
+      </div>
+      <ScrollArea className="w-full">
+        <div className="flex gap-4 pb-4">
+          {parts.map(part => <CollectionCard key={part.id} part={part} />)}
+        </div>
+        <ScrollBar orientation="horizontal" />
+      </ScrollArea>
+    </section>
   );
 }
 
@@ -1305,6 +1387,11 @@ export default function MovieDetailPage() {
               )}
             </div>
           </section>
+        )}
+
+        {/* Collection (franchise) */}
+        {movie.collection && movie.collection.parts.length > 1 && (
+          <CollectionSection collection={movie.collection} movieId={movie.id} />
         )}
 
         {/* Images */}

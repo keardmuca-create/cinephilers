@@ -64,6 +64,21 @@ export interface TvSeason {
   poster_path: string | null;
 }
 
+export interface CollectionItem {
+  id: string;          // app id, e.g. tmdb-438631 — links to the movie page
+  title: string;
+  year: string;
+  poster: string;
+  releaseDate: string; // drives release-order sort and the upcoming check
+  isCurrent: boolean;  // the film currently being viewed
+}
+
+export interface MovieCollection {
+  id: number;
+  name: string;        // e.g. "Dune Collection"
+  parts: CollectionItem[];
+}
+
 export interface Movie {
   id: string;
   title: string;
@@ -98,6 +113,7 @@ export interface Movie {
   productionCompanies?: string[];
   totalEpisodes?: number;
   showType?: string;
+  collection?: MovieCollection;  // movies only — other films in the same franchise
 }
 
 export type SocialAction = 'watched' | 'rated' | 'reviewed' | 'watchlist' | 'rewatched';

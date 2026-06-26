@@ -1,4 +1,4 @@
-import type { Movie, Actor, Review, Trailer, TvSeason, TvEpisode, EpisodeDetail } from './types';
+import type { Movie, Actor, Review, Trailer, TvSeason, TvEpisode, EpisodeDetail, MovieCollection } from './types';
 
 const BASE_URL = 'https://api.themoviedb.org/3';
 const IMAGE_BASE = 'https://image.tmdb.org/t/p';
@@ -81,10 +81,17 @@ interface TmdbMovieFull extends TmdbMovie {
   revenue?: number;
   original_language?: string;
   production_companies?: { name: string }[];
+  belongs_to_collection?: { id: number; name: string; poster_path: string | null } | null;
   credits?: TmdbCredits;
   videos?: { results: TmdbVideoResult[] };
   images?: { backdrops: { file_path: string }[] };
   reviews?: { results: TmdbReview[] };
+}
+
+interface TmdbCollection {
+  id: number;
+  name: string;
+  parts: { id: number; title?: string; release_date?: string; poster_path: string | null }[];
 }
 
 interface TmdbShowFull extends TmdbMovie {
@@ -421,6 +428,35 @@ export async function searchTmdb(query: string): Promise<{ results: Movie[]; peo
 
 // ─── Detail endpoints (full extended data) ────────────────────────────────────
 
+// Other films in the same franchise (e.g. all three Dune parts), sorted into
+// release order so the first/earlier entries a viewer may have missed lead the
+// strip. TMDB returns parts unsorted; undated (TBA) entries sink to the end.
+// Returns undefined for one-film "collections" — nothing worth showing.
+export async function getMovieCollection(collectionId: number, currentTmdbId: number): Promise<MovieCollection | undefined> {
+  try {
+    const data = await tmdbFetch<TmdbCollection>(`/collection/${collectionId}`);
+    const parts = (data.parts ?? [])
+      .filter(p => p.title)
+      .map(p => ({
+        id: `tmdb-${p.id}`,
+        title: p.title!,
+        year: p.release_date ? p.release_date.slice(0, 4) : '—',
+        poster: posterUrl(p.poster_path, 'w342'),
+        releaseDate: p.release_date ?? '',
+        isCurrent: p.id === currentTmdbId,
+      }))
+      .sort((a, b) => {
+        if (!a.releaseDate) return 1;
+        if (!b.releaseDate) return -1;
+        return a.releaseDate.localeCompare(b.releaseDate);
+      });
+    if (parts.length < 2) return undefined;
+    return { id: data.id, name: data.name, parts };
+  } catch {
+    return undefined;
+  }
+}
+
 export async function getMovieDetail(tmdbId: number): Promise<Movie> {
   const detail = await tmdbFetch<TmdbMovieFull>(
     `/movie/${tmdbId}`,
@@ -433,6 +469,10 @@ export async function getMovieDetail(tmdbId: number): Promise<Movie> {
   const crew = (detail.credits?.crew ?? [])
     .filter(c => keyCrew.includes(c.job))
     .map(c => ({ id: String(c.id), name: c.name, job: c.job }));
+
+  const collection = detail.belongs_to_collection
+    ? await getMovieCollection(detail.belongs_to_collection.id, tmdbId)
+    : undefined;
 
   return {
     ...base,
@@ -449,6 +489,7 @@ export async function getMovieDetail(tmdbId: number): Promise<Movie> {
     revenue: detail.revenue && detail.revenue > 0 ? detail.revenue : undefined,
     originalLanguage: detail.original_language,
     productionCompanies: detail.production_companies?.map(c => c.name).slice(0, 4),
+    collection,
   };
 }
 
