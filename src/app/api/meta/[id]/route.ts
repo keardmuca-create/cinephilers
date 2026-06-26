@@ -8,6 +8,7 @@ export interface ItemMeta {
   poster: string;
   type: 'movie' | 'show';
   genre?: string;
+  runtime?: number;  // minutes — movies only; used to classify shorts (<=40 min)
   language?: string;
   showType?: string;
   tmdbStatus?: string;

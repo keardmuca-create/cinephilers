@@ -9,7 +9,12 @@ export async function batchFetchMeta(ids: string[]): Promise<Record<string, Item
   for (const id of ids) {
     try {
       const raw = localStorage.getItem(`meta-${id}`);
-      if (raw) { result[id] = JSON.parse(raw); continue; }
+      if (raw) {
+        const cached = JSON.parse(raw) as ItemMeta;
+        // Refetch movies cached before runtime tracking so shorts can be detected.
+        const needsRuntime = cached.type === 'movie' && !cached.isEpisode && cached.runtime === undefined;
+        if (!needsRuntime) { result[id] = cached; continue; }
+      }
     } catch { /* ignore */ }
     toFetch.push(id);
   }

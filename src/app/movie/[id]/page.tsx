@@ -931,6 +931,11 @@ export default function MovieDetailPage() {
         if (!index.includes(key)) localStorage.setItem(`watched-eps-index-${id}`, JSON.stringify([...index, key]));
       } catch { /* ignore */ }
       appendWatchLog({ id: logId, type: 'episode', genre: movie?.genre ?? '', language: movie?.originalLanguage ?? '' });
+      // Mirror the movie watched button: stamp the watched date + manual tier so
+      // episodes sort newest-first above imports, and log to the activity feed.
+      recordWatchedAt(logId);
+      recordManualWatch(logId);
+      logActivity({ action: 'watched', contentId: logId, contentTitle: ep.name, contentPoster: movie?.poster ?? '', contentYear: movie?.year ?? '' });
       toast({ title: `${ep.name} marked as watched` });
     } else {
       try {
@@ -940,6 +945,8 @@ export default function MovieDetailPage() {
         localStorage.setItem(`watched-eps-index-${id}`, JSON.stringify(index.filter(k => k !== key)));
       } catch { /* ignore */ }
       removeFromWatchLog(logId, 'episode');
+      removeManualWatch(logId);
+      removeActivity('watched', logId);
       toast({ title: `${ep.name} removed from watched` });
     }
     // Sync to DB in background

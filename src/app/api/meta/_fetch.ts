@@ -50,6 +50,9 @@ export async function fetchOneMeta(id: string, key: string): Promise<ItemMeta> {
     id, title, year, poster,
     type: isShow ? 'show' : 'movie',
     genre: genreNames.join(', ') || undefined,
+    // Movies always carry a numeric runtime (0 when TMDB has none) so the cache
+    // can tell a pre-runtime entry (undefined) from one with no known length (0).
+    runtime: isShow ? undefined : (typeof d.runtime === 'number' ? d.runtime : 0),
     language: d.original_language ?? undefined,
     showType: isShow ? (d.type ?? undefined) : undefined,
     tmdbStatus: d.status ?? undefined,

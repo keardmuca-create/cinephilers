@@ -95,6 +95,8 @@ function getItemType(meta: ItemMeta): TypeFilter {
   const genres = meta.genre ?? '';
   if (genres.includes('TV Movie')) return 'tv-movie';
   if (genres.includes('Short')) return 'short';
+  // TMDB has no "Short" genre — shorts are defined by runtime (<=40 min).
+  if (typeof meta.runtime === 'number' && meta.runtime > 0 && meta.runtime <= 40) return 'short';
   return 'movie';
 }
 
@@ -314,7 +316,11 @@ export default function HistoryPage() {
           const m = readMetaCache(id);
           if (m) {
             next.set(id, m);
-            if (m.tmdbRating !== undefined) fetchingRef.current.add(id);
+            // A movie cached before runtime tracking has no runtime — leave it out
+            // of the fetched set so the batch fetch refreshes it and shorts (<=40
+            // min) reclassify instead of staying stuck as "movie".
+            const needsRuntime = m.type === 'movie' && !m.isEpisode && m.runtime === undefined;
+            if (m.tmdbRating !== undefined && !needsRuntime) fetchingRef.current.add(id);
           }
         }
       }
