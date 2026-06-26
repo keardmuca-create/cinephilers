@@ -227,6 +227,7 @@ export function tmdbToMovie(raw: TmdbMovie, credits?: TmdbCredits): Movie {
     trivia: [],
     type: isShow ? 'show' : 'movie',
     releaseDate: releaseDate || undefined,
+    originalLanguage: raw.original_language,
   };
 }
 

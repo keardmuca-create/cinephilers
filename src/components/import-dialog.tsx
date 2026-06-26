@@ -1,11 +1,12 @@
 "use client"
 
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import JSZip from 'jszip';
-import { X, Upload, Loader2, CheckCircle, AlertCircle, ChevronRight, Film } from 'lucide-react';
+import { X, Upload, Loader2, CheckCircle, AlertCircle, ChevronRight, Film, Check, Search } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { fetchWithAuth } from '@/lib/fetch-with-auth';
 import type { WatchEntry } from '@/lib/badges';
+import type { Movie } from '@/lib/types';
 import { recordAddedAt, recordWatchedAt } from '@/lib/media-id';
 
 type Platform = 'letterboxd' | 'imdb';
@@ -162,6 +163,97 @@ async function matchToTMDB(item: ParsedItem, typeHint?: 'movie' | 'tv'): Promise
   }
 }
 
+// Build a MatchedItem from a searched movie, carrying the original parsed item's
+// watched date / rating / review so a resolved title keeps its true history
+// instead of being stamped "now" when re-added through search.
+function movieToMatched(movie: Movie, base: ParsedItem): MatchedItem {
+  return {
+    ...base,
+    tmdbId: movie.id,
+    mediaType: movie.type === 'show' ? 'SHOW' : 'MOVIE',
+    matchedTitle: movie.title,
+    poster: movie.poster || null,
+    language: movie.originalLanguage ?? '',
+    tmdbRating: typeof movie.rating === 'number' ? movie.rating : undefined,
+    confident: true,
+  };
+}
+
+// Inline search-and-pick used to resolve a title the importer couldn't match
+// (or correct a wrong guess) without leaving the import flow.
+function MatchResolver({ base, onPick }: { base: ParsedItem; onPick: (m: MatchedItem) => void }) {
+  const [q, setQ] = useState(base.title);
+  const [results, setResults] = useState<Movie[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [searched, setSearched] = useState(false);
+
+  const search = async (query: string) => {
+    const term = query.trim();
+    if (!term) return;
+    setLoading(true);
+    try {
+      const res = await fetch(`/api/movies/search?q=${encodeURIComponent(term)}`);
+      const json = await res.json();
+      setResults(Array.isArray(json.results) ? (json.results as Movie[]).slice(0, 8) : []);
+    } catch {
+      setResults([]);
+    } finally {
+      setLoading(false);
+      setSearched(true);
+    }
+  };
+
+  // Auto-run the first search with the imported title so the right film is
+  // usually one tap away.
+  useEffect(() => { search(base.title); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, []);
+
+  return (
+    <div className="space-y-2 rounded-xl border border-border bg-background/50 p-2.5">
+      <div className="flex gap-2">
+        <input
+          value={q}
+          onChange={e => setQ(e.target.value)}
+          onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); search(q); } }}
+          placeholder="Search the correct title…"
+          className="flex-1 min-w-0 rounded-lg bg-muted px-3 py-2 text-xs outline-none focus:ring-1 focus:ring-primary"
+        />
+        <button
+          onClick={() => search(q)}
+          className="rounded-lg bg-primary text-primary-foreground px-3 py-2 shrink-0 flex items-center justify-center"
+          aria-label="Search"
+        >
+          <Search className="h-3.5 w-3.5" />
+        </button>
+      </div>
+      {loading ? (
+        <div className="flex justify-center py-3"><Loader2 className="h-4 w-4 animate-spin text-primary" /></div>
+      ) : results.length > 0 ? (
+        <div className="max-h-44 overflow-y-auto overscroll-contain space-y-1">
+          {results.map(m => (
+            <button
+              key={m.id}
+              onClick={() => onPick(movieToMatched(m, base))}
+              className="w-full flex items-center gap-2 p-1.5 rounded-lg hover:bg-muted text-left transition-colors"
+            >
+              {m.poster ? (
+                <img src={m.poster} alt={m.title} className="h-11 w-8 rounded object-cover shrink-0" />
+              ) : (
+                <div className="h-11 w-8 rounded bg-muted flex items-center justify-center shrink-0"><Film className="h-3.5 w-3.5 text-muted-foreground" /></div>
+              )}
+              <div className="min-w-0 flex-1">
+                <p className="text-xs font-semibold truncate">{m.title}</p>
+                <p className="text-[11px] text-muted-foreground truncate">{m.year}{m.type === 'show' ? ' · TV' : ''}</p>
+              </div>
+            </button>
+          ))}
+        </div>
+      ) : searched ? (
+        <p className="text-[11px] text-muted-foreground py-1 px-1">No results — try a different spelling.</p>
+      ) : null}
+    </div>
+  );
+}
+
 export function ImportDialog({ onClose }: { onClose: () => void }) {
   const [platform, setPlatform] = useState<Platform | null>(null);
   const [step, setStep] = useState<Step>('pick');
@@ -170,6 +262,10 @@ export function ImportDialog({ onClose }: { onClose: () => void }) {
   const [uncertain, setUncertain] = useState<MatchedItem[]>([]);
   const [selectedUncertain, setSelectedUncertain] = useState<Set<string>>(new Set());
   const [unmatched, setUnmatched] = useState<ParsedItem[]>([]);
+  // Unmatched titles the user resolved in-dialog, keyed by `${title}|${year}`.
+  const [resolvedMap, setResolvedMap] = useState<Record<string, MatchedItem>>({});
+  // Which row's resolver is currently open (only one at a time).
+  const [expandedKey, setExpandedKey] = useState<string | null>(null);
   const [matchProgress, setMatchProgress] = useState(0);
   const [result, setResult] = useState<{ watchedAdded: number; ratingsAdded: number; watchlistAdded: number; reviewsAdded: number; failed?: number } | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -209,14 +305,40 @@ export function ImportDialog({ onClose }: { onClose: () => void }) {
       setUncertain(uncertainList);
       setSelectedUncertain(new Set());
       setUnmatched(unmatchedList);
+      setResolvedMap({});
+      setExpandedKey(null);
       setStep('confirm');
     } catch (e) {
       setError(`Failed to read file: ${String(e)}`);
     }
   };
 
-  // Confident matches plus any uncertain ones the user explicitly ticked
-  const toImport = [...matched, ...uncertain.filter(u => selectedUncertain.has(u.tmdbId))];
+  const unmatchedKey = (u: ParsedItem) => `${u.title}|${u.year}`;
+
+  // Resolve an unmatched title to a real film (kept under its row's key so the
+  // row flips to a "found" state and is excluded from the manual-add list).
+  const resolveUnmatched = (u: ParsedItem, picked: MatchedItem) => {
+    setResolvedMap(prev => ({ ...prev, [unmatchedKey(u)]: picked }));
+    setExpandedKey(null);
+  };
+  const clearResolved = (u: ParsedItem) => {
+    setResolvedMap(prev => { const next = { ...prev }; delete next[unmatchedKey(u)]; return next; });
+  };
+
+  // Replace a wrong uncertain guess with the correct film and auto-tick it so it
+  // imports — reusing the existing uncertain selection mechanism.
+  const correctUncertain = (originalId: string, picked: MatchedItem) => {
+    setUncertain(prev => prev.map(u => (u.tmdbId === originalId ? picked : u)));
+    setSelectedUncertain(prev => { const next = new Set(prev); next.delete(originalId); next.add(picked.tmdbId); return next; });
+    setExpandedKey(null);
+  };
+
+  // Confident matches, any uncertain ones ticked, plus in-dialog resolutions.
+  const toImport = [
+    ...matched,
+    ...uncertain.filter(u => selectedUncertain.has(u.tmdbId)),
+    ...Object.values(resolvedMap),
+  ];
 
   const runImport = async () => {
     setStep('importing');
@@ -417,31 +539,48 @@ export function ImportDialog({ onClose }: { onClose: () => void }) {
                     {uncertain.length} film{uncertain.length !== 1 ? 's' : ''} we&apos;re not sure about
                   </p>
                   <p className="text-xs text-muted-foreground">These didn&apos;t clearly match. Tick the ones that are correct — the rest won&apos;t be imported.</p>
-                  <div className="max-h-48 overflow-y-auto space-y-1.5">
+                  <div className="max-h-72 overflow-y-auto space-y-1.5">
                     {uncertain.map(u => {
                       const checked = selectedUncertain.has(u.tmdbId);
+                      const rowKey = `uncertain:${u.tmdbId}`;
+                      const open = expandedKey === rowKey;
                       return (
-                        <label key={u.tmdbId} className="flex items-center gap-3 p-2 rounded-xl bg-muted cursor-pointer select-none">
-                          <input
-                            type="checkbox"
-                            checked={checked}
-                            onChange={() => setSelectedUncertain(prev => {
-                              const next = new Set(prev);
-                              if (next.has(u.tmdbId)) next.delete(u.tmdbId); else next.add(u.tmdbId);
-                              return next;
-                            })}
-                            className="h-4 w-4 rounded accent-primary shrink-0"
-                          />
-                          {u.poster ? (
-                            <img src={u.poster} alt={u.matchedTitle} className="h-12 w-8 object-cover rounded shrink-0" />
-                          ) : (
-                            <div className="h-12 w-8 rounded bg-background flex items-center justify-center shrink-0"><Film className="h-4 w-4 text-muted-foreground" /></div>
-                          )}
-                          <div className="min-w-0">
-                            <p className="text-xs text-muted-foreground truncate">Yours: {u.title}{u.year ? ` (${u.year})` : ''}</p>
-                            <p className="text-xs font-semibold truncate">Closest: {u.matchedTitle}{u.year ? '' : ''}</p>
+                        <div key={u.tmdbId} className="rounded-xl bg-muted overflow-hidden">
+                          <label className="flex items-center gap-3 p-2 cursor-pointer select-none">
+                            <input
+                              type="checkbox"
+                              checked={checked}
+                              onChange={() => setSelectedUncertain(prev => {
+                                const next = new Set(prev);
+                                if (next.has(u.tmdbId)) next.delete(u.tmdbId); else next.add(u.tmdbId);
+                                return next;
+                              })}
+                              className="h-4 w-4 rounded accent-primary shrink-0"
+                            />
+                            {u.poster ? (
+                              <img src={u.poster} alt={u.matchedTitle} className="h-12 w-8 object-cover rounded shrink-0" />
+                            ) : (
+                              <div className="h-12 w-8 rounded bg-background flex items-center justify-center shrink-0"><Film className="h-4 w-4 text-muted-foreground" /></div>
+                            )}
+                            <div className="min-w-0 flex-1">
+                              <p className="text-xs text-muted-foreground truncate">Yours: {u.title}{u.year ? ` (${u.year})` : ''}</p>
+                              <p className="text-xs font-semibold truncate">Closest: {u.matchedTitle}</p>
+                            </div>
+                          </label>
+                          <div className="px-2 pb-2">
+                            <button
+                              onClick={() => setExpandedKey(open ? null : rowKey)}
+                              className="text-[11px] font-semibold text-primary hover:underline"
+                            >
+                              {open ? 'Cancel' : 'Not right? Find the correct one'}
+                            </button>
+                            {open && (
+                              <div className="mt-2">
+                                <MatchResolver base={u} onPick={picked => correctUncertain(u.tmdbId, picked)} />
+                              </div>
+                            )}
                           </div>
-                        </label>
+                        </div>
                       );
                     })}
                   </div>
@@ -454,14 +593,53 @@ export function ImportDialog({ onClose }: { onClose: () => void }) {
                     <AlertCircle className="h-4 w-4" />
                     {unmatched.length} film{unmatched.length !== 1 ? 's' : ''} couldn&apos;t be matched
                   </p>
-                  <div className="max-h-40 overflow-y-auto overscroll-contain rounded-xl border border-border bg-muted/50 p-3 space-y-1">
-                    {unmatched.map((u, i) => (
-                      <p key={i} className="text-xs text-foreground">
-                        {u.title}{u.year ? ` (${u.year})` : ''}
-                      </p>
-                    ))}
+                  <p className="text-xs text-muted-foreground">Find the right match here and we&apos;ll add it with its original watch date — no need to search again later.</p>
+                  <div className="max-h-72 overflow-y-auto overscroll-contain space-y-1.5">
+                    {unmatched.map((u, i) => {
+                      const key = unmatchedKey(u);
+                      const resolved = resolvedMap[key];
+                      const rowKey = `unmatched:${key}`;
+                      const open = expandedKey === rowKey;
+                      return (
+                        <div key={i} className="rounded-xl bg-muted overflow-hidden">
+                          {resolved ? (
+                            <div className="flex items-center gap-3 p-2">
+                              <div className="h-5 w-5 rounded-full bg-green-500/20 flex items-center justify-center shrink-0">
+                                <Check className="h-3.5 w-3.5 text-green-400" />
+                              </div>
+                              {resolved.poster ? (
+                                <img src={resolved.poster} alt={resolved.matchedTitle} className="h-12 w-8 object-cover rounded shrink-0" />
+                              ) : (
+                                <div className="h-12 w-8 rounded bg-background flex items-center justify-center shrink-0"><Film className="h-4 w-4 text-muted-foreground" /></div>
+                              )}
+                              <div className="min-w-0 flex-1">
+                                <p className="text-xs text-muted-foreground truncate">Yours: {u.title}{u.year ? ` (${u.year})` : ''}</p>
+                                <p className="text-xs font-semibold truncate text-green-400">Matched: {resolved.matchedTitle}</p>
+                              </div>
+                              <button onClick={() => clearResolved(u)} className="text-[11px] font-semibold text-muted-foreground hover:text-foreground shrink-0">Undo</button>
+                            </div>
+                          ) : (
+                            <div className="p-2">
+                              <div className="flex items-center gap-2">
+                                <p className="text-xs text-foreground truncate flex-1 min-w-0">{u.title}{u.year ? ` (${u.year})` : ''}</p>
+                                <button
+                                  onClick={() => setExpandedKey(open ? null : rowKey)}
+                                  className="text-[11px] font-semibold text-primary hover:underline shrink-0"
+                                >
+                                  {open ? 'Cancel' : 'Find match'}
+                                </button>
+                              </div>
+                              {open && (
+                                <div className="mt-2">
+                                  <MatchResolver base={u} onPick={picked => resolveUnmatched(u, picked)} />
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
                   </div>
-                  <p className="text-xs text-muted-foreground">You can add these manually by searching for them.</p>
                 </div>
               )}
 
@@ -528,7 +706,7 @@ export function ImportDialog({ onClose }: { onClose: () => void }) {
               )}
               {(() => {
                 const skipped = [
-                  ...unmatched.map(u => ({ title: u.title, year: u.year })),
+                  ...unmatched.filter(u => !resolvedMap[unmatchedKey(u)]).map(u => ({ title: u.title, year: u.year })),
                   ...uncertain.filter(u => !selectedUncertain.has(u.tmdbId)).map(u => ({ title: u.title, year: u.year })),
                 ];
                 if (skipped.length === 0) return null;
