@@ -53,12 +53,19 @@ export async function POST(req: NextRequest) {
     await awardBadgeIfEarned(auth.sub, user.ratingsCount);
   }
 
-  // Auto-mark as watched when rated
-  await prisma.watchedItem.upsert({
-    where: { userId_tmdbId_mediaType: { userId: auth.sub, tmdbId, mediaType: mediaType as MediaType } },
-    create: { userId: auth.sub, tmdbId, mediaType: mediaType as MediaType },
-    update: {},
-  });
+  // Auto-mark as watched when rated. upsert isn't atomic, so two ratings for the
+  // same film landing together (rapid taps, or a flaky-network retry) can both
+  // try to INSERT — the loser hits the unique constraint. That just means it's
+  // already watched, so treat the P2002 conflict as success instead of 500ing.
+  try {
+    await prisma.watchedItem.upsert({
+      where: { userId_tmdbId_mediaType: { userId: auth.sub, tmdbId, mediaType: mediaType as MediaType } },
+      create: { userId: auth.sub, tmdbId, mediaType: mediaType as MediaType },
+      update: {},
+    });
+  } catch (e) {
+    if (!(e && typeof e === 'object' && (e as { code?: string }).code === 'P2002')) throw e;
+  }
 
   return ok(rating, existing ? 'Rating updated' : 'Rating saved', { status: existing ? 200 : 201 });
 }
