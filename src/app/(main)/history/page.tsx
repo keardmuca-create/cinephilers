@@ -179,8 +179,10 @@ function HistoryCard({ id, meta, userRating, addedAt, onRemove }: {
           body: JSON.stringify({ showTmdbId: showId, season, episode, watched: false }),
         }).then(ensureOk);
         // Remove any phantom row this episode left in the movie/show watched table.
-        // This one is best-effort cleanup, not the primary delete, so don't fail on it.
-        await fetchWithAuth(`/api/watched/${id}?mediaType=SHOW`, { method: 'DELETE' }).catch(() => {});
+        // deleteMany returns OK even when there's no such row, so confirming this only
+        // trips on a real network/server failure — which we want to surface, since a
+        // silently-failed delete lets the phantom resync back into history.
+        await fetchWithAuth(`/api/watched/${id}?mediaType=SHOW`, { method: 'DELETE' }).then(ensureOk);
       } else {
         // Movie or whole show.
         try { localStorage.removeItem(`watched-${id}`); } catch { /* ignore */ }
@@ -188,11 +190,13 @@ function HistoryCard({ id, meta, userRating, addedAt, onRemove }: {
         await fetchWithAuth(`/api/watched/${id}?mediaType=${mediaType}`, { method: 'DELETE' }).then(ensureOk);
         // Also clear any legacy bare-numeric twin (older imports stored "262504" instead
         // of "tmdb-262504"); without this, the leftover row syncs back as a duplicate.
+        // Confirm it too — deleteMany is a no-op when there's no twin, so this only
+        // throws on a genuine failure that would otherwise resurrect the duplicate.
         const twin = legacyTwin(id);
         if (twin) {
           try { localStorage.removeItem(`watched-${twin}`); } catch { /* ignore */ }
           removeFromWatchLog(twin, 'movie');
-          await fetchWithAuth(`/api/watched/${twin}?mediaType=${mediaType}`, { method: 'DELETE' }).catch(() => {});
+          await fetchWithAuth(`/api/watched/${twin}?mediaType=${mediaType}`, { method: 'DELETE' }).then(ensureOk);
         }
       }
     } catch {

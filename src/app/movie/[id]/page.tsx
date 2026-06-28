@@ -1153,9 +1153,26 @@ export default function MovieDetailPage() {
           <Button
             variant={isInWatchlist ? 'default' : 'outline'}
             className={`h-14 px-8 rounded-2xl font-bold flex-1 md:flex-none text-base transition-all ${isInWatchlist ? 'bg-primary border-primary' : 'border-2 border-foreground bg-background text-foreground'}`}
-            onClick={() => {
+            onClick={async () => {
               if (!authUser) { setAuthGate('add movies to your watchlist'); return; }
               const next = !isInWatchlist;
+              const mediaType = movie!.type === 'show' ? 'SHOW' : 'MOVIE';
+
+              // Confirm the server write before touching any local state, so a
+              // silently failed sync can't leave the DB and local copy out of step
+              // (a removed item would reappear, or an added one vanish, on the next
+              // DB->local sync). Wait for the server, and bail without changing
+              // anything local if it didn't take.
+              try {
+                const res = next
+                  ? await fetchWithAuth('/api/watchlist', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ tmdbId: id, mediaType }) })
+                  : await fetchWithAuth(`/api/watchlist/${id}?mediaType=${mediaType}`, { method: 'DELETE' });
+                if (!res.ok) throw new Error(`HTTP ${res.status}`);
+              } catch {
+                toast({ title: next ? "Couldn't add to watchlist. Check your connection and try again." : "Couldn't remove from watchlist. Check your connection and try again.", variant: 'destructive' });
+                return;
+              }
+
               setIsInWatchlist(next);
               try {
                 if (next) {
@@ -1175,12 +1192,6 @@ export default function MovieDetailPage() {
                   localStorage.removeItem(`watchlist-${id}`);
                 }
               } catch { /* ignore */ }
-              const mediaType = movie!.type === 'show' ? 'SHOW' : 'MOVIE';
-              if (next) {
-                syncDb('POST', '/api/watchlist', { tmdbId: id, mediaType });
-              } else {
-                syncDb('DELETE', `/api/watchlist/${id}?mediaType=${mediaType}`);
-              }
               if (next && movie) {
                 logActivity({ action: 'watchlist', contentId: id, contentTitle: movie.title, contentPoster: movie.poster, contentYear: movie.year });
               } else {
@@ -1195,9 +1206,26 @@ export default function MovieDetailPage() {
           <Button
             variant={isWatched ? 'default' : 'outline'}
             className={`h-14 px-8 rounded-2xl font-bold flex-1 md:flex-none text-base transition-all ${isWatched ? 'bg-accent border-accent' : 'border-2 border-foreground bg-background text-foreground'}`}
-            onClick={() => {
+            onClick={async () => {
               if (!authUser) { setAuthGate('mark movies as watched'); return; }
               const next = !isWatched;
+              const watchedMediaType = movie!.type === 'show' ? 'SHOW' : 'MOVIE';
+
+              // Confirm the server write before touching any local state. A
+              // fire-and-forget sync that silently fails leaves the DB and the local
+              // copy out of step, so a removed item reappears (or a marked one
+              // vanishes) on the next DB->local sync. Wait for the server, and bail
+              // without changing anything local if it didn't take.
+              try {
+                const res = next
+                  ? await fetchWithAuth('/api/watched', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ tmdbId: id, mediaType: watchedMediaType }) })
+                  : await fetchWithAuth(`/api/watched/${id}?mediaType=${watchedMediaType}`, { method: 'DELETE' });
+                if (!res.ok) throw new Error(`HTTP ${res.status}`);
+              } catch {
+                toast({ title: next ? "Couldn't mark as watched. Check your connection and try again." : "Couldn't remove from watched. Check your connection and try again.", variant: 'destructive' });
+                return;
+              }
+
               setIsWatched(next);
               try {
                 localStorage.setItem(`watched-${id}`, String(next));
@@ -1213,12 +1241,6 @@ export default function MovieDetailPage() {
                   }
                 }
               } catch { /* ignore */ }
-              const watchedMediaType = movie!.type === 'show' ? 'SHOW' : 'MOVIE';
-              if (next) {
-                syncDb('POST', '/api/watched', { tmdbId: id, mediaType: watchedMediaType });
-              } else {
-                syncDb('DELETE', `/api/watched/${id}?mediaType=${watchedMediaType}`);
-              }
               if (next && movie) {
                 // Only movies belong in the movie watch-log; whole-show watches are
                 // credited to the episode count via the watched-show-eps key above.
@@ -1312,10 +1334,21 @@ export default function MovieDetailPage() {
                 <p className="text-xs font-bold text-foreground">{userRating > 0 ? `Your score: ${userRating}/10` : 'Select a star to rate'}</p>
                 {userRating > 0 && (
                   <button
-                    onClick={() => {
+                    onClick={async () => {
+                      // Await the server delete and confirm it before clearing the
+                      // rating locally. A fire-and-forget delete that silently fails
+                      // leaves the row in the DB, so the next DB->local sync restores
+                      // the rating — it "comes back" no matter how often you remove it.
+                      const mediaType = movie?.type === 'show' ? 'SHOW' : 'MOVIE';
+                      try {
+                        const res = await fetchWithAuth(`/api/ratings/${id}?mediaType=${mediaType}`, { method: 'DELETE' });
+                        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                      } catch {
+                        toast({ title: "Couldn't remove the rating. Check your connection and try again.", variant: 'destructive' });
+                        return;
+                      }
                       setUserRating(0);
                       try { localStorage.removeItem(`movie-rating-${id}`); } catch { /* ignore */ }
-                      syncDb('DELETE', `/api/ratings/${id}?mediaType=${movie?.type === 'show' ? 'SHOW' : 'MOVIE'}`);
                       removeActivity('rated', id);
                       toast({ title: 'Rating removed' });
                       window.dispatchEvent(new CustomEvent('cinephilers-rating-changed', { detail: { id, rating: null } }));
