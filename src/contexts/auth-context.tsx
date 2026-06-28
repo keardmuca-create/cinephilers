@@ -93,28 +93,19 @@ async function restoreFromDb() {
       localStorage.setItem('activity-dismissed', JSON.stringify([...local].slice(-500)));
     } catch { /* ignore */ }
 
-    // ── Ratings: write DB scores to local; upload any local-only ratings to DB ──
-    const dbRatingIds = new Set(ratings.map(r => r.tmdbId));
+    // ── Ratings: DB → local only. We deliberately do NOT upload local-only
+    // ratings: on a shared browser, switching accounts could push one account's
+    // ratings into another's DB — and since rating auto-marks watched, that
+    // balloons the wrong account's history. Ratings already persist at action
+    // time via syncDb; this sync only mirrors the DB down. ──
     for (const r of ratings) {
       try { localStorage.setItem(`movie-rating-${r.tmdbId}`, String(r.score)); } catch { /* ignore */ }
       recordAddedAt(r.tmdbId, r.createdAt);
     }
-    try {
-      for (let i = 0; i < localStorage.length; i++) {
-        const k = localStorage.key(i);
-        if (!k?.startsWith('movie-rating-')) continue;
-        const tmdbId = k.slice('movie-rating-'.length);
-        if (dbRatingIds.has(tmdbId)) continue;
-        const score = parseInt(localStorage.getItem(k) ?? '0', 10);
-        if (score >= 1 && score <= 10) {
-          const mediaType = tmdbId.startsWith('tmdb-tv-') ? 'SHOW' : 'MOVIE';
-          fetchWithAuth('/api/ratings', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ tmdbId, mediaType, score }) }).catch(() => {});
-        }
-      }
-    } catch { /* ignore */ }
 
-    // ── Watchlist: write DB items to local; upload any local-only items to DB ──
-    const dbWatchlistIds = new Set(watchlist.map(w => w.tmdbId));
+    // ── Watchlist: DB → local only (same one-way rule as ratings/watched, so a
+    // shared-browser account switch can't push one account's watchlist into
+    // another's DB). Watchlist changes persist at action time via syncDb. ──
     for (const w of watchlist) {
       try {
         const existing = localStorage.getItem(`watchlist-${w.tmdbId}`);
@@ -126,16 +117,6 @@ async function restoreFromDb() {
       } catch { /* ignore */ }
       recordAddedAt(w.tmdbId, w.addedAt);
     }
-    try {
-      for (let i = 0; i < localStorage.length; i++) {
-        const k = localStorage.key(i);
-        if (!k?.startsWith('watchlist-')) continue;
-        const tmdbId = k.slice('watchlist-'.length);
-        if (dbWatchlistIds.has(tmdbId)) continue;
-        const mediaType = tmdbId.startsWith('tmdb-tv-') ? 'SHOW' : 'MOVIE';
-        fetchWithAuth('/api/watchlist', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ tmdbId, mediaType }) }).catch(() => {});
-      }
-    } catch { /* ignore */ }
 
     // ── Watched: the DB is the source of truth. Write DB items to local only. ──
     // We deliberately do NOT recover from watch-log or upload local-only watched
@@ -147,8 +128,8 @@ async function restoreFromDb() {
       recordWatchedAt(w.tmdbId, w.watchedAt);
     }
 
-    // ── Reviews: write DB reviews to local; upload any local-only reviews to DB
-    const dbReviewIds = new Set(reviews.map(r => r.tmdbId));
+    // ── Reviews: DB → local only (same one-way rule — never upload local-only
+    // reviews, which on a shared browser could belong to another account). ──
     for (const r of reviews) {
       try {
         // Preserve title/poster/year from existing local entry or meta cache
@@ -178,23 +159,6 @@ async function restoreFromDb() {
         }));
       } catch { /* ignore */ }
     }
-    try {
-      for (let i = 0; i < localStorage.length; i++) {
-        const k = localStorage.key(i);
-        if (!k?.startsWith('review-')) continue;
-        const tmdbId = k.slice('review-'.length);
-        if (dbReviewIds.has(tmdbId)) continue;
-        const raw = localStorage.getItem(k);
-        if (!raw) continue;
-        try {
-          const rev = JSON.parse(raw) as { content?: string; containsSpoiler?: boolean };
-          if (rev.content) {
-            const mediaType = tmdbId.startsWith('tmdb-tv-') ? 'SHOW' : 'MOVIE';
-            fetchWithAuth('/api/reviews', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ tmdbId, mediaType, body: rev.content, containsSpoiler: rev.containsSpoiler ?? false }) }).catch(() => {});
-          }
-        } catch { /* ignore */ }
-      }
-    } catch { /* ignore */ }
 
     // Merge DB watched items into watch-log — add any items not already tracked locally
     try {
