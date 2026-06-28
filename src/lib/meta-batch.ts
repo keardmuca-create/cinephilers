@@ -2,7 +2,10 @@ import type { ItemMeta } from '@/app/api/meta/[id]/route';
 
 const CHUNK = 100;
 
-export async function batchFetchMeta(ids: string[]): Promise<Record<string, ItemMeta>> {
+export async function batchFetchMeta(
+  ids: string[],
+  opts?: { needReleaseDate?: boolean },
+): Promise<Record<string, ItemMeta>> {
   const result: Record<string, ItemMeta> = {};
   const toFetch: string[] = [];
 
@@ -12,10 +15,13 @@ export async function batchFetchMeta(ids: string[]): Promise<Record<string, Item
       if (raw) {
         const cached = JSON.parse(raw) as ItemMeta;
         // Refetch entries cached before runtime/showType tracking so movie shorts
-        // (by runtime) and mini-series (by showType) can be classified.
+        // (by runtime) and mini-series (by showType) can be classified. Only callers
+        // that sort by date (the watchlist) ask for releaseDate, so older caches
+        // aren't refetched app-wide just to backfill it.
         const needsRefresh =
           (cached.type === 'movie' && !cached.isEpisode && cached.runtime === undefined) ||
-          (cached.type === 'show'  && !cached.isEpisode && cached.showType === undefined);
+          (cached.type === 'show'  && !cached.isEpisode && cached.showType === undefined) ||
+          (opts?.needReleaseDate === true && cached.releaseDate === undefined);
         if (!needsRefresh) { result[id] = cached; continue; }
       }
     } catch { /* ignore */ }

@@ -5,6 +5,7 @@ export interface ItemMeta {
   id: string;
   title: string;
   year: string;
+  releaseDate?: string;  // full ISO date (e.g. "2026-12-18"); '' when TMDB has none
   poster: string;
   type: 'movie' | 'show';
   genre?: string;

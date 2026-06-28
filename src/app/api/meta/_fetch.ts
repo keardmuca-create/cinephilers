@@ -21,7 +21,7 @@ export async function fetchOneMeta(id: string, key: string): Promise<ItemMeta> {
     const airDate  = epData.air_date ?? showData.first_air_date ?? '';
     const year     = airDate ? airDate.slice(0, 4) : '—';
     return {
-      id, title: epTitle, year, poster,
+      id, title: epTitle, year, releaseDate: airDate, poster,
       type: 'show', showId, isEpisode: true,
       showName: showData.name ?? undefined,
       seasonNumber: season,
@@ -47,7 +47,7 @@ export async function fetchOneMeta(id: string, key: string): Promise<ItemMeta> {
   const genreNames: string[] = (d.genres ?? []).map((g: { name: string }) => g.name);
 
   return {
-    id, title, year, poster,
+    id, title, year, releaseDate: release, poster,
     type: isShow ? 'show' : 'movie',
     genre: genreNames.join(', ') || undefined,
     // Movies always carry a numeric runtime (0 when TMDB has none) so the cache
