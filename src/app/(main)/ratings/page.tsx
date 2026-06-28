@@ -3,29 +3,31 @@
 import React, { useState, useEffect, useRef, useMemo, Suspense } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Star, ChevronLeft, Search, SlidersHorizontal, Check, X, Film, Eye } from 'lucide-react';
+import { Star, ChevronLeft, Search, SlidersHorizontal, X, Film, Eye } from 'lucide-react';
 import { normalizeLocalMediaIds, getAddedAt } from '@/lib/media-id';
 import { batchFetchMeta } from '@/lib/meta-batch';
+import { getItemType, TYPE_LABELS, TYPE_ORDER, type TypeFilter } from '@/lib/media-type';
+import { RefineSheet, type RefineValue, type SortOption, type CountOption } from '@/components/refine-sheet';
 
-type SortOption = 'recent' | 'rating-desc' | 'rating-asc' | 'title-asc' | 'title-desc' | 'release-desc' | 'release-asc';
+const SORT_OPTIONS: SortOption[] = [
+  { value: 'rating',  label: 'Your rating' },
+  { value: 'recent',  label: 'Date rated' },
+  { value: 'release', label: 'Release date' },
+  { value: 'title',   label: 'Title' },
+];
 
-const SORT_LABELS: Record<SortOption, string> = {
-  'recent':       'Recently Rated',
-  'rating-desc':  'Rating: High to Low',
-  'rating-asc':   'Rating: Low to High',
-  'title-asc':    'Title A–Z',
-  'title-desc':   'Title Z–A',
-  'release-desc': 'Release Date: Newest',
-  'release-asc':  'Release Date: Oldest',
-};
+const DEFAULT_REFINE: RefineValue = { sortField: 'recent', sortDir: 'desc', type: 'any', genre: 'any' };
 
 interface RatedItem {
   id: string;
   title: string;
   poster: string;
   year: string;
+  releaseDate?: string;  // full date, for precise release-date sorting
   tmdbRating?: number;
   userRating: number;
+  kind: TypeFilter;      // for the Type filter
+  genre: string;         // comma-joined genres, for the Genre filter
 }
 
 function readMetaCache(id: string) {
@@ -75,17 +77,20 @@ function RatingsPageInner() {
   const router = useRouter();
   const [items, setItems]           = useState<RatedItem[]>([]);
   const [loading, setLoading]       = useState(true);
-  const [sort, setSort]             = useState<SortOption>(() => (typeof sessionStorage !== 'undefined' ? sessionStorage.getItem('ratings-sort') as SortOption : null) || 'recent');
   const [search, setSearch]         = useState('');
   const [refineOpen, setRefineOpen] = useState(false);
-  const [pendingSort, setPendingSort] = useState<SortOption>('recent');
-  const [yearFrom, setYearFrom] = useState(() => (typeof sessionStorage !== 'undefined' ? sessionStorage.getItem('ratings-year-from') : null) || '');
-  const [yearTo, setYearTo]     = useState(() => (typeof sessionStorage !== 'undefined' ? sessionStorage.getItem('ratings-year-to') : null) || '');
-  const [pendingYearFrom, setPendingYearFrom] = useState('');
-  const [pendingYearTo, setPendingYearTo]     = useState('');
+  // Server-safe default; saved refine restored from sessionStorage after mount.
+  const [refine, setRefine]         = useState<RefineValue>(DEFAULT_REFINE);
   const searchParams = useSearchParams();
   const [ratingFilter, setRatingFilter] = useState<number | null>(null);
   const fetchingRef = useRef(new Set<string>());
+
+  useEffect(() => {
+    try {
+      const saved = sessionStorage.getItem('ratings-refine');
+      if (saved) setRefine({ ...DEFAULT_REFINE, ...JSON.parse(saved) });
+    } catch { /* ignore */ }
+  }, []);
 
   // Read the ?rating=N param reactively. The page doesn't remount when only the
   // query changes (same route segment), so a useState initializer would go stale.
@@ -119,10 +124,10 @@ function RatingsPageInner() {
         const meta = readMetaCache(id);
         const rv   = rvMap.get(id);
         if (meta?.title || rv?.title) {
-          initial.push({ id, title: meta?.title ?? rv?.title ?? '', poster: meta?.poster ?? rv?.poster ?? '', year: meta?.year ?? rv?.year ?? '', tmdbRating: meta?.tmdbRating ?? rv?.tmdbRating, userRating });
+          initial.push({ id, title: meta?.title ?? rv?.title ?? '', poster: meta?.poster ?? rv?.poster ?? '', year: meta?.year ?? rv?.year ?? '', releaseDate: meta?.releaseDate, tmdbRating: meta?.tmdbRating ?? rv?.tmdbRating, userRating, kind: getItemType(meta ?? {}), genre: meta?.genre ?? '' });
         } else {
           toFetch.push(id);
-          initial.push({ id, title: '', poster: '', year: '', userRating });
+          initial.push({ id, title: '', poster: '', year: '', userRating, kind: 'movie', genre: '' });
         }
       }
 
@@ -136,7 +141,7 @@ function RatingsPageInner() {
           for (const [id, m] of Object.entries(metaMap)) {
             if (!m?.title) continue;
             const idx = next.findIndex(x => x.id === id);
-            if (idx !== -1) next[idx] = { ...next[idx], title: m.title, poster: m.poster ?? '', year: m.year ?? '', tmdbRating: m.tmdbRating };
+            if (idx !== -1) next[idx] = { ...next[idx], title: m.title, poster: m.poster ?? '', year: m.year ?? '', releaseDate: m.releaseDate, tmdbRating: m.tmdbRating, kind: getItemType(m), genre: m.genre ?? '' };
           }
           return next;
         });
@@ -151,26 +156,70 @@ function RatingsPageInner() {
     return () => window.removeEventListener('cinephilers-db-restored', handler);
   }, []);
 
+  // Options for the Type / Genre filters, computed from the rated items.
+  const typeOptions = useMemo<CountOption[]>(() => {
+    const withTitle = items.filter(i => i.title);
+    const counts = new Map<TypeFilter, number>();
+    for (const it of withTitle) counts.set(it.kind, (counts.get(it.kind) ?? 0) + 1);
+    const present = TYPE_ORDER.filter(t => t !== 'any' && (counts.get(t) ?? 0) > 0);
+    if (present.length <= 1) return [];
+    return [
+      { value: 'any', label: 'Any', count: withTitle.length },
+      ...present.map(t => ({ value: t, label: TYPE_LABELS[t], count: counts.get(t)! })),
+    ];
+  }, [items]);
+
+  const genreOptions = useMemo<CountOption[]>(() => {
+    const withTitle = items.filter(i => i.title);
+    const counts = new Map<string, number>();
+    for (const it of withTitle) {
+      for (const g of it.genre.split(',').map(s => s.trim()).filter(Boolean)) counts.set(g, (counts.get(g) ?? 0) + 1);
+    }
+    const entries = [...counts.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
+    if (entries.length === 0) return [];
+    return [
+      { value: 'any', label: 'Any', count: withTitle.length },
+      ...entries.map(([g, c]) => ({ value: g, label: g, count: c })),
+    ];
+  }, [items]);
+
   const sortedFiltered = useMemo(() => {
     let result = items.filter(i => i.title);
-    if (ratingFilter !== null) result = result.filter(i => i.userRating === ratingFilter);
+    if (ratingFilter !== null)  result = result.filter(i => i.userRating === ratingFilter);
+    if (refine.type !== 'any')  result = result.filter(i => i.kind === refine.type);
+    if (refine.genre !== 'any') result = result.filter(i => i.genre.split(',').map(s => s.trim()).includes(refine.genre));
     if (search.trim()) {
       const q = search.trim().toLowerCase();
       result = result.filter(i => i.title.toLowerCase().includes(q));
     }
-    const yFrom = yearFrom ? parseInt(yearFrom, 10) : null;
-    const yTo   = yearTo   ? parseInt(yearTo,   10) : null;
-    if (yFrom) result = result.filter(i => parseInt(i.year, 10) >= yFrom);
-    if (yTo)   result = result.filter(i => parseInt(i.year, 10) <= yTo);
-    if (sort === 'recent')             result.sort((a, b) => getAddedAt(b.id) - getAddedAt(a.id));
-    else if (sort === 'title-asc')     result.sort((a, b) => a.title.localeCompare(b.title));
-    else if (sort === 'title-desc')    result.sort((a, b) => b.title.localeCompare(a.title));
-    else if (sort === 'rating-desc')   result.sort((a, b) => b.userRating - a.userRating);
-    else if (sort === 'rating-asc')    result.sort((a, b) => a.userRating - b.userRating);
-    else if (sort === 'release-desc')  result.sort((a, b) => parseInt(b.year, 10) - parseInt(a.year, 10));
-    else if (sort === 'release-asc')   result.sort((a, b) => parseInt(a.year, 10) - parseInt(b.year, 10));
+
+    if (refine.sortField === 'rating') {
+      result.sort((a, b) => b.userRating - a.userRating);
+      if (refine.sortDir === 'asc') result.reverse();
+    } else if (refine.sortField === 'title') {
+      result.sort((a, b) => a.title.localeCompare(b.title));
+      if (refine.sortDir === 'desc') result.reverse();
+    } else if (refine.sortField === 'release') {
+      const ts = (it: RatedItem): number | null => {
+        const raw = it.releaseDate || (/^\d{4}$/.test(it.year) ? `${it.year}-01-01` : '');
+        const t = raw ? Date.parse(raw) : NaN;
+        return Number.isNaN(t) ? null : t;
+      };
+      const dir = refine.sortDir === 'desc' ? -1 : 1;
+      result.sort((a, b) => {
+        const ta = ts(a), tb = ts(b);
+        if (ta === null && tb === null) return 0;
+        if (ta === null) return 1;
+        if (tb === null) return -1;
+        return (ta - tb) * dir;
+      });
+    } else {
+      // Date rated
+      result.sort((a, b) => getAddedAt(b.id) - getAddedAt(a.id));
+      if (refine.sortDir === 'asc') result.reverse();
+    }
     return result;
-  }, [items, sort, search, yearFrom, yearTo, ratingFilter]);
+  }, [items, refine, search, ratingFilter]);
 
   return (
     <main className="pb-32">
@@ -206,12 +255,13 @@ function RatingsPageInner() {
 
       {/* Sort bar */}
       <div className="px-6 pb-4 flex items-center justify-between">
-        <p className="text-xs text-muted-foreground">
-          {sortedFiltered.length} title{sortedFiltered.length !== 1 ? 's' : ''} · Sorted by {SORT_LABELS[sort]}
-          {(yearFrom || yearTo) && ` · ${yearFrom || '…'}–${yearTo || '…'}`}
+        <p className="text-xs text-muted-foreground truncate">
+          {sortedFiltered.length} title{sortedFiltered.length !== 1 ? 's' : ''} · {SORT_OPTIONS.find(s => s.value === refine.sortField)?.label}
+          {refine.type !== 'any' && ` · ${TYPE_LABELS[refine.type as TypeFilter]}`}
+          {refine.genre !== 'any' && ` · ${refine.genre}`}
         </p>
-        <button onClick={() => { setPendingSort(sort); setPendingYearFrom(yearFrom); setPendingYearTo(yearTo); setRefineOpen(true); }}
-          className="flex items-center gap-1.5 text-xs font-semibold text-primary hover:opacity-80 transition-opacity">
+        <button onClick={() => setRefineOpen(true)}
+          className="flex items-center gap-1.5 text-xs font-semibold text-primary hover:opacity-80 transition-opacity shrink-0">
           <SlidersHorizontal className="h-3.5 w-3.5" /> Refine
         </button>
       </div>
@@ -241,43 +291,19 @@ function RatingsPageInner() {
         </div>
       )}
 
-      {/* Refine modal */}
-      {refineOpen && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center p-6">
-          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setRefineOpen(false)} />
-          <div className="relative bg-white rounded-3xl w-full max-w-sm max-h-[75vh] flex flex-col overflow-hidden shadow-2xl border border-gray-200">
-            <div className="flex items-center justify-between px-6 pt-5 pb-4 border-b border-gray-100 shrink-0">
-              <button onClick={() => setRefineOpen(false)} className="text-sm text-gray-500 hover:text-gray-800 transition-colors">Cancel</button>
-              <span className="text-sm font-bold text-gray-900">{items.length} Titles</span>
-              <button onClick={() => { setSort(pendingSort); setYearFrom(pendingYearFrom); setYearTo(pendingYearTo); sessionStorage.setItem('ratings-sort', pendingSort); sessionStorage.setItem('ratings-year-from', pendingYearFrom); sessionStorage.setItem('ratings-year-to', pendingYearTo); setRefineOpen(false); }} className="text-sm font-bold text-primary hover:opacity-80 transition-opacity">Refine</button>
-            </div>
-            <div className="overflow-y-auto flex-1 px-6 py-4">
-              <div className="flex items-center justify-between mb-3">
-                <span className="text-sm font-bold text-gray-900">Sort By</span>
-                <span className="text-sm text-gray-500">{SORT_LABELS[pendingSort]}</span>
-              </div>
-              <div className="space-y-1">
-                {(['recent', 'rating-desc', 'rating-asc', 'release-desc', 'release-asc', 'title-asc', 'title-desc'] as SortOption[]).map(s => (
-                  <button key={s} onClick={() => setPendingSort(s)} className="w-full flex items-center justify-between py-2.5 text-sm">
-                    <span className={pendingSort === s ? 'font-semibold text-gray-900' : 'text-gray-500'}>{SORT_LABELS[s]}</span>
-                    {pendingSort === s && <Check className="h-4 w-4 text-primary" />}
-                  </button>
-                ))}
-              </div>
-              <div className="mt-5">
-                <p className="text-sm font-bold text-gray-900 mb-3">Release Year</p>
-                <div className="flex items-center gap-2">
-                  <input type="number" placeholder="From" min="1900" max="2099" value={pendingYearFrom} onChange={e => setPendingYearFrom(e.target.value)}
-                    className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm text-gray-900 focus:outline-none focus:border-primary" />
-                  <span className="text-gray-400 shrink-0">–</span>
-                  <input type="number" placeholder="To" min="1900" max="2099" value={pendingYearTo} onChange={e => setPendingYearTo(e.target.value)}
-                    className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm text-gray-900 focus:outline-none focus:border-primary" />
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
+      <RefineSheet
+        open={refineOpen}
+        onClose={() => setRefineOpen(false)}
+        total={items.filter(i => i.title).length}
+        sortOptions={SORT_OPTIONS}
+        typeOptions={typeOptions}
+        genreOptions={genreOptions}
+        value={refine}
+        onApply={v => {
+          setRefine(v);
+          try { sessionStorage.setItem('ratings-refine', JSON.stringify(v)); } catch { /* ignore */ }
+        }}
+      />
     </main>
   );
 }
