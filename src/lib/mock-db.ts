@@ -94,6 +94,23 @@ class Table {
     return row;
   }
 
+  createMany(args: { data: AnyRecord[]; skipDuplicates?: boolean }): { count: number } {
+    let count = 0;
+    for (const data of args.data) {
+      if (args.skipDuplicates) {
+        // Best-effort match of the common (userId, tmdbId, mediaType) unique key so
+        // dev behaves like Postgres' skipDuplicates for import inserts.
+        const dup = this.rows.some(r =>
+          r.userId === data.userId && r.tmdbId === data.tmdbId && r.mediaType === data.mediaType
+        );
+        if (dup) continue;
+      }
+      this.create({ data });
+      count++;
+    }
+    return { count };
+  }
+
   update(args: { where: WhereClause; data: AnyRecord; select?: SelectClause }): AnyRecord {
     const idx = this.rows.findIndex(r => matchesWhere(r, args.where));
     if (idx === -1) throw new Error(`[mock-db] Record not found for update`);

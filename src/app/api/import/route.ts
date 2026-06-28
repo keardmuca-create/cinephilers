@@ -50,60 +50,53 @@ export async function POST(req: NextRequest) {
   const hasWatchlist = new Set(existingWatchlist.map(w => `${w.tmdbId}:${w.mediaType}`));
   const hasReview = new Set(existingReviews.map(r => `${r.tmdbId}:${r.mediaType}`));
 
-  let watchedAdded = 0;
-  let ratingsAdded = 0;
-  let watchlistAdded = 0;
-  let reviewsAdded = 0;
   let failed = 0;
+  const watchedData: { userId: string; tmdbId: string; mediaType: 'MOVIE' | 'SHOW'; watchedAt: Date }[] = [];
+  const watchlistData: { userId: string; tmdbId: string; mediaType: 'MOVIE' | 'SHOW' }[] = [];
+  const ratingData: { userId: string; tmdbId: string; mediaType: 'MOVIE' | 'SHOW'; score: number }[] = [];
+  const reviewData: { userId: string; tmdbId: string; mediaType: 'MOVIE' | 'SHOW'; body: string; containsSpoiler: boolean }[] = [];
 
+  // Collect rows first, then bulk-insert each table in one round-trip below. The old
+  // per-item create loop fired up to ~4 awaited queries per film (thousands for a big
+  // Letterboxd library), which is slow and burns Fluid active-CPU; batching cuts it to
+  // four inserts total.
   for (const item of items) {
     const key = `${item.tmdbId}:${item.mediaType}`;
 
-    // Watched
     if (item.watchedAt && !hasWatched.has(key)) {
-      try {
-        await prisma.watchedItem.create({
-          data: { userId, tmdbId: item.tmdbId, mediaType: item.mediaType, watchedAt: new Date(item.watchedAt) },
-        });
-        watchedAdded++;
-      } catch { failed++; }
+      const watchedAt = new Date(item.watchedAt);
+      if (Number.isNaN(watchedAt.getTime())) failed++;
+      else watchedData.push({ userId, tmdbId: item.tmdbId, mediaType: item.mediaType, watchedAt });
     }
 
-    // Watchlist
     if (item.inWatchlist && !hasWatchlist.has(key)) {
-      try {
-        await prisma.watchlistItem.create({
-          data: { userId, tmdbId: item.tmdbId, mediaType: item.mediaType },
-        });
-        watchlistAdded++;
-      } catch { failed++; }
+      watchlistData.push({ userId, tmdbId: item.tmdbId, mediaType: item.mediaType });
     }
 
     // Rating — only accept whole numbers 1-10
     if (item.rating != null && !hasRating.has(key)) {
-      if (!Number.isInteger(item.rating) || item.rating < 1 || item.rating > 10) {
-        failed++;
-      } else {
-        try {
-          await prisma.rating.create({
-            data: { userId, tmdbId: item.tmdbId, mediaType: item.mediaType, score: item.rating },
-          });
-          ratingsAdded++;
-        } catch { failed++; }
-      }
+      if (!Number.isInteger(item.rating) || item.rating < 1 || item.rating > 10) failed++;
+      else ratingData.push({ userId, tmdbId: item.tmdbId, mediaType: item.mediaType, score: item.rating });
     }
 
-    // Review
     if (item.review && item.review.trim().length >= 10 && !hasReview.has(key)) {
-      const body = sanitizeText(item.review).slice(0, 5000);
-      try {
-        await prisma.review.create({
-          data: { userId, tmdbId: item.tmdbId, mediaType: item.mediaType, body, containsSpoiler: false },
-        });
-        reviewsAdded++;
-      } catch { failed++; }
+      reviewData.push({ userId, tmdbId: item.tmdbId, mediaType: item.mediaType, body: sanitizeText(item.review).slice(0, 5000), containsSpoiler: false });
     }
   }
+
+  // skipDuplicates guards against any (userId, tmdbId, mediaType) collision the
+  // pre-filter missed (e.g. duplicate rows within the uploaded file itself).
+  const [watchedRes, watchlistRes, ratingRes, reviewRes] = await Promise.all([
+    watchedData.length ? prisma.watchedItem.createMany({ data: watchedData, skipDuplicates: true }) : Promise.resolve({ count: 0 }),
+    watchlistData.length ? prisma.watchlistItem.createMany({ data: watchlistData, skipDuplicates: true }) : Promise.resolve({ count: 0 }),
+    ratingData.length ? prisma.rating.createMany({ data: ratingData, skipDuplicates: true }) : Promise.resolve({ count: 0 }),
+    reviewData.length ? prisma.review.createMany({ data: reviewData, skipDuplicates: true }) : Promise.resolve({ count: 0 }),
+  ]);
+
+  const watchedAdded = watchedRes.count;
+  const watchlistAdded = watchlistRes.count;
+  const ratingsAdded = ratingRes.count;
+  const reviewsAdded = reviewRes.count;
 
   // Recalculate counts from DB (source of truth after bulk insert)
   const [totalRatings, totalReviews] = await Promise.all([
