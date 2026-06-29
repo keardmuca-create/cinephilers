@@ -44,13 +44,7 @@ function ItemCard({ item }: { item: WatchlistItem }) {
         <h3 className="text-sm font-semibold font-headline line-clamp-2 group-hover:text-primary transition-colors leading-snug mb-0.5">
           {item.title}
         </h3>
-        <p className="text-xs text-muted-foreground mb-1.5">{item.year}</p>
-        {item.tmdbRating !== undefined && (
-          <div className="flex items-center gap-0.5">
-            <span className="text-xs text-yellow-400 font-bold">★</span>
-            <span className="text-xs font-bold text-foreground">{item.tmdbRating.toFixed(1)}</span>
-          </div>
-        )}
+        <p className="text-xs text-muted-foreground">{item.year}</p>
       </div>
     </Link>
   );
