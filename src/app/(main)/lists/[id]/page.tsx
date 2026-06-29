@@ -69,7 +69,7 @@ export default function ListDetailPage() {
   // Restore the saved refine after mount (reading during render would mismatch SSR).
   useEffect(() => {
     try {
-      const saved = sessionStorage.getItem('list-refine');
+      const saved = localStorage.getItem('list-refine');
       if (saved) setRefine({ ...DEFAULT_REFINE, ...JSON.parse(saved) });
     } catch { /* ignore */ }
   }, []);
@@ -340,7 +340,7 @@ export default function ListDetailPage() {
         value={refine}
         onApply={v => {
           setRefine(v);
-          try { sessionStorage.setItem('list-refine', JSON.stringify(v)); } catch { /* ignore */ }
+          try { localStorage.setItem('list-refine', JSON.stringify(v)); } catch { /* ignore */ }
         }}
       />
     </main>

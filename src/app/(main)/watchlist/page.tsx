@@ -96,13 +96,13 @@ export default function WatchlistPage() {
   const [fetchingMeta, setFetchingMeta] = useState(false);
   const [search, setSearch]         = useState('');
   const [refineOpen, setRefineOpen] = useState(false);
-  // Server-safe default; the saved refine is restored from sessionStorage after
+  // Server-safe default; the saved refine is restored from localStorage after
   // mount (reading it during render would mismatch the server and break hydration).
   const [refine, setRefine]         = useState<RefineValue>(DEFAULT_REFINE);
 
   useEffect(() => {
     try {
-      const saved = sessionStorage.getItem('watchlist-refine');
+      const saved = localStorage.getItem('watchlist-refine');
       if (saved) setRefine({ ...DEFAULT_REFINE, ...JSON.parse(saved) });
     } catch { /* ignore */ }
   }, []);
@@ -340,7 +340,7 @@ export default function WatchlistPage() {
         value={refine}
         onApply={v => {
           setRefine(v);
-          try { sessionStorage.setItem('watchlist-refine', JSON.stringify(v)); } catch { /* ignore */ }
+          try { localStorage.setItem('watchlist-refine', JSON.stringify(v)); } catch { /* ignore */ }
         }}
       />
     </main>

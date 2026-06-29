@@ -116,7 +116,7 @@ function RatingsPageInner() {
   const [loading, setLoading]       = useState(true);
   const [search, setSearch]         = useState('');
   const [refineOpen, setRefineOpen] = useState(false);
-  // Server-safe default; saved refine restored from sessionStorage after mount.
+  // Server-safe default; saved refine restored from localStorage after mount.
   const [refine, setRefine]         = useState<RefineValue>(DEFAULT_REFINE);
   const searchParams = useSearchParams();
   const [ratingFilter, setRatingFilter] = useState<number | null>(null);
@@ -124,7 +124,7 @@ function RatingsPageInner() {
 
   useEffect(() => {
     try {
-      const saved = sessionStorage.getItem('ratings-refine');
+      const saved = localStorage.getItem('ratings-refine');
       if (saved) setRefine({ ...DEFAULT_REFINE, ...JSON.parse(saved) });
     } catch { /* ignore */ }
   }, []);
@@ -340,7 +340,7 @@ function RatingsPageInner() {
         value={refine}
         onApply={v => {
           setRefine(v);
-          try { sessionStorage.setItem('ratings-refine', JSON.stringify(v)); } catch { /* ignore */ }
+          try { localStorage.setItem('ratings-refine', JSON.stringify(v)); } catch { /* ignore */ }
         }}
       />
     </main>

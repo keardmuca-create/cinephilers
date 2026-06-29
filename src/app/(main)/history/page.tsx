@@ -256,13 +256,13 @@ export default function HistoryPage() {
   const [fetching, setFetching]       = useState(false);
   const [search, setSearch]         = useState('');
   const [refineOpen, setRefineOpen] = useState(false);
-  // Server-safe default; the saved refine is restored from sessionStorage after
+  // Server-safe default; the saved refine is restored from localStorage after
   // mount (reading it during render would mismatch the server and break hydration).
   const [refine, setRefine]         = useState<RefineValue>(DEFAULT_REFINE);
 
   useEffect(() => {
     try {
-      const saved = sessionStorage.getItem('history-refine');
+      const saved = localStorage.getItem('history-refine');
       if (saved) setRefine({ ...DEFAULT_REFINE, ...JSON.parse(saved) });
     } catch { /* ignore */ }
   }, []);
@@ -544,7 +544,7 @@ export default function HistoryPage() {
         value={refine}
         onApply={v => {
           setRefine(v);
-          try { sessionStorage.setItem('history-refine', JSON.stringify(v)); } catch { /* ignore */ }
+          try { localStorage.setItem('history-refine', JSON.stringify(v)); } catch { /* ignore */ }
         }}
       />
     </main>

@@ -1,12 +1,13 @@
 import type { RefineValue } from '@/components/refine-sheet';
 
-// Read a saved refine — the sessionStorage entry each full-page list writes when
+// Read a saved refine — the localStorage entry each full-page list writes when
 // the user taps "Refine" (keys: watchlist-refine / history-refine / ratings-refine
-// / list-refine). Returns null when nothing is saved or it's malformed.
+// / list-refine). localStorage (not sessionStorage) so the chosen order survives
+// leaving and reopening the app. Returns null when nothing is saved or malformed.
 export function readSavedRefine(key: string): RefineValue | null {
   try {
-    if (typeof sessionStorage === 'undefined') return null;
-    const raw = sessionStorage.getItem(key);
+    if (typeof localStorage === 'undefined') return null;
+    const raw = localStorage.getItem(key);
     if (!raw) return null;
     const v = JSON.parse(raw);
     if (v && typeof v.sortField === 'string' && typeof v.sortDir === 'string') return v as RefineValue;

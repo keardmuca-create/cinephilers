@@ -471,7 +471,7 @@ export default function ProfilePage() {
   const [ratedItems, setRatedItems] = useState<RatedItem[]>([]);
 
   // Saved refines from the full-page lists, so each preview shows the same order
-  // the user chose there. Read after mount (sessionStorage would mismatch SSR) and
+  // the user chose there. Read after mount (localStorage would mismatch SSR) and
   // re-read on focus/return so a refine set on another page reflects here.
   const [refines, setRefines] = useState<{ history: RefineValue | null; ratings: RefineValue | null; watchlist: RefineValue | null }>(
     { history: null, ratings: null, watchlist: null }
