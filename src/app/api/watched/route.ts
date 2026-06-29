@@ -4,14 +4,6 @@ import { ok, err } from '@/lib/api-response';
 import { getCurrentUser } from '@/lib/auth-utils';
 import { MediaType } from '@/generated/prisma/client';
 
-export async function DELETE(req: NextRequest) {
-  const auth = await getCurrentUser(req);
-  if (!auth) return err('Unauthorized', 401);
-
-  await prisma.watchedItem.deleteMany({ where: { userId: auth.sub } });
-  return ok(null, 'Watch history cleared');
-}
-
 export async function POST(req: NextRequest) {
   const auth = await getCurrentUser(req);
   if (!auth) return err('Unauthorized', 401);
