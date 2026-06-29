@@ -283,7 +283,7 @@ export default function ProfilePage() {
           </div>
           <div className="flex gap-2">
             <Button asChild size="sm" className="rounded-xl font-bold">
-              <Link href="/signup">Sign Up Free</Link>
+              <Link href="/signup">Sign Up</Link>
             </Button>
             <Button asChild size="sm" variant="outline" className="rounded-xl font-bold">
               <Link href="/login">Log In</Link>

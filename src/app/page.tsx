@@ -49,11 +49,11 @@ export default async function RootPage() {
             Every film you watch,<br className="hidden sm:block" /> remembered.
           </h1>
           <p className="text-base sm:text-lg text-muted-foreground max-w-xl mx-auto">
-            Track movies and shows, rate and review them, build your watchlist, and see what your friends are watching — all free.
+            Track movies and shows, rate and review them, build your watchlist, and see what your friends are watching.
           </p>
           <div className="flex flex-col sm:flex-row gap-3 justify-center pt-2">
             <Button asChild size="lg" className="rounded-2xl h-14 px-8 font-bold text-base">
-              <Link href="/signup">Sign Up Free</Link>
+              <Link href="/signup">Sign Up</Link>
             </Button>
             <Button asChild size="lg" variant="outline" className="rounded-2xl h-14 px-8 font-bold text-base border-2 border-foreground">
               <Link href="/home">Explore First</Link>

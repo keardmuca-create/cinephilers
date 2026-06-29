@@ -172,7 +172,7 @@ export default function FriendsPage() {
             <p className="text-sm text-muted-foreground">Sign up to find and follow other film lovers.</p>
           </div>
           <div className="flex gap-2">
-            <Button asChild size="sm" className="rounded-xl font-bold"><Link href="/signup">Sign Up Free</Link></Button>
+            <Button asChild size="sm" className="rounded-xl font-bold"><Link href="/signup">Sign Up</Link></Button>
             <Button asChild size="sm" variant="outline" className="rounded-xl font-bold"><Link href="/login">Log In</Link></Button>
           </div>
         </div>

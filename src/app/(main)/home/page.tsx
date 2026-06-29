@@ -171,10 +171,10 @@ export default function HomePage() {
           <div className="bg-primary/10 border border-primary/20 rounded-2xl p-5 flex flex-col sm:flex-row sm:items-center gap-3 max-w-3xl mx-auto">
             <div className="space-y-1 flex-1">
               <p className="font-bold text-base">Join Cinephilers</p>
-              <p className="text-sm text-muted-foreground">Track every movie and show you watch, rate them, and follow friends — free.</p>
+              <p className="text-sm text-muted-foreground">Track every movie and show you watch, rate them, and follow friends.</p>
             </div>
             <div className="flex gap-2 shrink-0">
-              <Button asChild size="sm" className="rounded-xl font-bold"><Link href="/signup">Sign Up Free</Link></Button>
+              <Button asChild size="sm" className="rounded-xl font-bold"><Link href="/signup">Sign Up</Link></Button>
               <Button asChild size="sm" variant="outline" className="rounded-xl font-bold"><Link href="/login">Log In</Link></Button>
             </div>
           </div>
