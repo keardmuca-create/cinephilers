@@ -719,18 +719,18 @@ export default function ProfilePage() {
         if (!raw) continue;
         let meta: Record<string, unknown>;
         try { meta = JSON.parse(raw); } catch { continue; }
-        if (!meta.title) {
-          // Synced from the DB without metadata (e.g. after login on a new device) —
-          // try the cached meta entry, otherwise fetch it below
-          const id = k.slice('watchlist-'.length);
-          try {
-            const cached = localStorage.getItem(`meta-${id}`);
-            if (cached) meta = { ...meta, ...JSON.parse(cached) };
-          } catch { /* ignore */ }
-          if (!meta.title) { wlMissing.push(id); continue; }
-        }
+        const id = k.slice('watchlist-'.length);
+        // Fold in the cached meta entry so fields the watchlist-* record doesn't
+        // carry — notably tmdbRating — are present. The full watchlist page does
+        // this too; without it the profile preview showed no rating while the
+        // full page did. The watchlist-* entry still wins on any overlapping key.
+        try {
+          const cached = localStorage.getItem(`meta-${id}`);
+          if (cached) meta = { ...JSON.parse(cached), ...meta };
+        } catch { /* ignore */ }
+        if (!meta.title) { wlMissing.push(id); continue; }
         wlItems.push({
-          id: k.slice('watchlist-'.length),
+          id,
           title: meta.title as string,
           poster: (meta.poster as string) ?? '',
           backdrop: (meta.backdrop as string) ?? '',
