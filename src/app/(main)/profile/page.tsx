@@ -11,7 +11,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { MovieCard } from '@/components/movie-card';
 import Link from 'next/link';
-import { Settings, Star, Film, List, MessageSquare, ChevronRight, Award, History, Bookmark, User, Eye, Plus, Heart, TrendingUp, Download, Trash2 } from 'lucide-react';
+import { Settings, Star, Film, List, MessageSquare, ChevronRight, Award, History, Bookmark, User, Eye, Plus, Heart, TrendingUp, Download, Trash2, Share2 } from 'lucide-react';
 import { ImportDialog } from '@/components/import-dialog';
 import { FavoritesSection } from '@/components/favorites-section';
 import { BarChart, Bar, XAxis, ResponsiveContainer, Cell, YAxis, Tooltip as ChartTooltip } from 'recharts';
@@ -900,6 +900,28 @@ export default function ProfilePage() {
   // Founder is promoted to its own featured card, so keep it out of the carousel.
   const otherBadges = badges.filter(b => !(b.isSeasonal && b.isSeasonActive) && !b.isSpecial);
 
+  const shareProfile = async () => {
+    const username = authUser?.username;
+    if (!username) return;
+    const url = `${window.location.origin}/profile/${username}`;
+    // Prefer the native share sheet on mobile; fall back to copying the link.
+    if (typeof navigator !== 'undefined' && navigator.share) {
+      try {
+        await navigator.share({ title: 'Cinephilers', text: `Follow @${username} on Cinephilers`, url });
+        return;
+      } catch (e) {
+        if ((e as Error)?.name === 'AbortError') return; // user dismissed the sheet
+        // otherwise fall through to copying
+      }
+    }
+    try {
+      await navigator.clipboard.writeText(url);
+      toast({ title: 'Profile link copied!' });
+    } catch {
+      toast({ title: 'Could not copy link', variant: 'destructive' });
+    }
+  };
+
   if (guestView) return guestView;
 
   return (
@@ -924,12 +946,17 @@ export default function ProfilePage() {
             onChange={e => { const f = e.target.files?.[0]; if (f) handleAvatarFile(f); e.target.value = ''; }}
           />
         </div>
-        <Button variant="outline" size="icon" className="rounded-full border-border bg-muted hover:bg-muted/80" asChild>
-          <Link href="/stats"><TrendingUp className="h-5 w-5" /></Link>
-        </Button>
-        <Button variant="outline" size="icon" className="rounded-full border-border bg-muted hover:bg-muted/80" onClick={openSettings}>
-          <Settings className="h-5 w-5" />
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" size="icon" className="rounded-full border-border bg-muted hover:bg-muted/80" onClick={shareProfile} aria-label="Share profile">
+            <Share2 className="h-5 w-5" />
+          </Button>
+          <Button variant="outline" size="icon" className="rounded-full border-border bg-muted hover:bg-muted/80" asChild>
+            <Link href="/stats"><TrendingUp className="h-5 w-5" /></Link>
+          </Button>
+          <Button variant="outline" size="icon" className="rounded-full border-border bg-muted hover:bg-muted/80" onClick={openSettings}>
+            <Settings className="h-5 w-5" />
+          </Button>
+        </div>
 
         {showImport && <ImportDialog onClose={() => setShowImport(false)} />}
 
