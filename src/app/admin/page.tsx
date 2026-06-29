@@ -65,8 +65,6 @@ export default function AdminPage() {
   const [userQuery, setUserQuery] = useState('');
   const [userResults, setUserResults] = useState<AdminUser[]>([]);
   const [searchingUsers, setSearchingUsers] = useState(false);
-  const [deletingUserId, setDeletingUserId] = useState<string | null>(null);
-  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [actionLoadingId, setActionLoadingId] = useState<string | null>(null);
   const [usersError, setUsersError] = useState<string | null>(null);
   const searchTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -142,20 +140,6 @@ export default function AdminPage() {
     setReports(prev => prev.map(r => r.id === report.id ? { ...r, status: 'reviewed', content: null } : r));
   };
 
-  const deleteUser = async (userId: string) => {
-    setDeletingUserId(userId);
-    try {
-      await fetchWithAuth('/api/admin/users', {
-        method: 'DELETE',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId }),
-      });
-      setUserResults(prev => prev.filter(u => u.id !== userId));
-      setConfirmDeleteId(null);
-    } finally {
-      setDeletingUserId(null);
-    }
-  };
 
   const userAction = async (userId: string, action: 'ban' | 'unban' | 'promote' | 'demote') => {
     setActionLoadingId(userId);
@@ -417,22 +401,6 @@ export default function AdminPage() {
                       >
                         {u.role === 'ADMIN' ? <ChevronDown className="h-4 w-4 text-yellow-400" /> : <ChevronUp className="h-4 w-4 text-primary" />}
                       </button>
-
-                      {/* Delete */}
-                      {confirmDeleteId === u.id ? (
-                        <div className="flex gap-1.5">
-                          <button onClick={() => setConfirmDeleteId(null)} className="px-3 py-1.5 rounded-full bg-muted hover:bg-muted/80 text-xs font-bold text-muted-foreground transition-colors">
-                            Cancel
-                          </button>
-                          <button onClick={() => deleteUser(u.id)} disabled={deletingUserId === u.id} className="px-3 py-1.5 rounded-full bg-red-500 hover:bg-red-600 text-xs font-bold text-white transition-colors disabled:opacity-60">
-                            {deletingUserId === u.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : 'Confirm'}
-                          </button>
-                        </div>
-                      ) : (
-                        <button onClick={() => setConfirmDeleteId(u.id)} className="h-8 w-8 rounded-full bg-red-500/10 hover:bg-red-500/20 flex items-center justify-center transition-colors" title="Delete account">
-                          <Trash2 className="h-4 w-4 text-red-400" />
-                        </button>
-                      )}
                     </div>
                   )}
                 </div>
