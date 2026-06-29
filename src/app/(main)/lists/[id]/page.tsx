@@ -3,10 +3,11 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { ChevronLeft, Search, X, Film, Lock, Globe, SlidersHorizontal, Check, Trash2 } from 'lucide-react';
+import { ChevronLeft, Search, X, Film, Lock, Globe, SlidersHorizontal, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { fetchWithAuth } from '@/lib/fetch-with-auth';
 import { useAuth } from '@/contexts/auth-context';
+import { RefineSheet, type RefineValue, type SortOption, type CountOption } from '@/components/refine-sheet';
 
 interface ListItem {
   movieId: string;
@@ -27,20 +28,15 @@ interface CustomList {
   items: ListItem[];
 }
 
-type SortOption = 'added-desc' | 'added-asc' | 'title-asc' | 'title-desc' | 'release-desc' | 'release-asc';
-type TypeFilter = 'any' | 'movie' | 'show';
+const SORT_OPTIONS: SortOption[] = [
+  { value: 'added',   label: 'Date added' },
+  { value: 'release', label: 'Release year' },
+  { value: 'title',   label: 'Title' },
+];
 
-const SORT_LABELS: Record<SortOption, string> = {
-  'added-desc': 'Date added (newest)',
-  'added-asc': 'Date added (oldest)',
-  'title-asc': 'Title (A–Z)',
-  'title-desc': 'Title (Z–A)',
-  'release-desc': 'Release year (newest)',
-  'release-asc': 'Release year (oldest)',
-};
+const DEFAULT_REFINE: RefineValue = { sortField: 'added', sortDir: 'desc', type: 'any', genre: 'any' };
 
-const TYPE_LABELS: Record<TypeFilter, string> = {
-  any: 'All types',
+const TYPE_LABELS: Record<'movie' | 'show', string> = {
   movie: 'Movies',
   show: 'TV & Shows',
 };
@@ -66,12 +62,17 @@ export default function ListDetailPage() {
   const [search, setSearch] = useState('');
   const [removingId, setRemovingId] = useState<string | null>(null);
 
-  // Refine state
-  const [sort, setSort] = useState<SortOption>('added-desc');
-  const [typeFilter, setTypeFilter] = useState<TypeFilter>('any');
+  // Refine state — shares the accordion RefineSheet with Watchlist / History / Ratings.
+  const [refine, setRefine] = useState<RefineValue>(DEFAULT_REFINE);
   const [refineOpen, setRefineOpen] = useState(false);
-  const [pendingSort, setPendingSort] = useState<SortOption>('added-desc');
-  const [pendingType, setPendingType] = useState<TypeFilter>('any');
+
+  // Restore the saved refine after mount (reading during render would mismatch SSR).
+  useEffect(() => {
+    try {
+      const saved = sessionStorage.getItem('list-refine');
+      if (saved) setRefine({ ...DEFAULT_REFINE, ...JSON.parse(saved) });
+    } catch { /* ignore */ }
+  }, []);
 
   useEffect(() => {
     // Try localStorage first for instant load
@@ -107,13 +108,17 @@ export default function ListDetailPage() {
 
   const isOwner = !!user && !!ownerId && user.id === ownerId;
 
-  const typeCounts = useMemo(() => {
+  // Per-type counts → options for the Type filter (only offered when both kinds exist).
+  const typeOptions = useMemo<CountOption[]>(() => {
     const items = list?.items ?? [];
-    return {
-      any: items.length,
-      movie: items.filter(i => i.type === 'movie').length,
-      show: items.filter(i => i.type === 'show').length,
-    };
+    const movie = items.filter(i => i.type === 'movie').length;
+    const show  = items.filter(i => i.type === 'show').length;
+    const present = ([['movie', movie], ['show', show]] as ['movie' | 'show', number][]).filter(([, c]) => c > 0);
+    if (present.length <= 1) return [];
+    return [
+      { value: 'any', label: 'Any', count: items.length },
+      ...present.map(([t, c]) => ({ value: t, label: TYPE_LABELS[t], count: c })),
+    ];
   }, [list]);
 
   const filtered = useMemo(() => {
@@ -125,39 +130,37 @@ export default function ListDetailPage() {
       const q = search.trim().toLowerCase();
       items = items.filter(i => i.title.toLowerCase().includes(q));
     }
-    if (typeFilter !== 'any') {
-      items = items.filter(i => i.type === typeFilter);
+    if (refine.type !== 'any') {
+      items = items.filter(i => i.type === refine.type);
     }
 
-    if (sort === 'title-asc') {
+    if (refine.sortField === 'title') {
       items.sort((a, b) => a.title.localeCompare(b.title));
-    } else if (sort === 'title-desc') {
-      items.sort((a, b) => b.title.localeCompare(a.title));
-    } else if (sort === 'release-desc') {
-      items.sort((a, b) => parseInt(b.year || '0', 10) - parseInt(a.year || '0', 10));
-    } else if (sort === 'release-asc') {
-      items.sort((a, b) => parseInt(a.year || '9999', 10) - parseInt(b.year || '9999', 10));
-    } else if (sort === 'added-asc') {
-      items.sort((a, b) => b.originalIndex - a.originalIndex);
+      if (refine.sortDir === 'desc') items.reverse();
+    } else if (refine.sortField === 'release') {
+      // Year as a number; titles with no year always sink to the bottom.
+      const yr = (s: string): number | null => {
+        const n = parseInt(s, 10);
+        return s && Number.isFinite(n) ? n : null;
+      };
+      const dir = refine.sortDir === 'desc' ? -1 : 1;
+      items.sort((a, b) => {
+        const ya = yr(a.year), yb = yr(b.year);
+        if (ya === null && yb === null) return 0;
+        if (ya === null) return 1;
+        if (yb === null) return -1;
+        return (ya - yb) * dir;
+      });
     } else {
-      // added-desc: API already returns newest-first
+      // Date added — API already returns newest-first, so original order is desc.
       items.sort((a, b) => a.originalIndex - b.originalIndex);
+      if (refine.sortDir === 'asc') items.reverse();
     }
 
     return items;
-  }, [list, search, sort, typeFilter]);
+  }, [list, search, refine]);
 
-  const openRefine = () => {
-    setPendingSort(sort);
-    setPendingType(typeFilter);
-    setRefineOpen(true);
-  };
-
-  const applyRefine = () => {
-    setSort(pendingSort);
-    setTypeFilter(pendingType);
-    setRefineOpen(false);
-  };
+  const sortLabel = SORT_OPTIONS.find(s => s.value === refine.sortField)?.label ?? '';
 
   const removeItem = async (item: ListItem & { originalIndex?: number }) => {
     if (!list || removingId) return;
@@ -183,7 +186,7 @@ export default function ListDetailPage() {
   };
 
   return (
-    <main className="max-w-xl mx-auto pb-32">
+    <main className="pb-32">
       {/* Header */}
       <div className="sticky top-[env(safe-area-inset-top)] z-10 bg-background/90 backdrop-blur-xl border-b border-border px-4 py-4 flex items-center gap-3">
         <Button variant="ghost" size="icon" className="rounded-full shrink-0" onClick={() => router.back()}>
@@ -204,7 +207,7 @@ export default function ListDetailPage() {
         </div>
       </div>
 
-      <div className="px-4 pt-4 space-y-3">
+      <div className="px-6 pt-4 space-y-3">
         {/* Description */}
         {list?.description && (
           <p className="text-sm text-muted-foreground leading-relaxed">{list.description}</p>
@@ -233,11 +236,11 @@ export default function ListDetailPage() {
         {list && list.items.length > 0 && (
           <div className="flex items-center justify-between">
             <p className="text-xs text-muted-foreground">
-              {filtered.length} title{filtered.length !== 1 ? 's' : ''} · {SORT_LABELS[sort]}
-              {typeFilter !== 'any' && ` · ${TYPE_LABELS[typeFilter]}`}
+              {filtered.length} title{filtered.length !== 1 ? 's' : ''} · {sortLabel}
+              {refine.type !== 'any' && ` · ${TYPE_LABELS[refine.type as 'movie' | 'show']}`}
             </p>
             <button
-              onClick={openRefine}
+              onClick={() => setRefineOpen(true)}
               className="flex items-center gap-1.5 text-xs font-semibold text-primary hover:opacity-80 transition-opacity"
             >
               <SlidersHorizontal className="h-3.5 w-3.5" />
@@ -276,7 +279,7 @@ export default function ListDetailPage() {
               {search ? <>No titles match &ldquo;{search}&rdquo;</> : 'No titles match these filters'}
             </p>
             <button
-              onClick={() => { setSearch(''); setTypeFilter('any'); }}
+              onClick={() => { setSearch(''); setRefine(r => ({ ...r, type: 'any' })); }}
               className="text-xs text-primary font-bold"
             >
               Clear filters
@@ -327,86 +330,19 @@ export default function ListDetailPage() {
         )}
       </div>
 
-      {/* Refine modal */}
-      {refineOpen && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center p-6">
-          <div
-            className="absolute inset-0 bg-black/60 backdrop-blur-sm"
-            onClick={() => setRefineOpen(false)}
-          />
-          <div className="relative bg-background rounded-3xl w-full max-w-sm max-h-[75vh] flex flex-col overflow-hidden shadow-2xl border border-border">
-            {/* Modal header */}
-            <div className="flex items-center justify-between px-6 pt-5 pb-4 border-b border-border shrink-0">
-              <button
-                onClick={() => setRefineOpen(false)}
-                className="text-sm text-muted-foreground hover:text-foreground transition-colors"
-              >
-                Cancel
-              </button>
-              <span className="text-sm font-bold text-foreground">{list?.items.length ?? 0} Titles</span>
-              <button
-                onClick={applyRefine}
-                className="text-sm font-bold text-primary hover:opacity-80 transition-opacity"
-              >
-                Refine
-              </button>
-            </div>
-
-            {/* Scrollable content */}
-            <div className="overflow-y-auto flex-1">
-              {/* Sort By */}
-              <div className="px-6 py-4 border-b border-border">
-                <div className="flex items-center justify-between mb-3">
-                  <span className="text-sm font-bold text-foreground">Sort By</span>
-                  <span className="text-sm text-muted-foreground">{SORT_LABELS[pendingSort]}</span>
-                </div>
-                <div className="space-y-1">
-                  {(['added-desc', 'added-asc', 'release-desc', 'release-asc', 'title-asc', 'title-desc'] as SortOption[]).map(s => (
-                    <button
-                      key={s}
-                      onClick={() => setPendingSort(s)}
-                      className="w-full flex items-center justify-between py-2.5 text-sm"
-                    >
-                      <span className={pendingSort === s ? 'font-semibold text-foreground' : 'text-muted-foreground'}>
-                        {SORT_LABELS[s]}
-                      </span>
-                      {pendingSort === s && <Check className="h-4 w-4 text-primary" />}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* Type */}
-              <div className="px-6 py-4">
-                <p className="text-sm font-bold mb-3 text-foreground">Type</p>
-                <div className="space-y-1">
-                  {(['any', 'movie', 'show'] as TypeFilter[]).map(t => {
-                    if (t !== 'any' && typeCounts[t] === 0) return null;
-                    return (
-                      <button
-                        key={t}
-                        onClick={() => setPendingType(t)}
-                        className="w-full flex items-center justify-between py-2.5"
-                      >
-                        <div className="flex items-center gap-3">
-                          {pendingType === t
-                            ? <Check className="h-4 w-4 text-primary" />
-                            : <span className="w-4" />
-                          }
-                          <span className={pendingType === t ? 'text-sm font-semibold text-foreground' : 'text-sm text-muted-foreground'}>
-                            {TYPE_LABELS[t]}
-                          </span>
-                        </div>
-                        <span className="text-xs text-muted-foreground">{typeCounts[t]}</span>
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
+      <RefineSheet
+        open={refineOpen}
+        onClose={() => setRefineOpen(false)}
+        total={list?.items.length ?? 0}
+        sortOptions={SORT_OPTIONS}
+        typeOptions={typeOptions}
+        genreOptions={[]}
+        value={refine}
+        onApply={v => {
+          setRefine(v);
+          try { sessionStorage.setItem('list-refine', JSON.stringify(v)); } catch { /* ignore */ }
+        }}
+      />
     </main>
   );
 }
