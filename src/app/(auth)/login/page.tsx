@@ -16,10 +16,33 @@ export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [needsVerify, setNeedsVerify] = useState(false);
+  const [resendStatus, setResendStatus] = useState('');
+  const [resending, setResending] = useState(false);
+
+  const handleResend = async () => {
+    setResending(true);
+    setResendStatus('');
+    try {
+      const res = await fetch('/api/auth/resend-verification', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ identifier }),
+      });
+      const data = await res.json();
+      setResendStatus(data.message ?? 'Verification email sent.');
+    } catch {
+      setResendStatus('Could not send the email. Please try again.');
+    } finally {
+      setResending(false);
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
+    setNeedsVerify(false);
+    setResendStatus('');
     setLoading(true);
 
     const res = await fetch('/api/auth/login', {
@@ -32,6 +55,7 @@ export default function LoginPage() {
 
     if (!data.success) {
       setError(data.message ?? 'Login failed');
+      if (data.code === 'EMAIL_NOT_VERIFIED') setNeedsVerify(true);
       return;
     }
 
@@ -97,6 +121,20 @@ export default function LoginPage() {
         </div>
 
         {error && <p className="text-sm text-destructive">{error}</p>}
+
+        {needsVerify && (
+          <div className="text-sm space-y-1">
+            <button
+              type="button"
+              onClick={handleResend}
+              disabled={resending}
+              className="text-primary hover:underline font-semibold disabled:opacity-60"
+            >
+              {resending ? 'Sending…' : 'Resend verification email'}
+            </button>
+            {resendStatus && <p className="text-muted-foreground">{resendStatus}</p>}
+          </div>
+        )}
 
         <Button type="submit" className="w-full rounded-xl h-12" disabled={loading}>
           {loading ? 'Signing in…' : <><LogIn className="h-4 w-4 mr-2" /> Sign In</>}

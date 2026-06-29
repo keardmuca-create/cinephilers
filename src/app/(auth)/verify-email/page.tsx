@@ -46,7 +46,7 @@ function VerifyEmailContent() {
       <p className="text-sm">{message}</p>
       {status === 'success' && <p className="text-xs text-muted-foreground">Redirecting to login…</p>}
       {status === 'error' && (
-        <Link href="/forgot-password" className="text-sm text-primary hover:underline block">
+        <Link href="/login" className="text-sm text-primary hover:underline block">
           Resend verification email
         </Link>
       )}
