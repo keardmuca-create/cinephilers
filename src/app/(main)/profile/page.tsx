@@ -22,6 +22,8 @@ import { toast } from '@/hooks/use-toast';
 import { fetchWithAuth } from '@/lib/fetch-with-auth';
 import { batchFetchMeta } from '@/lib/meta-batch';
 import { useAuth } from '@/contexts/auth-context';
+import { readSavedRefine, applyRefineSort } from '@/lib/refine-sort';
+import type { RefineValue } from '@/components/refine-sheet';
 
 interface RatedItem { id: string; title: string; poster: string; year: string; tmdbRating?: number; userRating: number; }
 
@@ -71,6 +73,20 @@ function ListsSection() {
   const [createOpen, setCreateOpen] = useState(false);
   const [newTitle, setNewTitle] = useState('');
   const [newPrivate, setNewPrivate] = useState(false);
+  // Saved list refine, so each card's 3-poster strip matches the order the user set
+  // on the list pages. Read after mount and re-read on return.
+  const [listRefine, setListRefine] = useState<RefineValue | null>(null);
+  useEffect(() => {
+    const read = () => setListRefine(readSavedRefine('list-refine'));
+    read();
+    const onVisible = () => { if (document.visibilityState === 'visible') read(); };
+    document.addEventListener('visibilitychange', onVisible);
+    window.addEventListener('focus', read);
+    return () => {
+      document.removeEventListener('visibilitychange', onVisible);
+      window.removeEventListener('focus', read);
+    };
+  }, []);
 
   useEffect(() => {
     setLists(loadLists());
@@ -157,9 +173,9 @@ function ListsSection() {
               href={`/lists/${l.id}`}
               className="flex items-center gap-4 p-4 rounded-2xl border border-border hover:bg-muted/40 transition-colors text-left"
             >
-              {/* Mini poster strip */}
+              {/* Mini poster strip — ordered by the saved list refine */}
               <div className="flex gap-1 shrink-0">
-                {l.items.slice(0, 3).map(item => (
+                {applyRefineSort(l.items.map(it => ({ ...it, id: it.movieId })), listRefine).slice(0, 3).map(item => (
                   <div key={item.movieId} className="w-10 aspect-[2/3] rounded-lg overflow-hidden bg-muted flex items-center justify-center">
                     {item.poster ? (
                       <img src={item.poster} alt={item.title} className="w-full h-full object-cover" />
@@ -453,6 +469,33 @@ export default function ProfilePage() {
   const [watchlist, setWatchlist] = useState<Movie[]>([]);
   const [userReviews, setUserReviews] = useState<UserReview[]>([]);
   const [ratedItems, setRatedItems] = useState<RatedItem[]>([]);
+
+  // Saved refines from the full-page lists, so each preview shows the same order
+  // the user chose there. Read after mount (sessionStorage would mismatch SSR) and
+  // re-read on focus/return so a refine set on another page reflects here.
+  const [refines, setRefines] = useState<{ history: RefineValue | null; ratings: RefineValue | null; watchlist: RefineValue | null }>(
+    { history: null, ratings: null, watchlist: null }
+  );
+  useEffect(() => {
+    const read = () => setRefines({
+      history:   readSavedRefine('history-refine'),
+      ratings:   readSavedRefine('ratings-refine'),
+      watchlist: readSavedRefine('watchlist-refine'),
+    });
+    read();
+    const onVisible = () => { if (document.visibilityState === 'visible') read(); };
+    document.addEventListener('visibilitychange', onVisible);
+    window.addEventListener('focus', read);
+    return () => {
+      document.removeEventListener('visibilitychange', onVisible);
+      window.removeEventListener('focus', read);
+    };
+  }, []);
+
+  // Preview lists reordered to match each full page's saved refine (sort only).
+  const sortedWatched   = React.useMemo(() => applyRefineSort(recentWatched, refines.history),   [recentWatched, refines.history]);
+  const sortedRated     = React.useMemo(() => applyRefineSort(ratedItems, refines.ratings),      [ratedItems, refines.ratings]);
+  const sortedWatchlist = React.useMemo(() => applyRefineSort(watchlist, refines.watchlist),     [watchlist, refines.watchlist]);
 
   function openSettings() {
     setEditForm({
@@ -1129,7 +1172,7 @@ export default function ProfilePage() {
         <p className="text-sm text-muted-foreground mb-5">Everything you&apos;ve watched, rated, or checked into</p>
         {recentWatched.length > 0 ? (
           <div className="flex overflow-x-auto gap-4 pb-4 no-scrollbar -mx-6 px-6">
-            {recentWatched.map(item => (
+            {sortedWatched.map(item => (
               <Link key={item.id} href={`/movie/${item.linkId ?? item.id}`} className="group shrink-0 w-36">
                 <div className="relative aspect-[2/3] overflow-hidden rounded-xl bg-muted shadow-lg movie-card-hover mb-2">
                   {item.poster ? (
@@ -1187,7 +1230,7 @@ export default function ProfilePage() {
         </div>
         {ratedItems.length > 0 ? (
           <div className="flex overflow-x-auto gap-4 pb-4 no-scrollbar -mx-6 px-6">
-            {ratedItems.slice(0, 50).map(item => (
+            {sortedRated.slice(0, 50).map(item => (
               <Link key={item.id} href={`/movie/${item.id}`} className="group shrink-0 w-36">
                 <div className="relative aspect-[2/3] overflow-hidden rounded-xl bg-muted shadow-lg movie-card-hover mb-2">
                   {item.poster ? (
@@ -1261,7 +1304,7 @@ export default function ProfilePage() {
         />
         {watchlist.length > 0 ? (
           <div className="flex overflow-x-auto gap-4 pb-4 no-scrollbar">
-            {watchlist.map(m => <MovieCard key={m.id} movie={m} horizontal />)}
+            {sortedWatchlist.map(m => <MovieCard key={m.id} movie={m} horizontal />)}
           </div>
         ) : (
           <EmptyRow message="Save movies to watch later" />
