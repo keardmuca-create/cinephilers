@@ -3,8 +3,10 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { Bookmark, ChevronLeft, Search, SlidersHorizontal, X, Film } from 'lucide-react';
-import { getAddedAt } from '@/lib/media-id';
+import { Bookmark, ChevronLeft, Search, SlidersHorizontal, X, Film, Trash2 } from 'lucide-react';
+import { getAddedAt, legacyTwin } from '@/lib/media-id';
+import { fetchWithAuth } from '@/lib/fetch-with-auth';
+import { removeActivity } from '@/lib/activity';
 import { batchFetchMeta } from '@/lib/meta-batch';
 import { getItemType, TYPE_LABELS, TYPE_ORDER, type TypeFilter } from '@/lib/media-type';
 import { RefineSheet, type RefineValue, type SortOption, type CountOption } from '@/components/refine-sheet';
@@ -25,12 +27,35 @@ interface WatchlistItem {
   releaseDate?: string;  // full date, for precise release-date sorting
   tmdbRating?: number;
   kind: TypeFilter;      // movie / tv-series / … for the Type filter
+  mediaType: 'MOVIE' | 'SHOW';  // for the server delete (a "tv-movie" kind is still a MOVIE row)
   genre: string;         // comma-joined genres, for the Genre filter
 }
 
-function ItemCard({ item }: { item: WatchlistItem }) {
+function ItemCard({ item, onRemove }: { item: WatchlistItem; onRemove: () => void }) {
+  // Await the server delete and confirm it before dropping the row locally — a
+  // silently-failed delete leaves the DB row alive, which the next DB→local sync
+  // resurrects. Also clears the legacy bare-numeric twin key.
+  const handleRemove = async (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    try {
+      const res = await fetchWithAuth(`/api/watchlist/${item.id}?mediaType=${item.mediaType}`, { method: 'DELETE' });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    } catch {
+      alert("Couldn't remove this on the server — please check your connection and try again.");
+      return;
+    }
+    try {
+      localStorage.removeItem(`watchlist-${item.id}`);
+      const twin = legacyTwin(item.id);
+      if (twin) localStorage.removeItem(`watchlist-${twin}`);
+    } catch { /* ignore */ }
+    removeActivity('watchlist', item.id);
+    onRemove();
+  };
+
   return (
-    <Link href={`/movie/${item.id}`} className="group flex items-center gap-4 py-3.5">
+    <Link href={`/movie/${item.id}`} className="group relative flex items-center gap-4 py-3.5">
       <div className="relative w-16 aspect-[2/3] overflow-hidden rounded-lg bg-muted shadow-md shrink-0">
         {item.poster ? (
           <img src={item.poster} alt={item.title} className="w-full h-full object-cover transition-transform group-hover:scale-105" loading="lazy" />
@@ -46,6 +71,15 @@ function ItemCard({ item }: { item: WatchlistItem }) {
         </h3>
         <p className="text-xs text-muted-foreground">{item.year}</p>
       </div>
+
+      {/* Delete button */}
+      <button
+        onClick={handleRemove}
+        className="shrink-0 opacity-0 group-hover:opacity-100 transition-opacity p-2 rounded-full hover:bg-red-500/20 text-muted-foreground hover:text-red-400"
+        aria-label={`Remove ${item.title} from watchlist`}
+      >
+        <Trash2 className="h-4 w-4" />
+      </button>
     </Link>
   );
 }
@@ -109,6 +143,7 @@ export default function WatchlistPage() {
             releaseDate,
             tmdbRating: typeof meta.tmdbRating === 'number' ? meta.tmdbRating : undefined,
             kind: classify(meta),
+            mediaType: meta.type === 'show' ? 'SHOW' : 'MOVIE',
             genre: typeof meta.genre === 'string' ? meta.genre : '',
           });
         }
@@ -133,14 +168,14 @@ export default function WatchlistPage() {
           return [{
             id, title: m.title, poster: m.poster ?? '', year: m.year ?? '',
             releaseDate: m.releaseDate, tmdbRating: typeof m.tmdbRating === 'number' ? m.tmdbRating : undefined,
-            kind: classify(m), genre: m.genre ?? '',
+            kind: classify(m), mediaType: m.type === 'show' ? 'SHOW' : 'MOVIE', genre: m.genre ?? '',
           }];
         });
         // Backfill release date / classification on rows we already showed.
-        const updates = new Map<string, { releaseDate?: string; kind: TypeFilter; genre: string }>();
+        const updates = new Map<string, { releaseDate?: string; kind: TypeFilter; mediaType: 'MOVIE' | 'SHOW'; genre: string }>();
         for (const id of needMeta) {
           const m = metaMap[id];
-          if (m) updates.set(id, { releaseDate: m.releaseDate, kind: classify(m), genre: m.genre ?? '' });
+          if (m) updates.set(id, { releaseDate: m.releaseDate, kind: classify(m), mediaType: m.type === 'show' ? 'SHOW' : 'MOVIE', genre: m.genre ?? '' });
         }
         if (fetched.length > 0 || updates.size > 0) {
           setItems(prev => {
@@ -283,7 +318,9 @@ export default function WatchlistPage() {
         </div>
       ) : (
         <div className="px-6 divide-y divide-border">
-          {sortedFiltered.map(item => <ItemCard key={item.id} item={item} />)}
+          {sortedFiltered.map(item => (
+            <ItemCard key={item.id} item={item} onRemove={() => setItems(prev => prev.filter(i => i.id !== item.id))} />
+          ))}
         </div>
       )}
 
