@@ -3,10 +3,8 @@
 import React, { useState, useEffect, useRef, useMemo, Suspense } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Star, ChevronLeft, Search, SlidersHorizontal, X, Film, Eye, Trash2 } from 'lucide-react';
-import { normalizeLocalMediaIds, getAddedAt, legacyTwin } from '@/lib/media-id';
-import { fetchWithAuth } from '@/lib/fetch-with-auth';
-import { removeActivity } from '@/lib/activity';
+import { Star, ChevronLeft, Search, SlidersHorizontal, X, Film, Eye } from 'lucide-react';
+import { normalizeLocalMediaIds, getAddedAt } from '@/lib/media-id';
 import { batchFetchMeta } from '@/lib/meta-batch';
 import { getItemType, TYPE_LABELS, TYPE_ORDER, type TypeFilter } from '@/lib/media-type';
 import { RefineSheet, type RefineValue, type SortOption, type CountOption } from '@/components/refine-sheet';
@@ -29,7 +27,6 @@ interface RatedItem {
   tmdbRating?: number;
   userRating: number;
   kind: TypeFilter;      // for the Type filter
-  mediaType: 'MOVIE' | 'SHOW';  // for the server delete (a "tv-movie" kind is still a MOVIE row)
   genre: string;         // comma-joined genres, for the Genre filter
 }
 
@@ -38,34 +35,9 @@ function readMetaCache(id: string) {
 }
 
 
-function ItemCard({ item, onRemove }: { item: RatedItem; onRemove: () => void }) {
-  // Await the server delete before clearing locally. Removing here removes the
-  // rating itself: the DELETE drops the DB row (and aggregate), we clear the
-  // local rating key + legacy twin, and fire cinephilers-rating-changed so the
-  // blue user-rating star disappears on Watch History too. A silently-failed
-  // delete would otherwise let the next DB→local sync restore the rating.
-  const handleRemove = async (e: React.MouseEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    try {
-      const res = await fetchWithAuth(`/api/ratings/${item.id}?mediaType=${item.mediaType}`, { method: 'DELETE' });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    } catch {
-      alert("Couldn't remove this rating on the server — please check your connection and try again.");
-      return;
-    }
-    try {
-      localStorage.removeItem(`movie-rating-${item.id}`);
-      const twin = legacyTwin(item.id);
-      if (twin) localStorage.removeItem(`movie-rating-${twin}`);
-    } catch { /* ignore */ }
-    removeActivity('rated', item.id);
-    window.dispatchEvent(new CustomEvent('cinephilers-rating-changed', { detail: { id: item.id, rating: null } }));
-    onRemove();
-  };
-
+function ItemCard({ item }: { item: RatedItem }) {
   return (
-    <Link href={`/movie/${item.id}`} className="group relative flex items-center gap-4 py-3.5">
+    <Link href={`/movie/${item.id}`} className="group flex items-center gap-4 py-3.5">
       <div className="relative w-16 aspect-[2/3] overflow-hidden rounded-lg bg-muted shadow-md shrink-0">
         {item.poster ? (
           <img src={item.poster} alt={item.title} className="w-full h-full object-cover transition-transform group-hover:scale-105" loading="lazy" />
@@ -97,15 +69,6 @@ function ItemCard({ item, onRemove }: { item: RatedItem; onRemove: () => void })
           </div>
         </div>
       </div>
-
-      {/* Delete button — removes the rating itself */}
-      <button
-        onClick={handleRemove}
-        className="shrink-0 opacity-0 group-hover:opacity-100 transition-opacity p-2 rounded-full hover:bg-red-500/20 text-muted-foreground hover:text-red-400"
-        aria-label={`Remove rating for ${item.title}`}
-      >
-        <Trash2 className="h-4 w-4" />
-      </button>
     </Link>
   );
 }
@@ -161,10 +124,10 @@ function RatingsPageInner() {
         const meta = readMetaCache(id);
         const rv   = rvMap.get(id);
         if (meta?.title || rv?.title) {
-          initial.push({ id, title: meta?.title ?? rv?.title ?? '', poster: meta?.poster ?? rv?.poster ?? '', year: meta?.year ?? rv?.year ?? '', releaseDate: meta?.releaseDate, tmdbRating: meta?.tmdbRating ?? rv?.tmdbRating, userRating, kind: getItemType(meta ?? {}), mediaType: meta?.type === 'show' ? 'SHOW' : 'MOVIE', genre: meta?.genre ?? '' });
+          initial.push({ id, title: meta?.title ?? rv?.title ?? '', poster: meta?.poster ?? rv?.poster ?? '', year: meta?.year ?? rv?.year ?? '', releaseDate: meta?.releaseDate, tmdbRating: meta?.tmdbRating ?? rv?.tmdbRating, userRating, kind: getItemType(meta ?? {}), genre: meta?.genre ?? '' });
         } else {
           toFetch.push(id);
-          initial.push({ id, title: '', poster: '', year: '', userRating, kind: 'movie', mediaType: 'MOVIE', genre: '' });
+          initial.push({ id, title: '', poster: '', year: '', userRating, kind: 'movie', genre: '' });
         }
       }
 
@@ -178,7 +141,7 @@ function RatingsPageInner() {
           for (const [id, m] of Object.entries(metaMap)) {
             if (!m?.title) continue;
             const idx = next.findIndex(x => x.id === id);
-            if (idx !== -1) next[idx] = { ...next[idx], title: m.title, poster: m.poster ?? '', year: m.year ?? '', releaseDate: m.releaseDate, tmdbRating: m.tmdbRating, kind: getItemType(m), mediaType: m.type === 'show' ? 'SHOW' : 'MOVIE', genre: m.genre ?? '' };
+            if (idx !== -1) next[idx] = { ...next[idx], title: m.title, poster: m.poster ?? '', year: m.year ?? '', releaseDate: m.releaseDate, tmdbRating: m.tmdbRating, kind: getItemType(m), genre: m.genre ?? '' };
           }
           return next;
         });
@@ -324,9 +287,7 @@ function RatingsPageInner() {
         </div>
       ) : (
         <div className="px-6 divide-y divide-border">
-          {sortedFiltered.map(item => (
-            <ItemCard key={item.id} item={item} onRemove={() => setItems(prev => prev.filter(i => i.id !== item.id))} />
-          ))}
+          {sortedFiltered.map(item => <ItemCard key={item.id} item={item} />)}
         </div>
       )}
 
