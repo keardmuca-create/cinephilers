@@ -9,6 +9,11 @@ export function clearUserData() {
     for (let i = 0; i < localStorage.length; i++) {
       const k = localStorage.key(i);
       if (!k) continue;
+      // Keep the saved Refine sort preferences (watchlist-refine / history-refine /
+      // ratings-refine / list-refine) across logout and account switch — they're
+      // device-level UI prefs, not user data. Without this, "watchlist-refine" would
+      // be wiped by the "watchlist-" prefix rule below, resetting the sort on login.
+      if (k.endsWith('-refine')) continue;
       if (
         k === 'cinephilers_user' ||
         k === 'recently-viewed' ||
