@@ -24,7 +24,7 @@ function CollectionRow({ part }: { part: CollectionItem }) {
           <img
             src={part.poster}
             alt={part.title}
-            className="w-full h-full object-cover transition-transform group-hover:scale-105"
+            className="w-full h-full object-cover"
             loading="lazy"
           />
         ) : (

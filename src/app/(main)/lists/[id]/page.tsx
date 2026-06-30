@@ -295,7 +295,7 @@ export default function ListDetailPage() {
                 <Link href={`/movie/${item.movieId}`} className="flex items-center gap-4 flex-1 min-w-0">
                   <div className="relative w-16 aspect-[2/3] overflow-hidden rounded-lg bg-muted shadow-md shrink-0">
                     {item.poster
-                      ? <img src={item.poster} alt={item.title} className="w-full h-full object-cover transition-transform group-hover:scale-105" loading="lazy" />
+                      ? <img src={item.poster} alt={item.title} className="w-full h-full object-cover" loading="lazy" />
                       : <div className="w-full h-full flex items-center justify-center"><Film className="h-5 w-5 text-primary/60" /></div>
                     }
                   </div>

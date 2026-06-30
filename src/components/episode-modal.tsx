@@ -440,7 +440,7 @@ export function EpisodeModal({ showTmdbId, seasonNumber, episode, showTitle, isW
                             src={src}
                             alt={`Still ${i + 1}`}
                             fill
-                            className="object-cover transition-transform group-hover:scale-105"
+                            className="object-cover"
                             sizes="200px"
                           />
                           <div className="absolute inset-0 bg-black/0 group-hover:bg-black/30 transition-colors" />

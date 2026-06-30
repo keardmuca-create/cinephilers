@@ -60,7 +60,7 @@ function MovieListItem({ movie }: { movie: Movie }) {
       className="group flex items-center gap-4 px-6 py-3.5 border-b border-border hover:bg-muted/40 transition-colors"
     >
       <div className="relative w-16 shrink-0 rounded-lg overflow-hidden shadow-sm bg-muted" style={{ aspectRatio: '2/3' }}>
-        <Image src={movie.poster} alt={movie.title} fill className="object-cover transition-transform group-hover:scale-105" sizes="64px" />
+        <Image src={movie.poster} alt={movie.title} fill className="object-cover" sizes="64px" />
       </div>
       <div className="flex-1 min-w-0">
         <h3 className="text-sm font-semibold font-headline line-clamp-2 group-hover:text-primary transition-colors leading-snug mb-0.5">

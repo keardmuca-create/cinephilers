@@ -192,7 +192,7 @@ function HistoryCard({ id, meta, userRating, addedAt, onRemove }: {
           <img
             src={meta.poster}
             alt={meta.title}
-            className="w-full h-full object-cover transition-transform group-hover:scale-105"
+            className="w-full h-full object-cover"
             loading="lazy"
           />
         ) : (

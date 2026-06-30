@@ -58,7 +58,7 @@ function ItemCard({ item, onRemove }: { item: WatchlistItem; onRemove: () => voi
     <Link href={`/movie/${item.id}`} className="group relative flex items-center gap-4 py-3.5">
       <div className="relative w-16 aspect-[2/3] overflow-hidden rounded-lg bg-muted shadow-md shrink-0">
         {item.poster ? (
-          <img src={item.poster} alt={item.title} className="w-full h-full object-cover transition-transform group-hover:scale-105" loading="lazy" />
+          <img src={item.poster} alt={item.title} className="w-full h-full object-cover" loading="lazy" />
         ) : (
           <div className="w-full h-full flex items-center justify-center bg-muted">
             <Film className="h-7 w-7 text-primary/60" />

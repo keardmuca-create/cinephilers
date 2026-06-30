@@ -19,7 +19,7 @@ function ItemCard({ item, userRating }: { item: RecentItem; userRating?: number 
   return (
     <Link href={`/movie/${item.id}`} className="group flex items-center gap-4 py-3.5">
       <div className="relative w-16 aspect-[2/3] overflow-hidden rounded-lg bg-muted shadow-md shrink-0">
-        <Image src={item.poster} alt={item.title} fill className="object-cover transition-transform group-hover:scale-105" sizes="64px" />
+        <Image src={item.poster} alt={item.title} fill className="object-cover" sizes="64px" />
       </div>
       <div className="flex-1 min-w-0">
         <h3 className="text-sm font-semibold font-headline line-clamp-2 group-hover:text-primary transition-colors leading-snug mb-0.5">

@@ -56,7 +56,7 @@ function CreditRow({ credit, watched, userRating }: {
     >
       <div className="relative w-12 shrink-0 rounded-lg overflow-hidden shadow-sm bg-muted/60 border border-border" style={{ aspectRatio: '2/3' }}>
         {credit.poster ? (
-          <Image src={credit.poster} alt={credit.title} fill className="object-cover transition-transform group-hover:scale-105" sizes="48px" />
+          <Image src={credit.poster} alt={credit.title} fill className="object-cover" sizes="48px" />
         ) : (
           <div className="w-full h-full flex items-center justify-center">
             <Film className="h-5 w-5 text-primary/60" />

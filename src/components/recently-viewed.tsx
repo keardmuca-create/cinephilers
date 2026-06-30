@@ -92,7 +92,7 @@ export function RecentlyViewed() {
                     src={item.poster}
                     alt={item.title}
                     fill
-                    className="object-cover transition-transform group-hover:scale-110"
+                    className="object-cover"
                     sizes="176px"
                   />
                   <div className="absolute bottom-2 left-2">

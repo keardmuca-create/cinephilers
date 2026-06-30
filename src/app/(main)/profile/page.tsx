@@ -1203,7 +1203,7 @@ export default function ProfilePage() {
               <Link key={item.id} href={`/movie/${item.linkId ?? item.id}`} className="group shrink-0 w-36">
                 <div className="relative aspect-[2/3] overflow-hidden rounded-xl bg-muted shadow-lg movie-card-hover mb-2">
                   {item.poster ? (
-                    <img src={item.poster} alt={item.title} className="w-full h-full object-cover transition-transform group-hover:scale-110" />
+                    <img src={item.poster} alt={item.title} className="w-full h-full object-cover" />
                   ) : (
                     <div className="w-full h-full flex items-center justify-center bg-muted">
                       <Film className="h-9 w-9 text-primary/60" />
@@ -1261,7 +1261,7 @@ export default function ProfilePage() {
               <Link key={item.id} href={`/movie/${item.id}`} className="group shrink-0 w-36">
                 <div className="relative aspect-[2/3] overflow-hidden rounded-xl bg-muted shadow-lg movie-card-hover mb-2">
                   {item.poster ? (
-                    <img src={item.poster} alt={item.title} className="w-full h-full object-cover transition-transform group-hover:scale-110" />
+                    <img src={item.poster} alt={item.title} className="w-full h-full object-cover" />
                   ) : (
                     <div className="w-full h-full flex items-center justify-center bg-muted">
                       <Film className="h-9 w-9 text-primary/60" />
@@ -1362,7 +1362,7 @@ export default function ProfilePage() {
               <Link key={r.movieId} href={`/movie/${r.movieId}`} className="group relative flex gap-4 p-4 rounded-2xl border border-border hover:bg-muted/40 transition-colors">
                 <div className="w-14 shrink-0 aspect-[2/3] rounded-lg overflow-hidden bg-muted">
                   {r.moviePoster ? (
-                    <img src={r.moviePoster} alt={r.movieTitle} className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
+                    <img src={r.moviePoster} alt={r.movieTitle} className="w-full h-full object-cover" />
                   ) : (
                     <div className="w-full h-full flex items-center justify-center">
                       <Film className="h-5 w-5 text-primary/60" />

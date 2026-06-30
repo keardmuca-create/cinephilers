@@ -79,7 +79,7 @@ export default function ReviewsPage() {
           <Link key={r.movieId} href={`/movie/${r.movieId}`} className="group flex gap-4 p-4 rounded-2xl border border-border hover:bg-muted/40 transition-colors">
             <div className="w-14 shrink-0 aspect-[2/3] rounded-lg overflow-hidden bg-muted">
               {r.moviePoster ? (
-                <img src={r.moviePoster} alt={r.movieTitle} className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
+                <img src={r.moviePoster} alt={r.movieTitle} className="w-full h-full object-cover" />
               ) : (
                 <div className="w-full h-full flex items-center justify-center">
                   <Film className="h-5 w-5 text-primary/60" />

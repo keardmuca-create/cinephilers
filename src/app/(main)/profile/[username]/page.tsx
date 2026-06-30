@@ -120,7 +120,7 @@ function FavoritePoster({ tmdbId }: { tmdbId: string }) {
   return (
     <Link href={`/movie/${tmdbId}`} className="group relative flex-1 aspect-[2/3] rounded-2xl overflow-hidden bg-muted shadow-md">
       {meta?.poster
-        ? <Image src={meta.poster} alt={meta.title} fill className="object-cover transition-transform group-hover:scale-105" sizes="25vw" />
+        ? <Image src={meta.poster} alt={meta.title} fill className="object-cover" sizes="25vw" />
         : <div className="w-full h-full flex items-center justify-center"><Film className="h-5 w-5 text-primary/60" /></div>
       }
       {/* Title tooltip on hover */}

@@ -82,7 +82,7 @@ function CollectionCard({ part }: { part: CollectionItem }) {
     <>
       <div className={`relative w-full h-[165px] overflow-hidden rounded-xl bg-muted shadow-md ${part.isCurrent ? 'ring-2 ring-primary' : 'border border-border'}`}>
         {part.poster ? (
-          <img src={part.poster} alt={part.title} className="w-full h-full object-cover transition-transform group-hover:scale-105" loading="lazy" />
+          <img src={part.poster} alt={part.title} className="w-full h-full object-cover" loading="lazy" />
         ) : (
           <div className="w-full h-full flex items-center justify-center"><Film className="h-7 w-7 text-primary/60" /></div>
         )}
@@ -196,7 +196,7 @@ function ImagesGallery({ images, movieId }: { images: string[]; movieId: string 
       <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
         {images.slice(0, 6).map((url, i) => (
           <div key={i} className="relative aspect-video rounded-2xl overflow-hidden border border-border">
-            <Image src={url} alt="" fill className="object-cover hover:scale-105 transition-transform duration-500" />
+            <Image src={url} alt="" fill className="object-cover" />
           </div>
         ))}
       </div>
