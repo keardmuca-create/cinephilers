@@ -1,17 +1,11 @@
-import { NextRequest } from 'next/server';
-import { prisma } from '@/lib/db';
 import { ok } from '@/lib/api-response';
-import { clearAuthCookies, getCurrentUser } from '@/lib/auth-utils';
+import { clearAuthCookies } from '@/lib/auth-utils';
 
-export async function POST(req: NextRequest) {
-  const user = await getCurrentUser(req);
-  if (user) {
-    // Bump tokenVersion so every outstanding refresh token for this user is revoked.
-    await prisma.user.update({
-      where: { id: user.sub },
-      data: { tokenVersion: { increment: 1 } },
-    }).catch(() => {});
-  }
+// Logout is per-device: it only clears THIS browser's cookies. Sessions on
+// other devices stay signed in (IMDb-style "log in once, never again") thanks
+// to the 90-day sliding refresh window. Revoking ALL sessions at once is
+// reserved for password reset, which bumps user.tokenVersion.
+export async function POST() {
   await clearAuthCookies();
   return ok(null, 'Logged out');
 }
