@@ -15,13 +15,13 @@ export const BottomNav = () => {
   const { user } = useAuth();
   const [unread, setUnread] = useState(0);
 
-  // Fetch once on mount + every 2 minutes while the tab is VISIBLE. Hidden
-  // tabs skip the poll entirely (a backgrounded tab was firing 1,440 function
-  // invocations/day — the single biggest Vercel CPU cost) and re-check the
-  // moment the user comes back, so the bell is never stale when it's seen.
+  // No polling — check exactly when the badge is actually seen: on page load
+  // and when the user returns to the tab (Letterboxd-web style). Cost scales
+  // with visits instead of time-on-site; a timer was burning Vercel CPU asking
+  // "anything new?" thousands of times a day with nobody looking. When DMs
+  // ship, instant delivery should come from Web Push, not a faster poll.
   useEffect(() => {
     if (!user) return;
-    let interval: ReturnType<typeof setInterval>;
     const check = async () => {
       if (document.visibilityState === 'hidden') return;
       try {
@@ -29,10 +29,6 @@ export const BottomNav = () => {
         if (res.ok) {
           const json = await res.json();
           setUnread(json.data?.unreadCount ?? 0);
-        } else if (res.status === 401) {
-          // Refresh failed — session is dead. Stop polling; the auth context
-          // handles logout and we'll resume on the next mount.
-          clearInterval(interval);
         }
       } catch { /* ignore */ }
     };
@@ -40,12 +36,8 @@ export const BottomNav = () => {
       if (document.visibilityState === 'visible') check();
     };
     check();
-    interval = setInterval(check, 120_000);
     document.addEventListener('visibilitychange', onVisible);
-    return () => {
-      clearInterval(interval);
-      document.removeEventListener('visibilitychange', onVisible);
-    };
+    return () => document.removeEventListener('visibilitychange', onVisible);
   }, [user]);
 
   // Clear dot when visiting social page
