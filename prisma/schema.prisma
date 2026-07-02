@@ -44,11 +44,12 @@ model User {
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
+  // emailVerificationToken / passwordResetToken hold SHA-256 digests of the
+  // emailed tokens (see src/lib/token-hash.ts), never the raw values.
   emailVerificationToken   String?
   emailVerificationExpires DateTime?
   passwordResetToken       String?
   passwordResetExpires     DateTime?
-  refreshTokenHash         String?
   tokenVersion             Int       @default(0)
 
   ratings          Rating[]

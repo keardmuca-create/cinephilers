@@ -6,6 +6,7 @@ import { verifyAccessToken } from '@/lib/auth-utils';
 import { awardBadgeIfEarned } from '@/lib/badge-service';
 import { sanitizeText } from '@/lib/sanitize';
 import { rateLimit } from '@/lib/rate-limit';
+import { canonicalId, isValidMediaId } from '@/lib/media-id';
 
 export const dynamic = 'force-dynamic';
 
@@ -61,26 +62,33 @@ export async function POST(req: NextRequest) {
   // Letterboxd library), which is slow and burns Fluid active-CPU; batching cuts it to
   // four inserts total.
   for (const item of items) {
-    const key = `${item.tmdbId}:${item.mediaType}`;
+    // Validate per row and skip bad ones — one malformed row must not 500 the
+    // whole createMany, and unchecked ids/mediaTypes would pollute the DB (and
+    // inflate ratingsCount/badges) with garbage entries.
+    if (item.mediaType !== 'MOVIE' && item.mediaType !== 'SHOW') { failed++; continue; }
+    const tmdbId = typeof item.tmdbId === 'string' ? canonicalId(item.tmdbId) : '';
+    if (!isValidMediaId(tmdbId)) { failed++; continue; }
+
+    const key = `${tmdbId}:${item.mediaType}`;
 
     if (item.watchedAt && !hasWatched.has(key)) {
       const watchedAt = new Date(item.watchedAt);
       if (Number.isNaN(watchedAt.getTime())) failed++;
-      else watchedData.push({ userId, tmdbId: item.tmdbId, mediaType: item.mediaType, watchedAt });
+      else watchedData.push({ userId, tmdbId, mediaType: item.mediaType, watchedAt });
     }
 
     if (item.inWatchlist && !hasWatchlist.has(key)) {
-      watchlistData.push({ userId, tmdbId: item.tmdbId, mediaType: item.mediaType });
+      watchlistData.push({ userId, tmdbId, mediaType: item.mediaType });
     }
 
     // Rating — only accept whole numbers 1-10
     if (item.rating != null && !hasRating.has(key)) {
       if (!Number.isInteger(item.rating) || item.rating < 1 || item.rating > 10) failed++;
-      else ratingData.push({ userId, tmdbId: item.tmdbId, mediaType: item.mediaType, score: item.rating });
+      else ratingData.push({ userId, tmdbId, mediaType: item.mediaType, score: item.rating });
     }
 
-    if (item.review && item.review.trim().length >= 10 && !hasReview.has(key)) {
-      reviewData.push({ userId, tmdbId: item.tmdbId, mediaType: item.mediaType, body: sanitizeText(item.review).slice(0, 5000), containsSpoiler: false });
+    if (typeof item.review === 'string' && item.review.trim().length >= 10 && !hasReview.has(key)) {
+      reviewData.push({ userId, tmdbId, mediaType: item.mediaType, body: sanitizeText(item.review).slice(0, 5000), containsSpoiler: false });
     }
   }
 

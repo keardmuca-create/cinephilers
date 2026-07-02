@@ -17,6 +17,10 @@ export async function POST(req: NextRequest) {
     watched: boolean;
   };
   if (!showTmdbId || season == null || episode == null) return err('showTmdbId, season, and episode are required');
+  if (typeof showTmdbId !== 'string' || showTmdbId.length > 64) return err('Invalid showTmdbId');
+  // Non-integers throw a Prisma 500; absurd values would just store junk rows.
+  if (!Number.isInteger(season) || season < 0 || season > 200) return err('Invalid season');
+  if (!Number.isInteger(episode) || episode < 0 || episode > 2000) return err('Invalid episode');
 
   if (watched) {
     await prisma.watchedEpisode.upsert({

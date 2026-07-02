@@ -18,5 +18,9 @@ export async function GET(req: NextRequest) {
     const r = results[i];
     out[id] = r.status === 'fulfilled' ? r.value : null;
   });
-  return NextResponse.json(out);
+  // Title metadata barely changes — cache per ids-combination for an hour and
+  // serve stale for a day while revalidating in the background.
+  return NextResponse.json(out, {
+    headers: { 'Cache-Control': 'public, s-maxage=3600, stale-while-revalidate=86400' },
+  });
 }

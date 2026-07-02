@@ -14,12 +14,27 @@ import type { Movie } from '@/lib/types';
 import { seededShuffle, dedup, WEEK_MS } from '@/lib/seed-shuffle';
 import { getDailyPool } from '@/lib/home-pool';
 import { getRecommendations } from '@/lib/recommendations';
+import { rateLimit, getIp } from '@/lib/rate-limit';
 
 export async function GET(
   req: NextRequest,
   { params }: { params: Promise<{ section: string }> },
 ) {
+  // Each section fans out to dozens of TMDB calls (popular-shows enriches ~100
+  // titles), so this is the most expensive unauthenticated route — cap it hard.
+  const { allowed } = await rateLimit(`seeall:${getIp(req)}`, 30, 60_000);
+  if (!allowed) return NextResponse.json({ error: 'Too many requests' }, { status: 429 });
+
   const { section } = await params;
+
+  // Every section is the same for all viewers EXCEPT top-picks-*, which builds
+  // from the caller's auth cookie — CDN-caching those would serve one user's
+  // recommendations to everyone. The rest can be served from the CDN for an
+  // hour, skipping this function's ~100-fetch TMDB fan-out entirely.
+  const isPersonalized = section.startsWith('top-picks-');
+  const cacheHeaders = isPersonalized
+    ? undefined
+    : { 'Cache-Control': 'public, s-maxage=3600, stale-while-revalidate=600' };
 
   try {
     let items: Movie[];
@@ -38,7 +53,7 @@ export async function GET(
       } else {
         items = await getMoviesByGenre(movieId, 100);
       }
-      return NextResponse.json({ items });
+      return NextResponse.json({ items }, { headers: cacheHeaders });
     }
 
     switch (section) {
@@ -92,9 +107,9 @@ export async function GET(
       default:
         return NextResponse.json({ error: 'Unknown section' }, { status: 404 });
     }
-    return NextResponse.json({ items });
+    return NextResponse.json({ items }, { headers: cacheHeaders });
   } catch (err) {
-    const message = err instanceof Error ? err.message : 'Unknown error';
-    return NextResponse.json({ error: message }, { status: 500 });
+    console.error('see-all error:', err);
+    return NextResponse.json({ error: 'Failed to load section' }, { status: 500 });
   }
 }

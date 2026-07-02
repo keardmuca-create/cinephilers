@@ -7,6 +7,24 @@ import { put, del } from '@vercel/blob';
 
 const BLOB_HOST = '.blob.vercel-storage.com';
 
+// Hosts the CSP img-src and next.config remotePatterns actually allow — any
+// other https URL would save fine but render broken for everyone.
+const ALLOWED_AVATAR_HOSTS = [
+  'image.tmdb.org',
+  'picsum.photos',
+  'placehold.co',
+  'images.unsplash.com',
+];
+function isAllowedAvatarUrl(url: string): boolean {
+  try {
+    const { protocol, hostname } = new URL(url);
+    if (protocol !== 'https:') return false;
+    return ALLOWED_AVATAR_HOSTS.includes(hostname) || hostname.endsWith('.public.blob.vercel-storage.com');
+  } catch {
+    return false;
+  }
+}
+
 async function uploadAvatarToBlob(userId: string, dataUrl: string): Promise<string | null> {
   if (!process.env.BLOB_READ_WRITE_TOKEN) return null;
   const match = dataUrl.match(/^data:(image\/(?:jpeg|png|webp));base64,(.+)$/);
@@ -66,11 +84,13 @@ export async function PUT(req: NextRequest) {
     if (country.length > 100) return err('Country must be 100 characters or less');
   }
 
+  if (isPrivate !== undefined && typeof isPrivate !== 'boolean') return err('isPrivate must be a boolean');
+
   if (avatarUrl !== undefined && avatarUrl !== null) {
     if (typeof avatarUrl !== 'string') return err('Invalid avatar URL');
-    const isHttps = avatarUrl.startsWith('https://') && avatarUrl.length <= 2000;
+    const isHttps = avatarUrl.length <= 2000 && isAllowedAvatarUrl(avatarUrl);
     const isDataImage = avatarUrl.startsWith('data:image/') && avatarUrl.length <= 500_000;
-    if (!isHttps && !isDataImage) return err('Avatar must be an https URL or an uploaded image');
+    if (!isHttps && !isDataImage) return err('Avatar must be an uploaded image or a supported image URL');
   }
 
   let finalAvatarUrl = avatarUrl as string | null | undefined;

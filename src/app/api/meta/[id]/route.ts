@@ -32,7 +32,9 @@ export async function GET(
 
   try {
     const meta = await fetchOneMeta(id, key);
-    return NextResponse.json(meta);
+    return NextResponse.json(meta, {
+      headers: { 'Cache-Control': 'public, s-maxage=3600, stale-while-revalidate=86400' },
+    });
   } catch (err) {
     const msg = err instanceof Error ? err.message : 'Unknown error';
     const status = msg === 'Invalid id' ? 400 : 500;

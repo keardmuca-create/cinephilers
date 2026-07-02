@@ -18,10 +18,17 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   });
   if (existing) return err('Already liked');
 
-  await prisma.$transaction([
-    prisma.reviewLike.create({ data: { userId: auth.sub, reviewId } }),
-    prisma.review.update({ where: { id: reviewId }, data: { likesCount: { increment: 1 } } }),
-  ]);
+  try {
+    await prisma.$transaction([
+      prisma.reviewLike.create({ data: { userId: auth.sub, reviewId } }),
+      prisma.review.update({ where: { id: reviewId }, data: { likesCount: { increment: 1 } } }),
+    ]);
+  } catch (e) {
+    // Two rapid taps can both pass the existing-check; the loser's INSERT hits
+    // the unique constraint (P2002). The like already exists — that's success.
+    if ((e as { code?: string })?.code === 'P2002') return ok(null, 'Liked');
+    throw e;
+  }
 
   if (review.userId !== auth.sub) {
     await prisma.notification.create({

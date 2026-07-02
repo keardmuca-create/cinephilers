@@ -2,6 +2,7 @@ import { NextRequest } from 'next/server';
 import { prisma } from '@/lib/db';
 import { ok, err } from '@/lib/api-response';
 import { getCurrentUser } from '@/lib/auth-utils';
+import { clampInt } from '@/lib/query-params';
 
 export interface FeedItem {
   id: string;
@@ -21,7 +22,7 @@ export async function GET(req: NextRequest) {
   const auth = await getCurrentUser(req);
   if (!auth) return err('Unauthorized', 401);
 
-  const limit = Math.min(100, parseInt(req.nextUrl.searchParams.get('limit') ?? '50', 10));
+  const limit = clampInt(req.nextUrl.searchParams.get('limit'), 50, 1, 100);
   const since = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000); // last 30 days
 
   // Get the IDs of everyone the current user follows

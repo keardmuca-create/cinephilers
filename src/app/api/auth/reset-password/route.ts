@@ -3,6 +3,7 @@ import bcryptjs from 'bcryptjs';
 import { prisma } from '@/lib/db';
 import { ok, err } from '@/lib/api-response';
 import { rateLimit, getIp } from '@/lib/rate-limit';
+import { hashToken } from '@/lib/token-hash';
 
 export async function POST(req: NextRequest) {
   const { allowed, retryAfter } = await rateLimit(`reset:${getIp(req)}`, 5, 60_000);
@@ -16,9 +17,11 @@ export async function POST(req: NextRequest) {
   if (password !== confirmPassword) return err('Passwords do not match');
   if (password.length < 8) return err('Password must be at least 8 characters');
 
+  // Tokens are stored hashed (see lib/token-hash.ts) — hash the submitted
+  // value and match the digest.
   const user = await prisma.user.findFirst({
     where: {
-      passwordResetToken: token,
+      passwordResetToken: hashToken(token),
       passwordResetExpires: { gt: new Date() },
     },
   });

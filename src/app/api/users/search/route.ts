@@ -2,6 +2,7 @@ import { NextRequest } from 'next/server';
 import { prisma } from '@/lib/db';
 import { ok, err } from '@/lib/api-response';
 import { getCurrentUser } from '@/lib/auth-utils';
+import { clampInt } from '@/lib/query-params';
 
 export async function GET(req: NextRequest) {
   const auth = await getCurrentUser(req);
@@ -10,7 +11,7 @@ export async function GET(req: NextRequest) {
   const q = req.nextUrl.searchParams.get('q')?.trim() ?? '';
   if (q.length < 1) return ok([]);
 
-  const limit = Math.min(20, parseInt(req.nextUrl.searchParams.get('limit') ?? '10', 10));
+  const limit = clampInt(req.nextUrl.searchParams.get('limit'), 10, 1, 20);
 
   const users = await prisma.user.findMany({
     where: {

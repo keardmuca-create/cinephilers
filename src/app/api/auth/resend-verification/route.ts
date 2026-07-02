@@ -4,6 +4,7 @@ import { prisma } from '@/lib/db';
 import { ok, err } from '@/lib/api-response';
 import { sendVerificationEmail } from '@/lib/email';
 import { rateLimit, getIp } from '@/lib/rate-limit';
+import { hashToken } from '@/lib/token-hash';
 
 export async function POST(req: NextRequest) {
   const { allowed, retryAfter } = await rateLimit(`resend-verify:${getIp(req)}`, 3, 60_000);
@@ -30,7 +31,7 @@ export async function POST(req: NextRequest) {
     const expires = new Date(Date.now() + 24 * 60 * 60 * 1000);
     await prisma.user.update({
       where: { id: user.id },
-      data: { emailVerificationToken: token, emailVerificationExpires: expires },
+      data: { emailVerificationToken: hashToken(token), emailVerificationExpires: expires },
     });
     try {
       await sendVerificationEmail(user.email, token);

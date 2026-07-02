@@ -1,5 +1,6 @@
 import { NextRequest } from 'next/server';
 import { ok, err } from '@/lib/api-response';
+import { rateLimit, getIp } from '@/lib/rate-limit';
 
 export const dynamic = 'force-dynamic';
 
@@ -92,6 +93,11 @@ function scoredMatch(results: TMDBResult[], inputYear: number | null, isTV: bool
 }
 
 export async function GET(req: NextRequest) {
+  // Own (generous) bucket, separate from the tmdb: one — the import dialog
+  // legitimately fires one lookup per unmatched row in quick succession.
+  const { allowed } = await rateLimit(`tmdb-match:${getIp(req)}`, 600, 60_000);
+  if (!allowed) return err('Too many requests', 429);
+
   const key = process.env.TMDB_API_KEY;
   if (!key) return err('TMDB key not configured', 500);
 

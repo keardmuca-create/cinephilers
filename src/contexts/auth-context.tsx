@@ -368,13 +368,27 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return () => window.removeEventListener('session-expired', handle);
   }, []);
 
-  // Silently refresh the access token every 10 minutes so it never expires mid-session.
-  // This ensures background syncDb calls (watch, rate, etc.) always reach the server.
+  // Silently refresh the access token every 10 minutes so it never expires
+  // mid-session — but only while the tab is visible. A hidden tab makes no
+  // syncDb calls, so refreshing it just burns server CPU (144 invocations/day
+  // per backgrounded tab). On return we refresh immediately, so a tab hidden
+  // past the 15-min access-token expiry is valid again before the user acts;
+  // fetchWithAuth's 401-retry covers any race.
   useEffect(() => {
-    const id = setInterval(() => {
+    const refresh = () => {
       fetch('/api/auth/refresh', { method: 'POST', credentials: 'include' }).catch(() => {});
+    };
+    const id = setInterval(() => {
+      if (document.visibilityState !== 'hidden') refresh();
     }, 10 * 60 * 1000);
-    return () => clearInterval(id);
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') refresh();
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => {
+      clearInterval(id);
+      document.removeEventListener('visibilitychange', onVisible);
+    };
   }, []);
 
   return (

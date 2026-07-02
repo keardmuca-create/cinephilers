@@ -4,6 +4,7 @@ import { prisma } from '@/lib/db';
 import { ok, err } from '@/lib/api-response';
 import { sendPasswordResetEmail } from '@/lib/email';
 import { rateLimit, getIp } from '@/lib/rate-limit';
+import { hashToken } from '@/lib/token-hash';
 
 export async function POST(req: NextRequest) {
   const { allowed, retryAfter } = await rateLimit(`forgot:${getIp(req)}`, 3, 60_000);
@@ -23,7 +24,8 @@ export async function POST(req: NextRequest) {
   await prisma.user.update({
     where: { id: user.id },
     data: {
-      passwordResetToken: token,
+      // Stored hashed — the raw token exists only in the emailed link.
+      passwordResetToken: hashToken(token),
       passwordResetExpires: new Date(Date.now() + 60 * 60 * 1000),
     },
   });

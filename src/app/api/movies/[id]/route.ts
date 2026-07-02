@@ -1,11 +1,17 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { getMovieDetail, getShowDetail } from '@/lib/tmdb';
+import { rateLimit, getIp } from '@/lib/rate-limit';
 
 export async function GET(
-  _req: NextRequest,
+  req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  // Shared per-IP budget across all TMDB proxy routes — unique ids bypass the
+  // fetch cache, so without this a loop over ids can burn the TMDB quota.
+  const { allowed } = await rateLimit(`tmdb:${getIp(req)}`, 120, 60_000);
+  if (!allowed) return NextResponse.json({ error: 'Too many requests' }, { status: 429 });
+
   const { id: raw } = await params;
   const isShow = raw.startsWith('tmdb-tv-');
   const numId = parseInt(raw.replace('tmdb-tv-', '').replace('tmdb-', ''), 10);
@@ -16,9 +22,14 @@ export async function GET(
 
   try {
     const movie = isShow ? await getShowDetail(numId) : await getMovieDetail(numId);
-    return NextResponse.json(movie);
+    // Same response for every viewer — let Vercel's CDN serve repeats for an
+    // hour without invoking the function (each invocation parses a large TMDB
+    // payload and bills active CPU).
+    return NextResponse.json(movie, {
+      headers: { 'Cache-Control': 'public, s-maxage=3600, stale-while-revalidate=600' },
+    });
   } catch (err) {
-    const message = err instanceof Error ? err.message : 'Unknown error';
-    return NextResponse.json({ error: message }, { status: 500 });
+    console.error('movie detail error:', err);
+    return NextResponse.json({ error: 'Failed to load title' }, { status: 500 });
   }
 }

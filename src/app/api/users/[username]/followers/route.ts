@@ -2,12 +2,13 @@ import { NextRequest } from 'next/server';
 import { prisma } from '@/lib/db';
 import { paginated, err } from '@/lib/api-response';
 import { getCurrentUser } from '@/lib/auth-utils';
+import { clampInt } from '@/lib/query-params';
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ username: string }> }) {
   const { username } = await params;
   const { searchParams } = new URL(req.url);
-  const page = Math.max(1, parseInt(searchParams.get('page') ?? '1', 10));
-  const limit = Math.min(50, parseInt(searchParams.get('limit') ?? '20', 10));
+  const page = clampInt(searchParams.get('page'), 1, 1, 1_000_000);
+  const limit = clampInt(searchParams.get('limit'), 20, 1, 50);
 
   const user = await prisma.user.findUnique({ where: { username: username.toLowerCase() }, select: { id: true, isPrivate: true } });
   if (!user) return err('User not found', 404);

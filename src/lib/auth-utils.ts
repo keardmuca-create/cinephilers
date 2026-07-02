@@ -22,8 +22,11 @@ function getRefreshSecret() {
 }
 
 const ACCESS_EXPIRES = process.env.JWT_ACCESS_EXPIRES ?? '15m';
-// Long-lived so active users effectively never see a login screen. The refresh
-// token rotates on every use, so this window resets each time the app is opened.
+// Long-lived so active users effectively never see a login screen. Refresh
+// tokens are deliberately STABLE (no per-use rotation — see /api/auth/refresh):
+// a fresh token with the same tokenVersion is re-minted on each refresh, which
+// slides the 90-day window forward without ever invalidating concurrent tabs.
+// Revocation is via bumping user.tokenVersion (logout / password reset).
 // MUST stay in sync with the refresh cookie maxAge in setAuthCookies below.
 const REFRESH_EXPIRES = process.env.JWT_REFRESH_EXPIRES ?? '90d';
 const REFRESH_MAX_AGE = 60 * 60 * 24 * 90; // 90 days, in seconds

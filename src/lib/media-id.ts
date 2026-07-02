@@ -10,6 +10,13 @@ export function canonicalId(id: string): string {
   return /^\d+$/.test(id) ? `tmdb-${id}` : id;
 }
 
+// Strict shape check used by API routes on client-supplied ids (after
+// canonicalId): movies are `tmdb-{n}`, shows `tmdb-tv-{n}`. Rejects episode
+// ids, arbitrary strings, and oversized garbage before they reach the DB.
+export function isValidMediaId(id: string): boolean {
+  return /^tmdb-(?:tv-)?\d{1,10}$/.test(id);
+}
+
 // The bare-numeric legacy id for a canonical movie id, or null if there isn't one.
 // `tmdb-262504` → `262504`; `tmdb-tv-123` / episode ids → null.
 export function legacyTwin(id: string): string | null {

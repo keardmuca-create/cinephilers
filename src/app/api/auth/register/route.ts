@@ -5,6 +5,7 @@ import { prisma } from '@/lib/db';
 import { ok, err } from '@/lib/api-response';
 import { sendVerificationEmail } from '@/lib/email';
 import { rateLimit, getIp } from '@/lib/rate-limit';
+import { hashToken } from '@/lib/token-hash';
 
 export async function POST(req: NextRequest) {
   const { allowed, retryAfter } = await rateLimit(`register:${getIp(req)}`, 5, 60_000);
@@ -39,7 +40,8 @@ export async function POST(req: NextRequest) {
       email: email.toLowerCase(),
       username: username.toLowerCase(),
       passwordHash,
-      emailVerificationToken,
+      // Stored hashed — the raw token exists only in the emailed link.
+      emailVerificationToken: hashToken(emailVerificationToken),
       emailVerificationExpires,
     },
   });

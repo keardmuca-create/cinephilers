@@ -4,6 +4,7 @@ import { ok, err } from '@/lib/api-response';
 import { getCurrentUser } from '@/lib/auth-utils';
 import { awardBadgeIfEarned } from '@/lib/badge-service';
 import { MediaType } from '@/generated/prisma/client';
+import { canonicalId, isValidMediaId } from '@/lib/media-id';
 
 export async function POST(req: NextRequest) {
   const auth = await getCurrentUser(req);
@@ -12,10 +13,14 @@ export async function POST(req: NextRequest) {
   const body = await req.json().catch(() => null);
   if (!body) return err('Invalid JSON');
 
-  const { tmdbId, mediaType, score } = body as { tmdbId: string; mediaType: string; score: number };
-  if (!tmdbId || !mediaType || score === undefined) return err('tmdbId, mediaType, and score are required');
+  const { tmdbId: rawId, mediaType, score } = body as { tmdbId: string; mediaType: string; score: number };
+  if (!rawId || !mediaType || score === undefined) return err('tmdbId, mediaType, and score are required');
   if (!['MOVIE', 'SHOW'].includes(mediaType)) return err('mediaType must be MOVIE or SHOW');
   if (score < 1 || score > 10 || !Number.isInteger(score)) return err('Score must be an integer 1–10');
+  // Canonicalize like the watched route does — a bare-numeric id stored here
+  // becomes a "legacy twin" that resurrects on sync and splits the aggregate.
+  const tmdbId = canonicalId(String(rawId));
+  if (!isValidMediaId(tmdbId)) return err('Invalid tmdbId');
 
   const existing = await prisma.rating.findUnique({
     where: { userId_tmdbId_mediaType: { userId: auth.sub, tmdbId, mediaType: mediaType as MediaType } },

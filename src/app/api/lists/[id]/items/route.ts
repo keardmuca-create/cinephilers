@@ -3,6 +3,7 @@ import { prisma } from '@/lib/db';
 import { ok, err } from '@/lib/api-response';
 import { getCurrentUser } from '@/lib/auth-utils';
 import { MediaType } from '@/generated/prisma/client';
+import { canonicalId, isValidMediaId } from '@/lib/media-id';
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const auth = await getCurrentUser(req);
@@ -16,10 +17,12 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const body = await req.json().catch(() => null);
   if (!body) return err('Invalid JSON');
 
-  const { tmdbId, mediaType, note, title, poster, year } = body as { tmdbId: string; mediaType: string; note?: string; title?: string; poster?: string; year?: string };
-  if (!tmdbId || !mediaType) return err('tmdbId and mediaType are required');
+  const { tmdbId: rawId, mediaType, note, title, poster, year } = body as { tmdbId: string; mediaType: string; note?: string; title?: string; poster?: string; year?: string };
+  if (!rawId || !mediaType) return err('tmdbId and mediaType are required');
   if (!['MOVIE', 'SHOW'].includes(mediaType)) return err('mediaType must be MOVIE or SHOW');
   if (note && note.length > 500) return err('Note must be under 500 characters');
+  const tmdbId = canonicalId(String(rawId));
+  if (!isValidMediaId(tmdbId)) return err('Invalid tmdbId');
 
   const existingItem = await prisma.customListItem.findUnique({
     where: { listId_tmdbId_mediaType: { listId, tmdbId, mediaType: mediaType as MediaType } },

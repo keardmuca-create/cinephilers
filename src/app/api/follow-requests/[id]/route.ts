@@ -13,11 +13,21 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   if (!request) return err('Request not found', 404);
   if (request.targetId !== auth.sub) return err('Forbidden', 403);
 
-  await prisma.$transaction([
-    prisma.follow.create({ data: { followerId: request.requesterId, followingId: request.targetId } }),
-    prisma.followRequest.delete({ where: { id } }),
-    prisma.notification.create({ data: { userId: request.requesterId, fromId: auth.sub, type: 'follow_accept' } }),
-  ]);
+  try {
+    await prisma.$transaction([
+      prisma.follow.create({ data: { followerId: request.requesterId, followingId: request.targetId } }),
+      prisma.followRequest.delete({ where: { id } }),
+      prisma.notification.create({ data: { userId: request.requesterId, fromId: auth.sub, type: 'follow_accept' } }),
+    ]);
+  } catch (e) {
+    // Follow already exists (double-tap, or they followed while the request was
+    // pending) — treat as accepted and just clean up the request row.
+    if ((e as { code?: string })?.code === 'P2002') {
+      await prisma.followRequest.deleteMany({ where: { id } });
+      return ok(null, 'Accepted');
+    }
+    throw e;
+  }
 
   return ok(null, 'Accepted');
 }

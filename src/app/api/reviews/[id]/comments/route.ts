@@ -36,7 +36,9 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   if (!allowed) return err(`Too many comments. Try again in ${retryAfter}s`, 429);
 
   const { id: reviewId } = await params;
-  const { body } = await req.json();
+  const parsed = await req.json().catch(() => null);
+  if (!parsed) return err('Invalid JSON');
+  const { body } = parsed as { body?: unknown };
   const cleanBody = typeof body === 'string' ? sanitizeText(body) : '';
   if (!cleanBody) return err('Comment cannot be empty', 400);
   if (cleanBody.length > 500) return err('Comment too long', 400);

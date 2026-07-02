@@ -1,20 +1,9 @@
 import { NextRequest } from 'next/server';
 import { prisma } from '@/lib/db';
 import { ok, err } from '@/lib/api-response';
-import { getCurrentUser } from '@/lib/auth-utils';
+import { requireAdmin } from '@/lib/admin-auth';
 
 export const dynamic = 'force-dynamic';
-
-const ADMIN_IDS = new Set(['0e4f66de-b8f9-4d0b-b176-ad31a788fd1e']);
-
-async function requireAdmin(req: NextRequest) {
-  const auth = await getCurrentUser(req);
-  if (!auth) return { auth: null, status: 'unauthenticated' as const };
-  if (ADMIN_IDS.has(auth.sub)) return { auth, status: 'ok' as const };
-  const user = await prisma.user.findUnique({ where: { id: auth.sub }, select: { role: true } });
-  if (user?.role !== 'ADMIN') return { auth: null, status: 'forbidden' as const };
-  return { auth, status: 'ok' as const };
-}
 
 export async function GET(req: NextRequest) {
   const { status } = await requireAdmin(req);
@@ -26,29 +15,32 @@ export async function GET(req: NextRequest) {
     include: { reporter: { select: { id: true, username: true, displayName: true } } },
   });
 
-  // Enrich with content preview
-  const enriched = await Promise.all(reports.map(async r => {
-    let content: string | null = null;
-    let authorUsername: string | null = null;
-    try {
-      if (r.targetType === 'review') {
-        const review = await prisma.review.findUnique({
-          where: { id: r.targetId },
-          select: { body: true, user: { select: { username: true } } },
-        });
-        content = review?.body ?? null;
-        authorUsername = review?.user.username ?? null;
-      } else if (r.targetType === 'comment') {
-        const comment = await prisma.reviewComment.findUnique({
-          where: { id: r.targetId },
-          select: { body: true, user: { select: { username: true } } },
-        });
-        content = comment?.body ?? null;
-        authorUsername = comment?.user.username ?? null;
-      }
-    } catch { /* ignore */ }
-    return { ...r, content, authorUsername };
-  }));
+  // Enrich with content preview — batched (two queries total, not one per report)
+  const reviewIds = reports.filter(r => r.targetType === 'review').map(r => r.targetId);
+  const commentIds = reports.filter(r => r.targetType === 'comment').map(r => r.targetId);
+  const [reviews, comments] = await Promise.all([
+    reviewIds.length
+      ? prisma.review.findMany({
+          where: { id: { in: reviewIds } },
+          select: { id: true, body: true, user: { select: { username: true } } },
+        })
+      : Promise.resolve([]),
+    commentIds.length
+      ? prisma.reviewComment.findMany({
+          where: { id: { in: commentIds } },
+          select: { id: true, body: true, user: { select: { username: true } } },
+        })
+      : Promise.resolve([]),
+  ]);
+  const reviewById = new Map(reviews.map(r => [r.id, r]));
+  const commentById = new Map(comments.map(c => [c.id, c]));
+
+  const enriched = reports.map(r => {
+    const target = r.targetType === 'review' ? reviewById.get(r.targetId)
+      : r.targetType === 'comment' ? commentById.get(r.targetId)
+      : undefined;
+    return { ...r, content: target?.body ?? null, authorUsername: target?.user.username ?? null };
+  });
 
   return ok(enriched);
 }
@@ -72,9 +64,18 @@ export async function DELETE(req: NextRequest) {
 
   const { reportId, targetType, targetId } = await req.json().catch(() => ({}));
 
-  // Delete the reported content
+  // Delete the reported content. Reviews also decrement the author's
+  // reviewsCount, same as the normal delete path — otherwise every moderation
+  // action permanently skews that user's profile stats and badges.
   if (targetType === 'review') {
-    await prisma.review.delete({ where: { id: targetId } }).catch(() => {});
+    const review = await prisma.review.findUnique({ where: { id: targetId }, select: { userId: true } });
+    if (review) {
+      await prisma.review.delete({ where: { id: targetId } }).catch(() => {});
+      await prisma.user.update({
+        where: { id: review.userId },
+        data: { reviewsCount: { decrement: 1 } },
+      }).catch(() => {});
+    }
   } else if (targetType === 'comment') {
     await prisma.reviewComment.delete({ where: { id: targetId } }).catch(() => {});
   }

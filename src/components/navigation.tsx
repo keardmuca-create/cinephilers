@@ -15,11 +15,15 @@ export const BottomNav = () => {
   const { user } = useAuth();
   const [unread, setUnread] = useState(0);
 
-  // Fetch once on mount + every 60s — not on every navigation
+  // Fetch once on mount + every 2 minutes while the tab is VISIBLE. Hidden
+  // tabs skip the poll entirely (a backgrounded tab was firing 1,440 function
+  // invocations/day — the single biggest Vercel CPU cost) and re-check the
+  // moment the user comes back, so the bell is never stale when it's seen.
   useEffect(() => {
     if (!user) return;
     let interval: ReturnType<typeof setInterval>;
     const check = async () => {
+      if (document.visibilityState === 'hidden') return;
       try {
         const res = await fetchWithAuth('/api/notifications');
         if (res.ok) {
@@ -32,9 +36,16 @@ export const BottomNav = () => {
         }
       } catch { /* ignore */ }
     };
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') check();
+    };
     check();
-    interval = setInterval(check, 60_000);
-    return () => clearInterval(interval);
+    interval = setInterval(check, 120_000);
+    document.addEventListener('visibilitychange', onVisible);
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener('visibilitychange', onVisible);
+    };
   }, [user]);
 
   // Clear dot when visiting social page

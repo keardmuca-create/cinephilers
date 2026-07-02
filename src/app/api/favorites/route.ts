@@ -3,6 +3,7 @@ import { prisma } from '@/lib/db';
 import { ok, err } from '@/lib/api-response';
 import { getCurrentUser } from '@/lib/auth-utils';
 import { MediaType } from '@/generated/prisma/client';
+import { canonicalId, isValidMediaId } from '@/lib/media-id';
 
 export async function POST(req: NextRequest) {
   const auth = await getCurrentUser(req);
@@ -11,9 +12,11 @@ export async function POST(req: NextRequest) {
   const body = await req.json().catch(() => null);
   if (!body) return err('Invalid JSON');
 
-  const { tmdbId, mediaType } = body as { tmdbId: string; mediaType: string };
-  if (!tmdbId || !mediaType) return err('tmdbId and mediaType are required');
+  const { tmdbId: rawId, mediaType } = body as { tmdbId: string; mediaType: string };
+  if (!rawId || !mediaType) return err('tmdbId and mediaType are required');
   if (!['MOVIE', 'SHOW'].includes(mediaType)) return err('mediaType must be MOVIE or SHOW');
+  const tmdbId = canonicalId(String(rawId));
+  if (!isValidMediaId(tmdbId)) return err('Invalid tmdbId');
 
   const count = await prisma.favorite.count({ where: { userId: auth.sub } });
   if (count >= 10) return err('Maximum 10 favorites allowed');

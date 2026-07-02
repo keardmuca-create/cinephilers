@@ -1,6 +1,7 @@
 import { NextRequest } from 'next/server';
 import { prisma } from '@/lib/db';
 import { ok, err } from '@/lib/api-response';
+import { hashToken } from '@/lib/token-hash';
 
 export async function POST(req: NextRequest) {
   const body = await req.json().catch(() => null);
@@ -9,9 +10,11 @@ export async function POST(req: NextRequest) {
   const { token } = body as { token: string };
   if (!token) return err('Token is required');
 
+  // Tokens are stored hashed (see lib/token-hash.ts) — hash the submitted
+  // value and match the digest.
   const user = await prisma.user.findFirst({
     where: {
-      emailVerificationToken: token,
+      emailVerificationToken: hashToken(token),
       emailVerificationExpires: { gt: new Date() },
     },
   });
