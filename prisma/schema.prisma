@@ -55,6 +55,7 @@ model User {
   ratings          Rating[]
   reviews          Review[]
   watched          WatchedItem[]
+  watchEvents      WatchEvent[]
   watchlist        WatchlistItem[]
   favorites        Favorite[]
   lists            CustomList[]
@@ -142,6 +143,26 @@ model WatchedItem {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([userId, tmdbId, mediaType])
+}
+
+// One row per SITTING (the diary). WatchedItem stays as the per-title summary
+// ("have I seen this at all") that every existing page reads; WatchEvent is the
+// detail layer underneath — rewatch counts, the diary timeline, year stats.
+// watchedAt = when the film was watched (backdatable); createdAt = when the
+// entry was logged (drives feed ordering so backdated logs don't time-travel).
+model WatchEvent {
+  id        String    @id @default(uuid())
+  userId    String
+  tmdbId    String
+  mediaType MediaType
+  isRewatch Boolean   @default(false)
+  watchedAt DateTime  @default(now())
+  createdAt DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, watchedAt])
+  @@index([userId, tmdbId, mediaType])
 }
 
 model WatchlistItem {

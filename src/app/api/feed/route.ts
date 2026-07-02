@@ -6,7 +6,7 @@ import { clampInt } from '@/lib/query-params';
 
 export interface FeedItem {
   id: string;
-  type: 'watched' | 'rated' | 'reviewed' | 'imported';
+  type: 'watched' | 'rewatched' | 'rated' | 'reviewed' | 'imported';
   user: { id: string; username: string; displayName: string | null; avatarUrl: string | null };
   tmdbId: string;
   mediaType: string;
@@ -45,11 +45,19 @@ export async function GET(req: NextRequest) {
   const hiddenKeys = new Set(hidden.map(h => `${h.type}-${h.tmdbId}`));
 
   // Fetch recent activity from all tables in parallel
-  const [watched, ratings, reviews, imports] = await Promise.all([
+  const [watched, rewatches, ratings, reviews, imports] = await Promise.all([
     prisma.watchedItem.findMany({
       where: { userId: { in: followingIds }, watchedAt: { gte: since } },
       take: limit,
       orderBy: { watchedAt: 'desc' },
+      include: { user: userSelect },
+    }),
+    // Ordered by createdAt (when logged), not watchedAt — a backdated rewatch
+    // should surface now, not be buried weeks deep in the feed.
+    prisma.watchEvent.findMany({
+      where: { userId: { in: followingIds }, isRewatch: true, createdAt: { gte: since } },
+      take: limit,
+      orderBy: { createdAt: 'desc' },
       include: { user: userSelect },
     }),
     prisma.rating.findMany({
@@ -72,14 +80,28 @@ export async function GET(req: NextRequest) {
     }),
   ]);
 
+  // A rewatch bumps the summary row's watchedAt, so the same viewing would
+  // otherwise appear twice ("watched" + "rewatched"). The rewatch entry wins.
+  const rewatchKeys = new Set(rewatches.map(r => `${r.user.id}:${r.tmdbId}:${r.mediaType}`));
+
   const items: FeedItem[] = [
-    ...watched.map(w => ({
-      id: `watched-${w.id}`,
-      type: 'watched' as const,
-      user: w.user,
-      tmdbId: w.tmdbId,
-      mediaType: w.mediaType,
-      createdAt: w.watchedAt.toISOString(),
+    ...watched
+      .filter(w => !rewatchKeys.has(`${w.user.id}:${w.tmdbId}:${w.mediaType}`))
+      .map(w => ({
+        id: `watched-${w.id}`,
+        type: 'watched' as const,
+        user: w.user,
+        tmdbId: w.tmdbId,
+        mediaType: w.mediaType,
+        createdAt: w.watchedAt.toISOString(),
+      })),
+    ...rewatches.map(r => ({
+      id: `rewatched-${r.id}`,
+      type: 'rewatched' as const,
+      user: r.user,
+      tmdbId: r.tmdbId,
+      mediaType: r.mediaType,
+      createdAt: r.createdAt.toISOString(),
     })),
     ...ratings.map(r => ({
       id: `rated-${r.id}`,

@@ -68,6 +68,15 @@ export async function POST(req: NextRequest) {
       create: { userId: auth.sub, tmdbId, mediaType: mediaType as MediaType },
       update: {},
     });
+    // Seed the diary too when this rating created the first watch.
+    const hasEvent = await prisma.watchEvent.count({
+      where: { userId: auth.sub, tmdbId, mediaType: mediaType as MediaType },
+    });
+    if (hasEvent === 0) {
+      await prisma.watchEvent.create({
+        data: { userId: auth.sub, tmdbId, mediaType: mediaType as MediaType },
+      });
+    }
   } catch (e) {
     if (!(e && typeof e === 'object' && (e as { code?: string }).code === 'P2002')) throw e;
   }

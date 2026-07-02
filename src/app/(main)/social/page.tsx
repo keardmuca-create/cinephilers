@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
-import { Heart, Star, Eye, Bookmark, Film, MoreHorizontal, Share2, Trash2, Users, MessageSquare, Loader2, UserPlus, Bell, User } from 'lucide-react';
+import { Heart, Star, Eye, Bookmark, Film, MoreHorizontal, Share2, Trash2, Users, MessageSquare, Loader2, UserPlus, Bell, User, Repeat } from 'lucide-react';
 import { ActivityEntry, getFeed, toggleLike, removeActivity, dismissActivity, getDismissed, relativeTime } from '@/lib/activity';
 import { useAuth } from '@/contexts/auth-context';
 import { fetchWithAuth } from '@/lib/fetch-with-auth';
@@ -14,7 +14,7 @@ import { Button } from '@/components/ui/button';
 
 interface FeedItem {
   id: string;
-  type: 'watched' | 'rated' | 'reviewed' | 'imported';
+  type: 'watched' | 'rewatched' | 'rated' | 'reviewed' | 'imported';
   user: { id: string; username: string; displayName: string | null; avatarUrl: string | null };
   tmdbId: string;
   mediaType: string;
@@ -80,7 +80,7 @@ function UserAvatar({ user, size = 40 }: {
 interface UnifiedItem {
   id: string;
   isMe: boolean;
-  type: 'watched' | 'rated' | 'reviewed' | 'watchlist' | 'imported';
+  type: 'watched' | 'rewatched' | 'rated' | 'reviewed' | 'watchlist' | 'imported';
   user: { username: string; displayName: string | null; avatarUrl: string | null };
   tmdbId: string;
   meta?: { title: string; year: string; poster: string };
@@ -170,6 +170,7 @@ function ActivityCard({ item, onLike, onRemove }: {
           </Link>
           <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
             {item.type === 'watched' && <><Eye className="h-3.5 w-3.5 text-blue-400" /><span>Watched</span></>}
+            {item.type === 'rewatched' && <><Repeat className="h-3.5 w-3.5 text-primary" /><span>Rewatched</span></>}
             {item.type === 'rated' && <><Star className="h-3.5 w-3.5 text-yellow-400" /><span>Rated</span></>}
             {item.type === 'reviewed' && <><MessageSquare className="h-3.5 w-3.5 text-green-400" /><span>Reviewed</span></>}
             {item.type === 'watchlist' && <><Bookmark className="h-3.5 w-3.5 text-primary" /><span>Added to watchlist</span></>}

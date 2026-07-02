@@ -11,6 +11,7 @@ import {
   Play, Check, Plus, Star, ChevronLeft, Share2, ListPlus, Quote,
   Info, Film, Calendar, Clock, Globe, Building2, Tv, ChevronDown, ChevronUp,
   DollarSign, Images, Clapperboard, PenLine, Eye, ChevronRight, User, Users, MessageSquare, Trash2,
+  Repeat,
 } from 'lucide-react';
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
@@ -895,6 +896,15 @@ export default function MovieDetailPage() {
   const [myReview, setMyReview] = useState<UserReview | null>(null);
   const [authGate, setAuthGate] = useState<string | null>(null);
   const [cineRating, setCineRating] = useState<CinephilersRating | null>(null);
+  // Diary: how many times this title was watched + the latest date. Loaded
+  // from the server (never mirrored to localStorage). rewatchDateOpen shows
+  // the optional backdate picker; lastLoggedEventId powers the Undo.
+  const [seenCount, setSeenCount] = useState<number | null>(null);
+  const [lastSeenAt, setLastSeenAt] = useState<string | null>(null);
+  const [rewatchDateOpen, setRewatchDateOpen] = useState(false);
+  const [rewatchDate, setRewatchDate] = useState('');
+  const [rewatchBusy, setRewatchBusy] = useState(false);
+  const [lastLoggedEventId, setLastLoggedEventId] = useState<string | null>(null);
 
   const { user: authUser } = useAuth();
 
@@ -982,6 +992,67 @@ export default function MovieDetailPage() {
       .catch(() => setMovie(null))
       .finally(() => setLoading(false));
   }, [id, loadCineRating]);
+
+  // Load this title's diary summary (seen count + last watch date) once we
+  // know the media type. Server-only data — deliberately not in localStorage.
+  useEffect(() => {
+    if (!authUser || !movie || !isWatched) { setSeenCount(null); setLastSeenAt(null); return; }
+    const mediaType = movie.type === 'show' ? 'SHOW' : 'MOVIE';
+    fetchWithAuth(`/api/diary?tmdbId=${encodeURIComponent(id)}&mediaType=${mediaType}&limit=1`)
+      .then(r => r.ok ? r.json() : null)
+      .then(json => {
+        if (!json?.data) return;
+        setSeenCount(json.data.total ?? null);
+        setLastSeenAt(json.data.items?.[0]?.watchedAt ?? null);
+      })
+      .catch(() => { /* ignore */ });
+  }, [authUser, movie, isWatched, id]);
+
+  const logRewatch = async (dateStr?: string) => {
+    if (!movie || rewatchBusy) return;
+    setRewatchBusy(true);
+    try {
+      const res = await fetchWithAuth('/api/diary', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          tmdbId: id,
+          mediaType: movie.type === 'show' ? 'SHOW' : 'MOVIE',
+          ...(dateStr ? { watchedAt: new Date(`${dateStr}T12:00:00`).toISOString() } : {}),
+        }),
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const json = await res.json();
+      setSeenCount(json.data?.count ?? (seenCount ?? 1) + 1);
+      const loggedAt = json.data?.event?.watchedAt ?? null;
+      if (loggedAt && (!lastSeenAt || new Date(loggedAt) > new Date(lastSeenAt))) setLastSeenAt(loggedAt);
+      setLastLoggedEventId(json.data?.event?.id ?? null);
+      setRewatchDateOpen(false);
+      setRewatchDate('');
+      toast({ title: 'Rewatch logged' });
+    } catch {
+      toast({ title: "Couldn't log the rewatch. Check your connection and try again.", variant: 'destructive' });
+    } finally {
+      setRewatchBusy(false);
+    }
+  };
+
+  const undoRewatch = async () => {
+    if (!lastLoggedEventId || rewatchBusy) return;
+    setRewatchBusy(true);
+    try {
+      const res = await fetchWithAuth(`/api/diary/${lastLoggedEventId}`, { method: 'DELETE' });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const json = await res.json();
+      setSeenCount(json.data?.remaining ?? null);
+      setLastLoggedEventId(null);
+      toast({ title: 'Rewatch removed' });
+    } catch {
+      toast({ title: "Couldn't undo. Check your connection and try again.", variant: 'destructive' });
+    } finally {
+      setRewatchBusy(false);
+    }
+  };
 
   // Refetch the Cinephilers aggregate whenever this user rates/unrates, so the
   // displayed score reflects their own just-cast vote without a page reload.
@@ -1272,6 +1343,78 @@ export default function MovieDetailPage() {
           </Button>
           <AddToListButton movie={movie} onRequireAuth={authUser ? null : () => setAuthGate('save movies to lists')} />
         </section>
+
+        {/* Diary / rewatch strip — every tap logs a new viewing (an event, not a toggle) */}
+        {authUser && isWatched && (
+          <section className="flex flex-wrap items-center gap-3 -mt-4">
+            <div className="flex items-center gap-2 text-sm text-muted-foreground font-semibold">
+              <Repeat className="h-4 w-4 text-primary" />
+              {seenCount !== null && seenCount > 0 ? (
+                <span>
+                  Seen {seenCount}&times;
+                  {lastSeenAt && (
+                    <> &middot; last {new Date(lastSeenAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</>
+                  )}
+                </span>
+              ) : (
+                <span>Watched it again?</span>
+              )}
+            </div>
+            {!rewatchDateOpen ? (
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={rewatchBusy}
+                  className="rounded-full font-bold border-primary/40 text-primary hover:bg-primary/10"
+                  onClick={() => logRewatch()}
+                >
+                  <Repeat className="h-3.5 w-3.5 mr-1.5" />
+                  Log rewatch
+                </Button>
+                <button
+                  className="text-xs text-muted-foreground hover:text-foreground underline underline-offset-2"
+                  onClick={() => { setRewatchDate(new Date().toISOString().slice(0, 10)); setRewatchDateOpen(true); }}
+                >
+                  another date?
+                </button>
+                {lastLoggedEventId && (
+                  <button
+                    className="text-xs text-muted-foreground hover:text-destructive underline underline-offset-2"
+                    disabled={rewatchBusy}
+                    onClick={undoRewatch}
+                  >
+                    undo
+                  </button>
+                )}
+              </div>
+            ) : (
+              <div className="flex items-center gap-2">
+                <input
+                  type="date"
+                  value={rewatchDate}
+                  max={new Date().toISOString().slice(0, 10)}
+                  onChange={e => setRewatchDate(e.target.value)}
+                  className="h-8 rounded-full border border-border bg-background px-3 text-xs font-semibold"
+                />
+                <Button
+                  size="sm"
+                  disabled={rewatchBusy || !rewatchDate}
+                  className="rounded-full font-bold"
+                  onClick={() => logRewatch(rewatchDate)}
+                >
+                  Log
+                </Button>
+                <button
+                  className="text-xs text-muted-foreground hover:text-foreground underline underline-offset-2"
+                  onClick={() => setRewatchDateOpen(false)}
+                >
+                  cancel
+                </button>
+              </div>
+            )}
+          </section>
+        )}
 
         {/* Ratings */}
         <section className="grid grid-cols-1 md:grid-cols-2 gap-8 bg-muted p-8 rounded-[2.5rem] border border-border">

@@ -13,6 +13,11 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ t
   if (!mediaType || !['MOVIE', 'SHOW'].includes(mediaType)) return err('mediaType query param required');
   const tmdbId = rawId.startsWith('tmdb-') ? rawId : `tmdb-${rawId}`;
 
-  await prisma.watchedItem.deleteMany({ where: { userId: auth.sub, tmdbId, mediaType } });
+  // Removing from history removes the whole title: summary row AND its diary
+  // entries — otherwise the diary would resurrect it as "watched" on next log.
+  await Promise.all([
+    prisma.watchedItem.deleteMany({ where: { userId: auth.sub, tmdbId, mediaType } }),
+    prisma.watchEvent.deleteMany({ where: { userId: auth.sub, tmdbId, mediaType } }),
+  ]);
   return ok(null, 'Removed from watched');
 }

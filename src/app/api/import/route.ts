@@ -92,6 +92,26 @@ export async function POST(req: NextRequest) {
     }
   }
 
+  // Diary events — one per watch ROW in the file, so a Letterboxd export with
+  // several dates for the same film imports as first-watch + rewatches. Within
+  // each title, the earliest date is the original watch.
+  const eventData: { userId: string; tmdbId: string; mediaType: 'MOVIE' | 'SHOW'; watchedAt: Date; isRewatch: boolean }[] = [];
+  {
+    const byTitle = new Map<string, { tmdbId: string; mediaType: 'MOVIE' | 'SHOW'; watchedAt: Date }[]>();
+    for (const w of watchedData) {
+      const k = `${w.tmdbId}:${w.mediaType}`;
+      const arr = byTitle.get(k) ?? [];
+      arr.push(w);
+      byTitle.set(k, arr);
+    }
+    for (const rows of byTitle.values()) {
+      rows.sort((a, b) => a.watchedAt.getTime() - b.watchedAt.getTime());
+      rows.forEach((w, i) => {
+        eventData.push({ userId, tmdbId: w.tmdbId, mediaType: w.mediaType, watchedAt: w.watchedAt, isRewatch: i > 0 });
+      });
+    }
+  }
+
   // skipDuplicates guards against any (userId, tmdbId, mediaType) collision the
   // pre-filter missed (e.g. duplicate rows within the uploaded file itself).
   const [watchedRes, watchlistRes, ratingRes, reviewRes] = await Promise.all([
@@ -100,6 +120,10 @@ export async function POST(req: NextRequest) {
     ratingData.length ? prisma.rating.createMany({ data: ratingData, skipDuplicates: true }) : Promise.resolve({ count: 0 }),
     reviewData.length ? prisma.review.createMany({ data: reviewData, skipDuplicates: true }) : Promise.resolve({ count: 0 }),
   ]);
+
+  // Diary events after the watched rows land (no unique constraint to lean on,
+  // and the pre-filter already excluded titles the user had before this import).
+  if (eventData.length) await prisma.watchEvent.createMany({ data: eventData });
 
   const watchedAdded = watchedRes.count;
   const watchlistAdded = watchlistRes.count;

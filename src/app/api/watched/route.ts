@@ -24,5 +24,16 @@ export async function POST(req: NextRequest) {
     update: { watchedAt: new Date() },
   });
 
+  // First diary entry for the title. Rewatches go through POST /api/diary —
+  // this toggle only seeds the diary when the title has no entries yet.
+  const hasEvent = await prisma.watchEvent.count({
+    where: { userId: auth.sub, tmdbId, mediaType: mediaType as MediaType },
+  });
+  if (hasEvent === 0) {
+    await prisma.watchEvent.create({
+      data: { userId: auth.sub, tmdbId, mediaType: mediaType as MediaType, watchedAt: item.watchedAt },
+    });
+  }
+
   return ok(item, 'Marked as watched', { status: 201 });
 }

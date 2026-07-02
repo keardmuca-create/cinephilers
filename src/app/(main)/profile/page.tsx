@@ -11,7 +11,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { MovieCard } from '@/components/movie-card';
 import Link from 'next/link';
-import { Settings, Star, Film, List, MessageSquare, ChevronRight, Award, History, Bookmark, User, Eye, Plus, Heart, TrendingUp, Download, Trash2, Share2 } from 'lucide-react';
+import { Settings, Star, Film, List, MessageSquare, ChevronRight, Award, History, Bookmark, User, Eye, Plus, Heart, TrendingUp, Download, Trash2, Share2, Repeat, BookOpen } from 'lucide-react';
 import { ImportDialog } from '@/components/import-dialog';
 import { FavoritesSection } from '@/components/favorites-section';
 import { BarChart, Bar, XAxis, ResponsiveContainer, Cell, YAxis, Tooltip as ChartTooltip } from 'recharts';
@@ -26,6 +26,83 @@ import { readSavedRefine, applyRefineSort } from '@/lib/refine-sort';
 import type { RefineValue } from '@/components/refine-sheet';
 
 interface RatedItem { id: string; title: string; poster: string; year: string; tmdbRating?: number; userRating: number; }
+
+interface RewatchedShelfItem { id: string; count: number; title: string; poster: string; year: string }
+
+// "Comfort movies" shelf — titles watched 2+ times, most-rewatched first.
+// Server-only data (the diary is never mirrored to localStorage); the shelf
+// hides itself entirely until the user has at least one rewatch.
+function RewatchedSection() {
+  const { user } = useAuth();
+  const [items, setItems] = useState<RewatchedShelfItem[] | null>(null);
+
+  useEffect(() => {
+    if (!user?.username) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetchWithAuth(`/api/users/${user.username}/rewatched?limit=20`);
+        if (!res.ok) { if (!cancelled) setItems([]); return; }
+        const json = await res.json();
+        const rows: { tmdbId: string; count: number }[] = json.data?.items ?? [];
+        if (rows.length === 0) { if (!cancelled) setItems([]); return; }
+        const meta = await batchFetchMeta(rows.map(r => r.tmdbId));
+        if (cancelled) return;
+        setItems(rows.map(r => ({
+          id: r.tmdbId,
+          count: r.count,
+          title: meta[r.tmdbId]?.title ?? 'Untitled',
+          poster: meta[r.tmdbId]?.poster ?? '',
+          year: meta[r.tmdbId]?.year ?? '',
+        })));
+      } catch { if (!cancelled) setItems([]); }
+    })();
+    return () => { cancelled = true; };
+  }, [user?.username]);
+
+  if (!items || items.length === 0) return null;
+
+  return (
+    <section>
+      <div className="flex items-center justify-between mb-2">
+        <div className="flex items-center gap-2">
+          <div className="w-1 h-6 bg-primary rounded-full" />
+          <h3 className="text-2xl font-headline font-bold flex items-center gap-2">
+            <Repeat className="h-6 w-6 text-primary" />
+            Rewatched
+            <span className="text-2xl font-bold text-foreground">{items.length}</span>
+          </h3>
+        </div>
+        <Link href="/rewatched" className="text-xs text-primary border border-primary/30 rounded-full px-3 py-1 hover:bg-primary/10 transition-colors font-semibold flex items-center gap-1">
+          See All <ChevronRight className="h-3 w-3" />
+        </Link>
+      </div>
+      <p className="text-sm text-muted-foreground mb-5">Your comfort movies &mdash; watched again and again</p>
+      <div className="flex overflow-x-auto gap-4 pb-4 no-scrollbar -mx-6 px-6">
+        {items.map(item => (
+          <Link key={item.id} href={`/movie/${item.id}`} className="group shrink-0 w-36">
+            <div className="relative aspect-[2/3] overflow-hidden rounded-xl bg-muted shadow-lg movie-card-hover mb-2">
+              {item.poster ? (
+                <img src={item.poster} alt={item.title} className="w-full h-full object-cover" />
+              ) : (
+                <div className="w-full h-full flex items-center justify-center bg-muted">
+                  <Film className="h-9 w-9 text-primary/60" />
+                </div>
+              )}
+              <div className="absolute top-1.5 right-1.5 flex items-center gap-1 bg-background/85 backdrop-blur-sm rounded-full px-2 py-0.5">
+                <Repeat className="h-3 w-3 text-primary" />
+                <span className="text-xs font-black text-foreground">&times;{item.count}</span>
+              </div>
+            </div>
+            <p className="text-xs font-semibold font-headline line-clamp-2 group-hover:text-primary transition-colors leading-snug">
+              {item.title} {item.year ? `(${item.year})` : ''}
+            </p>
+          </Link>
+        ))}
+      </div>
+    </section>
+  );
+}
 
 type LucideIcon = React.ComponentType<{ className?: string }>;
 
@@ -1192,9 +1269,14 @@ export default function ProfilePage() {
               )}
             </h3>
           </div>
-          <Link href="/history" className="text-xs text-primary border border-primary/30 rounded-full px-3 py-1 hover:bg-primary/10 transition-colors font-semibold flex items-center gap-1">
-            See All <ChevronRight className="h-3 w-3" />
-          </Link>
+          <div className="flex items-center gap-2">
+            <Link href="/diary" className="text-xs text-primary border border-primary/30 rounded-full px-3 py-1 hover:bg-primary/10 transition-colors font-semibold flex items-center gap-1">
+              <BookOpen className="h-3 w-3" /> Diary
+            </Link>
+            <Link href="/history" className="text-xs text-primary border border-primary/30 rounded-full px-3 py-1 hover:bg-primary/10 transition-colors font-semibold flex items-center gap-1">
+              See All <ChevronRight className="h-3 w-3" />
+            </Link>
+          </div>
         </div>
         <p className="text-sm text-muted-foreground mb-5">Everything you&apos;ve watched, rated, or checked into</p>
         {recentWatched.length > 0 ? (
@@ -1240,6 +1322,9 @@ export default function ProfilePage() {
           <EmptyRow message="Movies and shows you watch will appear here" />
         )}
       </section>
+
+      {/* Rewatched — comfort movies, watched 2+ times */}
+      <RewatchedSection />
 
       {/* Ratings */}
       <section>
