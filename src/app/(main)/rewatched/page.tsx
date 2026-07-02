@@ -1,9 +1,9 @@
 "use client"
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { ChevronLeft, Repeat, Film } from 'lucide-react';
+import { ChevronLeft, Repeat, Film, Search, X, ChevronDown, ChevronUp } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { fetchWithAuth } from '@/lib/fetch-with-auth';
 import { batchFetchMeta } from '@/lib/meta-batch';
@@ -11,17 +11,23 @@ import { useAuth } from '@/contexts/auth-context';
 
 interface RewatchedItem {
   tmdbId: string;
+  mediaType: string;
   count: number;
   lastWatchedAt: string | null;
   title: string;
   poster: string;
   year: string;
+  tmdbRating?: number;
+  userRating?: number;
 }
 
-const PAGE_SIZE = 24;
+interface WatchDate { id: string; watchedAt: string; isRewatch: boolean }
 
-// Full grid behind the profile's Rewatched shelf — every title watched 2+
-// times, most-rewatched first. Server data, paginated.
+const PAGE_SIZE = 40;
+
+// "See All" behind the profile's Rewatched shelf — Watch History-style list.
+// Each row carries its x-count badge; tapping it expands the row into that
+// title's full watch-date history (fetched on demand from the diary).
 export default function RewatchedPage() {
   const router = useRouter();
   const { user, loading: authLoading } = useAuth();
@@ -29,6 +35,9 @@ export default function RewatchedPage() {
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState('');
+  const [expanded, setExpanded] = useState<string | null>(null);
+  const [dates, setDates] = useState<Record<string, WatchDate[]>>({});
 
   const loadPage = async (p: number) => {
     if (!user?.username) return;
@@ -36,16 +45,25 @@ export default function RewatchedPage() {
       const res = await fetchWithAuth(`/api/users/${user.username}/rewatched?page=${p}&limit=${PAGE_SIZE}`);
       if (!res.ok) return;
       const json = await res.json();
-      const rows: { tmdbId: string; count: number; lastWatchedAt: string | null }[] = json.data?.items ?? [];
+      const rows: { tmdbId: string; mediaType: string; count: number; lastWatchedAt: string | null }[] = json.data?.items ?? [];
       setHasMore(json.data?.hasMore ?? false);
       if (rows.length === 0) return;
       const meta = await batchFetchMeta(rows.map(r => r.tmdbId));
-      const mapped = rows.map(r => ({
-        ...r,
-        title: meta[r.tmdbId]?.title ?? 'Untitled',
-        poster: meta[r.tmdbId]?.poster ?? '',
-        year: meta[r.tmdbId]?.year ?? '',
-      }));
+      const mapped = rows.map(r => {
+        let userRating: number | undefined;
+        try {
+          const saved = localStorage.getItem(`movie-rating-${r.tmdbId}`);
+          if (saved) userRating = parseInt(saved, 10);
+        } catch { /* ignore */ }
+        return {
+          ...r,
+          title: meta[r.tmdbId]?.title ?? 'Untitled',
+          poster: meta[r.tmdbId]?.poster ?? '',
+          year: meta[r.tmdbId]?.year ?? '',
+          tmdbRating: meta[r.tmdbId]?.tmdbRating,
+          userRating,
+        };
+      });
       setItems(prev => (p === 1 ? mapped : [...prev, ...mapped]));
     } catch { /* ignore */ }
   };
@@ -56,6 +74,28 @@ export default function RewatchedPage() {
     loadPage(1).finally(() => setLoading(false));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [authLoading, user?.id]);
+
+  // Tap the x-count: expand the row into every logged watch date for the title.
+  const toggleDates = async (item: RewatchedItem) => {
+    if (expanded === item.tmdbId) { setExpanded(null); return; }
+    setExpanded(item.tmdbId);
+    if (dates[item.tmdbId]) return; // already fetched
+    try {
+      const res = await fetchWithAuth(`/api/diary?tmdbId=${encodeURIComponent(item.tmdbId)}&mediaType=${item.mediaType}&limit=100`);
+      if (!res.ok) return;
+      const json = await res.json();
+      setDates(prev => ({ ...prev, [item.tmdbId]: json.data?.items ?? [] }));
+    } catch { /* ignore */ }
+  };
+
+  const filtered = useMemo(() => {
+    if (!search.trim()) return items;
+    const q = search.trim().toLowerCase();
+    return items.filter(i => i.title.toLowerCase().includes(q));
+  }, [items, search]);
+
+  const fmtDate = (iso: string) =>
+    new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 
   return (
     <main className="pb-32">
@@ -82,28 +122,108 @@ export default function RewatchedPage() {
           <p className="text-muted-foreground text-sm">Titles you watch more than once will appear here</p>
         </div>
       ) : (
-        <div className="px-6 pt-6">
-          <div className="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-6 gap-4">
-            {items.map(item => (
-              <Link key={item.tmdbId} href={`/movie/${item.tmdbId}`} className="group">
-                <div className="relative aspect-[2/3] overflow-hidden rounded-xl bg-muted shadow-lg movie-card-hover mb-2">
-                  {item.poster ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src={item.poster} alt={item.title} className="w-full h-full object-cover" />
-                  ) : (
-                    <div className="w-full h-full flex items-center justify-center"><Film className="h-9 w-9 text-primary/60" /></div>
-                  )}
-                  <div className="absolute top-1.5 right-1.5 flex items-center gap-1 bg-background/85 backdrop-blur-sm rounded-full px-2 py-0.5">
-                    <Repeat className="h-3 w-3 text-primary" />
-                    <span className="text-xs font-black text-foreground">&times;{item.count}</span>
-                  </div>
+        <>
+          <div className="px-6 pt-6 pb-1">
+            <h2 className="text-3xl font-headline font-bold mb-0.5">Rewatched</h2>
+            <p className="text-muted-foreground text-sm">{items.length} Title{items.length !== 1 ? 's' : ''}</p>
+          </div>
+
+          {/* Search bar */}
+          <div className="px-6 pt-4 pb-3">
+            <div className="relative">
+              <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <input
+                type="text"
+                placeholder="Search this page"
+                value={search}
+                onChange={e => setSearch(e.target.value)}
+                className="w-full bg-muted border-2 border-primary/80 rounded-2xl pl-10 pr-4 py-3 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary transition-colors"
+              />
+              {search && (
+                <button onClick={() => setSearch('')} className="absolute right-3.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
+                  <X className="h-4 w-4" />
+                </button>
+              )}
+            </div>
+          </div>
+
+          <div className="px-6 pb-2">
+            <p className="text-xs text-muted-foreground">{filtered.length} title{filtered.length !== 1 ? 's' : ''} · Most rewatched</p>
+          </div>
+
+          <div className="px-6 divide-y divide-border">
+            {filtered.map(item => (
+              <div key={item.tmdbId} className="py-3.5">
+                <div className="flex items-center gap-4">
+                  <Link href={`/movie/${item.tmdbId}`} className="group flex items-center gap-4 flex-1 min-w-0">
+                    <div className="relative w-16 aspect-[2/3] overflow-hidden rounded-lg bg-muted shadow-md shrink-0">
+                      {item.poster ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={item.poster} alt={item.title} className="w-full h-full object-cover" />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center"><Film className="h-5 w-5 text-primary/60" /></div>
+                      )}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <h3 className="text-sm font-semibold font-headline line-clamp-2 group-hover:text-primary transition-colors leading-snug mb-0.5">
+                        {item.title}
+                      </h3>
+                      <p className="text-xs text-muted-foreground mb-1.5">{item.year}</p>
+                      <div className="flex items-center gap-2.5 flex-wrap">
+                        {item.tmdbRating !== undefined && item.tmdbRating > 0 && (
+                          <div className="flex items-center gap-0.5">
+                            <span className="text-xs text-yellow-400 font-bold">★</span>
+                            <span className="text-xs font-bold text-foreground">{item.tmdbRating.toFixed(1)}</span>
+                          </div>
+                        )}
+                        {item.userRating !== undefined && (
+                          <div className="flex items-center gap-0.5">
+                            <span className="text-xs text-blue-400 font-bold">★</span>
+                            <span className="text-xs font-bold text-blue-400">{item.userRating}</span>
+                          </div>
+                        )}
+                        {item.lastWatchedAt && (
+                          <span className="text-xs text-muted-foreground">Last on {fmtDate(item.lastWatchedAt)}</span>
+                        )}
+                      </div>
+                    </div>
+                  </Link>
+                  <button
+                    onClick={() => toggleDates(item)}
+                    aria-label={`Show all watch dates for ${item.title}`}
+                    className="flex items-center gap-1.5 bg-muted rounded-full px-3 py-1.5 shrink-0 hover:bg-primary/10 transition-colors"
+                  >
+                    <Repeat className="h-3.5 w-3.5 text-primary" />
+                    <span className="text-sm font-black text-foreground">&times;{item.count}</span>
+                    {expanded === item.tmdbId
+                      ? <ChevronUp className="h-3.5 w-3.5 text-muted-foreground" />
+                      : <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />}
+                  </button>
                 </div>
-                <p className="text-xs font-semibold font-headline line-clamp-2 group-hover:text-primary transition-colors leading-snug">
-                  {item.title} {item.year ? `(${item.year})` : ''}
-                </p>
-              </Link>
+
+                {/* Expanded: every logged watch date for this title */}
+                {expanded === item.tmdbId && (
+                  <div className="mt-3 ml-20 border-l-2 border-primary/20 pl-4 space-y-1.5">
+                    {!dates[item.tmdbId] ? (
+                      <p className="text-xs text-muted-foreground">Loading dates…</p>
+                    ) : (
+                      dates[item.tmdbId].map(d => (
+                        <div key={d.id} className="flex items-center gap-2 text-xs">
+                          <span className="font-semibold text-foreground">{fmtDate(d.watchedAt)}</span>
+                          {d.isRewatch ? (
+                            <span className="text-primary font-bold flex items-center gap-1"><Repeat className="h-3 w-3" /> Rewatch</span>
+                          ) : (
+                            <span className="text-muted-foreground">First watch</span>
+                          )}
+                        </div>
+                      ))
+                    )}
+                  </div>
+                )}
+              </div>
             ))}
           </div>
+
           {hasMore && (
             <div className="pt-8 text-center">
               <Button
@@ -115,7 +235,7 @@ export default function RewatchedPage() {
               </Button>
             </div>
           )}
-        </div>
+        </>
       )}
     </main>
   );
