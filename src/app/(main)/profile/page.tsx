@@ -27,30 +27,31 @@ import type { RefineValue } from '@/components/refine-sheet';
 
 interface RatedItem { id: string; title: string; poster: string; year: string; tmdbRating?: number; userRating: number; }
 
-interface RewatchedShelfItem { id: string; count: number; title: string; poster: string; year: string }
+interface DiaryShelfItem { id: string; count: number; lastWatchedAt: string | null; title: string; poster: string; year: string }
 
-// "Comfort movies" shelf — titles watched 2+ times, most-rewatched first.
-// Server-only data (the diary is never mirrored to localStorage); the shelf
-// hides itself entirely until the user has at least one rewatch.
-function RewatchedSection() {
+// Diary shelf — the most recent diary entries, one card per title, with the
+// watch date and an xN badge on anything logged more than once. Server-only
+// data (the diary is never mirrored to localStorage).
+function DiarySection() {
   const { user } = useAuth();
-  const [items, setItems] = useState<RewatchedShelfItem[] | null>(null);
+  const [items, setItems] = useState<DiaryShelfItem[] | null>(null);
 
   useEffect(() => {
     if (!user?.username) return;
     let cancelled = false;
     (async () => {
       try {
-        const res = await fetchWithAuth(`/api/users/${user.username}/rewatched?limit=20`);
+        const res = await fetchWithAuth(`/api/users/${user.username}/rewatched?min=1&sort=recent&limit=20`);
         if (!res.ok) { if (!cancelled) setItems([]); return; }
         const json = await res.json();
-        const rows: { tmdbId: string; count: number }[] = json.data?.items ?? [];
+        const rows: { tmdbId: string; count: number; lastWatchedAt: string | null }[] = json.data?.items ?? [];
         if (rows.length === 0) { if (!cancelled) setItems([]); return; }
         const meta = await batchFetchMeta(rows.map(r => r.tmdbId));
         if (cancelled) return;
         setItems(rows.map(r => ({
           id: r.tmdbId,
           count: r.count,
+          lastWatchedAt: r.lastWatchedAt,
           title: meta[r.tmdbId]?.title ?? 'Untitled',
           poster: meta[r.tmdbId]?.poster ?? '',
           year: meta[r.tmdbId]?.year ?? '',
@@ -68,16 +69,15 @@ function RewatchedSection() {
         <div className="flex items-center gap-2">
           <div className="w-1 h-6 bg-primary rounded-full" />
           <h3 className="text-2xl font-headline font-bold flex items-center gap-2">
-            <Repeat className="h-6 w-6 text-primary" />
-            Rewatched
-            <span className="text-2xl font-bold text-foreground">{items.length}</span>
+            <BookOpen className="h-6 w-6 text-primary" />
+            Diary
           </h3>
         </div>
-        <Link href="/rewatched" className="text-xs text-primary border border-primary/30 rounded-full px-3 py-1 hover:bg-primary/10 transition-colors font-semibold flex items-center gap-1">
+        <Link href="/diary" className="text-xs text-primary border border-primary/30 rounded-full px-3 py-1 hover:bg-primary/10 transition-colors font-semibold flex items-center gap-1">
           See All <ChevronRight className="h-3 w-3" />
         </Link>
       </div>
-      <p className="text-sm text-muted-foreground mb-5">Your comfort movies &mdash; watched again and again</p>
+      <p className="text-sm text-muted-foreground mb-5">Every watch, dated &mdash; rewatches wear their count</p>
       <div className="flex overflow-x-auto gap-4 pb-4 no-scrollbar -mx-6 px-6">
         {items.map(item => (
           <Link key={item.id} href={`/movie/${item.id}`} className="group shrink-0 w-36">
@@ -89,11 +89,18 @@ function RewatchedSection() {
                   <Film className="h-9 w-9 text-primary/60" />
                 </div>
               )}
-              <div className="absolute top-1.5 right-1.5 flex items-center gap-1 bg-background/85 backdrop-blur-sm rounded-full px-2 py-0.5">
-                <Repeat className="h-3 w-3 text-primary" />
-                <span className="text-xs font-black text-foreground">&times;{item.count}</span>
-              </div>
+              {item.count > 1 && (
+                <div className="absolute top-1.5 right-1.5 flex items-center gap-1 bg-background/85 backdrop-blur-sm rounded-full px-2 py-0.5">
+                  <Repeat className="h-3 w-3 text-primary" />
+                  <span className="text-xs font-black text-foreground">&times;{item.count}</span>
+                </div>
+              )}
             </div>
+            {item.lastWatchedAt && (
+              <p className="text-[11px] text-muted-foreground font-bold mb-0.5">
+                {new Date(item.lastWatchedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+              </p>
+            )}
             <p className="text-xs font-semibold font-headline line-clamp-2 group-hover:text-primary transition-colors leading-snug">
               {item.title} {item.year ? `(${item.year})` : ''}
             </p>
@@ -1269,14 +1276,9 @@ export default function ProfilePage() {
               )}
             </h3>
           </div>
-          <div className="flex items-center gap-2">
-            <Link href="/diary" className="text-xs text-primary border border-primary/30 rounded-full px-3 py-1 hover:bg-primary/10 transition-colors font-semibold flex items-center gap-1">
-              <BookOpen className="h-3 w-3" /> Diary
-            </Link>
-            <Link href="/history" className="text-xs text-primary border border-primary/30 rounded-full px-3 py-1 hover:bg-primary/10 transition-colors font-semibold flex items-center gap-1">
-              See All <ChevronRight className="h-3 w-3" />
-            </Link>
-          </div>
+          <Link href="/history" className="text-xs text-primary border border-primary/30 rounded-full px-3 py-1 hover:bg-primary/10 transition-colors font-semibold flex items-center gap-1">
+            See All <ChevronRight className="h-3 w-3" />
+          </Link>
         </div>
         <p className="text-sm text-muted-foreground mb-5">Everything you&apos;ve watched, rated, or checked into</p>
         {recentWatched.length > 0 ? (
@@ -1323,8 +1325,8 @@ export default function ProfilePage() {
         )}
       </section>
 
-      {/* Rewatched — comfort movies, watched 2+ times */}
-      <RewatchedSection />
+      {/* Diary — every watch dated, rewatches wear their count */}
+      <DiarySection />
 
       {/* Ratings */}
       <section>

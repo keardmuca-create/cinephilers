@@ -4,13 +4,17 @@ import { ok, err } from '@/lib/api-response';
 import { getCurrentUser } from '@/lib/auth-utils';
 import { clampInt } from '@/lib/query-params';
 
-// Titles this user has watched 2+ times, most-rewatched first. Same privacy
+// Per-title diary aggregate: watch count + latest watch date per title. By
+// default only titles watched 2+ times ("rewatched"); ?min=1 returns the whole
+// diary. ?sort=recent orders by latest watch instead of count. Same privacy
 // gate as the other users/[username]/* content endpoints.
 export async function GET(req: NextRequest, { params }: { params: Promise<{ username: string }> }) {
   const { username } = await params;
   const { searchParams } = new URL(req.url);
   const page = clampInt(searchParams.get('page'), 1, 1, 1_000_000);
   const limit = clampInt(searchParams.get('limit'), 20, 1, 100);
+  const min = clampInt(searchParams.get('min'), 2, 1, 2);
+  const sort = searchParams.get('sort') === 'recent' ? 'recent' : 'count';
 
   const user = await prisma.user.findUnique({
     where: { username: username.toLowerCase() },
@@ -35,8 +39,10 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ user
     where: { userId: user.id },
     _count: { _all: true },
     _max: { watchedAt: true },
-    having: { tmdbId: { _count: { gt: 1 } } },
-    orderBy: [{ _count: { tmdbId: 'desc' } }, { _max: { watchedAt: 'desc' } }],
+    having: { tmdbId: { _count: { gte: min } } },
+    orderBy: sort === 'recent'
+      ? [{ _max: { watchedAt: 'desc' } }, { _count: { tmdbId: 'desc' } }]
+      : [{ _count: { tmdbId: 'desc' } }, { _max: { watchedAt: 'desc' } }],
     skip: (page - 1) * limit,
     take: limit + 1, // one extra to know if there's a next page
   });

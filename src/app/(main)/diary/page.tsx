@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { ChevronLeft, BookOpen, Film, Repeat, Trash2 } from 'lucide-react';
+import { ChevronLeft, BookOpen, Repeat, Film, Search, X, ChevronDown, ChevronUp, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { toast } from '@/hooks/use-toast';
 import { fetchWithAuth } from '@/lib/fetch-with-auth';
@@ -12,74 +12,115 @@ import { removeFromWatchLog } from '@/lib/badges';
 import { removeManualWatch } from '@/lib/media-id';
 import { useAuth } from '@/contexts/auth-context';
 
-interface DiaryEntry {
-  id: string;
+interface DiaryTitle {
   tmdbId: string;
   mediaType: string;
-  isRewatch: boolean;
-  watchedAt: string;
+  count: number;
+  lastWatchedAt: string | null;
+  title: string;
+  poster: string;
+  year: string;
+  tmdbRating?: number;
+  userRating?: number;
 }
 
-interface EntryMeta { title: string; poster: string; year: string }
+interface WatchDate { id: string; watchedAt: string; isRewatch: boolean }
+
+type SortMode = 'recent' | 'count';
 
 const PAGE_SIZE = 40;
 
-// The diary is server-only data — fetched paginated, never mirrored into
-// localStorage (deliberately unlike the rest of the library).
+// The diary: one row per title with its watch count; tapping the xN badge
+// expands the row into every logged watch date (with per-date delete).
+// "Recent" = latest watch first (the diary feel); "Most rewatched" = comfort
+// movies ranking. Server data only — never mirrored into localStorage.
 export default function DiaryPage() {
   const router = useRouter();
   const { user, loading: authLoading } = useAuth();
-  const [entries, setEntries] = useState<DiaryEntry[]>([]);
-  const [meta, setMeta] = useState<Record<string, EntryMeta>>({});
+  const [items, setItems] = useState<DiaryTitle[]>([]);
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(false);
-  const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState('');
+  const [sort, setSort] = useState<SortMode>('recent');
+  const [expanded, setExpanded] = useState<string | null>(null);
+  const [dates, setDates] = useState<Record<string, WatchDate[]>>({});
   const [busyId, setBusyId] = useState<string | null>(null);
 
-  const loadPage = async (p: number) => {
+  const loadPage = async (p: number, mode: SortMode) => {
+    if (!user?.username) return;
     try {
-      const res = await fetchWithAuth(`/api/diary?page=${p}&limit=${PAGE_SIZE}`);
+      const res = await fetchWithAuth(`/api/users/${user.username}/rewatched?min=1&sort=${mode}&page=${p}&limit=${PAGE_SIZE}`);
       if (!res.ok) return;
       const json = await res.json();
-      const items: DiaryEntry[] = json.data?.items ?? [];
+      const rows: { tmdbId: string; mediaType: string; count: number; lastWatchedAt: string | null }[] = json.data?.items ?? [];
       setHasMore(json.data?.hasMore ?? false);
-      setTotal(json.data?.total ?? 0);
-      setEntries(prev => (p === 1 ? items : [...prev, ...items]));
-      const metaMap = await batchFetchMeta(items.map(e => e.tmdbId));
-      setMeta(prev => ({
-        ...prev,
-        ...Object.fromEntries(Object.entries(metaMap).map(([id, m]) => [id, { title: m.title, poster: m.poster, year: m.year }])),
-      }));
+      if (rows.length === 0) { if (p === 1) setItems([]); return; }
+      const meta = await batchFetchMeta(rows.map(r => r.tmdbId));
+      const mapped = rows.map(r => {
+        let userRating: number | undefined;
+        try {
+          const saved = localStorage.getItem(`movie-rating-${r.tmdbId}`);
+          if (saved) userRating = parseInt(saved, 10);
+        } catch { /* ignore */ }
+        return {
+          ...r,
+          title: meta[r.tmdbId]?.title ?? 'Untitled',
+          poster: meta[r.tmdbId]?.poster ?? '',
+          year: meta[r.tmdbId]?.year ?? '',
+          tmdbRating: meta[r.tmdbId]?.tmdbRating,
+          userRating,
+        };
+      });
+      setItems(prev => (p === 1 ? mapped : [...prev, ...mapped]));
     } catch { /* ignore */ }
   };
 
   useEffect(() => {
     if (authLoading) return;
     if (!user) { setLoading(false); return; }
-    loadPage(1).finally(() => setLoading(false));
+    setLoading(true);
+    setPage(1);
+    setExpanded(null);
+    loadPage(1, sort).finally(() => setLoading(false));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [authLoading, user?.id]);
+  }, [authLoading, user?.id, sort]);
 
-  const removeEntry = async (entry: DiaryEntry) => {
-    if (busyId) return;
-    setBusyId(entry.id);
+  // Tap the x-count: expand the row into every logged watch date for the title.
+  const toggleDates = async (item: DiaryTitle) => {
+    if (expanded === item.tmdbId) { setExpanded(null); return; }
+    setExpanded(item.tmdbId);
+    if (dates[item.tmdbId]) return; // already fetched
     try {
-      // Server first, always — a fire-and-forget delete that fails silently
-      // would resurrect the entry on the next sync.
-      const res = await fetchWithAuth(`/api/diary/${entry.id}`, { method: 'DELETE' });
+      const res = await fetchWithAuth(`/api/diary?tmdbId=${encodeURIComponent(item.tmdbId)}&mediaType=${item.mediaType}&limit=100`);
+      if (!res.ok) return;
+      const json = await res.json();
+      setDates(prev => ({ ...prev, [item.tmdbId]: json.data?.items ?? [] }));
+    } catch { /* ignore */ }
+  };
+
+  // Delete one logged date ("logged by mistake"). Server first, always —
+  // deleting the title's last entry also un-marks it watched.
+  const removeDate = async (item: DiaryTitle, d: WatchDate) => {
+    if (busyId) return;
+    setBusyId(d.id);
+    try {
+      const res = await fetchWithAuth(`/api/diary/${d.id}`, { method: 'DELETE' });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const json = await res.json();
-      setEntries(prev => prev.filter(e => e.id !== entry.id));
-      setTotal(t => Math.max(0, t - 1));
-      // Deleting the title's LAST entry un-marks it watched — mirror locally.
-      if ((json.data?.remaining ?? 1) === 0) {
+      const remaining = json.data?.remaining ?? 0;
+      setDates(prev => ({ ...prev, [item.tmdbId]: (prev[item.tmdbId] ?? []).filter(x => x.id !== d.id) }));
+      if (remaining === 0) {
+        setItems(prev => prev.filter(x => x.tmdbId !== item.tmdbId));
+        setExpanded(null);
         try {
-          localStorage.removeItem(`watched-${entry.tmdbId}`);
-          removeFromWatchLog(entry.tmdbId, 'movie');
-          removeManualWatch(entry.tmdbId);
+          localStorage.removeItem(`watched-${item.tmdbId}`);
+          removeFromWatchLog(item.tmdbId, 'movie');
+          removeManualWatch(item.tmdbId);
         } catch { /* ignore */ }
         window.dispatchEvent(new Event('cinephilers-watched-changed'));
+      } else {
+        setItems(prev => prev.map(x => (x.tmdbId === item.tmdbId ? { ...x, count: remaining } : x)));
       }
       toast({ title: 'Diary entry removed' });
     } catch {
@@ -89,17 +130,14 @@ export default function DiaryPage() {
     }
   };
 
-  // Group by "Month Year" of the watch date, preserving newest-first order.
-  const groups = useMemo(() => {
-    const out: { label: string; items: DiaryEntry[] }[] = [];
-    for (const e of entries) {
-      const label = new Date(e.watchedAt).toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
-      const last = out[out.length - 1];
-      if (last && last.label === label) last.items.push(e);
-      else out.push({ label, items: [e] });
-    }
-    return out;
-  }, [entries]);
+  const filtered = useMemo(() => {
+    if (!search.trim()) return items;
+    const q = search.trim().toLowerCase();
+    return items.filter(i => i.title.toLowerCase().includes(q));
+  }, [items, search]);
+
+  const fmtDate = (iso: string) =>
+    new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 
   return (
     <main className="pb-32">
@@ -110,7 +148,6 @@ export default function DiaryPage() {
         <h1 className="text-lg font-headline font-bold truncate flex-1 flex items-center gap-2">
           <BookOpen className="h-5 w-5 text-primary" /> Diary
         </h1>
-        {total > 0 && <span className="text-xs text-muted-foreground font-semibold">{total} entries</span>}
       </div>
 
       {loading ? (
@@ -121,71 +158,153 @@ export default function DiaryPage() {
           <p className="text-muted-foreground text-sm">Log in to see your diary</p>
           <Button asChild className="rounded-full font-bold mt-2"><Link href="/login">Log In</Link></Button>
         </div>
-      ) : entries.length === 0 ? (
+      ) : items.length === 0 && !search ? (
         <div className="flex flex-col items-center justify-center py-20 gap-3 text-center px-6">
           <BookOpen className="h-12 w-12 text-muted-foreground/20" />
           <p className="text-muted-foreground text-sm">Every film you watch gets a dated entry here</p>
         </div>
       ) : (
-        <div className="px-6">
-          {groups.map(group => (
-            <section key={group.label} className="pt-6">
-              <h2 className="text-xs font-black uppercase tracking-[0.2em] text-muted-foreground mb-2">{group.label}</h2>
-              <div className="divide-y divide-border">
-                {group.items.map(entry => {
-                  const m = meta[entry.tmdbId];
-                  const day = new Date(entry.watchedAt).toLocaleDateString('en-US', { day: '2-digit' });
-                  return (
-                    <div key={entry.id} className="flex items-center gap-4 py-3">
-                      <div className="w-8 text-center shrink-0">
-                        <span className="text-lg font-black font-headline text-foreground">{day}</span>
-                      </div>
-                      <Link href={`/movie/${entry.tmdbId}`} className="group flex items-center gap-3 flex-1 min-w-0">
-                        <div className="relative w-11 aspect-[2/3] overflow-hidden rounded-md bg-muted shrink-0">
-                          {m?.poster ? (
-                            // eslint-disable-next-line @next/next/no-img-element
-                            <img src={m.poster} alt={m?.title ?? ''} className="w-full h-full object-cover" />
-                          ) : (
-                            <div className="w-full h-full flex items-center justify-center"><Film className="h-4 w-4 text-primary/60" /></div>
-                          )}
-                        </div>
-                        <div className="min-w-0">
-                          <p className="text-sm font-semibold font-headline line-clamp-1 group-hover:text-primary transition-colors">
-                            {m?.title ?? 'Loading…'} {m?.year ? <span className="text-muted-foreground font-normal">({m.year})</span> : null}
-                          </p>
-                          {entry.isRewatch && (
-                            <p className="text-[11px] text-primary font-bold flex items-center gap-1 mt-0.5">
-                              <Repeat className="h-3 w-3" /> Rewatch
-                            </p>
-                          )}
-                        </div>
-                      </Link>
-                      <button
-                        onClick={() => removeEntry(entry)}
-                        disabled={busyId === entry.id}
-                        aria-label={`Remove diary entry for ${m?.title ?? entry.tmdbId}`}
-                        className="rounded-full p-2 text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors shrink-0"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </button>
+        <>
+          <div className="px-6 pt-6 pb-1">
+            <h2 className="text-3xl font-headline font-bold mb-0.5">Diary</h2>
+            <p className="text-muted-foreground text-sm">{items.length}{hasMore ? '+' : ''} Title{items.length !== 1 ? 's' : ''}</p>
+          </div>
+
+          {/* Search bar */}
+          <div className="px-6 pt-4 pb-3">
+            <div className="relative">
+              <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <input
+                type="text"
+                placeholder="Search this page"
+                value={search}
+                onChange={e => setSearch(e.target.value)}
+                className="w-full bg-muted border-2 border-primary/80 rounded-2xl pl-10 pr-4 py-3 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary transition-colors"
+              />
+              {search && (
+                <button onClick={() => setSearch('')} className="absolute right-3.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
+                  <X className="h-4 w-4" />
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* Sort toggle */}
+          <div className="px-6 pb-4 flex items-center justify-between">
+            <p className="text-xs text-muted-foreground">
+              {filtered.length} title{filtered.length !== 1 ? 's' : ''} · {sort === 'recent' ? 'Recently watched' : 'Most rewatched'}
+            </p>
+            <div className="flex items-center gap-1.5">
+              <button
+                onClick={() => setSort('recent')}
+                className={`text-xs font-semibold rounded-full px-3 py-1 border transition-colors ${sort === 'recent' ? 'bg-primary/10 border-primary/40 text-primary' : 'border-border text-muted-foreground hover:text-foreground'}`}
+              >
+                Recent
+              </button>
+              <button
+                onClick={() => setSort('count')}
+                className={`text-xs font-semibold rounded-full px-3 py-1 border transition-colors flex items-center gap-1 ${sort === 'count' ? 'bg-primary/10 border-primary/40 text-primary' : 'border-border text-muted-foreground hover:text-foreground'}`}
+              >
+                <Repeat className="h-3 w-3" /> Most rewatched
+              </button>
+            </div>
+          </div>
+
+          <div className="px-6 divide-y divide-border">
+            {filtered.map(item => (
+              <div key={item.tmdbId} className="py-3.5">
+                <div className="flex items-center gap-4">
+                  <Link href={`/movie/${item.tmdbId}`} className="group flex items-center gap-4 flex-1 min-w-0">
+                    <div className="relative w-16 aspect-[2/3] overflow-hidden rounded-lg bg-muted shadow-md shrink-0">
+                      {item.poster ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={item.poster} alt={item.title} className="w-full h-full object-cover" />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center"><Film className="h-5 w-5 text-primary/60" /></div>
+                      )}
                     </div>
-                  );
-                })}
+                    <div className="flex-1 min-w-0">
+                      <h3 className="text-sm font-semibold font-headline line-clamp-2 group-hover:text-primary transition-colors leading-snug mb-0.5">
+                        {item.title}
+                      </h3>
+                      <p className="text-xs text-muted-foreground mb-1.5">{item.year}</p>
+                      <div className="flex items-center gap-2.5 flex-wrap">
+                        {item.tmdbRating !== undefined && item.tmdbRating > 0 && (
+                          <div className="flex items-center gap-0.5">
+                            <span className="text-xs text-yellow-400 font-bold">★</span>
+                            <span className="text-xs font-bold text-foreground">{item.tmdbRating.toFixed(1)}</span>
+                          </div>
+                        )}
+                        {item.userRating !== undefined && (
+                          <div className="flex items-center gap-0.5">
+                            <span className="text-xs text-blue-400 font-bold">★</span>
+                            <span className="text-xs font-bold text-blue-400">{item.userRating}</span>
+                          </div>
+                        )}
+                        {item.lastWatchedAt && (
+                          <span className="text-xs text-muted-foreground">
+                            {item.count > 1 ? 'Last on' : 'Watched'} {fmtDate(item.lastWatchedAt)}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </Link>
+                  <button
+                    onClick={() => toggleDates(item)}
+                    aria-label={`Show all watch dates for ${item.title}`}
+                    className="flex items-center gap-1.5 bg-muted rounded-full px-3 py-1.5 shrink-0 hover:bg-primary/10 transition-colors"
+                  >
+                    <Repeat className={`h-3.5 w-3.5 ${item.count > 1 ? 'text-primary' : 'text-muted-foreground'}`} />
+                    <span className="text-sm font-black text-foreground">&times;{item.count}</span>
+                    {expanded === item.tmdbId
+                      ? <ChevronUp className="h-3.5 w-3.5 text-muted-foreground" />
+                      : <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />}
+                  </button>
+                </div>
+
+                {/* Expanded: every logged watch date for this title */}
+                {expanded === item.tmdbId && (
+                  <div className="mt-3 ml-20 border-l-2 border-primary/20 pl-4 space-y-1">
+                    {!dates[item.tmdbId] ? (
+                      <p className="text-xs text-muted-foreground">Loading dates…</p>
+                    ) : (
+                      dates[item.tmdbId].map(d => (
+                        <div key={d.id} className="flex items-center gap-2 text-xs group/date">
+                          <span className="font-semibold text-foreground">{fmtDate(d.watchedAt)}</span>
+                          {d.isRewatch ? (
+                            <span className="text-primary font-bold flex items-center gap-1"><Repeat className="h-3 w-3" /> Rewatch</span>
+                          ) : (
+                            <span className="text-muted-foreground">First watch</span>
+                          )}
+                          <button
+                            onClick={() => removeDate(item, d)}
+                            disabled={busyId === d.id}
+                            aria-label={`Remove ${fmtDate(d.watchedAt)} entry for ${item.title}`}
+                            className="p-1 rounded-full text-muted-foreground/50 hover:text-destructive hover:bg-destructive/10 transition-colors"
+                          >
+                            <Trash2 className="h-3 w-3" />
+                          </button>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                )}
               </div>
-            </section>
-          ))}
+            ))}
+          </div>
+
           {hasMore && (
             <div className="pt-8 text-center">
               <Button
                 variant="outline"
                 className="rounded-full font-bold"
-                onClick={() => { const next = page + 1; setPage(next); loadPage(next); }}
+                onClick={() => { const next = page + 1; setPage(next); loadPage(next, sort); }}
               >
                 Load more
               </Button>
             </div>
           )}
-        </div>
+        </>
       )}
     </main>
   );
