@@ -96,6 +96,9 @@ export async function POST(req: NextRequest) {
   // several dates for the same film imports as first-watch + rewatches. Within
   // each title, the earliest date is the original watch.
   const eventData: { userId: string; tmdbId: string; mediaType: 'MOVIE' | 'SHOW'; watchedAt: Date; isRewatch: boolean }[] = [];
+  // One summary row per title, stamped with its LATEST watch date so rewatched
+  // films sort by their most recent viewing in history (matches POST /api/diary).
+  const watchedRows: typeof watchedData = [];
   {
     const byTitle = new Map<string, { tmdbId: string; mediaType: 'MOVIE' | 'SHOW'; watchedAt: Date }[]>();
     for (const w of watchedData) {
@@ -109,13 +112,15 @@ export async function POST(req: NextRequest) {
       rows.forEach((w, i) => {
         eventData.push({ userId, tmdbId: w.tmdbId, mediaType: w.mediaType, watchedAt: w.watchedAt, isRewatch: i > 0 });
       });
+      const last = rows[rows.length - 1];
+      watchedRows.push({ userId, tmdbId: last.tmdbId, mediaType: last.mediaType, watchedAt: last.watchedAt });
     }
   }
 
   // skipDuplicates guards against any (userId, tmdbId, mediaType) collision the
   // pre-filter missed (e.g. duplicate rows within the uploaded file itself).
   const [watchedRes, watchlistRes, ratingRes, reviewRes] = await Promise.all([
-    watchedData.length ? prisma.watchedItem.createMany({ data: watchedData, skipDuplicates: true }) : Promise.resolve({ count: 0 }),
+    watchedRows.length ? prisma.watchedItem.createMany({ data: watchedRows, skipDuplicates: true }) : Promise.resolve({ count: 0 }),
     watchlistData.length ? prisma.watchlistItem.createMany({ data: watchlistData, skipDuplicates: true }) : Promise.resolve({ count: 0 }),
     ratingData.length ? prisma.rating.createMany({ data: ratingData, skipDuplicates: true }) : Promise.resolve({ count: 0 }),
     reviewData.length ? prisma.review.createMany({ data: reviewData, skipDuplicates: true }) : Promise.resolve({ count: 0 }),

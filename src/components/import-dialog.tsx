@@ -17,7 +17,8 @@ interface ParsedItem {
   year: string;
   rating?: number;      // 1-10
   review?: string;
-  watchedAt?: string;
+  watchedAt?: string;         // earliest viewing (the first watch)
+  extraWatchDates?: string[]; // later viewings from diary.csv → become rewatches
   inWatchlist?: boolean;
 }
 
@@ -82,6 +83,33 @@ async function parseLetterboxd(file: File): Promise<ParsedItem[]> {
       year: row['Year'] ?? '',
       watchedAt: row['Date'] ? new Date(row['Date']).toISOString() : new Date().toISOString(),
       ...(items.get(key) ?? {}),
+    });
+  }
+
+  // Diary — one row per VIEWING ("Watched Date"), so a film seen 3 times has 3
+  // rows here. The earliest date becomes the first watch; the rest import as
+  // rewatches. Diary dates are more precise than watched.csv's single date, so
+  // they take precedence when present.
+  const diary = await getCSV('diary.csv');
+  const diaryDates = new Map<string, string[]>();
+  for (const row of diary) {
+    const rawDate = row['Watched Date'] || row['Date'];
+    if (!row['Name'] || !rawDate) continue;
+    const d = new Date(rawDate);
+    if (Number.isNaN(d.getTime())) continue;
+    const key = `${row['Name']}|${row['Year']}`;
+    const arr = diaryDates.get(key) ?? [];
+    arr.push(d.toISOString());
+    diaryDates.set(key, arr);
+  }
+  for (const [key, datesRaw] of diaryDates) {
+    const dates = datesRaw.sort(); // ISO strings sort chronologically
+    const [name, year] = key.split('|');
+    const existing = items.get(key) ?? { title: name, year };
+    items.set(key, {
+      ...existing,
+      watchedAt: dates[0],
+      extraWatchDates: dates.slice(1).length ? dates.slice(1) : undefined,
     });
   }
 
@@ -345,10 +373,21 @@ export function ImportDialog({ onClose }: { onClose: () => void }) {
     // Refresh token first so a long matching step can't cause a mid-import logout
     await fetch('/api/auth/refresh', { method: 'POST', credentials: 'include' }).catch(() => {});
     try {
+      // Expand diary rewatches into their own rows: the server logs one diary
+      // event per row, marking everything after a title's earliest date as a
+      // rewatch. Unchecked films drop their rewatch rows along with the film.
+      const payloadItems = toImport.flatMap(item => [
+        item,
+        ...(item.extraWatchDates ?? []).map(d => ({
+          tmdbId: item.tmdbId,
+          mediaType: item.mediaType,
+          watchedAt: d,
+        })),
+      ]);
       const res = await fetchWithAuth('/api/import', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ items: toImport }),
+        body: JSON.stringify({ items: payloadItems }),
       });
       const json = await res.json();
       if (!res.ok) { setError(json?.message ?? 'Import failed'); setStep('confirm'); return; }
@@ -358,7 +397,12 @@ export function ImportDialog({ onClose }: { onClose: () => void }) {
         for (const item of toImport) {
           const meta = { id: item.tmdbId, title: item.matchedTitle, poster: item.poster ?? '', year: item.year, type: item.mediaType === 'SHOW' ? 'show' : 'movie', language: item.language, tmdbRating: item.tmdbRating };
           localStorage.setItem(`meta-${item.tmdbId}`, JSON.stringify(meta));
-          if (item.watchedAt) { localStorage.setItem(`watched-${item.tmdbId}`, 'true'); recordWatchedAt(item.tmdbId, item.watchedAt); }
+          if (item.watchedAt) {
+            localStorage.setItem(`watched-${item.tmdbId}`, 'true');
+            recordWatchedAt(item.tmdbId, item.watchedAt);
+            // Latest rewatch date wins for history sorting (recordWatchedAt keeps the newest)
+            for (const d of item.extraWatchDates ?? []) recordWatchedAt(item.tmdbId, d);
+          }
           if (item.inWatchlist) localStorage.setItem(`watchlist-${item.tmdbId}`, JSON.stringify({ id: item.tmdbId, title: item.matchedTitle, poster: item.poster ?? '', year: item.year, type: meta.type }));
           if (item.rating) localStorage.setItem(`movie-rating-${item.tmdbId}`, String(item.rating));
           if (item.inWatchlist || item.rating) recordAddedAt(item.tmdbId, item.watchedAt || undefined);
