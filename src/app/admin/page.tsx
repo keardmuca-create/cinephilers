@@ -162,6 +162,34 @@ export default function AdminPage() {
     }
   };
 
+  // Permanent, irreversible: hard-deletes the account and cascades all their
+  // data (ratings, reviews, watchlist, etc.). Double-confirm by username so a
+  // mis-click can't wipe a real account.
+  const deleteUser = async (u: AdminUser) => {
+    const name = u.username;
+    if (!window.confirm(`Permanently delete @${name} and ALL their data? This cannot be undone.`)) return;
+    const typed = window.prompt(`Type the username "${name}" to confirm deletion:`);
+    if (typed?.trim() !== name) {
+      if (typed !== null) window.alert('Username did not match — deletion cancelled.');
+      return;
+    }
+    setActionLoadingId(u.id);
+    try {
+      const res = await fetchWithAuth('/api/admin/users', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: u.id }),
+      });
+      if (res.ok) {
+        setUserResults(prev => prev.filter(x => x.id !== u.id));
+      } else {
+        window.alert('Could not delete this account.');
+      }
+    } finally {
+      setActionLoadingId(null);
+    }
+  };
+
   if (authLoading || !user) return null;
 
   const filtered = filter === 'all' ? reports : reports.filter(r => r.status === filter);
@@ -400,6 +428,16 @@ export default function AdminPage() {
                         className={`h-8 w-8 rounded-full flex items-center justify-center transition-colors disabled:opacity-60 ${u.role === 'ADMIN' ? 'bg-yellow-500/10 hover:bg-yellow-500/20' : 'bg-primary/10 hover:bg-primary/20'}`}
                       >
                         {u.role === 'ADMIN' ? <ChevronDown className="h-4 w-4 text-yellow-400" /> : <ChevronUp className="h-4 w-4 text-primary" />}
+                      </button>
+
+                      {/* Delete account (permanent, cascades all their data) */}
+                      <button
+                        onClick={() => deleteUser(u)}
+                        disabled={actionLoadingId === u.id}
+                        title="Delete account permanently"
+                        className="h-8 w-8 rounded-full flex items-center justify-center transition-colors disabled:opacity-60 bg-red-500/10 hover:bg-red-500/20"
+                      >
+                        {actionLoadingId === u.id ? <Loader2 className="h-3.5 w-3.5 animate-spin text-red-400" /> : <Trash2 className="h-4 w-4 text-red-400" />}
                       </button>
                     </div>
                   )}
