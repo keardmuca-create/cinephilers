@@ -9,7 +9,6 @@ import { normalizeLocalMediaIds, getAddedAt, getWatchedAtISO, getManualWatchISO 
 import { BadgeCard, FeaturedSeasonalBadge, FounderFlairChip } from '@/components/badge-card';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
-import { MovieCard } from '@/components/movie-card';
 import Link from 'next/link';
 import { Settings, Star, Film, List, MessageSquare, ChevronRight, Award, History, Bookmark, User, Eye, Plus, Heart, TrendingUp, Download, Trash2, Share2, Repeat, BookOpen } from 'lucide-react';
 import { ImportDialog } from '@/components/import-dialog';
@@ -1417,8 +1416,31 @@ export default function ProfilePage() {
           ) : undefined}
         />
         {watchlist.length > 0 ? (
-          <div className="flex overflow-x-auto gap-4 pb-4 no-scrollbar">
-            {sortedWatchlist.map(m => <MovieCard key={m.id} movie={m} horizontal />)}
+          <div className="flex overflow-x-auto gap-4 pb-4 no-scrollbar -mx-6 px-6">
+            {sortedWatchlist.map(item => (
+              <Link key={item.id} href={`/movie/${item.id}`} className="group shrink-0 w-36">
+                <div className="relative aspect-[2/3] overflow-hidden rounded-xl bg-muted shadow-lg movie-card-hover mb-2">
+                  {item.poster ? (
+                    <img src={item.poster} alt={item.title} className="w-full h-full object-cover" />
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center bg-muted">
+                      <Film className="h-9 w-9 text-primary/60" />
+                    </div>
+                  )}
+                </div>
+                {item.rating > 0 && (
+                  <div className="flex items-center gap-1.5 mb-0.5 flex-wrap">
+                    <div className="flex items-center gap-0.5">
+                      <span className="text-xs text-yellow-400 font-bold">★</span>
+                      <span className="text-xs font-bold text-foreground">{item.rating.toFixed(1)}</span>
+                    </div>
+                  </div>
+                )}
+                <p className="text-xs font-semibold font-headline line-clamp-2 group-hover:text-primary transition-colors leading-snug">
+                  {item.title} {item.year ? `(${item.year})` : ''}
+                </p>
+              </Link>
+            ))}
           </div>
         ) : (
           <EmptyRow message="Save movies to watch later" />
