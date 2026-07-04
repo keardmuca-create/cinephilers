@@ -58,8 +58,10 @@ function recencyCompare(a: string, b: string, dateFor: (id: string) => string): 
   const bm = getManualWatchISO(b);
   if (am && !bm) return -1;
   if (!am && bm) return 1;
-  if (am && bm) return new Date(bm).getTime() - new Date(am).getTime();
-  return new Date(dateFor(b)).getTime() - new Date(dateFor(a)).getTime();
+  // Id tie-break: bulk-imported items share one timestamp, and without a
+  // deterministic tie-break their order reshuffles on every login sync.
+  if (am && bm) return (new Date(bm).getTime() - new Date(am).getTime()) || a.localeCompare(b);
+  return (new Date(dateFor(b)).getTime() - new Date(dateFor(a)).getTime()) || a.localeCompare(b);
 }
 
 function readMetaCache(id: string): ItemMeta | null {
@@ -456,7 +458,7 @@ export default function HistoryPage() {
       if (refine.sortDir === 'desc') {
         ids.sort((a, b) => recencyCompare(a, b, id => dateMapRef.current.get(id) ?? new Date(0).toISOString()));
       } else {
-        ids.sort((a, b) => new Date(dateMapRef.current.get(a) ?? 0).getTime() - new Date(dateMapRef.current.get(b) ?? 0).getTime());
+        ids.sort((a, b) => (new Date(dateMapRef.current.get(a) ?? 0).getTime() - new Date(dateMapRef.current.get(b) ?? 0).getTime()) || a.localeCompare(b));
       }
     }
 

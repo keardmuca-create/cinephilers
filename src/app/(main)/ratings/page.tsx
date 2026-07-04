@@ -194,7 +194,9 @@ function RatingsPageInner() {
     }
 
     if (refine.sortField === 'rating') {
-      result.sort((a, b) => b.userRating - a.userRating);
+      // Title tie-break: same-score items would otherwise reshuffle across
+      // login syncs (localStorage rebuild order is arbitrary).
+      result.sort((a, b) => (b.userRating - a.userRating) || a.title.localeCompare(b.title));
       if (refine.sortDir === 'asc') result.reverse();
     } else if (refine.sortField === 'title') {
       result.sort((a, b) => a.title.localeCompare(b.title));
@@ -214,8 +216,8 @@ function RatingsPageInner() {
         return (ta - tb) * dir;
       });
     } else {
-      // Date rated
-      result.sort((a, b) => getAddedAt(b.id) - getAddedAt(a.id));
+      // Date rated — title tie-break keeps bulk-imported same-date items stable
+      result.sort((a, b) => (getAddedAt(b.id) - getAddedAt(a.id)) || a.title.localeCompare(b.title));
       if (refine.sortDir === 'asc') result.reverse();
     }
     return result;

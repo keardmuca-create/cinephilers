@@ -242,7 +242,9 @@ export default function WatchlistPage() {
     if (refine.genre !== 'any') result = result.filter(i => i.genre.split(',').map(s => s.trim()).includes(refine.genre));
 
     if (refine.sortField === 'recent') {
-      result.sort((a, b) => getAddedAt(b.id) - getAddedAt(a.id));
+      // Title tie-break: bulk-imported items share one addedAt, and without a
+      // deterministic tie-break their order reshuffles on every login sync.
+      result.sort((a, b) => (getAddedAt(b.id) - getAddedAt(a.id)) || a.title.localeCompare(b.title));
       if (refine.sortDir === 'asc') result.reverse();
     } else if (refine.sortField === 'title') {
       result.sort((a, b) => a.title.localeCompare(b.title));

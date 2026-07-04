@@ -9,8 +9,10 @@ export async function GET(req: NextRequest) {
 
   const [ratings, watchlist, watched, reviews, favorites, lists, hidden] = await Promise.all([
     prisma.rating.findMany({ where: { userId: auth.sub }, select: { tmdbId: true, mediaType: true, score: true, createdAt: true, updatedAt: true } }),
-    prisma.watchlistItem.findMany({ where: { userId: auth.sub }, select: { tmdbId: true, mediaType: true, addedAt: true } }),
-    prisma.watchedItem.findMany({ where: { userId: auth.sub }, select: { tmdbId: true, mediaType: true, watchedAt: true } }),
+    // Deterministic order: items with identical timestamps (bulk imports) must
+    // restore in the same sequence every login, or "Date added" sorts reshuffle.
+    prisma.watchlistItem.findMany({ where: { userId: auth.sub }, select: { tmdbId: true, mediaType: true, addedAt: true }, orderBy: [{ addedAt: 'asc' }, { tmdbId: 'asc' }] }),
+    prisma.watchedItem.findMany({ where: { userId: auth.sub }, select: { tmdbId: true, mediaType: true, watchedAt: true }, orderBy: [{ watchedAt: 'asc' }, { tmdbId: 'asc' }] }),
     prisma.review.findMany({
       where: { userId: auth.sub },
       select: { tmdbId: true, mediaType: true, body: true, containsSpoiler: true, createdAt: true },
