@@ -38,13 +38,12 @@ function loadUserFromStorage(): AuthUser | null {
   } catch { return null; }
 }
 
-async function restoreFromDb() {
+async function restoreFromDb(me?: { createdAt?: string; followingCount?: number }) {
   try {
-    // Fire both requests in parallel to save one round-trip (~300-500ms)
-    const [res, meResEarly] = await Promise.all([
-      fetch('/api/sync', { credentials: 'include' }),
-      fetch('/api/users/me', { credentials: 'include' }),
-    ]);
+    // `me` is the user object refetch() already fetched from /api/users/me —
+    // passed in so we don't re-request the same endpoint here (it was a fully
+    // redundant call + DB query on every app open). We only need /api/sync now.
+    const res = await fetch('/api/sync', { credentials: 'include' });
     if (!res.ok) return;
     const { data } = await res.json();
     const { ratings: ratingsRaw, watchlist: watchlistRaw, watched: watchedRaw, reviews: reviewsRaw, favorites: favoritesRaw, lists: listsRaw, hidden } = data as {
@@ -182,16 +181,14 @@ async function restoreFromDb() {
       }
     } catch { /* ignore */ }
 
-    // Always sync signup-date and following-count from DB so badges work on every device
+    // Always sync signup-date and following-count so badges work on every device.
+    // Sourced from the user object refetch() already fetched — no extra request.
     try {
-      if (meResEarly.ok) {
-        const meData = await meResEarly.json();
-        if (meData.data?.createdAt) {
-          localStorage.setItem('signup-date', meData.data.createdAt);
-        }
-        if (typeof meData.data?.followingCount === 'number') {
-          localStorage.setItem('following-count', String(meData.data.followingCount));
-        }
+      if (me?.createdAt) {
+        localStorage.setItem('signup-date', me.createdAt);
+      }
+      if (typeof me?.followingCount === 'number') {
+        localStorage.setItem('following-count', String(me.followingCount));
       }
     } catch { /* ignore */ }
 
@@ -322,8 +319,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if (typeof fresh.followingCount === 'number') {
           try { localStorage.setItem('following-count', String(fresh.followingCount)); } catch { /* ignore */ }
         }
-        // Restore user data from DB into localStorage
-        restoreFromDb();
+        // Restore user data from DB into localStorage. Pass the user object we
+        // just fetched so restoreFromDb doesn't re-request /api/users/me.
+        restoreFromDb(data.data);
       } else {
         // API failed (e.g. mock DB cold-started) — keep whatever we have from localStorage
         const stored = loadUserFromStorage();
