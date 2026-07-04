@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Bookmark, ChevronLeft, Search, SlidersHorizontal, X, Film, Trash2 } from 'lucide-react';
 import { getAddedAt, legacyTwin } from '@/lib/media-id';
+import { persistRefine } from '@/lib/refine-sort';
 import { fetchWithAuth } from '@/lib/fetch-with-auth';
 import { removeActivity } from '@/lib/activity';
 import { batchFetchMeta } from '@/lib/meta-batch';
@@ -101,10 +102,17 @@ export default function WatchlistPage() {
   const [refine, setRefine]         = useState<RefineValue>(DEFAULT_REFINE);
 
   useEffect(() => {
-    try {
-      const saved = localStorage.getItem('watchlist-refine');
-      if (saved) setRefine({ ...DEFAULT_REFINE, ...JSON.parse(saved) });
-    } catch { /* ignore */ }
+    const readRefine = () => {
+      try {
+        const saved = localStorage.getItem('watchlist-refine');
+        if (saved) setRefine({ ...DEFAULT_REFINE, ...JSON.parse(saved) });
+      } catch { /* ignore */ }
+    };
+    readRefine();
+    // Login sync may restore the account's saved sort into localStorage after
+    // this page has already mounted — re-read it then so it applies immediately.
+    window.addEventListener('cinephilers-db-restored', readRefine);
+    return () => window.removeEventListener('cinephilers-db-restored', readRefine);
   }, []);
 
   useEffect(() => {
@@ -342,7 +350,7 @@ export default function WatchlistPage() {
         value={refine}
         onApply={v => {
           setRefine(v);
-          try { localStorage.setItem('watchlist-refine', JSON.stringify(v)); } catch { /* ignore */ }
+          persistRefine('watchlist-refine', v);
         }}
       />
     </main>

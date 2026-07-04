@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { History, Eye, Search, SlidersHorizontal, X, Trash2, Film } from 'lucide-react';
 import type { ItemMeta } from '@/app/api/meta/[id]/route';
 import { fetchWithAuth } from '@/lib/fetch-with-auth';
+import { persistRefine } from '@/lib/refine-sort';
 import { removeFromWatchLog } from '@/lib/badges';
 import { legacyTwin, normalizeLocalMediaIds, getWatchedAtISO, getManualWatchISO } from '@/lib/media-id';
 import { batchFetchMeta } from '@/lib/meta-batch';
@@ -263,10 +264,16 @@ export default function HistoryPage() {
   const [refine, setRefine]         = useState<RefineValue>(DEFAULT_REFINE);
 
   useEffect(() => {
-    try {
-      const saved = localStorage.getItem('history-refine');
-      if (saved) setRefine({ ...DEFAULT_REFINE, ...JSON.parse(saved) });
-    } catch { /* ignore */ }
+    const readRefine = () => {
+      try {
+        const saved = localStorage.getItem('history-refine');
+        if (saved) setRefine({ ...DEFAULT_REFINE, ...JSON.parse(saved) });
+      } catch { /* ignore */ }
+    };
+    readRefine();
+    // Re-read after login sync restores the account's saved sort into localStorage.
+    window.addEventListener('cinephilers-db-restored', readRefine);
+    return () => window.removeEventListener('cinephilers-db-restored', readRefine);
   }, []);
 
   const fetchingRef = useRef(new Set<string>());
@@ -546,7 +553,7 @@ export default function HistoryPage() {
         value={refine}
         onApply={v => {
           setRefine(v);
-          try { localStorage.setItem('history-refine', JSON.stringify(v)); } catch { /* ignore */ }
+          persistRefine('history-refine', v);
         }}
       />
     </main>

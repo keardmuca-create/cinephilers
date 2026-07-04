@@ -5,6 +5,7 @@ import { fetchWithAuth } from '@/lib/fetch-with-auth';
 import { canonicalId, normalizeLocalMediaIds, recordAddedAt, recordWatchedAt } from '@/lib/media-id';
 import { batchFetchMeta } from '@/lib/meta-batch';
 import { clearUserData } from '@/lib/clear-user-data';
+import { applyServerRefinePrefs } from '@/lib/refine-sort';
 
 const STORAGE_KEY = 'cinephilers_user';
 
@@ -38,8 +39,12 @@ function loadUserFromStorage(): AuthUser | null {
   } catch { return null; }
 }
 
-async function restoreFromDb(me?: { createdAt?: string; followingCount?: number }) {
+async function restoreFromDb(me?: { createdAt?: string; followingCount?: number; listPrefs?: unknown }) {
   try {
+    // Account-stored list sort preferences (Refine) → localStorage, so a
+    // browser-data clear or a fresh device restores the user's chosen sorts.
+    applyServerRefinePrefs(me?.listPrefs);
+
     // `me` is the user object refetch() already fetched from /api/users/me —
     // passed in so we don't re-request the same endpoint here (it was a fully
     // redundant call + DB query on every app open). We only need /api/sync now.

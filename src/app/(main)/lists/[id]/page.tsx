@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { ChevronLeft, Search, X, Film, Lock, Globe, SlidersHorizontal, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { fetchWithAuth } from '@/lib/fetch-with-auth';
+import { persistRefine } from '@/lib/refine-sort';
 import { useAuth } from '@/contexts/auth-context';
 import { RefineSheet, type RefineValue, type SortOption, type CountOption } from '@/components/refine-sheet';
 
@@ -340,7 +341,7 @@ export default function ListDetailPage() {
         value={refine}
         onApply={v => {
           setRefine(v);
-          try { localStorage.setItem('list-refine', JSON.stringify(v)); } catch { /* ignore */ }
+          persistRefine('list-refine', v);
         }}
       />
     </main>

@@ -15,6 +15,53 @@ export function readSavedRefine(key: string): RefineValue | null {
   return null;
 }
 
+// The four localStorage keys that hold list sort preferences, mapped to the
+// short names stored server-side in User.listPrefs.
+export const REFINE_KEYS: Record<string, string> = {
+  history: 'history-refine',
+  ratings: 'ratings-refine',
+  watchlist: 'watchlist-refine',
+  list: 'list-refine',
+};
+
+// Save a refine and sync ALL current refines to the account, so the chosen
+// sort survives a browser-data clear and follows the user across devices.
+// The server stores the whole set (last write wins), so we always send every
+// key we have locally — no read-modify-write race on the server.
+export function persistRefine(lsKey: string, value: RefineValue): void {
+  try { localStorage.setItem(lsKey, JSON.stringify(value)); } catch { /* ignore */ }
+  try {
+    const prefs: Record<string, RefineValue> = {};
+    for (const [name, key] of Object.entries(REFINE_KEYS)) {
+      const v = readSavedRefine(key);
+      if (v) prefs[name] = v;
+    }
+    // Fire-and-forget — the local write already took effect; server is backup.
+    fetch('/api/users/me/prefs', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({ listPrefs: prefs }),
+    }).catch(() => { /* ignore */ });
+  } catch { /* ignore */ }
+}
+
+// Write account-stored refine prefs into localStorage on login (server is the
+// source of truth after a browser-data clear or on a fresh device). Only fills
+// keys the server actually has, so it never clobbers a device-local sort with
+// nothing.
+export function applyServerRefinePrefs(prefs: unknown): void {
+  if (!prefs || typeof prefs !== 'object') return;
+  try {
+    for (const [name, key] of Object.entries(REFINE_KEYS)) {
+      const v = (prefs as Record<string, unknown>)[name];
+      if (v && typeof v === 'object' && typeof (v as RefineValue).sortField === 'string') {
+        localStorage.setItem(key, JSON.stringify(v));
+      }
+    }
+  } catch { /* ignore */ }
+}
+
 // Full release timestamp: prefer the cached meta's full date so same-year titles
 // order identically to the full page; fall back to Jan 1 of the year.
 function releaseTs(id: string, year?: string): number | null {

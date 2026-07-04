@@ -52,6 +52,11 @@ model User {
   passwordResetExpires     DateTime?
   tokenVersion             Int       @default(0)
 
+  // Per-user list sort preferences (Refine) — { history, ratings, watchlist,
+  // list } → RefineValue. Stored on the account so they survive a browser-data
+  // clear and stay consistent across devices.
+  listPrefs                Json?
+
   ratings          Rating[]
   reviews          Review[]
   watched          WatchedItem[]

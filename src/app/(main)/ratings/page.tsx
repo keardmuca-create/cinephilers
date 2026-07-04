@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Star, ChevronLeft, Search, SlidersHorizontal, X, Film, Eye } from 'lucide-react';
 import { normalizeLocalMediaIds, getAddedAt } from '@/lib/media-id';
+import { persistRefine } from '@/lib/refine-sort';
 import { batchFetchMeta } from '@/lib/meta-batch';
 import { getItemType, TYPE_LABELS, TYPE_ORDER, type TypeFilter } from '@/lib/media-type';
 import { RefineSheet, type RefineValue, type SortOption, type CountOption } from '@/components/refine-sheet';
@@ -86,10 +87,16 @@ function RatingsPageInner() {
   const fetchingRef = useRef(new Set<string>());
 
   useEffect(() => {
-    try {
-      const saved = localStorage.getItem('ratings-refine');
-      if (saved) setRefine({ ...DEFAULT_REFINE, ...JSON.parse(saved) });
-    } catch { /* ignore */ }
+    const readRefine = () => {
+      try {
+        const saved = localStorage.getItem('ratings-refine');
+        if (saved) setRefine({ ...DEFAULT_REFINE, ...JSON.parse(saved) });
+      } catch { /* ignore */ }
+    };
+    readRefine();
+    // Re-read after login sync restores the account's saved sort into localStorage.
+    window.addEventListener('cinephilers-db-restored', readRefine);
+    return () => window.removeEventListener('cinephilers-db-restored', readRefine);
   }, []);
 
   // Read the ?rating=N param reactively. The page doesn't remount when only the
@@ -303,7 +310,7 @@ function RatingsPageInner() {
         value={refine}
         onApply={v => {
           setRefine(v);
-          try { localStorage.setItem('ratings-refine', JSON.stringify(v)); } catch { /* ignore */ }
+          persistRefine('ratings-refine', v);
         }}
       />
     </main>
