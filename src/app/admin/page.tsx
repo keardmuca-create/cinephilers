@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
-import { Flag, Trash2, Check, X, Loader2, ShieldAlert, Users, Search, Ban, ShieldCheck, ChevronUp, ChevronDown, Database } from 'lucide-react';
+import { Flag, Trash2, Check, X, Loader2, ShieldAlert, Users, Search, Ban, ShieldCheck, ChevronUp, ChevronDown, Database, RotateCcw } from 'lucide-react';
 import { useAuth } from '@/contexts/auth-context';
 import { fetchWithAuth } from '@/lib/fetch-with-auth';
 import { relativeTime } from '@/lib/activity';
@@ -16,6 +16,7 @@ interface Report {
   createdAt: string;
   content: string | null;
   authorUsername: string | null;
+  hidden?: boolean; // review soft-removed (restorable)
   reporter: { id: string; username: string; displayName: string | null };
 }
 
@@ -137,7 +138,21 @@ export default function AdminPage() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ reportId: report.id, targetType: report.targetType, targetId: report.targetId }),
     });
-    setReports(prev => prev.map(r => r.id === report.id ? { ...r, status: 'reviewed', content: null } : r));
+    // Reviews are soft-removed (kept, hidden → restorable); comments are gone.
+    setReports(prev => prev.map(r => r.id === report.id
+      ? report.targetType === 'review'
+        ? { ...r, status: 'reviewed', hidden: true }
+        : { ...r, status: 'reviewed', content: null }
+      : r));
+  };
+
+  const restoreContent = async (report: Report) => {
+    await fetchWithAuth('/api/admin/reports', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ reportId: report.id, targetType: report.targetType, targetId: report.targetId }),
+    });
+    setReports(prev => prev.map(r => r.id === report.id ? { ...r, status: 'dismissed', hidden: false } : r));
   };
 
 
@@ -331,20 +346,34 @@ export default function AdminPage() {
                       </button>
                       <button
                         onClick={() => deleteContent(r)}
-                        title="Delete content"
+                        title="Remove content"
                         className="h-8 w-8 rounded-full bg-red-500/10 hover:bg-red-500/20 flex items-center justify-center transition-colors"
                       >
                         <Trash2 className="h-4 w-4 text-red-400" />
                       </button>
                     </div>
                   )}
-                  {r.status !== 'pending' && (
+                  {/* Restore a soft-removed review (undo a removal) */}
+                  {r.status !== 'pending' && r.targetType === 'review' && r.hidden && (
+                    <button
+                      onClick={() => restoreContent(r)}
+                      title="Restore review"
+                      className="h-8 px-3 rounded-full bg-green-500/10 hover:bg-green-500/20 flex items-center gap-1.5 shrink-0 transition-colors"
+                    >
+                      <RotateCcw className="h-3.5 w-3.5 text-green-400" />
+                      <span className="text-xs font-semibold text-green-400">Restore</span>
+                    </button>
+                  )}
+                  {r.status !== 'pending' && !(r.targetType === 'review' && r.hidden) && (
                     <Check className="h-4 w-4 text-muted-foreground shrink-0 mt-1" />
                   )}
                 </div>
 
                 {r.content && (
                   <div className="bg-muted/30 rounded-xl px-4 py-3">
+                    {r.hidden && (
+                      <p className="text-[11px] font-bold uppercase tracking-wider text-red-400/80 mb-1.5">Removed — hidden from users</p>
+                    )}
                     <p className="text-sm text-foreground/80 italic leading-relaxed line-clamp-4">&ldquo;{r.content}&rdquo;</p>
                   </div>
                 )}

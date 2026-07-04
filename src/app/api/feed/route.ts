@@ -67,7 +67,7 @@ export async function GET(req: NextRequest) {
       include: { user: userSelect },
     }),
     prisma.review.findMany({
-      where: { userId: { in: followingIds }, createdAt: { gte: since } },
+      where: { userId: { in: followingIds }, createdAt: { gte: since }, hidden: false },
       take: limit,
       orderBy: { createdAt: 'desc' },
       include: { user: userSelect },

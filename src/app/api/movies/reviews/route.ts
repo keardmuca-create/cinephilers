@@ -17,6 +17,7 @@ export async function GET(req: NextRequest) {
   const reviews = await prisma.review.findMany({
     where: {
       tmdbId,
+      hidden: false,
       OR: [
         { user: { isPrivate: false } },
         ...(auth

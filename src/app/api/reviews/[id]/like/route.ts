@@ -9,8 +9,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   if (!auth) return err('Unauthorized', 401);
 
   const { id: reviewId } = await params;
-  const review = await prisma.review.findUnique({ where: { id: reviewId }, select: { id: true, userId: true, tmdbId: true } });
-  if (!review) return err('Review not found', 404);
+  const review = await prisma.review.findUnique({ where: { id: reviewId }, select: { id: true, userId: true, tmdbId: true, hidden: true } });
+  if (!review || review.hidden) return err('Review not found', 404);
   if (!(await canViewUserContent(auth.sub, review.userId))) return err('This account is private', 403);
 
   const existing = await prisma.reviewLike.findUnique({

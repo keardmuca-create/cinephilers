@@ -14,7 +14,9 @@ export async function GET(req: NextRequest) {
     prisma.watchlistItem.findMany({ where: { userId: auth.sub }, select: { tmdbId: true, mediaType: true, addedAt: true }, orderBy: [{ addedAt: 'asc' }, { tmdbId: 'asc' }] }),
     prisma.watchedItem.findMany({ where: { userId: auth.sub }, select: { tmdbId: true, mediaType: true, watchedAt: true }, orderBy: [{ watchedAt: 'asc' }, { tmdbId: 'asc' }] }),
     prisma.review.findMany({
-      where: { userId: auth.sub },
+      // Exclude moderator-hidden reviews so a removed review doesn't sync back
+      // into the author's own device and reappear on their profile.
+      where: { userId: auth.sub, hidden: false },
       select: { tmdbId: true, mediaType: true, body: true, containsSpoiler: true, createdAt: true },
     }),
     prisma.favorite.findMany({ where: { userId: auth.sub }, select: { tmdbId: true, mediaType: true, addedAt: true }, orderBy: { addedAt: 'asc' } }),

@@ -24,9 +24,9 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ user
   }
 
   const [total, items] = await Promise.all([
-    prisma.review.count({ where: { userId: user.id } }),
+    prisma.review.count({ where: { userId: user.id, hidden: false } }),
     prisma.review.findMany({
-      where: { userId: user.id },
+      where: { userId: user.id, hidden: false },
       skip: (page - 1) * limit,
       take: limit,
       orderBy: { createdAt: 'desc' },

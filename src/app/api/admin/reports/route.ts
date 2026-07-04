@@ -22,7 +22,7 @@ export async function GET(req: NextRequest) {
     reviewIds.length
       ? prisma.review.findMany({
           where: { id: { in: reviewIds } },
-          select: { id: true, body: true, user: { select: { username: true } } },
+          select: { id: true, body: true, hidden: true, user: { select: { username: true } } },
         })
       : Promise.resolve([]),
     commentIds.length
@@ -39,7 +39,10 @@ export async function GET(req: NextRequest) {
     const target = r.targetType === 'review' ? reviewById.get(r.targetId)
       : r.targetType === 'comment' ? commentById.get(r.targetId)
       : undefined;
-    return { ...r, content: target?.body ?? null, authorUsername: target?.user.username ?? null };
+    // `hidden` = a review that was soft-removed and can be restored. Comments
+    // are hard-deleted, so their content simply goes null when removed.
+    const hidden = r.targetType === 'review' ? (reviewById.get(r.targetId)?.hidden ?? false) : false;
+    return { ...r, content: target?.body ?? null, authorUsername: target?.user.username ?? null, hidden };
   });
 
   return ok(enriched);
@@ -64,13 +67,13 @@ export async function DELETE(req: NextRequest) {
 
   const { reportId, targetType, targetId } = await req.json().catch(() => ({}));
 
-  // Delete the reported content. Reviews also decrement the author's
-  // reviewsCount, same as the normal delete path — otherwise every moderation
-  // action permanently skews that user's profile stats and badges.
+  // Remove the reported content. REVIEWS are soft-removed (hidden=true) so the
+  // action can be undone via Restore below; comments are hard-deleted. Either
+  // way the author's reviewsCount is decremented so profile stats stay accurate.
   if (targetType === 'review') {
-    const review = await prisma.review.findUnique({ where: { id: targetId }, select: { userId: true } });
-    if (review) {
-      await prisma.review.delete({ where: { id: targetId } }).catch(() => {});
+    const review = await prisma.review.findUnique({ where: { id: targetId }, select: { userId: true, hidden: true } });
+    if (review && !review.hidden) {
+      await prisma.review.update({ where: { id: targetId }, data: { hidden: true } }).catch(() => {});
       await prisma.user.update({
         where: { id: review.userId },
         data: { reviewsCount: { decrement: 1 } },
@@ -83,5 +86,33 @@ export async function DELETE(req: NextRequest) {
   // Mark report as reviewed
   await prisma.report.update({ where: { id: reportId }, data: { status: 'reviewed' } }).catch(() => {});
 
-  return ok(null, 'Content deleted');
+  return ok(null, 'Content removed');
+}
+
+// Restore a soft-removed review (undo a moderation removal). Un-hides it and
+// re-increments the author's reviewsCount; the report is marked dismissed.
+export async function POST(req: NextRequest) {
+  const { status } = await requireAdmin(req);
+  if (status === 'unauthenticated') return err('Unauthorized', 401);
+  if (status === 'forbidden') return err('Forbidden', 403);
+
+  const { reportId, targetType, targetId } = await req.json().catch(() => ({}));
+  if (targetType !== 'review') return err('Only reviews can be restored', 400);
+
+  const review = await prisma.review.findUnique({ where: { id: targetId }, select: { userId: true, hidden: true } });
+  if (!review) return err('Review no longer exists', 404);
+
+  if (review.hidden) {
+    await prisma.review.update({ where: { id: targetId }, data: { hidden: false } }).catch(() => {});
+    await prisma.user.update({
+      where: { id: review.userId },
+      data: { reviewsCount: { increment: 1 } },
+    }).catch(() => {});
+  }
+
+  if (reportId) {
+    await prisma.report.update({ where: { id: reportId }, data: { status: 'dismissed' } }).catch(() => {});
+  }
+
+  return ok(null, 'Review restored');
 }

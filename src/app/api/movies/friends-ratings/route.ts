@@ -32,7 +32,7 @@ export async function GET(req: NextRequest) {
       include: { user: userSelect },
     }),
     prisma.review.findMany({
-      where: { userId: { in: followingIds }, tmdbId },
+      where: { userId: { in: followingIds }, tmdbId, hidden: false },
       include: { user: userSelect },
     }),
   ]);

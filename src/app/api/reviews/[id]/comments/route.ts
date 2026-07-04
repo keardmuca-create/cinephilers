@@ -9,8 +9,8 @@ import { rateLimit } from '@/lib/rate-limit';
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id: reviewId } = await params;
 
-  const review = await prisma.review.findUnique({ where: { id: reviewId }, select: { userId: true } });
-  if (!review) return err('Review not found', 404);
+  const review = await prisma.review.findUnique({ where: { id: reviewId }, select: { userId: true, hidden: true } });
+  if (!review || review.hidden) return err('Review not found', 404);
   const auth = await getCurrentUser(req);
   if (!(await canViewUserContent(auth?.sub ?? null, review.userId))) return err('This account is private', 403);
 
@@ -43,8 +43,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   if (!cleanBody) return err('Comment cannot be empty', 400);
   if (cleanBody.length > 500) return err('Comment too long', 400);
 
-  const review = await prisma.review.findUnique({ where: { id: reviewId }, select: { id: true, userId: true, tmdbId: true } });
-  if (!review) return err('Review not found', 404);
+  const review = await prisma.review.findUnique({ where: { id: reviewId }, select: { id: true, userId: true, tmdbId: true, hidden: true } });
+  if (!review || review.hidden) return err('Review not found', 404);
   if (!(await canViewUserContent(auth.sub, review.userId))) return err('This account is private', 403);
 
   const comment = await prisma.reviewComment.create({

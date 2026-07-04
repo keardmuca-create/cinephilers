@@ -41,7 +41,7 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
   if (!auth) return err('Unauthorized', 401);
 
   const { id } = await params;
-  const review = await prisma.review.findUnique({ where: { id }, select: { userId: true } });
+  const review = await prisma.review.findUnique({ where: { id }, select: { userId: true, hidden: true } });
   if (!review) return err('Review not found', 404);
   if (review.userId !== auth.sub) {
     // Re-read role from the DB rather than trusting the (up to 15-min stale)
@@ -51,10 +51,14 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
   }
 
   await prisma.review.delete({ where: { id } });
-  await prisma.user.update({
-    where: { id: review.userId },
-    data: { reviewsCount: { decrement: 1 } },
-  });
+  // Only decrement if the review still counted — a moderator-hidden review was
+  // already subtracted from reviewsCount when it was hidden.
+  if (!review.hidden) {
+    await prisma.user.update({
+      where: { id: review.userId },
+      data: { reviewsCount: { decrement: 1 } },
+    });
+  }
 
   return ok(null, 'Review deleted');
 }
