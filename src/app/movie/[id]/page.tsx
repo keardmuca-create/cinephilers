@@ -6,6 +6,7 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { Movie, Actor, TvEpisode, TvSeason, MovieCollection, CollectionItem } from '@/lib/types';
 import { EpisodeModal } from '@/components/episode-modal';
+import { SpoilerWrap } from '@/components/spoiler-wrap';
 import { Button } from '@/components/ui/button';
 import {
   Play, Check, Plus, Star, ChevronLeft, Share2, ListPlus, Quote,
@@ -592,7 +593,7 @@ function AddToListButton({ movie, onRequireAuth }: { movie: Movie; onRequireAuth
 
 // ─── Reviews section ──────────────────────────────────────────────────────────
 
-interface UserReview { movieId: string; movieTitle: string; moviePoster: string; movieYear: string; content: string; rating: number; date: string; }
+interface UserReview { movieId: string; movieTitle: string; moviePoster: string; movieYear: string; content: string; rating: number; date: string; containsSpoiler?: boolean; }
 
 interface CinephilersReview {
   id: string;
@@ -613,6 +614,7 @@ function ReviewsSection({ movie, writeOpen, setWriteOpen, myReview, setMyReview 
 }) {
   const [draftContent, setDraftContent] = useState('');
   const [draftRating, setDraftRating] = useState(0);
+  const [draftSpoiler, setDraftSpoiler] = useState(false);
   const [hoverRating, setHoverRating] = useState(0);
   const [cinephilersReviews, setCinephilersReviews] = useState<CinephilersReview[]>([]);
 
@@ -629,6 +631,7 @@ function ReviewsSection({ movie, writeOpen, setWriteOpen, myReview, setMyReview 
     if (writeOpen) {
       setDraftContent(myReview?.content ?? '');
       setDraftRating(myReview?.rating ?? 0);
+      setDraftSpoiler(myReview?.containsSpoiler ?? false);
     }
   }, [writeOpen, myReview]);
 
@@ -642,13 +645,14 @@ function ReviewsSection({ movie, writeOpen, setWriteOpen, myReview, setMyReview 
       content: draftContent.trim(),
       rating: draftRating,
       date: new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }),
+      containsSpoiler: draftSpoiler,
     };
     try { localStorage.setItem(`review-${movie.id}`, JSON.stringify(review)); } catch { /* ignore */ }
     fetch('/api/reviews', {
       method: 'POST',
       credentials: 'include',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ tmdbId: movie.id, mediaType: movie.type === 'show' ? 'SHOW' : 'MOVIE', body: review.content, containsSpoiler: false }),
+      body: JSON.stringify({ tmdbId: movie.id, mediaType: movie.type === 'show' ? 'SHOW' : 'MOVIE', body: review.content, containsSpoiler: draftSpoiler }),
     }).catch(() => { /* background sync */ });
     setMyReview(review);
     setWriteOpen(false);
@@ -714,10 +718,11 @@ function ReviewsSection({ movie, writeOpen, setWriteOpen, myReview, setMyReview 
                     </div>
                   )}
                 </div>
-                <p className="text-sm text-foreground/90 leading-relaxed italic">
-                  {r.containsSpoiler && <span className="not-italic font-bold text-yellow-500/80 mr-1.5">[Spoiler]</span>}
-                  &ldquo;{r.body}&rdquo;
-                </p>
+                <SpoilerWrap isSpoiler={r.containsSpoiler}>
+                  <p className="text-sm text-foreground/90 leading-relaxed italic">
+                    &ldquo;{r.body}&rdquo;
+                  </p>
+                </SpoilerWrap>
               </div>
             ))}
           </div>
@@ -803,6 +808,17 @@ function ReviewsSection({ movie, writeOpen, setWriteOpen, myReview, setMyReview 
                 className="w-full h-36 p-3 rounded-xl border border-border bg-muted/30 text-sm text-foreground placeholder:text-muted-foreground resize-none focus:outline-none focus:ring-2 focus:ring-primary/40"
               />
             </div>
+            {/* Spoiler toggle — flagged reviews are blurred until a reader taps to reveal */}
+            <button
+              type="button"
+              onClick={() => setDraftSpoiler(v => !v)}
+              className="flex items-center gap-2.5 w-full text-left"
+            >
+              <span className={`h-5 w-5 rounded-md border-2 flex items-center justify-center transition-colors shrink-0 ${draftSpoiler ? 'bg-yellow-500 border-yellow-500' : 'border-border'}`}>
+                {draftSpoiler && <Check className="h-3.5 w-3.5 text-black" />}
+              </span>
+              <span className="text-sm font-semibold text-foreground">This review contains spoilers</span>
+            </button>
             <div className="flex gap-3">
               <Button variant="outline" className="flex-1 rounded-xl" onClick={() => setWriteOpen(false)}>Cancel</Button>
               <Button className="flex-1 rounded-xl" disabled={!draftContent.trim()} onClick={submitReview}>Save Review</Button>

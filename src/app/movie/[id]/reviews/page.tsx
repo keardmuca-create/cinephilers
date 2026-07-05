@@ -5,6 +5,7 @@ import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { ChevronLeft, MessageSquare, Star, Loader2, Heart, Send, Trash2, Flag } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { SpoilerWrap } from '@/components/spoiler-wrap';
 import { relativeTime } from '@/lib/activity';
 import { useAuth } from '@/contexts/auth-context';
 import { fetchWithAuth } from '@/lib/fetch-with-auth';
@@ -332,10 +333,9 @@ export default function MovieReviewsPage() {
 
               {/* Review body */}
               <div>
-                {r.containsSpoiler && (
-                  <span className="text-xs font-bold text-yellow-500/80 mr-1.5">[Spoiler]</span>
-                )}
-                <p className="text-sm text-foreground/90 leading-relaxed italic">&ldquo;{r.body}&rdquo;</p>
+                <SpoilerWrap isSpoiler={r.containsSpoiler}>
+                  <p className="text-sm text-foreground/90 leading-relaxed italic">&ldquo;{r.body}&rdquo;</p>
+                </SpoilerWrap>
               </div>
 
               {/* Delete own review */}

@@ -9,6 +9,7 @@ import { useAuth } from '@/contexts/auth-context';
 import { fetchWithAuth } from '@/lib/fetch-with-auth';
 import { batchFetchMeta } from '@/lib/meta-batch';
 import { Button } from '@/components/ui/button';
+import { SpoilerWrap } from '@/components/spoiler-wrap';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -218,10 +219,11 @@ function ActivityCard({ item, onLike, onRemove }: {
               </div>
             )}
             {item.type === 'reviewed' && item.reviewBody && (
-              <p className="text-xs text-muted-foreground line-clamp-2 italic leading-relaxed">
-                {item.containsSpoiler && <span className="not-italic font-bold text-yellow-500/80 mr-1">[Spoiler]</span>}
-                &ldquo;{item.reviewBody}&rdquo;
-              </p>
+              <SpoilerWrap isSpoiler={item.containsSpoiler}>
+                <p className="text-xs text-muted-foreground line-clamp-2 italic leading-relaxed">
+                  &ldquo;{item.reviewBody}&rdquo;
+                </p>
+              </SpoilerWrap>
             )}
           </div>
         </div>

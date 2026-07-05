@@ -6,6 +6,7 @@ import Image from 'next/image';
 import { useParams, useRouter } from 'next/navigation';
 import { Star, Film, Eye, UserPlus, UserCheck, Loader2, Lock, User, MessageSquare, List, ChevronRight, Clock, Heart } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { SpoilerWrap } from '@/components/spoiler-wrap';
 import { useAuth } from '@/contexts/auth-context';
 import { relativeTime } from '@/lib/activity';
 import { fetchWithAuth } from '@/lib/fetch-with-auth';
@@ -150,10 +151,11 @@ function ReviewCard({ review }: { review: ReviewItem }) {
             ? <p className="text-sm font-bold group-hover:text-primary transition-colors line-clamp-1 mb-1">{meta.title}</p>
             : <div className="h-3 bg-muted rounded-full w-2/3 animate-pulse mb-1" />
           }
-          <p className="text-xs text-muted-foreground line-clamp-3 leading-relaxed">
-            {review.containsSpoiler && <span className="text-yellow-500/80 font-bold not-italic mr-1">[Spoiler]</span>}
-            {review.body}
-          </p>
+          <SpoilerWrap isSpoiler={review.containsSpoiler}>
+            <p className="text-xs text-muted-foreground line-clamp-3 leading-relaxed">
+              {review.body}
+            </p>
+          </SpoilerWrap>
           <p className="text-[10px] text-muted-foreground mt-1.5">{relativeTime(review.createdAt)}</p>
         </div>
       </div>
