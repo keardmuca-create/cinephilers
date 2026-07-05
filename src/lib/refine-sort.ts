@@ -22,6 +22,7 @@ export const REFINE_KEYS: Record<string, string> = {
   ratings: 'ratings-refine',
   watchlist: 'watchlist-refine',
   list: 'list-refine',
+  rewatched: 'rewatched-refine',
 };
 
 // Save a refine and sync ALL current refines to the account, so the chosen

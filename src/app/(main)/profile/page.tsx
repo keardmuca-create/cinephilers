@@ -26,11 +26,11 @@ import type { RefineValue } from '@/components/refine-sheet';
 
 interface RatedItem { id: string; title: string; poster: string; year: string; tmdbRating?: number; userRating: number; }
 
-interface DiaryShelfItem { id: string; count: number; lastWatchedAt: string | null; title: string; poster: string; year: string }
+interface DiaryShelfItem { id: string; count: number; lastWatchedAt: string | null; title: string; poster: string; year: string; tmdbRating?: number; userRating?: number }
 
-// Diary shelf — the most recent diary entries, one card per title, with the
-// watch date and an xN badge on anything logged more than once. Server-only
-// data (the diary is never mirrored to localStorage).
+// Rewatched shelf — films watched 2+ times, one card per title with the same
+// rating row as Watch History (TMDB score, your rating, eye) plus an xN badge.
+// Server-only data (never mirrored to localStorage).
 function DiarySection() {
   const { user } = useAuth();
   const [items, setItems] = useState<DiaryShelfItem[] | null>(null);
@@ -47,14 +47,23 @@ function DiarySection() {
         if (rows.length === 0) { if (!cancelled) setItems([]); return; }
         const meta = await batchFetchMeta(rows.map(r => r.tmdbId));
         if (cancelled) return;
-        setItems(rows.map(r => ({
-          id: r.tmdbId,
-          count: r.count,
-          lastWatchedAt: r.lastWatchedAt,
-          title: meta[r.tmdbId]?.title ?? 'Untitled',
-          poster: meta[r.tmdbId]?.poster ?? '',
-          year: meta[r.tmdbId]?.year ?? '',
-        })));
+        setItems(rows.map(r => {
+          let userRating: number | undefined;
+          try {
+            const saved = localStorage.getItem(`movie-rating-${r.tmdbId}`);
+            if (saved) userRating = parseInt(saved, 10);
+          } catch { /* ignore */ }
+          return {
+            id: r.tmdbId,
+            count: r.count,
+            lastWatchedAt: r.lastWatchedAt,
+            title: meta[r.tmdbId]?.title ?? 'Untitled',
+            poster: meta[r.tmdbId]?.poster ?? '',
+            year: meta[r.tmdbId]?.year ?? '',
+            tmdbRating: meta[r.tmdbId]?.tmdbRating,
+            userRating,
+          };
+        }));
       } catch { if (!cancelled) setItems([]); }
     })();
     return () => { cancelled = true; };
@@ -95,11 +104,21 @@ function DiarySection() {
                 </div>
               )}
             </div>
-            {item.lastWatchedAt && (
-              <p className="text-[11px] text-muted-foreground font-bold mb-0.5">
-                {new Date(item.lastWatchedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
-              </p>
-            )}
+            <div className="flex items-center gap-1.5 mb-0.5 flex-wrap">
+              {item.tmdbRating !== undefined && (
+                <div className="flex items-center gap-0.5">
+                  <span className="text-xs text-yellow-400 font-bold">★</span>
+                  <span className="text-xs font-bold text-foreground">{item.tmdbRating.toFixed(1)}</span>
+                </div>
+              )}
+              {item.userRating !== undefined && (
+                <div className="flex items-center gap-0.5">
+                  <span className="text-xs text-blue-400 font-bold">★</span>
+                  <span className="text-xs font-bold text-blue-400">{item.userRating}</span>
+                </div>
+              )}
+              <Eye className="h-3.5 w-3.5 text-blue-400" />
+            </div>
             <p className="text-xs font-semibold font-headline line-clamp-2 group-hover:text-primary transition-colors leading-snug">
               {item.title} {item.year ? `(${item.year})` : ''}
             </p>

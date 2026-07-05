@@ -3,7 +3,7 @@ import { prisma } from '@/lib/db';
 import { ok, err } from '@/lib/api-response';
 import { getCurrentUser } from '@/lib/auth-utils';
 
-const VALID_KEYS = new Set(['history', 'ratings', 'watchlist', 'list']);
+const VALID_KEYS = new Set(['history', 'ratings', 'watchlist', 'list', 'rewatched']);
 
 // Persist the user's list sort preferences (Refine) to their account so the
 // chosen order survives a browser-data clear and follows them across devices.

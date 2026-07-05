@@ -3,13 +3,15 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { ChevronLeft, Repeat, Film, Search, X, ChevronDown, ChevronUp, Trash2 } from 'lucide-react';
+import { ChevronLeft, Repeat, Film, Search, X, ChevronDown, ChevronUp, Trash2, SlidersHorizontal, Eye } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { toast } from '@/hooks/use-toast';
 import { fetchWithAuth } from '@/lib/fetch-with-auth';
 import { batchFetchMeta } from '@/lib/meta-batch';
 import { removeFromWatchLog } from '@/lib/badges';
 import { removeManualWatch } from '@/lib/media-id';
+import { readSavedRefine, persistRefine } from '@/lib/refine-sort';
+import { RefineSheet, type RefineValue } from '@/components/refine-sheet';
 import { useAuth } from '@/contexts/auth-context';
 
 interface DiaryTitle {
@@ -26,9 +28,15 @@ interface DiaryTitle {
 
 interface WatchDate { id: string; watchedAt: string; isRewatch: boolean }
 
-type SortMode = 'recent' | 'count';
-
 const PAGE_SIZE = 40;
+
+// Refine: Recent (by latest watch date) or Most rewatched (by count); direction
+// arrow flips each. Persisted per-account like the other list pages.
+const DEFAULT_REFINE: RefineValue = { sortField: 'recent', sortDir: 'desc', type: 'any', genre: 'any' };
+const SORT_OPTIONS = [
+  { value: 'recent', label: 'Recently watched' },
+  { value: 'count', label: 'Most rewatched' },
+];
 
 // The diary: one row per title with its watch count; tapping the xN badge
 // expands the row into every logged watch date (with per-date delete).
@@ -42,15 +50,25 @@ export default function DiaryPage() {
   const [hasMore, setHasMore] = useState(false);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
-  const [sort, setSort] = useState<SortMode>('recent');
+  const [refine, setRefine] = useState<RefineValue>(DEFAULT_REFINE);
+  const [refineOpen, setRefineOpen] = useState(false);
   const [expanded, setExpanded] = useState<string | null>(null);
   const [dates, setDates] = useState<Record<string, WatchDate[]>>({});
   const [busyId, setBusyId] = useState<string | null>(null);
 
-  const loadPage = async (p: number, mode: SortMode) => {
+  // Restore the saved refine after mount + re-read once the login sync lands.
+  useEffect(() => {
+    const read = () => { const v = readSavedRefine('rewatched-refine'); if (v) setRefine({ ...DEFAULT_REFINE, ...v }); };
+    read();
+    window.addEventListener('cinephilers-db-restored', read);
+    return () => window.removeEventListener('cinephilers-db-restored', read);
+  }, []);
+
+  const loadPage = async (p: number, r: RefineValue) => {
     if (!user?.username) return;
     try {
-      const res = await fetchWithAuth(`/api/users/${user.username}/rewatched?min=2&sort=${mode}&page=${p}&limit=${PAGE_SIZE}`);
+      const sort = r.sortField === 'count' ? 'count' : 'recent';
+      const res = await fetchWithAuth(`/api/users/${user.username}/rewatched?min=2&sort=${sort}&dir=${r.sortDir}&page=${p}&limit=${PAGE_SIZE}`);
       if (!res.ok) return;
       const json = await res.json();
       const rows: { tmdbId: string; mediaType: string; count: number; lastWatchedAt: string | null }[] = json.data?.items ?? [];
@@ -82,9 +100,9 @@ export default function DiaryPage() {
     setLoading(true);
     setPage(1);
     setExpanded(null);
-    loadPage(1, sort).finally(() => setLoading(false));
+    loadPage(1, refine).finally(() => setLoading(false));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [authLoading, user?.id, sort]);
+  }, [authLoading, user?.id, refine]);
 
   // Tap the x-count: expand the row into every logged watch date for the title.
   const toggleDates = async (item: DiaryTitle) => {
@@ -189,25 +207,17 @@ export default function DiaryPage() {
             </div>
           </div>
 
-          {/* Sort toggle */}
+          {/* Sorted-by note + Refine button (matches the other list pages) */}
           <div className="px-6 pb-4 flex items-center justify-between">
-            <p className="text-xs text-muted-foreground">
-              {filtered.length} title{filtered.length !== 1 ? 's' : ''} · {sort === 'recent' ? 'Recently watched' : 'Most rewatched'}
+            <p className="text-xs text-muted-foreground truncate">
+              {filtered.length} title{filtered.length !== 1 ? 's' : ''} · {SORT_OPTIONS.find(s => s.value === refine.sortField)?.label ?? 'Recently watched'}
             </p>
-            <div className="flex items-center gap-1.5">
-              <button
-                onClick={() => setSort('recent')}
-                className={`text-xs font-semibold rounded-full px-3 py-1 border transition-colors ${sort === 'recent' ? 'bg-primary/10 border-primary/40 text-primary' : 'border-border text-muted-foreground hover:text-foreground'}`}
-              >
-                Recent
-              </button>
-              <button
-                onClick={() => setSort('count')}
-                className={`text-xs font-semibold rounded-full px-3 py-1 border transition-colors flex items-center gap-1 ${sort === 'count' ? 'bg-primary/10 border-primary/40 text-primary' : 'border-border text-muted-foreground hover:text-foreground'}`}
-              >
-                <Repeat className="h-3 w-3" /> Most rewatched
-              </button>
-            </div>
+            <button
+              onClick={() => setRefineOpen(true)}
+              className="flex items-center gap-1.5 text-xs font-semibold rounded-full px-3 py-1.5 border border-border text-muted-foreground hover:text-foreground hover:bg-muted transition-colors shrink-0"
+            >
+              <SlidersHorizontal className="h-3.5 w-3.5" /> Refine
+            </button>
           </div>
 
           <div className="px-6 divide-y divide-border">
@@ -241,6 +251,7 @@ export default function DiaryPage() {
                             <span className="text-xs font-bold text-blue-400">{item.userRating}</span>
                           </div>
                         )}
+                        <Eye className="h-3.5 w-3.5 text-blue-400" />
                         {item.lastWatchedAt && (
                           <span className="text-xs text-muted-foreground">
                             {item.count > 1 ? 'Last on' : 'Watched'} {fmtDate(item.lastWatchedAt)}
@@ -298,7 +309,7 @@ export default function DiaryPage() {
               <Button
                 variant="outline"
                 className="rounded-full font-bold"
-                onClick={() => { const next = page + 1; setPage(next); loadPage(next, sort); }}
+                onClick={() => { const next = page + 1; setPage(next); loadPage(next, refine); }}
               >
                 Load more
               </Button>
@@ -306,6 +317,17 @@ export default function DiaryPage() {
           )}
         </>
       )}
+
+      <RefineSheet
+        open={refineOpen}
+        onClose={() => setRefineOpen(false)}
+        total={items.length}
+        sortOptions={SORT_OPTIONS}
+        typeOptions={[]}
+        genreOptions={[]}
+        value={refine}
+        onApply={v => { setRefine(v); persistRefine('rewatched-refine', v); }}
+      />
     </main>
   );
 }

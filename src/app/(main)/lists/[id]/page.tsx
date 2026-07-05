@@ -7,6 +7,7 @@ import { ChevronLeft, Search, X, Film, Lock, Globe, SlidersHorizontal, Trash2 } 
 import { Button } from '@/components/ui/button';
 import { fetchWithAuth } from '@/lib/fetch-with-auth';
 import { persistRefine } from '@/lib/refine-sort';
+import { toast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/auth-context';
 import { RefineSheet, type RefineValue, type SortOption, type CountOption } from '@/components/refine-sheet';
 
@@ -109,6 +110,25 @@ export default function ListDetailPage() {
 
   const isOwner = !!user && !!ownerId && user.id === ownerId;
 
+  // Delete the ENTIRE list (not the films inside — those have their own remove
+  // buttons and stay in the library). Confirmed, then server-first, then drop
+  // from the local cache and leave the page.
+  const deleteList = async () => {
+    if (!window.confirm(`Delete the list "${list?.name ?? ''}"? This removes the whole list. The films inside stay in your library. This can't be undone.`)) return;
+    try {
+      const res = await fetchWithAuth(`/api/lists/${id}`, { method: 'DELETE' });
+      if (!res.ok) { toast({ title: "Couldn't delete the list. Try again.", variant: 'destructive' }); return; }
+      try {
+        const stored: CustomList[] = JSON.parse(localStorage.getItem('user-lists') ?? '[]');
+        localStorage.setItem('user-lists', JSON.stringify(stored.filter(l => l.id !== id)));
+      } catch { /* ignore */ }
+      toast({ title: 'List deleted' });
+      router.push('/lists');
+    } catch {
+      toast({ title: "Couldn't delete the list. Check your connection.", variant: 'destructive' });
+    }
+  };
+
   // Per-type counts → options for the Type filter (only offered when both kinds exist).
   const typeOptions = useMemo<CountOption[]>(() => {
     const items = list?.items ?? [];
@@ -206,6 +226,17 @@ export default function ListDetailPage() {
             </div>
           )}
         </div>
+        {isOwner && (
+          <Button
+            variant="ghost"
+            size="icon"
+            className="rounded-full shrink-0 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+            onClick={deleteList}
+            aria-label="Delete this list"
+          >
+            <Trash2 className="h-5 w-5" />
+          </Button>
+        )}
       </div>
 
       <div className="px-6 pt-4 space-y-3">

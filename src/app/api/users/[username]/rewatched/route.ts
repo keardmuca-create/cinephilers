@@ -15,6 +15,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ user
   const limit = clampInt(searchParams.get('limit'), 20, 1, 100);
   const min = clampInt(searchParams.get('min'), 2, 1, 2);
   const sort = searchParams.get('sort') === 'recent' ? 'recent' : 'count';
+  const dir = searchParams.get('dir') === 'asc' ? 'asc' : 'desc';
 
   const user = await prisma.user.findUnique({
     where: { username: username.toLowerCase() },
@@ -41,8 +42,8 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ user
     _max: { watchedAt: true },
     having: { tmdbId: { _count: { gte: min } } },
     orderBy: sort === 'recent'
-      ? [{ _max: { watchedAt: 'desc' } }, { _count: { tmdbId: 'desc' } }]
-      : [{ _count: { tmdbId: 'desc' } }, { _max: { watchedAt: 'desc' } }],
+      ? [{ _max: { watchedAt: dir } }, { _count: { tmdbId: 'desc' } }]
+      : [{ _count: { tmdbId: dir } }, { _max: { watchedAt: 'desc' } }],
     skip: (page - 1) * limit,
     take: limit + 1, // one extra to know if there's a next page
   });
