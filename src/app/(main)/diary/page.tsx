@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { ChevronLeft, BookOpen, Repeat, Film, Search, X, ChevronDown, ChevronUp, Trash2 } from 'lucide-react';
+import { ChevronLeft, Repeat, Film, Search, X, ChevronDown, ChevronUp, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { toast } from '@/hooks/use-toast';
 import { fetchWithAuth } from '@/lib/fetch-with-auth';
@@ -50,7 +50,7 @@ export default function DiaryPage() {
   const loadPage = async (p: number, mode: SortMode) => {
     if (!user?.username) return;
     try {
-      const res = await fetchWithAuth(`/api/users/${user.username}/rewatched?min=1&sort=${mode}&page=${p}&limit=${PAGE_SIZE}`);
+      const res = await fetchWithAuth(`/api/users/${user.username}/rewatched?min=2&sort=${mode}&page=${p}&limit=${PAGE_SIZE}`);
       if (!res.ok) return;
       const json = await res.json();
       const rows: { tmdbId: string; mediaType: string; count: number; lastWatchedAt: string | null }[] = json.data?.items ?? [];
@@ -122,7 +122,7 @@ export default function DiaryPage() {
       } else {
         setItems(prev => prev.map(x => (x.tmdbId === item.tmdbId ? { ...x, count: remaining } : x)));
       }
-      toast({ title: 'Diary entry removed' });
+      toast({ title: 'Entry removed' });
     } catch {
       toast({ title: "Couldn't remove the entry. Check your connection and try again.", variant: 'destructive' });
     } finally {
@@ -146,27 +146,27 @@ export default function DiaryPage() {
           <ChevronLeft className="h-5 w-5" />
         </button>
         <h1 className="text-lg font-headline font-bold truncate flex-1 flex items-center gap-2">
-          <BookOpen className="h-5 w-5 text-primary" /> Diary
+          <Repeat className="h-5 w-5 text-primary" /> Rewatched
         </h1>
       </div>
 
       {loading ? (
-        <div className="px-6 py-20 text-center text-sm text-muted-foreground">Loading your diary…</div>
+        <div className="px-6 py-20 text-center text-sm text-muted-foreground">Loading…</div>
       ) : !user ? (
         <div className="flex flex-col items-center justify-center py-20 gap-3 text-center px-6">
-          <BookOpen className="h-12 w-12 text-muted-foreground/20" />
-          <p className="text-muted-foreground text-sm">Log in to see your diary</p>
+          <Repeat className="h-12 w-12 text-muted-foreground/20" />
+          <p className="text-muted-foreground text-sm">Log in to see your rewatches</p>
           <Button asChild className="rounded-full font-bold mt-2"><Link href="/login">Log In</Link></Button>
         </div>
       ) : items.length === 0 && !search ? (
         <div className="flex flex-col items-center justify-center py-20 gap-3 text-center px-6">
-          <BookOpen className="h-12 w-12 text-muted-foreground/20" />
-          <p className="text-muted-foreground text-sm">Every film you watch gets a dated entry here</p>
+          <Repeat className="h-12 w-12 text-muted-foreground/20" />
+          <p className="text-muted-foreground text-sm">Films you&apos;ve watched more than once show up here, with every date</p>
         </div>
       ) : (
         <>
           <div className="px-6 pt-6 pb-1">
-            <h2 className="text-3xl font-headline font-bold mb-0.5">Diary</h2>
+            <h2 className="text-3xl font-headline font-bold mb-0.5">Rewatched</h2>
             <p className="text-muted-foreground text-sm">{items.length}{hasMore ? '+' : ''} Title{items.length !== 1 ? 's' : ''}</p>
           </div>
 

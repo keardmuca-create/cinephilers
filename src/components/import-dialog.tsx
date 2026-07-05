@@ -295,7 +295,7 @@ export function ImportDialog({ onClose }: { onClose: () => void }) {
   // Which row's resolver is currently open (only one at a time).
   const [expandedKey, setExpandedKey] = useState<string | null>(null);
   const [matchProgress, setMatchProgress] = useState(0);
-  const [result, setResult] = useState<{ watchedAdded: number; ratingsAdded: number; watchlistAdded: number; reviewsAdded: number; failed?: number } | null>(null);
+  const [result, setResult] = useState<{ watchedAdded: number; ratingsAdded: number; watchlistAdded: number; reviewsAdded: number; rewatchesAdded?: number; failed?: number } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [shareActivity, setShareActivity] = useState(true);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -729,6 +729,7 @@ export function ImportDialog({ onClose }: { onClose: () => void }) {
               <div className="space-y-2">
                 {[
                   { label: 'Films marked as watched', value: result.watchedAdded },
+                  { label: 'Rewatches logged', value: result.rewatchesAdded ?? 0 },
                   { label: 'Ratings imported', value: result.ratingsAdded },
                   { label: 'Added to watchlist', value: result.watchlistAdded },
                   { label: 'Reviews imported', value: result.reviewsAdded },

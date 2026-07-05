@@ -134,6 +134,9 @@ export async function POST(req: NextRequest) {
   const watchlistAdded = watchlistRes.count;
   const ratingsAdded = ratingRes.count;
   const reviewsAdded = reviewRes.count;
+  // Extra viewings beyond each title's first watch — the rewatch history that
+  // came in from diary.csv (so the summary can show it was imported).
+  const rewatchesAdded = eventData.filter(e => e.isRewatch).length;
 
   // Recalculate counts from DB (source of truth after bulk insert)
   const [totalRatings, totalReviews] = await Promise.all([
@@ -149,5 +152,5 @@ export async function POST(req: NextRequest) {
   // Award any newly earned badges
   await awardBadgeIfEarned(userId, totalRatings);
 
-  return ok({ watchedAdded, ratingsAdded, watchlistAdded, reviewsAdded, failed });
+  return ok({ watchedAdded, ratingsAdded, watchlistAdded, reviewsAdded, rewatchesAdded, failed });
 }

@@ -10,7 +10,7 @@ import { BadgeCard, FeaturedSeasonalBadge, FounderFlairChip } from '@/components
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import Link from 'next/link';
-import { Settings, Star, Film, List, MessageSquare, ChevronRight, Award, History, Bookmark, User, Eye, Plus, Heart, TrendingUp, Download, Trash2, Share2, Repeat, BookOpen } from 'lucide-react';
+import { Settings, Star, Film, List, MessageSquare, ChevronRight, Award, History, Bookmark, User, Eye, Plus, Heart, TrendingUp, Download, Trash2, Share2, Repeat } from 'lucide-react';
 import { ImportDialog } from '@/components/import-dialog';
 import { FavoritesSection } from '@/components/favorites-section';
 import { BarChart, Bar, XAxis, ResponsiveContainer, Cell, YAxis, Tooltip as ChartTooltip } from 'recharts';
@@ -40,7 +40,7 @@ function DiarySection() {
     let cancelled = false;
     (async () => {
       try {
-        const res = await fetchWithAuth(`/api/users/${user.username}/rewatched?min=1&sort=recent&limit=20`);
+        const res = await fetchWithAuth(`/api/users/${user.username}/rewatched?min=2&sort=recent&limit=20`);
         if (!res.ok) { if (!cancelled) setItems([]); return; }
         const json = await res.json();
         const rows: { tmdbId: string; count: number; lastWatchedAt: string | null }[] = json.data?.items ?? [];
@@ -68,15 +68,15 @@ function DiarySection() {
         <div className="flex items-center gap-2">
           <div className="w-1 h-6 bg-primary rounded-full" />
           <h3 className="text-2xl font-headline font-bold flex items-center gap-2">
-            <BookOpen className="h-6 w-6 text-primary" />
-            Diary
+            <Repeat className="h-6 w-6 text-primary" />
+            Rewatched
           </h3>
         </div>
         <Link href="/diary" className="text-xs text-primary border border-primary/30 rounded-full px-3 py-1 hover:bg-primary/10 transition-colors font-semibold flex items-center gap-1">
           See All <ChevronRight className="h-3 w-3" />
         </Link>
       </div>
-      <p className="text-sm text-muted-foreground mb-5">Every watch, dated &mdash; rewatches wear their count</p>
+      <p className="text-sm text-muted-foreground mb-5">Films you&apos;ve watched more than once</p>
       <div className="flex overflow-x-auto gap-4 pb-4 no-scrollbar -mx-6 px-6">
         {items.map(item => (
           <Link key={item.id} href={`/movie/${item.id}`} className="group shrink-0 w-36">
@@ -1324,7 +1324,7 @@ export default function ProfilePage() {
         )}
       </section>
 
-      {/* Diary — every watch dated, rewatches wear their count */}
+      {/* Diary — films watched 2+ times, with all their dates (rewatches only) */}
       <DiarySection />
 
       {/* Ratings */}
