@@ -69,8 +69,8 @@ function DiarySection() {
     return () => { cancelled = true; };
   }, [user?.username]);
 
-  if (!items || items.length === 0) return null;
-
+  // Always render the section (like the others), with an empty state when the
+  // user has no rewatches yet — don't hide it.
   return (
     <section>
       <div className="flex items-center justify-between mb-2">
@@ -81,11 +81,16 @@ function DiarySection() {
             Rewatched
           </h3>
         </div>
-        <Link href="/diary" className="text-xs text-primary border border-primary/30 rounded-full px-3 py-1 hover:bg-primary/10 transition-colors font-semibold flex items-center gap-1">
-          See All <ChevronRight className="h-3 w-3" />
-        </Link>
+        {items && items.length > 0 && (
+          <Link href="/diary" className="text-xs text-primary border border-primary/30 rounded-full px-3 py-1 hover:bg-primary/10 transition-colors font-semibold flex items-center gap-1">
+            See All <ChevronRight className="h-3 w-3" />
+          </Link>
+        )}
       </div>
       <p className="text-sm text-muted-foreground mb-5">Films you&apos;ve watched more than once</p>
+      {!items || items.length === 0 ? (
+        <EmptyRow message="Films you watch more than once will show up here" />
+      ) : (
       <div className="flex overflow-x-auto gap-4 pb-4 no-scrollbar -mx-6 px-6">
         {items.map(item => (
           <Link key={item.id} href={`/movie/${item.id}`} className="group shrink-0 w-36">
@@ -125,6 +130,7 @@ function DiarySection() {
           </Link>
         ))}
       </div>
+      )}
     </section>
   );
 }
