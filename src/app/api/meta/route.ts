@@ -1,10 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { fetchOneMeta } from './_fetch';
+import { rateLimit, getIp } from '@/lib/rate-limit';
 import type { ItemMeta } from './[id]/route';
 
 const MAX_IDS = 100;
 
 export async function GET(req: NextRequest) {
+  // Own bucket, tighter than the shared tmdb one: a single call here fans out
+  // up to MAX_IDS TMDB fetches, so 30/min still allows several full library
+  // loads while capping what one IP can make us fetch.
+  const { allowed } = await rateLimit(`meta:${getIp(req)}`, 30, 60_000);
+  if (!allowed) return NextResponse.json({ error: 'Too many requests' }, { status: 429 });
+
   const key = process.env.TMDB_API_KEY ?? '';
   if (!key) return NextResponse.json({ error: 'No API key' }, { status: 500 });
 

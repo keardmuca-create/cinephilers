@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { fetchOneMeta } from '../_fetch';
+import { rateLimit, getIp } from '@/lib/rate-limit';
 
 export interface ItemMeta {
   id: string;
@@ -23,9 +24,13 @@ export interface ItemMeta {
 }
 
 export async function GET(
-  _req: NextRequest,
+  req: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
+  // Single-title fetch — joins the shared per-IP bucket used by the other TMDB proxies.
+  const { allowed } = await rateLimit(`tmdb:${getIp(req)}`, 120, 60_000);
+  if (!allowed) return NextResponse.json({ error: 'Too many requests' }, { status: 429 });
+
   const { id } = await params;
   const key = process.env.TMDB_API_KEY ?? '';
   if (!key) return NextResponse.json({ error: 'No API key' }, { status: 500 });
