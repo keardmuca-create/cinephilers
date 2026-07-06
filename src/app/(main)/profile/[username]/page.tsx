@@ -4,9 +4,10 @@ import React, { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { useParams, useRouter } from 'next/navigation';
-import { Star, Film, Eye, UserPlus, UserCheck, Loader2, Lock, User, MessageSquare, List, ChevronRight, Clock, Heart } from 'lucide-react';
+import { Star, Film, Eye, UserPlus, UserCheck, Loader2, Lock, User, MessageSquare, List, ChevronRight, Clock, Heart, Crown } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { SpoilerWrap } from '@/components/spoiler-wrap';
+import { RING } from '@/components/favorites-section';
 import { useAuth } from '@/contexts/auth-context';
 import { relativeTime } from '@/lib/activity';
 import { fetchWithAuth } from '@/lib/fetch-with-auth';
@@ -115,21 +116,23 @@ function FollowStatLink({ username, type, count }: { username: string; type: 'fo
   );
 }
 
-function FavoritePoster({ tmdbId }: { tmdbId: string }) {
+// Read-only ring poster for a friend's Favorites (hero gets a crown badge).
+function FavoriteRingPoster({ tmdbId, hero }: { tmdbId: string; hero?: boolean }) {
   const [meta, setMeta] = useState<{ title: string; year: string; poster: string } | null>(null);
   useEffect(() => { getMeta(tmdbId).then(m => { if (m) setMeta(m); }); }, [tmdbId]);
   return (
-    <Link href={`/movie/${tmdbId}`} className="group relative flex-1 aspect-[2/3] rounded-2xl overflow-hidden bg-muted shadow-md">
-      {meta?.poster
-        ? <Image src={meta.poster} alt={meta.title} fill className="object-cover" sizes="25vw" />
-        : <div className="w-full h-full flex items-center justify-center"><Film className="h-5 w-5 text-primary/60" /></div>
-      }
-      {/* Title tooltip on hover */}
-      {meta?.title && (
-        <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 to-transparent p-2 translate-y-full group-hover:translate-y-0 transition-transform">
-          <p className="text-[10px] font-bold text-white line-clamp-2 leading-tight">{meta.title}</p>
-        </div>
-      )}
+    <Link href={`/movie/${tmdbId}`} className="group block" aria-label={meta?.title ?? 'Favorite'}>
+      <div className={`relative aspect-[2/3] rounded-xl overflow-hidden border-2 ${hero ? 'border-primary shadow-lg' : 'border-foreground/20'}`}>
+        {meta?.poster
+          ? <Image src={meta.poster} alt={meta.title} fill className="object-cover" sizes="30vw" />
+          : <div className="w-full h-full flex items-center justify-center bg-muted"><Film className={`${hero ? 'h-8 w-8' : 'h-6 w-6'} text-primary/60`} /></div>
+        }
+        {hero && (
+          <div className="absolute top-1 left-1 bg-primary text-primary-foreground rounded-full h-5 w-5 flex items-center justify-center shadow">
+            <Crown className="h-3 w-3" />
+          </div>
+        )}
+      </div>
     </Link>
   );
 }
@@ -431,14 +434,22 @@ export default function PublicProfilePage() {
         </div>
       )}
 
-      {/* Favorite films */}
+      {/* Favorites — ring layout: a crowned #1 hero with 6 orbiting it */}
       {isVisible && favorites.length > 0 && (
         <section className="space-y-3">
           <h2 className="text-lg font-headline font-bold flex items-center gap-2">
-            <Heart className="h-5 w-5 text-primary" />Favorite Films
+            <Heart className="h-5 w-5 text-primary" />Favorites
           </h2>
-          <div className="grid grid-cols-5 gap-2">
-            {favorites.map(f => <FavoritePoster key={f.id} tmdbId={f.tmdbId} />)}
+          <div className="relative w-full max-w-[380px] mx-auto" style={{ aspectRatio: '202 / 262' }}>
+            {RING.map((pos, i) => {
+              const fav = favorites[i];
+              if (!fav) return null;
+              return (
+                <div key={i} className="absolute" style={{ left: pos.left, top: pos.top, width: pos.width }}>
+                  <FavoriteRingPoster tmdbId={fav.tmdbId} hero={pos.hero} />
+                </div>
+              );
+            })}
           </div>
         </section>
       )}

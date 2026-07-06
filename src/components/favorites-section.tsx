@@ -23,7 +23,7 @@ const MAX_FAVORITES = 7;
 // Ring layout: slot 0 is the hero (centre), slots 1–6 orbit it with a gap so
 // the top/bottom posters never touch the hero. Positions are % of a fixed-ratio
 // container so the whole thing scales cleanly from phone to desktop.
-const RING = [
+export const RING = [
   { left: '35%',   top: '32.6%', width: '30%', hero: true },
   { left: '37.5%', top: '0%',    width: '25%' },
   { left: '75%',   top: '14%',   width: '25%' },

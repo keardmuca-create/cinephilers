@@ -467,8 +467,14 @@ export default function SocialPage() {
   // Build merged + sorted activity list
   const mergedActivity: UnifiedItem[] = React.useMemo(() => {
     const dismissed = new Set(getDismissed());
+    // Films the server feed already shows as a rewatch by us — drop the local
+    // "watched" entry for those so a rewatch doesn't appear as both.
+    const myRewatchedIds = new Set(
+      friendFeed.filter(f => f.type === 'rewatched' && f.user.username === user?.username).map(f => f.tmdbId)
+    );
     const myItems: UnifiedItem[] = myLocalFeed
       .filter(e => !dismissed.has(`${e.action}-${e.contentId}`))
+      .filter(e => !(e.action === 'watched' && myRewatchedIds.has(e.contentId)))
       .map(e => ({
       id: `me-${e.id}`,
       localId: e.id,
