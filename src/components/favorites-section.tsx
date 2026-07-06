@@ -1,7 +1,7 @@
 "use client"
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Plus, X, Search, Heart, RefreshCw, Film } from 'lucide-react';
+import { Plus, X, Search, Heart, RefreshCw, Film, Crown, Move } from 'lucide-react';
 import Link from 'next/link';
 import { fetchWithAuth } from '@/lib/fetch-with-auth';
 import { batchFetchMeta } from '@/lib/meta-batch';
@@ -18,7 +18,20 @@ interface FavoriteItem {
 }
 
 const FAVORITES_KEY = 'user-favorites';
-const MAX_FAVORITES = 10;
+const MAX_FAVORITES = 7;
+
+// Ring layout: slot 0 is the hero (centre), slots 1–6 orbit it with a gap so
+// the top/bottom posters never touch the hero. Positions are % of a fixed-ratio
+// container so the whole thing scales cleanly from phone to desktop.
+const RING = [
+  { left: '35%',   top: '32.6%', width: '30%', hero: true },
+  { left: '37.5%', top: '0%',    width: '25%' },
+  { left: '75%',   top: '14%',   width: '25%' },
+  { left: '75%',   top: '57.1%', width: '25%' },
+  { left: '37.5%', top: '71.1%', width: '25%' },
+  { left: '0%',    top: '57.1%', width: '25%' },
+  { left: '0%',    top: '14%',   width: '25%' },
+];
 
 function loadFavorites(): FavoriteItem[] {
   if (typeof window === 'undefined') return [];
@@ -41,22 +54,22 @@ export function FavoritesSection() {
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<FavoriteItem[]>([]);
   const [searching, setSearching] = useState(false);
+  // Arrange mode: taps swap posters instead of opening the movie — the only
+  // reorder that works on touch (the old HTML5 drag was mouse-only).
+  const [arranging, setArranging] = useState(false);
+  const [selected, setSelected] = useState<number | null>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const dragIndexRef = useRef<number | null>(null);
 
   useEffect(() => {
-    // Load from localStorage immediately for fast render
     const local = loadFavorites();
     if (local.length > 0) setFavorites(local);
 
-    // Then hydrate from DB so favorites survive new devices/cleared storage
     if (!user) return;
     fetch(`/api/users/${user.username}/favorites`, { credentials: 'include' })
       .then(r => r.ok ? r.json() : null)
       .then(async json => {
         const dbItems: { id: string; tmdbId: string; mediaType: string }[] = json?.data ?? [];
         if (dbItems.length === 0) return;
-        // local item.id === db.tmdbId — build merged list preserving local metadata
         const localByTmdbId = new Map(local.map(f => [f.id, f]));
         const missingIds = dbItems.filter(db => !localByTmdbId.has(db.tmdbId)).map(db => db.tmdbId);
         const metaMap = missingIds.length > 0 ? await batchFetchMeta(missingIds) : {};
@@ -64,7 +77,7 @@ export function FavoritesSection() {
           if (localByTmdbId.has(db.tmdbId)) return localByTmdbId.get(db.tmdbId)!;
           const m = metaMap[db.tmdbId];
           return { id: db.tmdbId, title: m?.title ?? '', year: m?.year ?? '', poster: m?.poster ?? '', type: db.mediaType === 'SHOW' ? 'show' as const : 'movie' as const };
-        });
+        }).slice(0, MAX_FAVORITES);
         setFavorites(merged);
         saveFavorites(merged);
       })
@@ -90,11 +103,7 @@ export function FavoritesSection() {
         const data = await res.json();
         setResults(
           (data.results ?? []).slice(0, 8).map((m: { id: string; title: string; year: string; poster: string; type: 'movie' | 'show' }) => ({
-            id: m.id,
-            title: m.title,
-            year: m.year,
-            poster: m.poster,
-            type: m.type,
+            id: m.id, title: m.title, year: m.year, poster: m.poster, type: m.type,
           }))
         );
       } catch {
@@ -126,7 +135,8 @@ export function FavoritesSection() {
   };
 
   const addFavorite = (item: FavoriteItem) => {
-    if (swapIndex !== null) {
+    if (favorites.some(f => f.id === item.id)) { setSearchOpen(false); return; }
+    if (swapIndex !== null && swapIndex < favorites.length) {
       const removed = favorites[swapIndex];
       const updated = [...favorites];
       updated[swapIndex] = item;
@@ -141,122 +151,113 @@ export function FavoritesSection() {
     setSearchOpen(false);
   };
 
-  const removeFavorite = (index: number, e: React.MouseEvent) => {
-    e.stopPropagation();
+  const removeFavorite = (index: number) => {
     const removed = favorites[index];
     updateFavorites(favorites.filter((_, i) => i !== index));
+    setSelected(null);
     if (removed) syncFavoriteDb('DELETE', removed);
   };
 
-  const onDragStart = (index: number) => {
-    dragIndexRef.current = index;
+  // Tap a poster in arrange mode: first tap selects, second tap swaps the two.
+  const onArrangeTap = (i: number) => {
+    if (selected === null) { setSelected(i); return; }
+    if (selected === i) { setSelected(null); return; }
+    const updated = [...favorites];
+    [updated[selected], updated[i]] = [updated[i], updated[selected]];
+    updateFavorites(updated);
+    setSelected(null);
   };
-
-  const onDragOver = (e: React.DragEvent, targetIndex: number) => {
-    e.preventDefault();
-    const src = dragIndexRef.current;
-    if (src === null || src === targetIndex) return;
-    setFavorites(prev => {
-      const updated = [...prev];
-      const [moved] = updated.splice(src, 1);
-      updated.splice(targetIndex, 0, moved);
-      return updated;
-    });
-    dragIndexRef.current = targetIndex;
-  };
-
-  const onDragEnd = () => {
-    dragIndexRef.current = null;
-    setFavorites(prev => { saveFavorites(prev); return prev; });
-  };
-
-  // Always show 10 slots
-  const emptySlots = Math.max(0, MAX_FAVORITES - favorites.length);
 
   return (
     <>
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex items-center justify-between mb-4">
         <h3 className="text-2xl font-headline font-bold flex items-center gap-3">
           <Heart className="h-6 w-6 text-primary" /> Favorites
         </h3>
-        {favorites.length < MAX_FAVORITES && (
-          <button
-            onClick={() => openSearch()}
-            className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground border border-border bg-muted hover:bg-muted/80 px-3 py-1.5 rounded-full transition-colors"
-          >
-            <Plus className="h-3.5 w-3.5" /> Add
-          </button>
-        )}
+        <div className="flex items-center gap-2">
+          {favorites.length >= 2 && (
+            <button
+              onClick={() => { setArranging(v => !v); setSelected(null); }}
+              className={`flex items-center gap-1.5 text-sm border px-3 py-1.5 rounded-full transition-colors ${arranging ? 'bg-primary text-primary-foreground border-primary' : 'text-muted-foreground hover:text-foreground border-border bg-muted hover:bg-muted/80'}`}
+            >
+              {arranging ? 'Done' : <><Move className="h-3.5 w-3.5" /> Arrange</>}
+            </button>
+          )}
+          {!arranging && favorites.length < MAX_FAVORITES && (
+            <button
+              onClick={() => openSearch()}
+              className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground border border-border bg-muted hover:bg-muted/80 px-3 py-1.5 rounded-full transition-colors"
+            >
+              <Plus className="h-3.5 w-3.5" /> Add
+            </button>
+          )}
+        </div>
       </div>
 
-      <div className="grid grid-cols-5 gap-2">
-        {favorites.map((fav, i) => (
-          <div
-            key={fav.id}
-            draggable
-            onDragStart={() => onDragStart(i)}
-            onDragOver={e => onDragOver(e, i)}
-            onDragEnd={onDragEnd}
-            className="relative aspect-[2/3] rounded-xl overflow-hidden border-2 border-foreground/20 group cursor-grab active:cursor-grabbing select-none"
-          >
-            {fav.poster ? (
-              <img
-                src={fav.poster}
-                alt={fav.title}
-                className="w-full h-full object-cover"
-                draggable={false}
-              />
-            ) : (
-              <div className="w-full h-full flex items-center justify-center bg-muted">
-                <Film className="h-8 w-8 text-primary/60" />
+      {arranging && (
+        <p className="text-xs text-muted-foreground mb-3">
+          {selected === null ? 'Tap a poster, then tap another to swap them. The centre is your #1.' : 'Now tap where you want it.'}
+        </p>
+      )}
+
+      {/* Ring: hero in the centre, 6 orbiting with a gap */}
+      <div className="relative w-full max-w-[380px] mx-auto" style={{ aspectRatio: '202 / 262' }}>
+        {RING.map((pos, i) => {
+          const fav = favorites[i];
+          const isSelected = selected === i;
+
+          const posterInner = fav && (
+            <div className={`relative w-full aspect-[2/3] rounded-xl overflow-hidden border-2 transition-all ${pos.hero ? 'border-primary shadow-lg' : 'border-foreground/20'} ${isSelected ? 'ring-2 ring-primary ring-offset-2 ring-offset-background scale-95' : ''}`}>
+              {fav.poster ? (
+                <img src={fav.poster} alt={fav.title} className="w-full h-full object-cover" draggable={false} />
+              ) : (
+                <div className="w-full h-full flex items-center justify-center bg-muted">
+                  <Film className={`${pos.hero ? 'h-8 w-8' : 'h-6 w-6'} text-primary/60`} />
+                </div>
+              )}
+              {pos.hero && (
+                <div className="absolute top-1 left-1 bg-primary text-primary-foreground rounded-full h-5 w-5 flex items-center justify-center shadow">
+                  <Crown className="h-3 w-3" />
+                </div>
+              )}
+              <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/85 to-transparent p-1.5 pt-5">
+                <p className="text-[9px] font-bold leading-tight truncate text-white">{fav.title}</p>
               </div>
-            )}
-
-            {/* Title overlay */}
-            <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/90 via-black/40 to-transparent p-2 pt-6">
-              <p className="text-[9px] font-bold leading-tight truncate text-white">{fav.title}</p>
-              <p className="text-[8px] text-white/50 mt-0.5">{fav.year}</p>
             </div>
+          );
 
-            {/* Hover dim */}
-            <div className="absolute inset-0 bg-black/0 group-hover:bg-black/40 transition-colors pointer-events-none" />
-
-            {/* Hover actions */}
-            <div className="absolute top-1.5 right-1.5 z-20 flex flex-col gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-              <button
-                onClick={e => removeFavorite(i, e)}
-                className="p-1 rounded-full bg-black/70 text-white hover:bg-red-500/90"
-              >
-                <X className="h-3 w-3" />
-              </button>
-              <button
-                onClick={e => { e.preventDefault(); e.stopPropagation(); openSearch(i); }}
-                className="p-1 rounded-full bg-black/70 text-white hover:bg-primary/90"
-                aria-label={`Swap ${fav.title}`}
-              >
-                <RefreshCw className="h-3 w-3" />
-              </button>
+          return (
+            <div key={i} className="absolute" style={{ left: pos.left, top: pos.top, width: pos.width }}>
+              {!fav ? (
+                <button
+                  onClick={() => openSearch()}
+                  className="w-full aspect-[2/3] rounded-xl border-2 border-dashed border-foreground/25 hover:border-foreground/60 flex items-center justify-center transition-colors group"
+                  aria-label="Add favorite"
+                >
+                  <Plus className={`${pos.hero ? 'h-5 w-5' : 'h-4 w-4'} text-foreground/30 group-hover:text-foreground/70 transition-colors`} />
+                </button>
+              ) : arranging ? (
+                <div className="relative">
+                  <button onClick={() => onArrangeTap(i)} className="w-full block" aria-label={`Move ${fav.title}`}>
+                    {posterInner}
+                  </button>
+                  <div className="absolute -top-1.5 -right-1.5 z-20 flex flex-col gap-1">
+                    <button onClick={() => removeFavorite(i)} className="p-1 rounded-full bg-black/80 text-white hover:bg-red-500/90 shadow" aria-label={`Remove ${fav.title}`}>
+                      <X className="h-3 w-3" />
+                    </button>
+                    <button onClick={() => openSearch(i)} className="p-1 rounded-full bg-black/80 text-white hover:bg-primary/90 shadow" aria-label={`Replace ${fav.title}`}>
+                      <RefreshCw className="h-3 w-3" />
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <Link href={`/movie/${fav.id}`} aria-label={fav.title} className="block group">
+                  {posterInner}
+                </Link>
+              )}
             </div>
-
-            {/* Click navigates to movie */}
-            <Link
-              href={`/movie/${fav.id}`}
-              className="absolute inset-0 z-10"
-              aria-label={fav.title}
-            />
-          </div>
-        ))}
-
-        {/* Empty slots */}
-        {Array.from({ length: emptySlots }).map((_, i) => (
-          <button
-            key={`empty-${i}`}
-            onClick={() => openSearch()}
-            className="relative aspect-[2/3] rounded-xl border-2 border-dashed border-foreground/25 hover:border-foreground/60 flex items-center justify-center transition-colors group"
-          >
-            <Plus className="h-4 w-4 text-foreground/30 group-hover:text-foreground/70 transition-colors" />
-          </button>
-        ))}
+          );
+        })}
       </div>
 
       <Dialog open={searchOpen} onOpenChange={setSearchOpen}>
@@ -269,7 +270,7 @@ export function FavoritesSection() {
 
           {favorites.length >= MAX_FAVORITES && swapIndex === null ? (
             <p className="text-sm text-muted-foreground py-6 text-center">
-              You have reached the maximum of 10 favorites. Remove one to add another.
+              You have reached the maximum of {MAX_FAVORITES} favorites. Remove one to add another.
             </p>
           ) : (
             <div className="space-y-4 pt-1">
@@ -285,15 +286,11 @@ export function FavoritesSection() {
               </div>
 
               <div className="space-y-1 max-h-72 overflow-y-auto pr-1">
-                {searching && (
-                  <p className="text-sm text-muted-foreground text-center py-6">Searching…</p>
-                )}
+                {searching && <p className="text-sm text-muted-foreground text-center py-6">Searching…</p>}
                 {!searching && query.trim() && results.length === 0 && (
                   <p className="text-sm text-muted-foreground text-center py-6">No results found</p>
                 )}
-                {!query.trim() && (
-                  <p className="text-sm text-muted-foreground text-center py-6">Type to search movies & shows</p>
-                )}
+                {!query.trim() && <p className="text-sm text-muted-foreground text-center py-6">Type to search movies & shows</p>}
                 {results.map(r => (
                   <button
                     key={r.id}
@@ -301,11 +298,7 @@ export function FavoritesSection() {
                     className="w-full flex items-center gap-3 p-2 rounded-xl hover:bg-muted/50 transition-colors text-left"
                   >
                     {r.poster ? (
-                      <img
-                        src={r.poster}
-                        alt={r.title}
-                        className="w-9 h-[54px] object-cover rounded-lg flex-shrink-0 bg-muted"
-                      />
+                      <img src={r.poster} alt={r.title} className="w-9 h-[54px] object-cover rounded-lg flex-shrink-0 bg-muted" />
                     ) : (
                       <div className="w-9 h-[54px] rounded-lg flex-shrink-0 bg-muted flex items-center justify-center">
                         <Film className="h-4 w-4 text-primary/60" />
@@ -316,9 +309,7 @@ export function FavoritesSection() {
                       <p className="text-xs text-muted-foreground">{r.year}</p>
                     </div>
                     <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full flex-shrink-0 ${
-                      r.type === 'show'
-                        ? 'bg-blue-500/20 text-blue-400'
-                        : 'bg-primary/20 text-primary'
+                      r.type === 'show' ? 'bg-blue-500/20 text-blue-400' : 'bg-primary/20 text-primary'
                     }`}>
                       {r.type === 'show' ? 'TV' : 'Film'}
                     </span>
