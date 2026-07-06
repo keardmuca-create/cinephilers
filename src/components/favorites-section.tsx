@@ -220,9 +220,6 @@ export function FavoritesSection() {
                   <Crown className="h-3 w-3" />
                 </div>
               )}
-              <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/85 to-transparent p-1.5 pt-5">
-                <p className="text-[9px] font-bold leading-tight truncate text-white">{fav.title}</p>
-              </div>
             </div>
           );
 

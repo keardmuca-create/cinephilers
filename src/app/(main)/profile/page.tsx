@@ -190,9 +190,13 @@ function ListsSection() {
     const onVisible = () => { if (document.visibilityState === 'visible') read(); };
     document.addEventListener('visibilitychange', onVisible);
     window.addEventListener('focus', read);
+    // Login sync restores account-saved refines into localStorage AFTER this
+    // mounts — re-read then, or the saved sort doesn't apply until a refresh.
+    window.addEventListener('cinephilers-db-restored', read);
     return () => {
       document.removeEventListener('visibilitychange', onVisible);
       window.removeEventListener('focus', read);
+      window.removeEventListener('cinephilers-db-restored', read);
     };
   }, []);
 
@@ -594,9 +598,13 @@ export default function ProfilePage() {
     const onVisible = () => { if (document.visibilityState === 'visible') read(); };
     document.addEventListener('visibilitychange', onVisible);
     window.addEventListener('focus', read);
+    // Login sync restores account-saved refines into localStorage AFTER this
+    // mounts — re-read then, or the saved sorts don't apply until a refresh.
+    window.addEventListener('cinephilers-db-restored', read);
     return () => {
       document.removeEventListener('visibilitychange', onVisible);
       window.removeEventListener('focus', read);
+      window.removeEventListener('cinephilers-db-restored', read);
     };
   }, []);
 
