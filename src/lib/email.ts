@@ -3,7 +3,11 @@ import { Resend } from 'resend';
 function getResend() {
   return new Resend(process.env.RESEND_API_KEY);
 }
-const FROM = process.env.EMAIL_FROM ?? 'Cinephilers <onboarding@resend.dev>';
+// Default to the verified cinephilers.app domain so email works even if the
+// EMAIL_FROM env var is missing. The old fallback (onboarding@resend.dev) is
+// Resend's shared sandbox sender, which only delivers to the account owner —
+// every other recipient 403s, silently breaking signup/reset for real users.
+const FROM = process.env.EMAIL_FROM ?? 'Cinephilers <noreply@cinephilers.app>';
 const BASE_URL = process.env.APP_URL ?? 'https://cinephilers.app';
 
 function escapeHtml(str: string): string {
