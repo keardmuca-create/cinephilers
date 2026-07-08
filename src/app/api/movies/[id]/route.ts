@@ -9,7 +9,7 @@ export async function GET(
 ) {
   // Shared per-IP budget across all TMDB proxy routes — unique ids bypass the
   // fetch cache, so without this a loop over ids can burn the TMDB quota.
-  const { allowed } = await rateLimit(`tmdb:${getIp(req)}`, 120, 60_000);
+  const { allowed } = await rateLimit(`tmdb:${getIp(req)}`, 300, 60_000);
   if (!allowed) return NextResponse.json({ error: 'Too many requests' }, { status: 429 });
 
   const { id: raw } = await params;

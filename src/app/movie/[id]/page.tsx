@@ -921,6 +921,8 @@ export default function MovieDetailPage() {
   const [rewatchDate, setRewatchDate] = useState('');
   const [rewatchBusy, setRewatchBusy] = useState(false);
   const [lastLoggedEventId, setLastLoggedEventId] = useState<string | null>(null);
+  // Bumped by the error screen's Try Again button to re-run the title load.
+  const [reloadKey, setReloadKey] = useState(0);
 
   const { user: authUser } = useAuth();
 
@@ -972,42 +974,52 @@ export default function MovieDetailPage() {
         })
         .catch(() => { /* ignore */ });
     } catch { /* ignore */ }
-    fetch(`/api/movies/${id}`)
-      .then(r => r.json())
-      .then((data: Movie & { error?: string }) => {
-        if (!data.error) {
-          setMovie(data);
-          loadCineRating(data.type === 'show' ? 'SHOW' : 'MOVIE');
-          // Cache metadata for profile/watchlist lookups
-          try {
-            localStorage.setItem(`meta-${data.id}`, JSON.stringify({
-              title: data.title,
-              poster: data.poster,
-              backdrop: data.backdrop,
-              year: data.year,
-              genre: data.genre,
-              language: data.originalLanguage,
-              description: data.description,
-              type: data.type,
-              tmdbRating: data.rating,
-            }));
-          } catch { /* ignore */ }
-          // Track recently viewed in localStorage
-          try {
-            const stored = localStorage.getItem('recently-viewed');
-            const viewed: { id: string; title: string; poster: string; year: string; type: string }[] =
-              stored ? JSON.parse(stored) : [];
-            const entry = { id: data.id, title: data.title, poster: data.poster, year: data.year, type: data.type, rating: data.rating };
-            const filtered = viewed.filter(v => v.id !== data.id);
-            localStorage.setItem('recently-viewed', JSON.stringify([entry, ...filtered].slice(0, 100)));
-          } catch { /* ignore */ }
-        } else {
-          setMovie(null);
-        }
-      })
-      .catch(() => setMovie(null))
-      .finally(() => setLoading(false));
-  }, [id, loadCineRating]);
+    // Transient failures (a rate-limit blip, a TMDB hiccup, flaky mobile
+    // network) must never dead-end the page in "Title not found" — retry a
+    // couple of times with a short backoff before giving up.
+    let cancelled = false;
+    (async () => {
+      for (let attempt = 0; attempt < 3; attempt++) {
+        try {
+          const r = await fetch(`/api/movies/${id}`);
+          const data: Movie & { error?: string } = await r.json();
+          if (cancelled) return;
+          if (!data.error) {
+            setMovie(data);
+            loadCineRating(data.type === 'show' ? 'SHOW' : 'MOVIE');
+            // Cache metadata for profile/watchlist lookups
+            try {
+              localStorage.setItem(`meta-${data.id}`, JSON.stringify({
+                title: data.title,
+                poster: data.poster,
+                backdrop: data.backdrop,
+                year: data.year,
+                genre: data.genre,
+                language: data.originalLanguage,
+                description: data.description,
+                type: data.type,
+                tmdbRating: data.rating,
+              }));
+            } catch { /* ignore */ }
+            // Track recently viewed in localStorage
+            try {
+              const stored = localStorage.getItem('recently-viewed');
+              const viewed: { id: string; title: string; poster: string; year: string; type: string }[] =
+                stored ? JSON.parse(stored) : [];
+              const entry = { id: data.id, title: data.title, poster: data.poster, year: data.year, type: data.type, rating: data.rating };
+              const filtered = viewed.filter(v => v.id !== data.id);
+              localStorage.setItem('recently-viewed', JSON.stringify([entry, ...filtered].slice(0, 100)));
+            } catch { /* ignore */ }
+            setLoading(false);
+            return;
+          }
+        } catch { /* network error — fall through to retry */ }
+        if (attempt < 2) await new Promise(res => setTimeout(res, 1200 * (attempt + 1)));
+      }
+      if (!cancelled) { setMovie(null); setLoading(false); }
+    })();
+    return () => { cancelled = true; };
+  }, [id, loadCineRating, reloadKey]);
 
   // Load this title's diary summary (seen count + last watch date) once we
   // know the media type. Server-only data — deliberately not in localStorage.
@@ -1137,9 +1149,14 @@ export default function MovieDetailPage() {
         <h1 className="text-2xl font-headline font-bold">Title not found</h1>
         <p className="text-muted-foreground">This movie or show could not be loaded.</p>
       </div>
-      <Button variant="outline" className="rounded-full border-border" onClick={() => router.back()}>
-        <ChevronLeft className="h-4 w-4 mr-2" /> Go Back
-      </Button>
+      <div className="flex items-center gap-3">
+        <Button variant="outline" className="rounded-full border-border" onClick={() => router.back()}>
+          <ChevronLeft className="h-4 w-4 mr-2" /> Go Back
+        </Button>
+        <Button className="rounded-full" onClick={() => { setLoading(true); setReloadKey(k => k + 1); }}>
+          Try Again
+        </Button>
+      </div>
     </main>
   );
 

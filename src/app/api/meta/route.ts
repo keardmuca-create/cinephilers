@@ -7,9 +7,9 @@ const MAX_IDS = 100;
 
 export async function GET(req: NextRequest) {
   // Own bucket, tighter than the shared tmdb one: a single call here fans out
-  // up to MAX_IDS TMDB fetches, so 30/min still allows several full library
-  // loads while capping what one IP can make us fetch.
-  const { allowed } = await rateLimit(`meta:${getIp(req)}`, 30, 60_000);
+  // up to MAX_IDS TMDB fetches, so 60/min still allows many full library
+  // loads per minute while capping what one IP can make us fetch.
+  const { allowed } = await rateLimit(`meta:${getIp(req)}`, 60, 60_000);
   if (!allowed) return NextResponse.json({ error: 'Too many requests' }, { status: 429 });
 
   const key = process.env.TMDB_API_KEY ?? '';

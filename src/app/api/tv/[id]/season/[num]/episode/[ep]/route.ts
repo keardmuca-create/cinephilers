@@ -6,7 +6,7 @@ export async function GET(
   req: NextRequest,
   { params }: { params: Promise<{ id: string; num: string; ep: string }> },
 ) {
-  const { allowed } = await rateLimit(`tmdb:${getIp(req)}`, 120, 60_000);
+  const { allowed } = await rateLimit(`tmdb:${getIp(req)}`, 300, 60_000);
   if (!allowed) return NextResponse.json({ error: 'Too many requests' }, { status: 429 });
 
   const { id, num, ep } = await params;
