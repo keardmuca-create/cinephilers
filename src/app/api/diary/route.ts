@@ -53,8 +53,9 @@ export async function POST(req: NextRequest) {
     },
   });
 
-  // Keep the summary row in sync: mark watched, and bump its watchedAt only
-  // forward (a backdated rewatch shouldn't push a title DOWN in history).
+  // Keep the summary row in sync: mark watched on the first log, but NEVER
+  // bump watchedAt on later logs — Watch history keeps the first-watch order;
+  // rewatch recency lives in the Rewatched shelf (max WatchEvent.watchedAt).
   const existing = await prisma.watchedItem.findUnique({
     where: { userId_tmdbId_mediaType: { userId: auth.sub, tmdbId, mediaType: mediaType as MediaType } },
     select: { watchedAt: true },
@@ -64,11 +65,6 @@ export async function POST(req: NextRequest) {
       data: { userId: auth.sub, tmdbId, mediaType: mediaType as MediaType, watchedAt },
     }).catch(e => {
       if ((e as { code?: string })?.code !== 'P2002') throw e;
-    });
-  } else if (watchedAt > existing.watchedAt) {
-    await prisma.watchedItem.update({
-      where: { userId_tmdbId_mediaType: { userId: auth.sub, tmdbId, mediaType: mediaType as MediaType } },
-      data: { watchedAt },
     });
   }
 

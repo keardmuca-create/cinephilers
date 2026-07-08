@@ -96,8 +96,9 @@ export async function POST(req: NextRequest) {
   // several dates for the same film imports as first-watch + rewatches. Within
   // each title, the earliest date is the original watch.
   const eventData: { userId: string; tmdbId: string; mediaType: 'MOVIE' | 'SHOW'; watchedAt: Date; isRewatch: boolean }[] = [];
-  // One summary row per title, stamped with its LATEST watch date so rewatched
-  // films sort by their most recent viewing in history (matches POST /api/diary).
+  // One summary row per title, stamped with its EARLIEST watch date — Watch
+  // history keeps first-watch order; rewatch recency lives in the Rewatched
+  // shelf (matches POST /api/diary).
   const watchedRows: typeof watchedData = [];
   {
     const byTitle = new Map<string, { tmdbId: string; mediaType: 'MOVIE' | 'SHOW'; watchedAt: Date }[]>();
@@ -112,8 +113,8 @@ export async function POST(req: NextRequest) {
       rows.forEach((w, i) => {
         eventData.push({ userId, tmdbId: w.tmdbId, mediaType: w.mediaType, watchedAt: w.watchedAt, isRewatch: i > 0 });
       });
-      const last = rows[rows.length - 1];
-      watchedRows.push({ userId, tmdbId: last.tmdbId, mediaType: last.mediaType, watchedAt: last.watchedAt });
+      const first = rows[0];
+      watchedRows.push({ userId, tmdbId: first.tmdbId, mediaType: first.mediaType, watchedAt: first.watchedAt });
     }
   }
 
