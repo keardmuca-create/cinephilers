@@ -58,32 +58,34 @@ export const MovieCard = React.memo(function MovieCard({ movie, className, horiz
           )}
         </div>
 
-        <div className="space-y-1 px-1">
-          <div className="flex items-start justify-between gap-1">
+        {/* Title + year stack together on the left so the year always sits
+            right under the title — the badge column's height can't push it down. */}
+        <div className="flex items-start justify-between gap-1 px-1">
+          <div className="space-y-1 min-w-0">
             <h3 className="text-sm font-semibold font-headline line-clamp-2 group-hover:text-primary transition-colors leading-snug">
               {movie.title}
             </h3>
-            <div className="flex flex-col items-end gap-0.5 shrink-0">
-              {movie.rating > 0 && (
-                <div className="flex items-center gap-0.5">
-                  <Star className="h-3 w-3 fill-yellow-400 text-yellow-400" />
-                  <span className="text-xs font-bold text-foreground">{movie.rating.toFixed(1)}</span>
-                </div>
-              )}
-              {userRating !== undefined && (
-                <div className="flex items-center gap-0.5">
-                  <Star className="h-3 w-3 fill-blue-400 text-blue-400" />
-                  <span className="text-[10px] font-bold text-blue-400">{userRating}</span>
-                </div>
-              )}
-              {watched && (
-                <Eye className="h-4 w-4 text-blue-400" />
-              )}
-            </div>
+            <p className="text-xs text-muted-foreground line-clamp-1">
+              {movie.year}
+            </p>
           </div>
-          <p className="text-xs text-muted-foreground line-clamp-1">
-            {movie.year}
-          </p>
+          <div className="flex flex-col items-end gap-0.5 shrink-0">
+            {movie.rating > 0 && (
+              <div className="flex items-center gap-0.5">
+                <Star className="h-3 w-3 fill-yellow-400 text-yellow-400" />
+                <span className="text-xs font-bold text-foreground">{movie.rating.toFixed(1)}</span>
+              </div>
+            )}
+            {userRating !== undefined && (
+              <div className="flex items-center gap-0.5">
+                <Star className="h-3 w-3 fill-blue-400 text-blue-400" />
+                <span className="text-[10px] font-bold text-blue-400">{userRating}</span>
+              </div>
+            )}
+            {watched && (
+              <Eye className="h-4 w-4 text-blue-400" />
+            )}
+          </div>
         </div>
       </div>
     </Link>

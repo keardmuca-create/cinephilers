@@ -84,6 +84,21 @@ export async function GET(req: NextRequest) {
   // otherwise appear twice ("watched" + "rewatched"). The rewatch entry wins.
   const rewatchKeys = new Set(rewatches.map(r => `${r.user.id}:${r.tmdbId}:${r.mediaType}`));
 
+  // A bulk import creates hundreds of Rating/Review rows in one moment. Those
+  // must collapse into the single "imported N titles" card — not flood the
+  // feed as individual entries. Drop rated/reviewed items whose timestamp
+  // falls within 10 minutes of that user's own import event.
+  const importTimes = new Map<string, number[]>();
+  for (const i of imports) {
+    const arr = importTimes.get(i.user.id) ?? [];
+    arr.push(i.createdAt.getTime());
+    importTimes.set(i.user.id, arr);
+  }
+  const nearImport = (userId: string, t: Date) => {
+    const arr = importTimes.get(userId);
+    return !!arr && arr.some(x => Math.abs(x - t.getTime()) < 10 * 60_000);
+  };
+
   const items: FeedItem[] = [
     ...watched
       .filter(w => !rewatchKeys.has(`${w.user.id}:${w.tmdbId}:${w.mediaType}`))
@@ -103,16 +118,18 @@ export async function GET(req: NextRequest) {
       mediaType: r.mediaType,
       createdAt: r.createdAt.toISOString(),
     })),
-    ...ratings.map(r => ({
-      id: `rated-${r.id}`,
-      type: 'rated' as const,
-      user: r.user,
-      tmdbId: r.tmdbId,
-      mediaType: r.mediaType,
-      rating: r.score,
-      createdAt: r.updatedAt.toISOString(),
-    })),
-    ...reviews.map(r => ({
+    ...ratings
+      .filter(r => !nearImport(r.user.id, r.updatedAt))
+      .map(r => ({
+        id: `rated-${r.id}`,
+        type: 'rated' as const,
+        user: r.user,
+        tmdbId: r.tmdbId,
+        mediaType: r.mediaType,
+        rating: r.score,
+        createdAt: r.updatedAt.toISOString(),
+      })),
+    ...reviews.filter(r => !nearImport(r.user.id, r.createdAt)).map(r => ({
       id: `reviewed-${r.id}`,
       type: 'reviewed' as const,
       user: r.user,
