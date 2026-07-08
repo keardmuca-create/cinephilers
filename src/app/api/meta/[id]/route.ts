@@ -27,8 +27,11 @@ export async function GET(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  // Single-title fetch — joins the shared per-IP bucket used by the other TMDB proxies.
-  const { allowed } = await rateLimit(`tmdb:${getIp(req)}`, 120, 60_000);
+  // Own bucket, NOT the shared tmdb: one — the social feed fires one of these
+  // per activity item on a cold cache, and sharing a bucket with movies/[id]
+  // and search let a busy feed starve the movie page into "Title not found".
+  // 300/min still caps abuse (each call = at most one uncached TMDB fetch).
+  const { allowed } = await rateLimit(`meta-one:${getIp(req)}`, 300, 60_000);
   if (!allowed) return NextResponse.json({ error: 'Too many requests' }, { status: 429 });
 
   const { id } = await params;
