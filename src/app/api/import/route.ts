@@ -7,6 +7,7 @@ import { awardBadgeIfEarned } from '@/lib/badge-service';
 import { sanitizeText } from '@/lib/sanitize';
 import { rateLimit } from '@/lib/rate-limit';
 import { canonicalId, isValidMediaId } from '@/lib/media-id';
+import { recomputeMovieRatings } from '@/lib/movie-rating-sync';
 
 export const dynamic = 'force-dynamic';
 
@@ -130,6 +131,11 @@ export async function POST(req: NextRequest) {
   // Diary events after the watched rows land (no unique constraint to lean on,
   // and the pre-filter already excluded titles the user had before this import).
   if (eventData.length) await prisma.watchEvent.createMany({ data: eventData });
+
+  // Imported votes must count toward the Cinephilers score. Recompute the
+  // aggregates for every title this import rated — recompute (not increment)
+  // so it stays correct regardless of what skipDuplicates actually skipped.
+  await recomputeMovieRatings(ratingData.map(r => ({ tmdbId: r.tmdbId, mediaType: r.mediaType })));
 
   const watchedAdded = watchedRes.count;
   const watchlistAdded = watchlistRes.count;

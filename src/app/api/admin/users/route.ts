@@ -2,6 +2,7 @@ import { NextRequest } from 'next/server';
 import { prisma } from '@/lib/db';
 import { ok, err } from '@/lib/api-response';
 import { requireAdmin } from '@/lib/admin-auth';
+import { recomputeMovieRatings } from '@/lib/movie-rating-sync';
 
 export const dynamic = 'force-dynamic';
 
@@ -93,6 +94,16 @@ export async function DELETE(req: NextRequest) {
 
   if (userId === auth.sub) return err('Cannot delete your own account', 400);
 
+  // The cascade wipes the user's ratings — capture which titles they voted on
+  // first, then pull those votes back out of the Cinephilers aggregates so a
+  // deleted account leaves no ghost votes in any score.
+  const ratedTitles = await prisma.rating.findMany({
+    where: { userId },
+    select: { tmdbId: true, mediaType: true },
+  });
+
   await prisma.user.delete({ where: { id: userId } });
+  await recomputeMovieRatings(ratedTitles);
+
   return ok(null, 'User deleted');
 }
