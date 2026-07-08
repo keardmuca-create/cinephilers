@@ -8,6 +8,7 @@ import { Play, Star, ChevronRight, Info, Eye } from 'lucide-react';
 import { Movie } from '@/lib/types';
 import { MovieCard } from '@/components/movie-card';
 import { AIRecommendations } from '@/components/ai-recommendations';
+import { InstallPrompt } from '@/components/install-prompt';
 import { RecentlyViewed } from '@/components/recently-viewed';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -165,6 +166,10 @@ export default function HomePage() {
 
   return (
     <main className="flex flex-col gap-10 pb-20">
+      {/* Install-app banner: native install dialog on Chromium, Share-sheet
+          guide on iOS; hides itself when installed or dismissed */}
+      <InstallPrompt />
+
       {/* Guest signup banner */}
       {!authLoading && !user && (
         <div className="px-6 pt-6 -mb-4">
