@@ -433,7 +433,23 @@ export function readUserStats(): UserStats {
   const maxMoviesInWeek = weekMap.size > 0 ? Math.max(...weekMap.values()) : 0;
 
   const lateNightMovies   = movieEntries.filter(e => e.hour >= 0 && e.hour < 4).length;
-  const distinctLanguages = new Set(movieEntries.map(e => e.language).filter(Boolean)).size;
+
+  // World Cinema: the login sync rebuilds the watch-log from the DB WITHOUT
+  // languages (the DB doesn't store them), so log entries alone read 0 after
+  // any re-login. Fall back to the meta-{id} cache, which carries the
+  // original_language for every title the app has ever displayed.
+  const languages = new Set<string>();
+  for (const e of movieEntries) {
+    if (e.language) { languages.add(e.language); continue; }
+    try {
+      const raw = localStorage.getItem(`meta-${e.id}`);
+      if (raw) {
+        const lang = (JSON.parse(raw) as { language?: string }).language;
+        if (lang) languages.add(lang);
+      }
+    } catch { /* ignore */ }
+  }
+  const distinctLanguages = languages.size;
 
   const now = new Date();
   const y   = now.getFullYear();
