@@ -7,9 +7,10 @@ export async function GET(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  // Shared per-IP budget across all TMDB proxy routes — unique ids bypass the
-  // fetch cache, so without this a loop over ids can burn the TMDB quota.
-  const { allowed } = await rateLimit(`tmdb:${getIp(req)}`, 300, 60_000);
+  // Own bucket, deliberately NOT the shared tmdb: one. Opening a title page is
+  // the app's most critical read — browse/search/discover storms must never be
+  // able to starve it into the "Title not found" screen.
+  const { allowed } = await rateLimit(`movie-detail:${getIp(req)}`, 300, 60_000);
   if (!allowed) return NextResponse.json({ error: 'Too many requests' }, { status: 429 });
 
   const { id: raw } = await params;

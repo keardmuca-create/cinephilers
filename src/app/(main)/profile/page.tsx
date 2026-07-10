@@ -762,21 +762,20 @@ export default function ProfilePage() {
           resolveItem(id, logMap.get(id) ?? getWatchedAtISO(id) ?? new Date(0).toISOString());
         }
 
-        // Fetch uncached movie metadata via /api/movies (preserves existing pattern)
+        // Fetch uncached movie metadata via the batch endpoint. NEVER fetch
+        // /api/movies/[id] per item here: a fresh login has zero meta- cache,
+        // so a big library fired hundreds of parallel detail requests, drained
+        // the per-IP rate bucket, and every movie page opened in that window
+        // died with "Title not found". One batch call per 100 ids instead.
         if (movieFetchIds.length > 0) {
-          await Promise.allSettled(movieFetchIds.map(id =>
-            fetch(`/api/movies/${id}`)
-              .then(r => r.json())
-              .then((data: { title?: string; poster?: string; year?: string; type?: string; rating?: number; tmdbRating?: number; error?: string }) => {
-                if (data.error || !data.title) return;
-                const loggedAt = logMap.get(id) ?? getWatchedAtISO(id) ?? new Date(0).toISOString();
-                const rating = localStorage.getItem(`movie-rating-${id}`);
-                const cached = { title: data.title, poster: data.poster ?? '', year: data.year ?? '', type: data.type ?? 'movie', tmdbRating: data.rating ?? data.tmdbRating };
-                try { localStorage.setItem(`meta-${id}`, JSON.stringify(cached)); } catch { /* ignore */ }
-                items.push({ id, title: cached.title, poster: cached.poster, year: cached.year, loggedAt, rating: rating ? Number(rating) : undefined, tmdbRating: cached.tmdbRating });
-              })
-              .catch(() => { /* ignore */ })
-          ));
+          const movieMetaMap = await batchFetchMeta(movieFetchIds);
+          for (const id of movieFetchIds) {
+            const data = movieMetaMap[id];
+            if (!data?.title) continue;
+            const loggedAt = logMap.get(id) ?? getWatchedAtISO(id) ?? new Date(0).toISOString();
+            const rating = localStorage.getItem(`movie-rating-${id}`);
+            items.push({ id, title: data.title, poster: data.poster ?? '', year: data.year ?? '', loggedAt, rating: rating ? Number(rating) : undefined, tmdbRating: data.tmdbRating });
+          }
         }
 
         // Individual watched episodes — batch-fetch metadata
