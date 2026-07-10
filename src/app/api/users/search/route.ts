@@ -37,6 +37,12 @@ export async function GET(req: NextRequest) {
         where: { followerId: auth.sub },
         select: { followerId: true },
       },
+      // Pending follow request from the caller (private accounts) — the
+      // Find People button must show "Requested", not "Follow"/"Following".
+      receivedRequests: {
+        where: { requesterId: auth.sub },
+        select: { id: true },
+      },
     },
     orderBy: { ratingsCount: 'desc' },
   });
@@ -50,6 +56,7 @@ export async function GET(req: NextRequest) {
     followersCount: u._count.followers,
     followingCount: u._count.following,
     isFollowing: u.followers.length > 0,
+    isRequested: u.receivedRequests.length > 0,
   }));
 
   return ok(result);

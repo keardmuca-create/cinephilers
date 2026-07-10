@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
-import { Search, Users, UserPlus, UserCheck, UserX, Loader2, User } from 'lucide-react';
+import { Search, Users, UserPlus, UserCheck, UserX, Loader2, User, Clock } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/contexts/auth-context';
@@ -17,7 +17,11 @@ interface UserResult {
   followersCount: number;
   followingCount: number;
   isFollowing: boolean;
+  isRequested: boolean;
 }
+
+// What the caller's relationship to this user currently is.
+type FollowState = 'none' | 'following' | 'requested';
 
 function Avatar({ user, size = 40 }: { user: Pick<UserResult, 'avatarUrl' | 'displayName' | 'username'>; size?: number }) {
   const initials = (user.displayName ?? user.username).slice(0, 2).toUpperCase();
@@ -34,21 +38,28 @@ function Avatar({ user, size = 40 }: { user: Pick<UserResult, 'avatarUrl' | 'dis
   );
 }
 
-function FollowButton({ username, isFollowing, onToggle }: { username: string; isFollowing: boolean; onToggle: (username: string, nowFollowing: boolean) => void }) {
+function FollowButton({ username, initialState, onChange }: { username: string; initialState: FollowState; onChange: (username: string, state: FollowState) => void }) {
   const [loading, setLoading] = useState(false);
-  const [following, setFollowing] = useState(isFollowing);
+  const [state, setState] = useState<FollowState>(initialState);
 
-  useEffect(() => { setFollowing(isFollowing); }, [isFollowing]);
+  useEffect(() => { setState(initialState); }, [initialState]);
 
   const toggle = async () => {
     setLoading(true);
-    const method = following ? 'DELETE' : 'POST';
+    // Following -> unfollow; Requested -> cancel the request; None -> follow.
+    const method = state === 'none' ? 'POST' : 'DELETE';
     try {
       const res = await fetch(`/api/users/${username}/follow`, { method, credentials: 'include' });
       if (res.ok) {
-        const next = !following;
-        setFollowing(next);
-        onToggle(username, next);
+        let next: FollowState = 'none';
+        if (method === 'POST') {
+          // Private accounts answer { requested: true } — that's a pending
+          // request, NOT a follow. Show "Requested" until they accept.
+          const json = await res.json().catch(() => null);
+          next = json?.data?.requested === true ? 'requested' : 'following';
+        }
+        setState(next);
+        onChange(username, next);
       }
     } finally {
       setLoading(false);
@@ -58,22 +69,24 @@ function FollowButton({ username, isFollowing, onToggle }: { username: string; i
   return (
     <Button
       size="sm"
-      variant={following ? 'outline' : 'default'}
+      variant={state === 'none' ? 'default' : 'outline'}
       className="rounded-xl font-bold text-xs min-w-[90px] gap-1.5"
       onClick={toggle}
       disabled={loading}
     >
       {loading
         ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
-        : following
+        : state === 'following'
           ? <><UserCheck className="h-3.5 w-3.5" />Following</>
-          : <><UserPlus className="h-3.5 w-3.5" />Follow</>
+          : state === 'requested'
+            ? <><Clock className="h-3.5 w-3.5" />Requested</>
+            : <><UserPlus className="h-3.5 w-3.5" />Follow</>
       }
     </Button>
   );
 }
 
-function UserCard({ user, onToggle }: { user: UserResult; onToggle: (username: string, nowFollowing: boolean) => void }) {
+function UserCard({ user, onChange }: { user: UserResult; onChange: (username: string, state: FollowState) => void }) {
   return (
     <div className="flex items-center gap-3 p-4 rounded-2xl bg-card border border-border">
       <Link href={`/profile/${user.username}`} className="flex-1 flex items-center gap-3 min-w-0">
@@ -91,7 +104,11 @@ function UserCard({ user, onToggle }: { user: UserResult; onToggle: (username: s
           </p>
         </div>
       </Link>
-      <FollowButton username={user.username} isFollowing={user.isFollowing} onToggle={onToggle} />
+      <FollowButton
+        username={user.username}
+        initialState={user.isFollowing ? 'following' : user.isRequested ? 'requested' : 'none'}
+        onChange={onChange}
+      />
     </div>
   );
 }
@@ -122,6 +139,7 @@ export default function FriendsPage() {
           followersCount: u.followersCount ?? 0,
           followingCount: 0,
           isFollowing: true,
+          isRequested: false,
         })));
       }
     } finally {
@@ -152,11 +170,13 @@ export default function FriendsPage() {
     return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
   }, [query]);
 
-  const handleToggle = (username: string, nowFollowing: boolean) => {
+  const handleChange = (username: string, state: FollowState) => {
     // Update search results in-place
-    setSearchResults(prev => prev.map(u => u.username === username ? { ...u, isFollowing: nowFollowing } : u));
-    // Refresh following list
-    if (nowFollowing) {
+    setSearchResults(prev => prev.map(u => u.username === username
+      ? { ...u, isFollowing: state === 'following', isRequested: state === 'requested' }
+      : u));
+    // Refresh following list — a pending request is NOT a follow
+    if (state === 'following') {
       loadFollowing();
     } else {
       setFollowing(prev => prev.filter(u => u.username !== username));
@@ -213,7 +233,7 @@ export default function FriendsPage() {
             </div>
           )}
           {searchResults.map(u => (
-            <UserCard key={u.username} user={u} onToggle={handleToggle} />
+            <UserCard key={u.username} user={u} onChange={handleChange} />
           ))}
         </section>
       )}
@@ -255,7 +275,7 @@ export default function FriendsPage() {
           ) : (
             <div className="space-y-3">
               {following.map(u => (
-                <UserCard key={u.username} user={u} onToggle={handleToggle} />
+                <UserCard key={u.username} user={u} onChange={handleChange} />
               ))}
             </div>
           )}

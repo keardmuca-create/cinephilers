@@ -249,7 +249,7 @@ function NotificationCard({ notif, onFollowBack, onRequestHandled }: {
   onFollowBack: (username: string) => void;
   onRequestHandled: (notifId: string) => void;
 }) {
-  const [followState, setFollowState] = useState<'idle' | 'loading' | 'following'>(notif.from.isFollowingBack ? 'following' : 'idle');
+  const [followState, setFollowState] = useState<'idle' | 'loading' | 'following' | 'requested'>(notif.from.isFollowingBack ? 'following' : 'idle');
   const [requestState, setRequestState] = useState<'pending' | 'loading' | 'accepted' | 'denied'>('pending');
   const [movieMeta, setMovieMeta] = useState<{ title: string; poster: string } | null>(null);
 
@@ -264,8 +264,17 @@ function NotificationCard({ notif, onFollowBack, onRequestHandled }: {
     setFollowState('loading');
     try {
       const res = await fetch(`/api/users/${notif.from.username}/follow`, { method: 'POST', credentials: 'include' });
-      if (res.ok) { setFollowState('following'); onFollowBack(notif.from.username); }
-      else setFollowState('idle');
+      if (res.ok) {
+        // Private accounts answer { requested: true } — show "Requested",
+        // it's a pending request, not a follow.
+        const json = await res.json().catch(() => null);
+        if (json?.data?.requested === true) {
+          setFollowState('requested');
+        } else {
+          setFollowState('following');
+          onFollowBack(notif.from.username);
+        }
+      } else setFollowState('idle');
     } catch { setFollowState('idle'); }
   };
 
@@ -341,9 +350,11 @@ function NotificationCard({ notif, onFollowBack, onRequestHandled }: {
       {notif.type === 'follow' && (
         followState === 'following'
           ? <span className="text-xs text-muted-foreground font-bold px-3 py-1.5 rounded-xl border border-border shrink-0">Following</span>
-          : <Button size="sm" variant="outline" className="rounded-xl font-bold text-xs gap-1.5 shrink-0" onClick={handleFollowBack} disabled={followState === 'loading'}>
-              {followState === 'loading' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <><UserPlus className="h-3.5 w-3.5" />Follow back</>}
-            </Button>
+          : followState === 'requested'
+            ? <span className="text-xs text-muted-foreground font-bold px-3 py-1.5 rounded-xl border border-border shrink-0">Requested</span>
+            : <Button size="sm" variant="outline" className="rounded-xl font-bold text-xs gap-1.5 shrink-0" onClick={handleFollowBack} disabled={followState === 'loading'}>
+                {followState === 'loading' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <><UserPlus className="h-3.5 w-3.5" />Follow back</>}
+              </Button>
       )}
     </div>
   );
