@@ -67,7 +67,7 @@ export default function PrivacyPage() {
             </p>
             <p className="mt-3">
               We also rely on a small number of infrastructure providers to run the service:{' '}
-              <strong className="text-foreground">Vercel</strong> (application hosting and server logs),{' '}
+              <strong className="text-foreground">Vercel</strong> (application hosting, server logs, and cookieless visitor analytics — aggregated page-view counts with no cookies and no cross-site tracking),{' '}
               <strong className="text-foreground">Resend</strong> (sends account emails such as verification and password reset — they process your email address),{' '}
               <strong className="text-foreground">Upstash</strong> (short-lived rate-limit counters keyed by IP address, expiring within minutes), and{' '}
               <strong className="text-foreground">Sentry</strong> (error monitoring, which may include technical request details when something breaks).
