@@ -143,26 +143,31 @@ export default function MovieFriendsPage() {
                 <p className="text-sm text-muted-foreground truncate">@{e.user.username}</p>
               </div>
 
-              {/* Activity icons + rating */}
+              {/* Three constant slots, always in the same order: watched eye ·
+                  rating · review. A dash fills any empty slot so every row
+                  lines up. Rating or reviewing implies they watched it, so the
+                  eye shows even if the watched flag never got set. */}
               <div className="flex items-center gap-3 shrink-0">
-                {e.watched && (
-                  <div className="flex items-center gap-1 text-blue-400">
-                    <Eye className="h-4 w-4" />
-                  </div>
-                )}
-                {e.reviewed && (
-                  <div className="flex items-center gap-1 text-green-400">
-                    <MessageSquare className="h-4 w-4" />
-                  </div>
-                )}
-                {e.rating !== null ? (
-                  <div className="flex items-center gap-1">
-                    <Star className="h-3.5 w-3.5 fill-yellow-400 text-yellow-400" />
-                    <span className="text-sm font-bold text-foreground">{e.rating}</span>
-                  </div>
-                ) : (
-                  <span className="text-sm text-muted-foreground/50">—</span>
-                )}
+                <span className="w-5 flex justify-center">
+                  {(e.watched || e.rating !== null || e.reviewed)
+                    ? <Eye className="h-4 w-4 text-blue-400" />
+                    : <span className="text-sm text-muted-foreground/50">—</span>}
+                </span>
+                <span className="w-10 flex items-center justify-center gap-1">
+                  {e.rating !== null ? (
+                    <>
+                      <Star className="h-3.5 w-3.5 fill-yellow-400 text-yellow-400" />
+                      <span className="text-sm font-bold text-foreground">{e.rating}</span>
+                    </>
+                  ) : (
+                    <span className="text-sm text-muted-foreground/50">—</span>
+                  )}
+                </span>
+                <span className="w-5 flex justify-center">
+                  {e.reviewed
+                    ? <MessageSquare className="h-4 w-4 text-green-400" />
+                    : <span className="text-sm text-muted-foreground/50">—</span>}
+                </span>
               </div>
             </Link>
           ))}
