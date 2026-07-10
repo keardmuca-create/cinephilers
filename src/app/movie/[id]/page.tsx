@@ -22,7 +22,8 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Badge } from '@/components/ui/badge';
 import { toast } from '@/hooks/use-toast';
 import { appendWatchLog, removeFromWatchLog, saveMovieRating, ensureSignupDate } from '@/lib/badges';
-import { recordAddedAt, recordWatchedAt, recordManualWatch, removeManualWatch } from '@/lib/media-id';
+import { recordAddedAt, recordWatchedAt, recordManualWatch, removeManualWatch, legacyTwin } from '@/lib/media-id';
+import { RatingSheet } from '@/components/rating-sheet';
 import { logActivity, removeActivity, relativeTime } from '@/lib/activity';
 import { useAuth } from '@/contexts/auth-context';
 import { fetchWithAuth } from '@/lib/fetch-with-auth';
@@ -923,6 +924,7 @@ export default function MovieDetailPage() {
   const [lastLoggedEventId, setLastLoggedEventId] = useState<string | null>(null);
   // Bumped by the error screen's Try Again button to re-run the title load.
   const [reloadKey, setReloadKey] = useState(0);
+  const [rateSheetOpen, setRateSheetOpen] = useState(false);
 
   const { user: authUser } = useAuth();
 
@@ -940,6 +942,69 @@ export default function MovieDetailPage() {
       .then(json => { if (json?.data) setCineRating(json.data as CinephilersRating); })
       .catch(() => { /* ignore */ });
   }, [id]);
+
+  // Save a rating (from the RatingSheet). Additions are local-first with a
+  // background sync; rating also marks the title watched, mirroring the
+  // watched button (the server does the same on its side).
+  const applyRating = (i: number) => {
+    setUserRating(i);
+    saveMovieRating(id, i);
+    syncDb('POST', '/api/ratings', { tmdbId: id, mediaType: movie?.type === 'show' ? 'SHOW' : 'MOVIE', score: i });
+    if (movie) logActivity({ action: 'rated', contentId: id, contentTitle: movie.title, contentPoster: movie.poster, contentYear: movie.year, rating: i });
+    toast({ title: `You rated it ${i}/10!` });
+    window.dispatchEvent(new CustomEvent('cinephilers-rating-changed', { detail: { id, rating: i } }));
+    if (!isWatched) {
+      try {
+        localStorage.setItem(`watched-${id}`, 'true');
+        if (movie?.type === 'show') {
+          localStorage.setItem(`show-status-${id}`, 'completed');
+          if (movie.totalEpisodes && movie.totalEpisodes > 0) localStorage.setItem(`watched-show-eps-${id}`, String(movie.totalEpisodes));
+        }
+      } catch { /* ignore */ }
+      setIsWatched(true);
+      syncDb('POST', '/api/watched', { tmdbId: id, mediaType: movie?.type === 'show' ? 'SHOW' : 'MOVIE' });
+      if (movie) {
+        if (movie.type !== 'show') appendWatchLog({ id, type: 'movie', genre: movie.genre ?? '', language: movie.originalLanguage ?? '' });
+        recordWatchedAt(id);
+        recordManualWatch(id);
+        logActivity({ action: 'watched', contentId: id, contentTitle: movie.title, contentPoster: movie.poster, contentYear: movie.year });
+      }
+      window.dispatchEvent(new Event('cinephilers-watched-changed'));
+    }
+  };
+
+  // Remove the rating. Await the server delete and confirm it before clearing
+  // locally — a fire-and-forget delete that silently fails leaves the row in
+  // the DB and the next DB->local sync restores it (see sync invariant).
+  const removeRatingServerFirst = async () => {
+    const mediaType = movie?.type === 'show' ? 'SHOW' : 'MOVIE';
+    try {
+      const res = await fetchWithAuth(`/api/ratings/${id}?mediaType=${mediaType}`, { method: 'DELETE' });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    } catch {
+      toast({ title: "Couldn't remove the rating. Check your connection and try again.", variant: 'destructive' });
+      return;
+    }
+    setUserRating(0);
+    try { localStorage.removeItem(`movie-rating-${id}`); } catch { /* ignore */ }
+    removeActivity('rated', id);
+    toast({ title: 'Rating removed' });
+    window.dispatchEvent(new CustomEvent('cinephilers-rating-changed', { detail: { id, rating: null } }));
+  };
+
+  // Watchlist removal for the sheet's checkbox — server first, same invariant.
+  const removeFromWatchlistServerFirst = async () => {
+    const mediaType = movie?.type === 'show' ? 'SHOW' : 'MOVIE';
+    const res = await fetchWithAuth(`/api/watchlist/${id}?mediaType=${mediaType}`, { method: 'DELETE' });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    try {
+      localStorage.removeItem(`watchlist-${id}`);
+      const twin = legacyTwin(id);
+      if (twin) localStorage.removeItem(`watchlist-${twin}`);
+    } catch { /* ignore */ }
+    removeActivity('watchlist', id);
+    setIsInWatchlist(false);
+  };
 
   useEffect(() => {
     if (!id) return;
@@ -1475,69 +1540,38 @@ export default function MovieDetailPage() {
               </div>
             );
           })()}
-          <div className="space-y-4">
-            <h3 className="text-sm font-bold uppercase tracking-widest text-muted-foreground">Rate This</h3>
-            <div className="flex flex-col gap-2">
-              <div className="flex items-center gap-1">
-                {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(i => (
-                  <button key={i} onClick={() => { if (!authUser) { setAuthGate('rate movies'); return; } setUserRating(i); saveMovieRating(id, i); syncDb('POST', '/api/ratings', { tmdbId: id, mediaType: movie?.type === 'show' ? 'SHOW' : 'MOVIE', score: i }); if (movie) logActivity({ action: 'rated', contentId: id, contentTitle: movie.title, contentPoster: movie.poster, contentYear: movie.year, rating: i }); toast({ title: `You rated it ${i}/10!` }); window.dispatchEvent(new CustomEvent('cinephilers-rating-changed', { detail: { id, rating: i } }));
-                    // Rating a title also marks it watched. Mirror the watched button so it
-                    // persists to the DB, watch-log, and activity feed — not just locally.
-                    if (!isWatched) {
-                      try {
-                        localStorage.setItem(`watched-${id}`, 'true');
-                        if (movie?.type === 'show') {
-                          localStorage.setItem(`show-status-${id}`, 'completed');
-                          if (movie.totalEpisodes && movie.totalEpisodes > 0) localStorage.setItem(`watched-show-eps-${id}`, String(movie.totalEpisodes));
-                        }
-                      } catch { /* ignore */ }
-                      setIsWatched(true);
-                      syncDb('POST', '/api/watched', { tmdbId: id, mediaType: movie?.type === 'show' ? 'SHOW' : 'MOVIE' });
-                      if (movie) {
-                        if (movie.type !== 'show') appendWatchLog({ id, type: 'movie', genre: movie.genre ?? '', language: movie.originalLanguage ?? '' });
-                        recordWatchedAt(id);
-                        recordManualWatch(id);
-                        logActivity({ action: 'watched', contentId: id, contentTitle: movie.title, contentPoster: movie.poster, contentYear: movie.year });
-                      }
-                      window.dispatchEvent(new Event('cinephilers-watched-changed'));
-                    }
-                  }} className="transition-all hover:scale-125 active:scale-90 p-0.5">
-                    <Star className={`h-5 w-5 transition-colors ${userRating >= i ? 'fill-yellow-400 text-yellow-400' : 'text-foreground/25 hover:text-foreground/50'}`} />
-                  </button>
-                ))}
-              </div>
-              <div className="flex items-center gap-3">
-                <p className="text-xs font-bold text-foreground">{userRating > 0 ? `Your score: ${userRating}/10` : 'Select a star to rate'}</p>
-                {userRating > 0 && (
-                  <button
-                    onClick={async () => {
-                      // Await the server delete and confirm it before clearing the
-                      // rating locally. A fire-and-forget delete that silently fails
-                      // leaves the row in the DB, so the next DB->local sync restores
-                      // the rating — it "comes back" no matter how often you remove it.
-                      const mediaType = movie?.type === 'show' ? 'SHOW' : 'MOVIE';
-                      try {
-                        const res = await fetchWithAuth(`/api/ratings/${id}?mediaType=${mediaType}`, { method: 'DELETE' });
-                        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-                      } catch {
-                        toast({ title: "Couldn't remove the rating. Check your connection and try again.", variant: 'destructive' });
-                        return;
-                      }
-                      setUserRating(0);
-                      try { localStorage.removeItem(`movie-rating-${id}`); } catch { /* ignore */ }
-                      removeActivity('rated', id);
-                      toast({ title: 'Rating removed' });
-                      window.dispatchEvent(new CustomEvent('cinephilers-rating-changed', { detail: { id, rating: null } }));
-                    }}
-                    className="text-[11px] text-muted-foreground hover:text-foreground transition-colors underline underline-offset-2"
-                  >
-                    Remove
-                  </button>
-                )}
-              </div>
-            </div>
-          </div>
+          <Button
+            variant="outline"
+            onClick={() => { if (!authUser) { setAuthGate('rate movies'); return; } setRateSheetOpen(true); }}
+            className="rounded-full border-border font-bold"
+          >
+            <Star className={`h-4 w-4 mr-2 ${userRating > 0 ? 'fill-yellow-400 text-yellow-400' : ''}`} />
+            {userRating > 0 ? `Your rating: ${userRating}/10` : 'Rate this'}
+          </Button>
         </section>
+
+        {movie && (
+          <RatingSheet
+            open={rateSheetOpen}
+            onClose={() => setRateSheetOpen(false)}
+            title={movie.title}
+            poster={movie.poster}
+            currentRating={userRating}
+            showWatchlistOption={isInWatchlist}
+            onRate={async (score, removeWl) => {
+              applyRating(score);
+              if (removeWl) {
+                try {
+                  await removeFromWatchlistServerFirst();
+                  toast({ title: 'Removed from Watchlist' });
+                } catch {
+                  toast({ title: "Rated, but couldn't remove from Watchlist. Try again from the list.", variant: 'destructive' });
+                }
+              }
+            }}
+            onRemoveRating={removeRatingServerFirst}
+          />
+        )}
 
         {/* Friends' ratings */}
         <FriendsRatings tmdbId={id} />
