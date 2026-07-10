@@ -22,7 +22,7 @@ export async function GET(req: NextRequest) {
     select: { id: true, username: true, displayName: true, avatarUrl: true },
   };
 
-  const [ratings, watched, reviews] = await Promise.all([
+  const [ratings, watched, reviews, watchlisted] = await Promise.all([
     prisma.rating.findMany({
       where: { userId: { in: followingIds }, tmdbId },
       include: { user: userSelect },
@@ -35,6 +35,10 @@ export async function GET(req: NextRequest) {
       where: { userId: { in: followingIds }, tmdbId, hidden: false },
       include: { user: userSelect },
     }),
+    prisma.watchlistItem.findMany({
+      where: { userId: { in: followingIds }, tmdbId },
+      include: { user: userSelect },
+    }),
   ]);
 
   const map = new Map<string, {
@@ -42,26 +46,27 @@ export async function GET(req: NextRequest) {
     rating: number | null;
     watched: boolean;
     reviewed: boolean;
+    inWatchlist: boolean;
   }>();
 
+  const blank = (user: { id: string; username: string; displayName: string | null; avatarUrl: string | null }) =>
+    ({ user, rating: null as number | null, watched: false, reviewed: false, inWatchlist: false });
+
   for (const w of watched) {
-    map.set(w.userId, { user: w.user, rating: null, watched: true, reviewed: false });
+    map.set(w.userId, { ...blank(w.user), watched: true });
   }
   for (const r of ratings) {
-    const existing = map.get(r.userId);
-    if (existing) {
-      existing.rating = r.score;
-    } else {
-      map.set(r.userId, { user: r.user, rating: r.score, watched: false, reviewed: false });
-    }
+    const entry = map.get(r.userId) ?? map.set(r.userId, blank(r.user)).get(r.userId)!;
+    entry.rating = r.score;
   }
   for (const r of reviews) {
-    const existing = map.get(r.userId);
-    if (existing) {
-      existing.reviewed = true;
-    } else {
-      map.set(r.userId, { user: r.user, rating: null, watched: false, reviewed: true });
-    }
+    const entry = map.get(r.userId) ?? map.set(r.userId, blank(r.user)).get(r.userId)!;
+    entry.reviewed = true;
+  }
+  // Friends who saved it for later — they appear too, even with no other activity.
+  for (const w of watchlisted) {
+    const entry = map.get(w.userId) ?? map.set(w.userId, blank(w.user)).get(w.userId)!;
+    entry.inWatchlist = true;
   }
 
   return ok(Array.from(map.values()));

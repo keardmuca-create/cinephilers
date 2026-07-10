@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { ChevronLeft, Eye, MessageSquare, Star, Users, Loader2, Search, X } from 'lucide-react';
+import { ChevronLeft, Eye, MessageSquare, Star, Users, Loader2, Search, X, Bookmark } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/contexts/auth-context';
 import { fetchWithAuth } from '@/lib/fetch-with-auth';
@@ -13,6 +13,7 @@ interface FriendRatingEntry {
   rating: number | null;
   watched: boolean;
   reviewed: boolean;
+  inWatchlist: boolean;
 }
 
 export default function MovieFriendsPage() {
@@ -166,6 +167,11 @@ export default function MovieFriendsPage() {
                 <span className="w-5 flex justify-center">
                   {e.reviewed
                     ? <MessageSquare className="h-4 w-4 text-green-400" />
+                    : <span className="text-sm text-muted-foreground/50">—</span>}
+                </span>
+                <span className="w-5 flex justify-center">
+                  {e.inWatchlist
+                    ? <Bookmark className="h-4 w-4 text-primary fill-primary/20" />
                     : <span className="text-sm text-muted-foreground/50">—</span>}
                 </span>
               </div>
