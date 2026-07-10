@@ -20,7 +20,7 @@ export default function PrivacyPage() {
           <h1 className="text-2xl font-headline font-bold">Privacy Policy</h1>
         </div>
 
-        <p className="text-sm text-muted-foreground mb-8">Last updated: June 2026</p>
+        <p className="text-sm text-muted-foreground mb-8">Last updated: July 2026</p>
 
         <div className="space-y-8 text-muted-foreground leading-relaxed">
 
@@ -64,6 +64,14 @@ export default function PrivacyPage() {
             </p>
             <p className="mt-3">
               We use <strong className="text-foreground">Neon</strong> (PostgreSQL) for database hosting. Your data is stored on servers in the EU (Frankfurt).
+            </p>
+            <p className="mt-3">
+              We also rely on a small number of infrastructure providers to run the service:{' '}
+              <strong className="text-foreground">Vercel</strong> (application hosting and server logs),{' '}
+              <strong className="text-foreground">Resend</strong> (sends account emails such as verification and password reset — they process your email address),{' '}
+              <strong className="text-foreground">Upstash</strong> (short-lived rate-limit counters keyed by IP address, expiring within minutes), and{' '}
+              <strong className="text-foreground">Sentry</strong> (error monitoring, which may include technical request details when something breaks).
+              None of these providers use your data for anything other than operating Cinephilers.
             </p>
           </section>
 
