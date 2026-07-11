@@ -533,7 +533,7 @@ function AddToListButton({ movie, onRequireAuth }: { movie: Movie; onRequireAuth
     <>
       <Dialog open={open} onOpenChange={v => { if (v && onRequireAuth) { onRequireAuth(); return; } setOpen(v); }}>
         <DialogTrigger asChild>
-          <Button variant="outline" className="h-14 px-8 rounded-2xl border-2 border-foreground bg-background text-foreground font-bold flex-1 md:flex-none text-base">
+          <Button variant="outline" className="h-14 px-8 rounded-2xl border-2 border-foreground bg-background text-foreground font-bold w-full md:w-auto text-base">
             <ListPlus className="h-5 w-5 mr-2" /> Add to List
           </Button>
         </DialogTrigger>
@@ -1321,7 +1321,7 @@ export default function MovieDetailPage() {
         <section className="flex flex-wrap gap-4">
           <Button
             variant={isInWatchlist ? 'default' : 'outline'}
-            className={`h-14 px-8 rounded-2xl font-bold flex-1 md:flex-none text-base transition-all ${isInWatchlist ? 'bg-primary border-primary' : 'border-2 border-foreground bg-background text-foreground'}`}
+            className={`h-14 px-8 rounded-2xl font-bold w-full md:w-auto text-base transition-all ${isInWatchlist ? 'bg-primary border-primary' : 'border-2 border-foreground bg-background text-foreground'}`}
             onClick={async () => {
               if (!authUser) { setAuthGate('add movies to your watchlist'); return; }
               const next = !isInWatchlist;
@@ -1374,7 +1374,7 @@ export default function MovieDetailPage() {
           </Button>
           <Button
             variant={isWatched ? 'default' : 'outline'}
-            className={`h-14 px-8 rounded-2xl font-bold flex-1 md:flex-none text-base transition-all ${isWatched ? 'bg-accent border-accent' : 'border-2 border-foreground bg-background text-foreground'}`}
+            className={`h-14 px-8 rounded-2xl font-bold w-full md:w-auto text-base transition-all ${isWatched ? 'bg-accent border-accent' : 'border-2 border-foreground bg-background text-foreground'}`}
             onClick={async () => {
               if (!authUser) { setAuthGate('mark movies as watched'); return; }
               const next = !isWatched;
@@ -1515,39 +1515,38 @@ export default function MovieDetailPage() {
         )}
 
         {/* Ratings */}
-        <section className="grid grid-cols-1 md:grid-cols-2 gap-8 bg-muted p-8 rounded-[2.5rem] border border-border">
+        <section className="bg-muted p-8 rounded-[2.5rem] border border-border">
           {(() => {
             // Once a title has enough community votes, show the Cinephilers
-            // aggregate in place of the TMDB rating. Both use a 0–10 scale, so
-            // the star math (score / 2) is identical.
+            // aggregate in place of the TMDB rating. One star only — a 5-star
+            // strip misreads as a /5 scale when every score here is /10.
+            // Layout: score + star, count directly below, Rate button beside.
             const useCine = cineRating?.hasEnough && cineRating.average !== null;
             const score = useCine ? cineRating!.average! : movie.rating;
             const count = useCine ? cineRating!.count : movie.votes;
             return (
-              <div className="space-y-4">
-                <h3 className="text-sm font-bold uppercase tracking-widest text-muted-foreground">{useCine ? 'Cinephilers Rating' : 'TMDB Rating'}</h3>
-                <div className="flex items-center gap-4">
-                  <div className="text-5xl font-black font-headline text-foreground">{score.toFixed(1)}</div>
-                  <div className="space-y-1">
-                    <div className="flex gap-0.5">
-                      {Array(5).fill(0).map((_, i) => (
-                        <Star key={i} className={`h-4 w-4 fill-current ${i < Math.floor(score / 2) ? 'fill-yellow-400 text-yellow-400' : 'text-foreground/20'}`} />
-                      ))}
+              <div className="flex items-center justify-between gap-4">
+                <div className="space-y-3 min-w-0">
+                  <h3 className="text-sm font-bold uppercase tracking-widest text-muted-foreground">{useCine ? 'Cinephilers Rating' : 'TMDB Rating'}</h3>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-5xl font-black font-headline text-foreground">{score.toFixed(1)}</span>
+                      <Star className="h-7 w-7 fill-yellow-400 text-yellow-400" />
                     </div>
-                    <div className="text-xs text-muted-foreground font-bold">{count.toLocaleString()} ratings</div>
+                    <div className="text-xs text-muted-foreground font-bold mt-1.5">{count.toLocaleString()} ratings</div>
                   </div>
                 </div>
+                <Button
+                  variant="outline"
+                  onClick={() => { if (!authUser) { setAuthGate('rate movies'); return; } setRateSheetOpen(true); }}
+                  className="rounded-full border-border font-bold shrink-0"
+                >
+                  <Star className={`h-4 w-4 mr-2 ${userRating > 0 ? 'fill-yellow-400 text-yellow-400' : ''}`} />
+                  {userRating > 0 ? `Your rating: ${userRating}/10` : 'Rate this'}
+                </Button>
               </div>
             );
           })()}
-          <Button
-            variant="outline"
-            onClick={() => { if (!authUser) { setAuthGate('rate movies'); return; } setRateSheetOpen(true); }}
-            className="rounded-full border-border font-bold"
-          >
-            <Star className={`h-4 w-4 mr-2 ${userRating > 0 ? 'fill-yellow-400 text-yellow-400' : ''}`} />
-            {userRating > 0 ? `Your rating: ${userRating}/10` : 'Rate this'}
-          </Button>
         </section>
 
         {movie && (

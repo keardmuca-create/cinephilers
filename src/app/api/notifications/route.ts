@@ -28,12 +28,34 @@ export async function GET(req: NextRequest) {
 
   const unreadCount = notifications.filter(n => !n.read).length;
 
+  // Follow-request notifications outlive the request row (accepting/denying
+  // deletes it), so compute each one's LIVE status — otherwise the card shows
+  // Accept/Deny forever and pressing them 404s against the deleted request.
+  const requestNotifs = notifications.filter(n => n.type === 'follow_request');
+  const [pendingRequests, acceptedFollows] = requestNotifs.length === 0
+    ? [[], []]
+    : await Promise.all([
+        prisma.followRequest.findMany({
+          where: { id: { in: requestNotifs.map(n => n.refId).filter((r): r is string => !!r) } },
+          select: { id: true },
+        }),
+        prisma.follow.findMany({
+          where: { followingId: auth.sub, followerId: { in: requestNotifs.map(n => n.fromId) } },
+          select: { followerId: true },
+        }),
+      ]);
+  const pendingIds = new Set(pendingRequests.map(r => r.id));
+  const acceptedFromIds = new Set(acceptedFollows.map(f => f.followerId));
+  const requestStatus = (n: { refId: string | null; fromId: string }) =>
+    n.refId && pendingIds.has(n.refId) ? 'pending' : acceptedFromIds.has(n.fromId) ? 'accepted' : 'denied';
+
   const result = notifications.map(n => ({
     id: n.id,
     type: n.type,
     refId: n.refId,
     read: n.read,
     createdAt: n.createdAt,
+    ...(n.type === 'follow_request' ? { requestStatus: requestStatus(n) } : {}),
     from: {
       username: n.from.username,
       displayName: n.from.displayName,

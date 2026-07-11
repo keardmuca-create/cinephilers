@@ -33,6 +33,9 @@ interface NotificationItem {
   refId: string | null;
   read: boolean;
   createdAt: string;
+  // follow_request notifications only: the request's live server-side state,
+  // so an already-handled request never shows Accept/Deny again.
+  requestStatus?: 'pending' | 'accepted' | 'denied';
   from: { username: string; displayName: string | null; avatarUrl: string | null; isFollowingBack: boolean };
 }
 
@@ -250,7 +253,7 @@ function NotificationCard({ notif, onFollowBack, onRequestHandled }: {
   onRequestHandled: (notifId: string) => void;
 }) {
   const [followState, setFollowState] = useState<'idle' | 'loading' | 'following' | 'requested'>(notif.from.isFollowingBack ? 'following' : 'idle');
-  const [requestState, setRequestState] = useState<'pending' | 'loading' | 'accepted' | 'denied'>('pending');
+  const [requestState, setRequestState] = useState<'pending' | 'loading' | 'accepted' | 'denied'>(notif.requestStatus ?? 'pending');
   const [movieMeta, setMovieMeta] = useState<{ title: string; poster: string } | null>(null);
 
   const isReviewNotif = notif.type === 'review_like' || notif.type === 'review_comment';
@@ -284,7 +287,9 @@ function NotificationCard({ notif, onFollowBack, onRequestHandled }: {
     const method = action === 'accept' ? 'POST' : 'DELETE';
     try {
       const res = await fetch(`/api/follow-requests/${notif.refId}`, { method, credentials: 'include' });
-      if (res.ok) {
+      if (res.ok || res.status === 404) {
+        // 404 = the request row is already gone (handled elsewhere) — resolve
+        // the card instead of bouncing back to Accept/Deny forever.
         setRequestState(action === 'accept' ? 'accepted' : 'denied');
         onRequestHandled(notif.id);
       } else setRequestState('pending');

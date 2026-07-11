@@ -2,7 +2,8 @@
 
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import Link from 'next/link';
-import { History, Eye, Search, SlidersHorizontal, X, Trash2, Film } from 'lucide-react';
+import { useRouter } from 'next/navigation';
+import { History, Eye, Search, SlidersHorizontal, X, Trash2, Film, ChevronLeft } from 'lucide-react';
 import type { ItemMeta } from '@/app/api/meta/[id]/route';
 import { fetchWithAuth } from '@/lib/fetch-with-auth';
 import { persistRefine } from '@/lib/refine-sort';
@@ -253,6 +254,7 @@ function HistoryCard({ id, meta, userRating, addedAt, onRemove }: {
 
 
 export default function HistoryPage() {
+  const router = useRouter();
   const [allIds, setAllIds]           = useState<string[]>([]);
   const [metaMap, setMetaMap]         = useState<Map<string, ItemMeta>>(new Map());
   const [userRatings, setUserRatings] = useState<Map<string, number>>(new Map());
@@ -476,9 +478,14 @@ export default function HistoryPage() {
 
   return (
     <main className="pb-32">
-      {/* Header */}
+      {/* Header — back arrow matters in the installed PWA, where there's no browser back button */}
       <div className="px-6 pt-12 pb-4">
-        <h1 className="text-3xl font-headline font-bold mb-0.5">Watch History</h1>
+        <div className="flex items-center gap-2 mb-0.5">
+          <button onClick={() => router.back()} aria-label="Go back" className="rounded-full p-1 -ml-2 hover:bg-muted/60 transition-colors">
+            <ChevronLeft className="h-6 w-6" />
+          </button>
+          <h1 className="text-3xl font-headline font-bold">Watch History</h1>
+        </div>
         <p className="text-muted-foreground text-sm">
           {allIds.length} Title{allIds.length !== 1 ? 's' : ''}
           {fetching && <span className="ml-2 opacity-50">loading…</span>}
