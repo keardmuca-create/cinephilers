@@ -55,7 +55,7 @@ export async function POST(req: NextRequest) {
   let failed = 0;
   const watchedData: { userId: string; tmdbId: string; mediaType: 'MOVIE' | 'SHOW'; watchedAt: Date }[] = [];
   const watchlistData: { userId: string; tmdbId: string; mediaType: 'MOVIE' | 'SHOW' }[] = [];
-  const ratingData: { userId: string; tmdbId: string; mediaType: 'MOVIE' | 'SHOW'; score: number }[] = [];
+  const ratingData: { userId: string; tmdbId: string; mediaType: 'MOVIE' | 'SHOW'; score: number; createdAt?: Date }[] = [];
   const reviewData: { userId: string; tmdbId: string; mediaType: 'MOVIE' | 'SHOW'; body: string; containsSpoiler: boolean }[] = [];
 
   // Collect rows first, then bulk-insert each table in one round-trip below. The old
@@ -82,10 +82,20 @@ export async function POST(req: NextRequest) {
       watchlistData.push({ userId, tmdbId, mediaType: item.mediaType });
     }
 
-    // Rating — only accept whole numbers 1-10
+    // Rating — only accept whole numbers 1-10. Backdate createdAt to the
+    // file's rated/watched date: the login sync rebuilds every device's
+    // "Date rated" order from Rating.createdAt, so without this an import's
+    // real dates survive only on the browser that ran the import.
     if (item.rating != null && !hasRating.has(key)) {
       if (!Number.isInteger(item.rating) || item.rating < 1 || item.rating > 10) failed++;
-      else ratingData.push({ userId, tmdbId, mediaType: item.mediaType, score: item.rating });
+      else {
+        const ratedAt = item.watchedAt ? new Date(item.watchedAt) : null;
+        const validRatedAt = ratedAt && !Number.isNaN(ratedAt.getTime()) && ratedAt.getTime() <= Date.now() && ratedAt.getFullYear() >= 1900;
+        ratingData.push({
+          userId, tmdbId, mediaType: item.mediaType, score: item.rating,
+          ...(validRatedAt ? { createdAt: ratedAt } : {}),
+        });
+      }
     }
 
     if (typeof item.review === 'string' && item.review.trim().length >= 10 && !hasReview.has(key)) {

@@ -69,6 +69,15 @@ function ItemCard({ item }: { item: RatedItem }) {
             <span className="text-xs font-semibold">Watched</span>
           </div>
         </div>
+        {/* Same timestamp the "Date rated" sort uses, so the order is legible */}
+        {(() => {
+          const t = getAddedAt(item.id);
+          return t > 0 ? (
+            <p className="text-xs text-muted-foreground mt-1.5">
+              Rated on {new Date(t).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+            </p>
+          ) : null;
+        })()}
       </div>
     </Link>
   );

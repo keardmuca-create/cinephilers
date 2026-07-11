@@ -168,7 +168,10 @@ async function parseIMDb(file: File): Promise<ParsedItem[]> {
       title,
       year,
       rating: yourRating >= 1 && yourRating <= 10 ? yourRating : undefined,
-      watchedAt: yourRating >= 1 ? (row['Created'] ? new Date(row['Created']).toISOString() : new Date().toISOString()) : undefined,
+      // IMDb's ratings export dates the row "Date Rated"; the watchlist export
+      // uses "Created". Without reading both, imported ratings all stamp "now"
+      // and the Date-rated sort loses the user's real IMDb order.
+      watchedAt: yourRating >= 1 ? ((row['Date Rated'] ?? row['Created']) ? new Date(row['Date Rated'] ?? row['Created']!).toISOString() : new Date().toISOString()) : undefined,
       inWatchlist: !yourRating,
     });
   }
