@@ -514,7 +514,10 @@ export default function SocialPage() {
       })
       .map(f => ({
       id: f.id,
-      isMe: false,
+      // Own server-fed items (rewatches live ONLY in the server feed — diary
+      // data never mirrors to localStorage) still belong to us: without this
+      // flag they'd render without the three-dots menu.
+      isMe: f.user.username === user?.username,
       type: f.type,
       user: f.user,
       tmdbId: f.tmdbId,
@@ -531,21 +534,28 @@ export default function SocialPage() {
 
   const handleLike = (localId: string) => { setMyLocalFeed(toggleLike(localId)); };
   const handleRemove = (item: UnifiedItem) => {
-    if (!item.localId) return;
-    const entry = myLocalFeed.find(e => e.id === item.localId);
-    if (entry) {
+    const action = item.type;
+    // Local-log entries (watched/rated/reviewed/watchlist logged on this device)
+    if (item.localId) {
+      const entry = myLocalFeed.find(e => e.id === item.localId);
+      if (!entry) return;
       dismissActivity(entry.action, entry.contentId);
       removeActivity(entry.action, entry.contentId);
       setMyLocalFeed(getFeed());
-      // Persist server-side so the activity stays hidden on every device. Watchlist
-      // entries are local-only (the feed API has no watchlist type), so skip those.
-      if (entry.action !== 'watchlist') {
-        fetchWithAuth('/api/feed/hidden', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ type: entry.action, tmdbId: entry.contentId }),
-        }).catch(() => {});
-      }
+    } else {
+      // Server-fed own items (rewatches, activity from other devices): dismiss
+      // locally and drop from the fetched feed right away.
+      dismissActivity(action, item.tmdbId);
+      setFriendFeed(prev => prev.filter(f => !(f.type === item.type && f.tmdbId === item.tmdbId && f.user.username === user?.username)));
+    }
+    // Persist server-side so the activity stays hidden on every device. Watchlist
+    // entries are local-only (the feed API has no watchlist type), so skip those.
+    if (action !== 'watchlist' && item.tmdbId) {
+      fetchWithAuth('/api/feed/hidden', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type: action, tmdbId: item.tmdbId }),
+      }).catch(() => {});
     }
   };
 
