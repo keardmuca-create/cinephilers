@@ -1,14 +1,96 @@
 "use client"
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
-import { ChevronLeft, Loader2, User, UserX } from 'lucide-react';
+import { ChevronLeft, Loader2, User, MoreHorizontal, UserX, Share2 } from 'lucide-react';
 import { useAuth } from '@/contexts/auth-context';
 import { fetchWithAuth } from '@/lib/fetch-with-auth';
+import { toast } from '@/hooks/use-toast';
 
 interface FollowUser { username: string; displayName: string | null; avatarUrl: string | null }
+
+// One follower/following row. Owns its own three-dots menu (open state +
+// click-outside), so the menu only appears for the account owner's followers.
+function FollowRow({ u, canRemove, onRemove }: {
+  u: FollowUser;
+  canRemove: boolean;
+  onRemove: (u: FollowUser) => Promise<void>;
+}) {
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!menuOpen) return;
+    const onClick = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) setMenuOpen(false);
+    };
+    document.addEventListener('mousedown', onClick);
+    return () => document.removeEventListener('mousedown', onClick);
+  }, [menuOpen]);
+
+  const share = async (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setMenuOpen(false);
+    const url = `${window.location.origin}/profile/${u.username}`;
+    try {
+      if (navigator.share) await navigator.share({ title: u.displayName ?? u.username, url });
+      else { await navigator.clipboard.writeText(url); toast({ title: 'Profile link copied' }); }
+    } catch { /* user cancelled the share sheet */ }
+  };
+
+  const remove = async (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setMenuOpen(false);
+    setBusy(true);
+    try { await onRemove(u); } finally { setBusy(false); }
+  };
+
+  return (
+    <Link
+      href={`/profile/${u.username}`}
+      className="flex items-center gap-3 px-2 py-4 hover:bg-muted/50 transition-colors rounded-xl"
+    >
+      <div className="h-10 w-10 rounded-2xl bg-primary/20 flex items-center justify-center shrink-0 overflow-hidden">
+        {u.avatarUrl
+          ? <img src={u.avatarUrl} alt={u.username} className="w-full h-full object-cover" />
+          : <span className="text-primary font-bold text-sm">{(u.displayName ?? u.username).slice(0, 2).toUpperCase()}</span>
+        }
+      </div>
+      <div className="min-w-0 flex-1">
+        <p className="font-bold text-sm truncate">{u.displayName ?? u.username}</p>
+        <p className="text-xs text-muted-foreground truncate">@{u.username}</p>
+      </div>
+
+      <div className="relative shrink-0" ref={menuRef}>
+        <button
+          onClick={e => { e.preventDefault(); e.stopPropagation(); setMenuOpen(v => !v); }}
+          disabled={busy}
+          aria-label="Options"
+          className="h-8 w-8 flex items-center justify-center rounded-full hover:bg-muted/60 text-muted-foreground transition-colors disabled:opacity-50"
+        >
+          {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <MoreHorizontal className="h-4 w-4" />}
+        </button>
+        {menuOpen && (
+          <div className="absolute right-0 top-9 z-50 min-w-[150px] bg-card border border-border rounded-2xl shadow-xl overflow-hidden">
+            <button onClick={share} className="flex items-center gap-2.5 w-full px-4 py-3 text-sm hover:bg-muted/50 transition-colors">
+              <Share2 className="h-4 w-4 text-muted-foreground" />Share profile
+            </button>
+            {canRemove && (
+              <button onClick={remove} className="flex items-center gap-2.5 w-full px-4 py-3 text-sm hover:bg-muted/50 transition-colors text-destructive">
+                <UserX className="h-4 w-4" />Remove follower
+              </button>
+            )}
+          </div>
+        )}
+      </div>
+    </Link>
+  );
+}
 
 export function FollowListPage({ type }: { type: 'followers' | 'following' }) {
   const params = useParams();
@@ -18,25 +100,19 @@ export function FollowListPage({ type }: { type: 'followers' | 'following' }) {
 
   const [users, setUsers] = useState<FollowUser[]>([]);
   const [loading, setLoading] = useState(true);
-  const [removing, setRemoving] = useState<string | null>(null);
 
   // Only the account owner can remove people from their own followers list.
   const canRemove = type === 'followers' && !!authUser && authUser.username.toLowerCase() === username?.toLowerCase();
 
-  const removeFollower = async (e: React.MouseEvent, u: FollowUser) => {
-    e.preventDefault();
-    e.stopPropagation();
-    if (removing) return;
-    setRemoving(u.username);
+  const removeFollower = async (u: FollowUser) => {
     try {
       // Server first — a silently failed delete would resurrect on refresh.
       const res = await fetchWithAuth(`/api/users/${u.username}/follower`, { method: 'DELETE' });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       setUsers(prev => prev.filter(x => x.username !== u.username));
+      toast({ title: 'Follower removed' });
     } catch {
-      alert("Couldn't remove this follower — check your connection and try again.");
-    } finally {
-      setRemoving(null);
+      toast({ title: "Couldn't remove this follower — check your connection and try again.", variant: 'destructive' });
     }
   };
 
@@ -76,32 +152,7 @@ export function FollowListPage({ type }: { type: 'followers' | 'following' }) {
       ) : (
         <div className="divide-y divide-border">
           {users.map(u => (
-            <Link
-              key={u.username}
-              href={`/profile/${u.username}`}
-              className="flex items-center gap-3 px-2 py-4 hover:bg-muted/50 transition-colors rounded-xl"
-            >
-              <div className="h-10 w-10 rounded-2xl bg-primary/20 flex items-center justify-center shrink-0 overflow-hidden">
-                {u.avatarUrl
-                  ? <img src={u.avatarUrl} alt={u.username} className="w-full h-full object-cover" />
-                  : <span className="text-primary font-bold text-sm">{(u.displayName ?? u.username).slice(0, 2).toUpperCase()}</span>
-                }
-              </div>
-              <div className="min-w-0 flex-1">
-                <p className="font-bold text-sm truncate">{u.displayName ?? u.username}</p>
-                <p className="text-xs text-muted-foreground truncate">@{u.username}</p>
-              </div>
-              {canRemove && (
-                <button
-                  onClick={e => removeFollower(e, u)}
-                  disabled={removing === u.username}
-                  aria-label={`Remove ${u.username} from your followers`}
-                  className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-border text-xs font-bold text-muted-foreground hover:border-red-400 hover:text-red-400 transition-colors disabled:opacity-50"
-                >
-                  {removing === u.username ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <><UserX className="h-3.5 w-3.5" /> Remove</>}
-                </button>
-              )}
-            </Link>
+            <FollowRow key={u.username} u={u} canRemove={canRemove} onRemove={removeFollower} />
           ))}
         </div>
       )}
