@@ -16,6 +16,7 @@ interface ImportItem {
   mediaType: 'MOVIE' | 'SHOW';
   rating?: number;       // 1-10
   review?: string;       // text
+  reviewedAt?: string;   // ISO date the review was written
   watchedAt?: string;    // ISO date string
   inWatchlist?: boolean;
 }
@@ -56,7 +57,7 @@ export async function POST(req: NextRequest) {
   const watchedData: { userId: string; tmdbId: string; mediaType: 'MOVIE' | 'SHOW'; watchedAt: Date }[] = [];
   const watchlistData: { userId: string; tmdbId: string; mediaType: 'MOVIE' | 'SHOW' }[] = [];
   const ratingData: { userId: string; tmdbId: string; mediaType: 'MOVIE' | 'SHOW'; score: number; createdAt?: Date }[] = [];
-  const reviewData: { userId: string; tmdbId: string; mediaType: 'MOVIE' | 'SHOW'; body: string; containsSpoiler: boolean }[] = [];
+  const reviewData: { userId: string; tmdbId: string; mediaType: 'MOVIE' | 'SHOW'; body: string; containsSpoiler: boolean; createdAt?: Date }[] = [];
 
   // Collect rows first, then bulk-insert each table in one round-trip below. The old
   // per-item create loop fired up to ~4 awaited queries per film (thousands for a big
@@ -99,7 +100,17 @@ export async function POST(req: NextRequest) {
     }
 
     if (typeof item.review === 'string' && item.review.trim().length >= 10 && !hasReview.has(key)) {
-      reviewData.push({ userId, tmdbId, mediaType: item.mediaType, body: sanitizeText(item.review).slice(0, 5000), containsSpoiler: false });
+      // Backdate to the review's written date (Letterboxd 'Date'), falling back
+      // to the watched date — so an imported review reads as old, keeps its real
+      // order, and doesn't flood followers' feeds as if written just now.
+      const rawDate = item.reviewedAt ?? item.watchedAt;
+      const writtenAt = rawDate ? new Date(rawDate) : null;
+      const validWrittenAt = writtenAt && !Number.isNaN(writtenAt.getTime()) && writtenAt.getTime() <= Date.now() && writtenAt.getFullYear() >= 1900;
+      reviewData.push({
+        userId, tmdbId, mediaType: item.mediaType,
+        body: sanitizeText(item.review).slice(0, 5000), containsSpoiler: false,
+        ...(validWrittenAt ? { createdAt: writtenAt } : {}),
+      });
     }
   }
 

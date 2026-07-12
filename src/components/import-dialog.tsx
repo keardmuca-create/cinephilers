@@ -17,6 +17,7 @@ interface ParsedItem {
   year: string;
   rating?: number;      // 1-10
   review?: string;
+  reviewedAt?: string;        // when the review was written (Letterboxd 'Date')
   watchedAt?: string;         // earliest viewing (the first watch)
   extraWatchDates?: string[]; // later viewings from diary.csv → become rewatches
   inWatchlist?: boolean;
@@ -138,10 +139,14 @@ async function parseLetterboxd(file: File): Promise<ParsedItem[]> {
     const stars = parseFloat(row['Rating'] ?? '0');
     const score = stars > 0 ? Math.round(stars * 2) : undefined;
     const existing = items.get(key) ?? { title: row['Name'] ?? '', year: row['Year'] ?? '' };
+    // 'Date' is when the review was posted on Letterboxd — keep it so the
+    // imported review shows its real written date, not the import moment.
+    const reviewedAt = row['Date'] ? new Date(row['Date']) : null;
     items.set(key, {
       ...existing,
       review: row['Review'] || existing.review,
       rating: score ?? existing.rating,
+      reviewedAt: reviewedAt && !Number.isNaN(reviewedAt.getTime()) ? reviewedAt.toISOString() : existing.reviewedAt,
       watchedAt: existing.watchedAt ?? (row['Watched Date'] ? new Date(row['Watched Date']).toISOString() : new Date().toISOString()),
     });
   }
