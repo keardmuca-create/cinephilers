@@ -100,8 +100,14 @@ function CollectionCard({ part }: { part: CollectionItem }) {
           <p className="text-sm font-semibold font-headline line-clamp-2 leading-snug">{part.title}</p>
           <p className="text-xs text-muted-foreground mt-0.5">{isUpcoming ? `Coming ${comingLabel}` : part.year}</p>
         </div>
-        {!isUpcoming && (isWatched || userRating !== undefined) && (
+        {!isUpcoming && (part.tmdbRating !== undefined || isWatched || userRating !== undefined) && (
           <div className="flex flex-col items-end gap-0.5 shrink-0">
+            {part.tmdbRating !== undefined && (
+              <div className="flex items-center gap-0.5">
+                <span className="text-xs text-yellow-400 font-bold">★</span>
+                <span className="text-xs font-bold text-foreground">{part.tmdbRating.toFixed(1)}</span>
+              </div>
+            )}
             {isWatched && <Eye className="h-3.5 w-3.5 text-blue-400" />}
             {userRating !== undefined && (
               <div className="flex items-center gap-0.5">

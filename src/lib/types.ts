@@ -70,6 +70,7 @@ export interface CollectionItem {
   year: string;
   poster: string;
   releaseDate: string; // drives release-order sort and the upcoming check
+  tmdbRating?: number; // TMDB vote average (0-10); absent when unrated/upcoming
   isCurrent: boolean;  // the film currently being viewed
 }
 

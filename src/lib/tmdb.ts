@@ -91,7 +91,7 @@ interface TmdbMovieFull extends TmdbMovie {
 interface TmdbCollection {
   id: number;
   name: string;
-  parts: { id: number; title?: string; release_date?: string; poster_path: string | null }[];
+  parts: { id: number; title?: string; release_date?: string; poster_path: string | null; vote_average?: number }[];
 }
 
 interface TmdbShowFull extends TmdbMovie {
@@ -444,6 +444,7 @@ export async function getMovieCollection(collectionId: number, currentTmdbId: nu
         year: p.release_date ? p.release_date.slice(0, 4) : '—',
         poster: posterUrl(p.poster_path, 'w342'),
         releaseDate: p.release_date ?? '',
+        tmdbRating: typeof p.vote_average === 'number' && p.vote_average > 0 ? p.vote_average : undefined,
         isCurrent: p.id === currentTmdbId,
       }))
       .sort((a, b) => {
