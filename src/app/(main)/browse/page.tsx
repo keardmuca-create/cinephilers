@@ -21,7 +21,8 @@ interface RecentItem {
 function PersonRow({ person }: { person: PersonResult }) {
   return (
     <Link href={`/person/${person.id}`} className="flex items-center gap-4 py-3 hover:bg-black/5 transition-colors -mx-6 px-6">
-      <div className="w-14 h-14 rounded-full overflow-hidden bg-muted shrink-0 shadow-sm border border-border">
+      {/* Same shape and size as the movie-poster rows, so mixed results line up */}
+      <div className="w-14 aspect-[2/3] rounded-lg overflow-hidden bg-muted shrink-0 shadow-sm">
         {person.profileImage ? (
           <img src={person.profileImage} alt={person.name} className="w-full h-full object-cover" loading="lazy" />
         ) : (
@@ -75,7 +76,8 @@ function ResultRow({ id, poster, title, sub, onRemove }: {
 function RecentPersonRow({ item, onRemove }: { item: RecentItem; onRemove?: () => void }) {
   return (
     <Link href={`/person/${item.id}`} className="flex items-center gap-4 py-3 hover:bg-black/5 transition-colors -mx-6 px-6">
-      <div className="w-14 h-14 rounded-full overflow-hidden bg-muted shrink-0 shadow-sm border border-border flex items-center justify-center">
+      {/* Same shape and size as the movie-poster rows, so mixed results line up */}
+      <div className="w-14 aspect-[2/3] rounded-lg overflow-hidden bg-muted shrink-0 shadow-sm flex items-center justify-center">
         {item.poster ? (
           <img src={item.poster} alt={item.title} className="w-full h-full object-cover" loading="lazy" />
         ) : (
