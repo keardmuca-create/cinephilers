@@ -16,6 +16,8 @@ export interface FeedItem {
   importPlatform?: string;
   importCount?: number;
   createdAt: string;
+  likeCount?: number;
+  likedByMe?: boolean;
 }
 
 export async function GET(req: NextRequest) {
@@ -158,6 +160,32 @@ export async function GET(req: NextRequest) {
 
   // Sort merged items by recency and return top `limit`
   visible.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  const top = visible.slice(0, limit);
 
-  return ok(visible.slice(0, limit));
+  // Attach like counts + whether the caller liked each card. One batched query
+  // over the page's (owner, tmdbId) pairs, matched to exact triples in JS.
+  const likeable = top.filter(i => i.tmdbId && i.type !== 'imported');
+  if (likeable.length > 0) {
+    const likes = await prisma.activityLike.findMany({
+      where: {
+        targetId: { in: [...new Set(likeable.map(i => i.user.id))] },
+        tmdbId: { in: [...new Set(likeable.map(i => i.tmdbId))] },
+      },
+      select: { targetId: true, type: true, tmdbId: true, userId: true },
+    });
+    const counts = new Map<string, number>();
+    const mine = new Set<string>();
+    for (const l of likes) {
+      const k = `${l.targetId}:${l.type}:${l.tmdbId}`;
+      counts.set(k, (counts.get(k) ?? 0) + 1);
+      if (l.userId === auth.sub) mine.add(k);
+    }
+    for (const i of top) {
+      const k = `${i.user.id}:${i.type}:${i.tmdbId}`;
+      i.likeCount = counts.get(k) ?? 0;
+      i.likedByMe = mine.has(k);
+    }
+  }
+
+  return ok(top);
 }

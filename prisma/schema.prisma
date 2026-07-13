@@ -77,6 +77,8 @@ model User {
   reports           Report[]
   importActivities  ImportActivity[]
   hiddenActivities  HiddenActivity[]
+  activityLikesGiven    ActivityLike[] @relation("ActivityLiker")
+  activityLikesReceived ActivityLike[] @relation("ActivityOwner")
 }
 
 model Rating {
@@ -129,6 +131,24 @@ model Review {
 
   @@unique([userId, tmdbId, mediaType])
   @@index([tmdbId])
+}
+
+// A like on a feed activity card (watched / rewatched / rated / reviewed).
+// Feed items have no single row id across their source tables, so a like is
+// keyed by (owner, type, tmdbId) — the same identity the feed itself uses.
+model ActivityLike {
+  id        String   @id @default(uuid())
+  userId    String   // who liked it
+  targetId  String   // whose activity it is
+  type      String   // watched | rewatched | rated | reviewed
+  tmdbId    String
+  createdAt DateTime @default(now())
+
+  user   User @relation("ActivityLiker", fields: [userId], references: [id], onDelete: Cascade)
+  target User @relation("ActivityOwner", fields: [targetId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, targetId, type, tmdbId])
+  @@index([targetId, tmdbId])
 }
 
 model ReviewLike {

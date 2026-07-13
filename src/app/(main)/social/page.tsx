@@ -4,7 +4,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { Heart, Star, Eye, Bookmark, Film, MoreHorizontal, Share2, Trash2, Users, MessageSquare, Loader2, UserPlus, Bell, User, Repeat } from 'lucide-react';
-import { ActivityEntry, getFeed, toggleLike, removeActivity, dismissActivity, getDismissed, relativeTime } from '@/lib/activity';
+import { ActivityEntry, getFeed, removeActivity, dismissActivity, getDismissed, relativeTime } from '@/lib/activity';
 import { useAuth } from '@/contexts/auth-context';
 import { fetchWithAuth } from '@/lib/fetch-with-auth';
 import { batchFetchMeta } from '@/lib/meta-batch';
@@ -25,6 +25,8 @@ interface FeedItem {
   importPlatform?: string;
   importCount?: number;
   createdAt: string;
+  likeCount?: number;
+  likedByMe?: boolean;
 }
 
 interface NotificationItem {
@@ -94,14 +96,19 @@ interface UnifiedItem {
   importPlatform?: string;
   importCount?: number;
   createdAt: string;
+  // server-backed social likes (watched/rewatched/rated/reviewed cards)
+  likeCount?: number;
+  likedByMe?: boolean;
   // my-activity-only fields
   localId?: string;
   likes?: string[];
 }
 
-function ActivityCard({ item, onLike, onRemove }: {
+const LIKEABLE_TYPES = ['watched', 'rewatched', 'rated', 'reviewed'];
+
+function ActivityCard({ item, onToggleLike, onRemove }: {
   item: UnifiedItem;
-  onLike?: (id: string) => void;
+  onToggleLike?: (item: UnifiedItem) => void;
   onRemove?: (item: UnifiedItem) => void;
 }) {
   const [meta, setMeta] = useState(item.meta ?? null);
@@ -123,7 +130,7 @@ function ActivityCard({ item, onLike, onRemove }: {
   }, [menuOpen]);
 
   const href = `/movie/${item.tmdbId}`;
-  const liked = item.likes?.includes('me') ?? false;
+  const liked = item.likedByMe ?? false;
 
   const handleShare = () => {
     setMenuOpen(false);
@@ -232,12 +239,13 @@ function ActivityCard({ item, onLike, onRemove }: {
         </div>
       </Link>
 
-      {/* Like (only for own items) */}
-      {item.isMe && item.localId && (
+      {/* Like — real server-backed likes on every activity card (yours and
+          friends'); the owner gets a notification when someone likes theirs */}
+      {LIKEABLE_TYPES.includes(item.type) && item.tmdbId && (
         <div className="px-5 pb-4">
-          <button onClick={() => onLike?.(item.localId!)} className="flex items-center gap-1.5 text-xs font-bold text-muted-foreground hover:text-primary transition-colors">
+          <button onClick={() => onToggleLike?.(item)} className="flex items-center gap-1.5 text-xs font-bold text-muted-foreground hover:text-primary transition-colors">
             <Heart className={`h-5 w-5 transition-colors ${liked ? 'fill-primary text-primary' : ''}`} />
-            {(item.likes?.length ?? 0) > 0 && <span>{item.likes!.length}</span>}
+            {(item.likeCount ?? 0) > 0 && <span>{item.likeCount}</span>}
           </button>
         </div>
       )}
@@ -256,7 +264,8 @@ function NotificationCard({ notif, onFollowBack, onRequestHandled }: {
   const [requestState, setRequestState] = useState<'pending' | 'loading' | 'accepted' | 'denied'>(notif.requestStatus ?? 'pending');
   const [movieMeta, setMovieMeta] = useState<{ title: string; poster: string } | null>(null);
 
-  const isReviewNotif = notif.type === 'review_like' || notif.type === 'review_comment';
+  // Notification types whose refId is a tmdbId — show the movie thumbnail.
+  const isReviewNotif = notif.type === 'review_like' || notif.type === 'review_comment' || notif.type === 'activity_like';
 
   useEffect(() => {
     if (!isReviewNotif || !notif.refId) return;
@@ -301,6 +310,7 @@ function NotificationCard({ notif, onFollowBack, onRequestHandled }: {
     follow_accept: 'accepted your follow request',
     follow_request: 'wants to follow you',
     review_like: 'liked your review',
+    activity_like: 'liked your activity',
     review_comment: 'commented on your review',
   }[notif.type] ?? notif.type;
 
@@ -488,6 +498,12 @@ export default function SocialPage() {
     const myRewatchedIds = new Set(
       friendFeed.filter(f => f.type === 'rewatched' && f.user.username === user?.username).map(f => f.tmdbId)
     );
+    // Like data for our own cards comes from the server feed's copy of them
+    // (local log entries know nothing about likes).
+    const ownLikeData = new Map(
+      friendFeed.filter(f => f.user.username === user?.username)
+        .map(f => [`${f.type}-${f.tmdbId}`, { likeCount: f.likeCount ?? 0, likedByMe: f.likedByMe ?? false }])
+    );
     const myItems: UnifiedItem[] = myLocalFeed
       .filter(e => !dismissed.has(`${e.action}-${e.contentId}`))
       .filter(e => !(e.action === 'watched' && myRewatchedIds.has(e.contentId)))
@@ -501,6 +517,7 @@ export default function SocialPage() {
       meta: e.contentTitle ? { title: e.contentTitle, year: e.contentYear, poster: e.contentPoster } : undefined,
       rating: e.rating,
       likes: e.likes,
+      ...(ownLikeData.get(`${e.action}-${e.contentId}`) ?? {}),
       createdAt: e.timestamp,
     }));
 
@@ -526,13 +543,54 @@ export default function SocialPage() {
       containsSpoiler: f.containsSpoiler,
       importPlatform: f.importPlatform,
       importCount: f.importCount,
+      likeCount: f.likeCount,
+      likedByMe: f.likedByMe,
       createdAt: f.createdAt,
     }));
 
     return [...myItems, ...friendItems].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
   }, [myLocalFeed, friendFeed, user]);
 
-  const handleLike = (localId: string) => { setMyLocalFeed(toggleLike(localId)); };
+  // Toggle a like on any activity card. The server answers with the new state
+  // + count; we write it into the friendFeed copy (source of truth for like
+  // data) so the memo re-renders every view of that card consistently.
+  const likeBusy = useRef(new Set<string>());
+  const handleToggleLike = async (item: UnifiedItem) => {
+    const key = `${item.user.username}:${item.type}:${item.tmdbId}`;
+    if (likeBusy.current.has(key)) return;
+    likeBusy.current.add(key);
+    try {
+      const res = await fetchWithAuth('/api/activity/like', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username: item.user.username, type: item.type, tmdbId: item.tmdbId }),
+      });
+      if (!res.ok) return;
+      const json = await res.json();
+      const { liked, count } = json.data as { liked: boolean; count: number };
+      setFriendFeed(prev => {
+        const hasEntry = prev.some(f => f.user.username === item.user.username && f.type === item.type && f.tmdbId === item.tmdbId);
+        const updated = prev.map(f =>
+          f.user.username === item.user.username && f.type === item.type && f.tmdbId === item.tmdbId
+            ? { ...f, likedByMe: liked, likeCount: count }
+            : f
+        );
+        // Own local-only cards have no server-feed copy to carry the like data —
+        // append a synthetic hidden carrier so ownLikeData picks it up.
+        return hasEntry ? updated : [...updated, {
+          id: `like-carrier-${key}`,
+          type: item.type as FeedItem['type'],
+          user: { id: '', username: item.user.username, displayName: item.user.displayName, avatarUrl: item.user.avatarUrl },
+          tmdbId: item.tmdbId,
+          mediaType: '',
+          createdAt: item.createdAt,
+          likeCount: count,
+          likedByMe: liked,
+        }];
+      });
+    } catch { /* ignore */ }
+    finally { likeBusy.current.delete(key); }
+  };
   const handleRemove = (item: UnifiedItem) => {
     const action = item.type;
     // Local-log entries (watched/rated/reviewed/watchlist logged on this device)
@@ -668,7 +726,7 @@ export default function SocialPage() {
           {mergedActivity.length > 0 && (
             <div className="space-y-4">
               {mergedActivity.map(item => (
-                <ActivityCard key={item.id} item={item} onLike={handleLike} onRemove={handleRemove} />
+                <ActivityCard key={item.id} item={item} onToggleLike={handleToggleLike} onRemove={handleRemove} />
               ))}
             </div>
           )}
