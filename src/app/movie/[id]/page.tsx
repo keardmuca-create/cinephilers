@@ -1248,7 +1248,21 @@ export default function MovieDetailPage() {
           <Button
             variant="outline" size="icon"
             className="rounded-full bg-white text-black border-white/80 hover:bg-white/90"
-            onClick={() => { navigator.clipboard.writeText(window.location.href); toast({ title: 'Link copied!' }); }}
+            onClick={async () => {
+              // Native share sheet = one tap to WhatsApp/IG with a real title,
+              // which is exactly how a film gets recommended to a friend. The
+              // friend taps the link and lands on this page. Clipboard fallback
+              // on desktop / unsupported browsers.
+              const shareText = `${movie.title}${movie.year ? ` (${movie.year})` : ''} on Cinephilers`;
+              try {
+                if (navigator.share) {
+                  await navigator.share({ title: shareText, text: shareText, url: window.location.href });
+                } else {
+                  await navigator.clipboard.writeText(window.location.href);
+                  toast({ title: 'Link copied!' });
+                }
+              } catch { /* user dismissed the share sheet */ }
+            }}
           >
             <Share2 className="h-5 w-5" />
           </Button>
@@ -1322,6 +1336,22 @@ export default function MovieDetailPage() {
             </button>
           </div>
         </section>
+
+        {/* Guest join banner — the movie page is where shared links land, so a
+            logged-out visitor from a friend's share sees the pitch and a way in
+            (not just an auth popup when they happen to tap something). */}
+        {!authUser && (
+          <section className="rounded-[2rem] border border-primary/20 bg-primary/10 p-6 flex flex-col sm:flex-row sm:items-center gap-4">
+            <div className="flex-1 space-y-1">
+              <p className="font-headline font-bold text-lg">Track this and everything you watch</p>
+              <p className="text-sm text-muted-foreground">Log films <span className="text-foreground font-semibold">and shows</span>, rate them, and see what your friends are watching. Free — import your Letterboxd or IMDb history in one tap.</p>
+            </div>
+            <div className="flex gap-2 shrink-0">
+              <Button asChild className="rounded-xl font-bold h-11 px-6"><Link href="/signup">Join free</Link></Button>
+              <Button asChild variant="outline" className="rounded-xl font-bold h-11 px-5 border-border"><Link href="/login">Log in</Link></Button>
+            </div>
+          </section>
+        )}
 
         {/* Action Buttons */}
         <section className="flex flex-wrap gap-4">

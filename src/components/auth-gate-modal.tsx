@@ -21,19 +21,21 @@ export function AuthGateModal({ open, onClose, action }: AuthGateModalProps) {
             <Film className="h-8 w-8 text-primary" />
           </div>
           <div className="space-y-1.5">
-            <h2 className="text-xl font-headline font-bold">Sign in to continue</h2>
+            <h2 className="text-xl font-headline font-bold">Join Cinephilers</h2>
             <p className="text-sm text-muted-foreground leading-relaxed">
               {action
-                ? `Create an account or sign in to ${action}.`
-                : 'Create an account or sign in to track movies, rate, and more.'}
+                ? `Create a free account to ${action} — and track every film and show you watch.`
+                : 'Create a free account to track every film and show you watch, rate them, and follow friends.'}
             </p>
           </div>
+          {/* Create Account is primary: a visitor hitting this from a shared
+              link is almost always new, not returning. */}
           <div className="flex flex-col gap-2 w-full pt-1">
             <Button asChild className="w-full rounded-xl h-12 font-bold" onClick={onClose}>
-              <Link href="/login">Log In</Link>
+              <Link href="/signup">Create free account</Link>
             </Button>
             <Button asChild variant="outline" className="w-full rounded-xl h-12 font-bold" onClick={onClose}>
-              <Link href="/signup">Create Account</Link>
+              <Link href="/login">I already have one</Link>
             </Button>
           </div>
         </div>
