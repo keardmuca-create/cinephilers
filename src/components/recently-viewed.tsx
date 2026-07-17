@@ -86,7 +86,7 @@ export function RecentlyViewed() {
           const userRating = userRatings[item.id];
           return (
             <Link key={item.id} href={`/movie/${item.id}`} className="block shrink-0 group">
-              <div className="w-44 flex flex-col">
+              <div className="w-36 flex flex-col">
                 <div className="relative aspect-[2/3] overflow-hidden rounded-xl bg-muted shadow-lg movie-card-hover mb-2.5">
                   <Image
                     src={item.poster}

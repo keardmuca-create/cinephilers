@@ -79,7 +79,7 @@ export const AIRecommendations = () => {
         {loading
           ? Array(5).fill(0).map((_, i) => (
               <div key={i} className="space-y-3 shrink-0">
-                <Skeleton className="h-[240px] w-44 rounded-xl" />
+                <Skeleton className="h-[216px] w-36 rounded-xl" />
                 <Skeleton className="h-4 w-32" />
                 <Skeleton className="h-3 w-20" />
               </div>

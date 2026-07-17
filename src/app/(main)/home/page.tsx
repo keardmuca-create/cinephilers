@@ -40,8 +40,8 @@ function Top10Card({ movie, index }: { movie: Movie; index: number }) {
   }, [movie.id]);
 
   return (
-    <Link href={`/movie/${movie.id}`} className="group shrink-0 w-44">
-      <div className="relative aspect-[2/3] w-44 rounded-xl overflow-hidden shadow-xl movie-card-hover border border-border mb-3">
+    <Link href={`/movie/${movie.id}`} className="group shrink-0 w-36">
+      <div className="relative aspect-[2/3] w-36 rounded-xl overflow-hidden shadow-xl movie-card-hover border border-border mb-3">
         <Image src={movie.poster} alt={movie.title} fill className="object-cover" />
         {/* Rank number overlaid inside the poster, bottom-left */}
         <span
@@ -110,7 +110,7 @@ const CardRowSkeleton = () => (
   <div className="flex gap-4 px-6 pb-4">
     {Array(5).fill(0).map((_, i) => (
       <div key={i} className="space-y-3 shrink-0">
-        <Skeleton className="h-[240px] w-44 rounded-xl" />
+        <Skeleton className="h-[216px] w-36 rounded-xl" />
         <Skeleton className="h-4 w-32" />
         <Skeleton className="h-3 w-20" />
       </div>

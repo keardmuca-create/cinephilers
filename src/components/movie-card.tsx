@@ -39,7 +39,8 @@ export const MovieCard = React.memo(function MovieCard({ movie, className, horiz
     <Link href={`/movie/${movie.id}`} className={cn("block shrink-0", className)}>
       <div className={cn(
         "group flex flex-col",
-        horizontal ? "w-40" : "w-44"
+        // One poster size app-wide, matching the profile sections (w-36)
+        "w-36"
       )}>
         <div className="relative aspect-[2/3] overflow-hidden rounded-xl bg-muted shadow-lg movie-card-hover mb-3">
           {movie.poster ? (

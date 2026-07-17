@@ -684,6 +684,13 @@ export default function ProfilePage() {
     toast({ title: 'Review deleted' });
   };
 
+  // PWA opens fire several rebuild triggers at once (focus + visibilitychange +
+  // db-restored). buildWatchHistory is async, so overlapping runs finish out of
+  // order and a stale early run (started before the sync wrote its data) can
+  // overwrite the complete strip with a partial one. Only the latest run may
+  // write its result.
+  const historyRunRef = useRef(0);
+
   const loadFromStorage = useCallback(() => {
     normalizeLocalMediaIds();
     ensureSignupDate();
@@ -704,6 +711,7 @@ export default function ProfilePage() {
 
     // Build recent watch preview — movies as individual cards, episodes grouped by show
     const buildWatchHistory = async () => {
+      const runId = ++historyRunRef.current;
       try {
         const rvMap = new Map<string, { title: string; poster: string; year: string; type: string; tmdbRating?: number }>();
         try {
@@ -818,6 +826,8 @@ export default function ProfilePage() {
           if (am && bm) return new Date(bm).getTime() - new Date(am).getTime();
           return new Date(b.loggedAt).getTime() - new Date(a.loggedAt).getTime();
         });
+        // A newer rebuild started while this one was fetching — discard this result.
+        if (runId !== historyRunRef.current) return;
         setRecentWatched(items.slice(0, 50));
       } catch { /* ignore */ }
     };
