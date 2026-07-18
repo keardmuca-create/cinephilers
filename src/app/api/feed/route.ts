@@ -6,7 +6,7 @@ import { clampInt } from '@/lib/query-params';
 
 export interface FeedItem {
   id: string;
-  type: 'watched' | 'rewatched' | 'rated' | 'reviewed' | 'imported';
+  type: 'watched' | 'rewatched' | 'rated' | 'reviewed' | 'imported' | 'watchlist' | 'watchlist_batch';
   user: { id: string; username: string; displayName: string | null; avatarUrl: string | null };
   tmdbId: string;
   mediaType: string;
@@ -15,6 +15,9 @@ export interface FeedItem {
   containsSpoiler?: boolean;
   importPlatform?: string;
   importCount?: number;
+  // watchlist_batch: a burst of watchlist adds collapsed into one card
+  batchCount?: number;
+  batchTmdbIds?: string[];
   createdAt: string;
   likeCount?: number;
   likedByMe?: boolean;
@@ -47,7 +50,7 @@ export async function GET(req: NextRequest) {
   const hiddenKeys = new Set(hidden.map(h => `${h.type}-${h.tmdbId}`));
 
   // Fetch recent activity from all tables in parallel
-  const [watched, rewatches, ratings, reviews, imports] = await Promise.all([
+  const [watched, rewatches, ratings, reviews, imports, watchlist] = await Promise.all([
     prisma.watchedItem.findMany({
       where: { userId: { in: followingIds }, watchedAt: { gte: since } },
       take: limit,
@@ -80,6 +83,14 @@ export async function GET(req: NextRequest) {
       orderBy: { createdAt: 'desc' },
       include: { user: userSelect },
     }),
+    // Higher take: a burst gets collapsed into one card, so we need to see the
+    // whole burst to count it correctly.
+    prisma.watchlistItem.findMany({
+      where: { userId: { in: followingIds }, addedAt: { gte: since } },
+      take: 200,
+      orderBy: { addedAt: 'desc' },
+      include: { user: userSelect },
+    }),
   ]);
 
   // A rewatch bumps the summary row's watchedAt, so the same viewing would
@@ -101,7 +112,50 @@ export async function GET(req: NextRequest) {
     return !!arr && arr.some(x => Math.abs(x - t.getTime()) < 10 * 60_000);
   };
 
+  // Watchlist adds flood if broadcast one-by-one (a browsing session = a dozen
+  // cards). Collapse per user per day: 1-2 adds show as normal "wants to see
+  // this" cards (the invitational signal worth keeping), 3+ collapse into a
+  // single "added N to watchlist" card. Import-time adds are excluded — the
+  // "imported N titles" card already covers them.
+  const wlByUserDay = new Map<string, typeof watchlist>();
+  for (const w of watchlist) {
+    if (nearImport(w.user.id, w.addedAt)) continue;
+    const day = w.addedAt.toISOString().slice(0, 10);
+    const key = `${w.user.id}:${day}`;
+    const arr = wlByUserDay.get(key) ?? [];
+    arr.push(w);
+    wlByUserDay.set(key, arr);
+  }
+  const watchlistItems: FeedItem[] = [];
+  for (const [key, rows] of wlByUserDay) {
+    const sorted = rows.slice().sort((a, b) => b.addedAt.getTime() - a.addedAt.getTime());
+    if (sorted.length <= 2) {
+      for (const w of sorted) {
+        watchlistItems.push({
+          id: `watchlist-${w.id}`,
+          type: 'watchlist',
+          user: w.user,
+          tmdbId: w.tmdbId,
+          mediaType: w.mediaType,
+          createdAt: w.addedAt.toISOString(),
+        });
+      }
+    } else {
+      watchlistItems.push({
+        id: `watchlist-batch-${key}`,
+        type: 'watchlist_batch',
+        user: sorted[0].user,
+        tmdbId: '',
+        mediaType: '',
+        batchCount: sorted.length,
+        batchTmdbIds: sorted.slice(0, 6).map(w => w.tmdbId),
+        createdAt: sorted[0].addedAt.toISOString(),
+      });
+    }
+  }
+
   const items: FeedItem[] = [
+    ...watchlistItems,
     ...watched
       .filter(w => !rewatchKeys.has(`${w.user.id}:${w.tmdbId}:${w.mediaType}`))
       .map(w => ({

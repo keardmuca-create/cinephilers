@@ -6,7 +6,7 @@ import { canViewUserContent } from '@/lib/privacy';
 import { rateLimit } from '@/lib/rate-limit';
 import { canonicalId, isValidMediaId } from '@/lib/media-id';
 
-const TYPES = ['watched', 'rewatched', 'rated', 'reviewed'];
+const TYPES = ['watched', 'rewatched', 'rated', 'reviewed', 'watchlist'];
 
 // Toggle a like on a feed activity card. Activities have no single row id
 // across their source tables, so the like is keyed by (owner, type, tmdbId) —
@@ -24,7 +24,7 @@ export async function POST(req: NextRequest) {
 
   const { username, type, tmdbId: rawId } = body as { username: string; type: string; tmdbId: string };
   if (!username || !type || !rawId) return err('username, type, and tmdbId are required');
-  if (!TYPES.includes(type)) return err('type must be watched, rewatched, rated, or reviewed');
+  if (!TYPES.includes(type)) return err('Invalid activity type');
   const tmdbId = canonicalId(String(rawId));
   if (!isValidMediaId(tmdbId)) return err('Invalid tmdbId');
 

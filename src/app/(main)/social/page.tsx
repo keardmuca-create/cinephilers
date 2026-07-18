@@ -15,7 +15,7 @@ import { SpoilerWrap } from '@/components/spoiler-wrap';
 
 interface FeedItem {
   id: string;
-  type: 'watched' | 'rewatched' | 'rated' | 'reviewed' | 'imported';
+  type: 'watched' | 'rewatched' | 'rated' | 'reviewed' | 'imported' | 'watchlist' | 'watchlist_batch';
   user: { id: string; username: string; displayName: string | null; avatarUrl: string | null };
   tmdbId: string;
   mediaType: string;
@@ -24,6 +24,8 @@ interface FeedItem {
   containsSpoiler?: boolean;
   importPlatform?: string;
   importCount?: number;
+  batchCount?: number;
+  batchTmdbIds?: string[];
   createdAt: string;
   likeCount?: number;
   likedByMe?: boolean;
@@ -86,7 +88,7 @@ function UserAvatar({ user, size = 40 }: {
 interface UnifiedItem {
   id: string;
   isMe: boolean;
-  type: 'watched' | 'rewatched' | 'rated' | 'reviewed' | 'watchlist' | 'imported';
+  type: 'watched' | 'rewatched' | 'rated' | 'reviewed' | 'watchlist' | 'watchlist_batch' | 'imported';
   user: { username: string; displayName: string | null; avatarUrl: string | null };
   tmdbId: string;
   meta?: { title: string; year: string; poster: string };
@@ -95,6 +97,8 @@ interface UnifiedItem {
   containsSpoiler?: boolean;
   importPlatform?: string;
   importCount?: number;
+  batchCount?: number;
+  batchTmdbIds?: string[];
   createdAt: string;
   // server-backed social likes (watched/rewatched/rated/reviewed cards)
   likeCount?: number;
@@ -104,7 +108,7 @@ interface UnifiedItem {
   likes?: string[];
 }
 
-const LIKEABLE_TYPES = ['watched', 'rewatched', 'rated', 'reviewed'];
+const LIKEABLE_TYPES = ['watched', 'rewatched', 'rated', 'reviewed', 'watchlist'];
 
 function ActivityCard({ item, onToggleLike, onRemove }: {
   item: UnifiedItem;
@@ -249,6 +253,64 @@ function ActivityCard({ item, onToggleLike, onRemove }: {
           </button>
         </div>
       )}
+    </div>
+  );
+}
+
+// ─── Watchlist batch card ──────────────────────────────────────────────────────
+// A burst of watchlist adds collapsed into one card (poster strip), so a
+// browsing session doesn't flood followers. Informational — no like/menu,
+// matching the import summary card.
+function WatchlistBatchCard({ item }: { item: UnifiedItem }) {
+  const ids = item.batchTmdbIds ?? [];
+  const [posters, setPosters] = useState<Record<string, string>>({});
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const entries = await Promise.all(ids.map(async id => {
+        const m = await fetchMeta(id);
+        return [id, m?.poster ?? ''] as const;
+      }));
+      if (!cancelled) setPosters(Object.fromEntries(entries));
+    })();
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [item.id]);
+
+  return (
+    <div className="bg-card rounded-3xl border border-border shadow-lg overflow-hidden">
+      <div className="flex items-center gap-3 px-5 pt-5 pb-3">
+        <Link href={item.isMe ? '/profile' : `/profile/${item.user.username}`}>
+          <UserAvatar user={item.user} size={40} />
+        </Link>
+        <div className="flex-1 min-w-0">
+          <Link href={item.isMe ? '/profile' : `/profile/${item.user.username}`} className="text-sm font-bold font-headline hover:text-primary transition-colors">
+            {item.user.displayName ?? item.user.username}
+          </Link>
+          <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+            <Bookmark className="h-3.5 w-3.5 text-primary" />
+            <span>Added {item.batchCount} to watchlist</span>
+            <span>·</span>
+            <span>{relativeTime(item.createdAt)}</span>
+          </div>
+        </div>
+      </div>
+      <div className="flex gap-2 px-5 pb-5 overflow-x-auto no-scrollbar">
+        {ids.map(id => (
+          <Link key={id} href={`/movie/${id}`} className="shrink-0 w-14 aspect-[2/3] rounded-lg overflow-hidden bg-muted shadow-sm">
+            {posters[id]
+              ? <Image src={posters[id]} alt="" width={56} height={84} className="w-full h-full object-cover" />
+              : <div className="w-full h-full flex items-center justify-center"><Film className="h-5 w-5 text-primary/50" /></div>
+            }
+          </Link>
+        ))}
+        {(item.batchCount ?? 0) > ids.length && (
+          <div className="shrink-0 w-14 aspect-[2/3] rounded-lg bg-muted/60 border border-border flex items-center justify-center">
+            <span className="text-xs font-bold text-muted-foreground">+{(item.batchCount ?? 0) - ids.length}</span>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
@@ -507,11 +569,14 @@ export default function SocialPage() {
     const myItems: UnifiedItem[] = myLocalFeed
       .filter(e => !dismissed.has(`${e.action}-${e.contentId}`))
       .filter(e => !(e.action === 'watched' && myRewatchedIds.has(e.contentId)))
+      // Watchlist is now a server-fed activity (collapsed + likeable), so it no
+      // longer comes from the local log — the server copy of my own adds shows.
+      .filter(e => e.action !== 'watchlist')
       .map(e => ({
       id: `me-${e.id}`,
       localId: e.id,
       isMe: true,
-      type: e.action === 'watchlist' ? 'watchlist' : e.action as UnifiedItem['type'],
+      type: e.action as UnifiedItem['type'],
       user: { username: user?.username ?? '', displayName: user?.displayName ?? null, avatarUrl: user?.avatarUrl ?? null },
       tmdbId: e.contentId,
       meta: e.contentTitle ? { title: e.contentTitle, year: e.contentYear, poster: e.contentPoster } : undefined,
@@ -543,6 +608,8 @@ export default function SocialPage() {
       containsSpoiler: f.containsSpoiler,
       importPlatform: f.importPlatform,
       importCount: f.importCount,
+      batchCount: f.batchCount,
+      batchTmdbIds: f.batchTmdbIds,
       likeCount: f.likeCount,
       likedByMe: f.likedByMe,
       createdAt: f.createdAt,
@@ -606,9 +673,10 @@ export default function SocialPage() {
       dismissActivity(action, item.tmdbId);
       setFriendFeed(prev => prev.filter(f => !(f.type === item.type && f.tmdbId === item.tmdbId && f.user.username === user?.username)));
     }
-    // Persist server-side so the activity stays hidden on every device. Watchlist
-    // entries are local-only (the feed API has no watchlist type), so skip those.
-    if (action !== 'watchlist' && item.tmdbId) {
+    // Persist server-side so the activity stays hidden on every device. All feed
+    // types (incl. watchlist now) are server-fed and hideable; the batch card
+    // has no menu so it never reaches here.
+    if (item.tmdbId) {
       fetchWithAuth('/api/feed/hidden', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -726,7 +794,9 @@ export default function SocialPage() {
           {mergedActivity.length > 0 && (
             <div className="space-y-4">
               {mergedActivity.map(item => (
-                <ActivityCard key={item.id} item={item} onToggleLike={handleToggleLike} onRemove={handleRemove} />
+                item.type === 'watchlist_batch'
+                  ? <WatchlistBatchCard key={item.id} item={item} />
+                  : <ActivityCard key={item.id} item={item} onToggleLike={handleToggleLike} onRemove={handleRemove} />
               ))}
             </div>
           )}
