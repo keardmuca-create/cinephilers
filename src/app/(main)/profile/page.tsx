@@ -346,7 +346,7 @@ function ListsSection() {
 }
 
 
-type SettingsView = 'main' | 'edit-profile' | 'privacy' | 'delete-account';
+type SettingsView = 'main' | 'edit-profile' | 'privacy' | 'account';
 
 function Pulse({ className }: { className: string }) {
   return <div className={`bg-muted animate-pulse rounded-lg ${className}`} />;
@@ -1084,6 +1084,9 @@ export default function ProfilePage() {
                     <Button variant="ghost" className="w-full justify-start text-sm h-12 rounded-xl" onClick={() => setSettingsView('privacy')}>
                       Privacy Settings <ChevronRight className="h-4 w-4 ml-auto" />
                     </Button>
+                    <Button variant="ghost" className="w-full justify-start text-sm h-12 rounded-xl" onClick={() => { setDeleteConfirmText(''); setSettingsView('account'); }}>
+                      Manage Account <ChevronRight className="h-4 w-4 ml-auto" />
+                    </Button>
                   </div>
                   <div className="space-y-2">
                     <h4 className="text-sm font-bold">App</h4>
@@ -1122,13 +1125,6 @@ export default function ProfilePage() {
                     </Button>
                   </div>
                   <Separator className="bg-muted" />
-                  <Button
-                    variant="ghost"
-                    className="w-full rounded-xl h-12 text-red-500 hover:text-red-600 hover:bg-red-500/10 text-sm"
-                    onClick={() => { setDeleteConfirmText(''); setSettingsView('delete-account'); }}
-                  >
-                    Delete Account
-                  </Button>
                   <Button variant="destructive" className="w-full rounded-xl h-12" onClick={logout}>Logout</Button>
                 </div>
               </>
@@ -1218,39 +1214,42 @@ export default function ProfilePage() {
               </>
             )}
 
-            {settingsView === 'delete-account' && (
+            {settingsView === 'account' && (
               <>
                 <DialogHeader>
                   <div className="flex items-center gap-3">
                     <button onClick={() => setSettingsView('main')} className="text-muted-foreground hover:text-foreground transition-colors">
                       ←
                     </button>
-                    <DialogTitle className="font-headline text-red-500">Delete Account</DialogTitle>
+                    <DialogTitle className="font-headline">Manage Account</DialogTitle>
                   </div>
                 </DialogHeader>
-                <div className="space-y-5 py-4">
-                  <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-4 space-y-1">
-                    <p className="text-sm font-semibold text-red-400">This action is permanent and cannot be undone.</p>
-                    <p className="text-xs text-muted-foreground">All your ratings, reviews, watchlist, watch history, favorites, and account data will be permanently deleted.</p>
+                <div className="space-y-4 py-4">
+                  <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Danger Zone</p>
+                  <div className="rounded-2xl border border-red-500/20 bg-red-500/5 p-4 space-y-4">
+                    <div className="space-y-1">
+                      <p className="text-sm font-semibold text-red-400">Delete account — permanent and cannot be undone.</p>
+                      <p className="text-xs text-muted-foreground">All your ratings, reviews, watchlist, watch history, favorites, and account data will be permanently deleted.</p>
+                    </div>
+                    <div className="space-y-2">
+                      <p className="text-sm text-muted-foreground">Type <span className="font-bold text-foreground">DELETE</span> to confirm</p>
+                      <input
+                        type="text"
+                        value={deleteConfirmText}
+                        onChange={e => setDeleteConfirmText(e.target.value)}
+                        placeholder="Type DELETE here"
+                        className="w-full px-4 py-3 rounded-xl bg-muted border border-border text-sm focus:outline-none focus:ring-2 focus:ring-red-500/50"
+                      />
+                    </div>
+                    <Button
+                      variant="destructive"
+                      className="w-full rounded-xl h-12"
+                      disabled={deleteConfirmText !== 'DELETE' || deleting}
+                      onClick={deleteAccount}
+                    >
+                      {deleting ? 'Deleting…' : 'Permanently Delete My Account'}
+                    </Button>
                   </div>
-                  <div className="space-y-2">
-                    <p className="text-sm text-muted-foreground">Type <span className="font-bold text-foreground">DELETE</span> to confirm</p>
-                    <input
-                      type="text"
-                      value={deleteConfirmText}
-                      onChange={e => setDeleteConfirmText(e.target.value)}
-                      placeholder="Type DELETE here"
-                      className="w-full px-4 py-3 rounded-xl bg-muted border border-border text-sm focus:outline-none focus:ring-2 focus:ring-red-500/50"
-                    />
-                  </div>
-                  <Button
-                    variant="destructive"
-                    className="w-full rounded-xl h-12"
-                    disabled={deleteConfirmText !== 'DELETE' || deleting}
-                    onClick={deleteAccount}
-                  >
-                    {deleting ? 'Deleting…' : 'Permanently Delete My Account'}
-                  </Button>
                 </div>
               </>
             )}
