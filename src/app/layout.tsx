@@ -46,6 +46,12 @@ export const viewport: Viewport = {
   themeColor: '#0a0a0a',
   // Required for env(safe-area-inset-*) to work in installed PWA mode
   viewportFit: 'cover',
+  // Lock pinch-zoom so the installed app feels like a fixed native screen, not
+  // a zoomable web page. iOS enforces this only in standalone/PWA mode; regular
+  // Safari still allows zoom (which is the accessible default there).
+  initialScale: 1,
+  maximumScale: 1,
+  userScalable: false,
 };
 
 export default async function RootLayout({
