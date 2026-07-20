@@ -742,83 +742,19 @@ export default function ProfilePage() {
           }
         }
 
-        const items: RecentItem[] = [];
-        const movieFetchIds: string[] = [];
+        // Sort by date FIRST using local timestamps only (no network), then fetch
+        // metadata for JUST the preview slice. Fetching the whole library (hundreds
+        // of titles) to render a 50-item strip is what made this hang on a cold
+        // open while the synchronous count showed instantly. The two-tier order
+        // matches the history page: hand-marked titles first (newest), then the
+        // rest by watch date.
+        const PREVIEW = 50;
+        type Cand = { id: string; isEpisode: boolean; loggedAt: string };
+        const candidates: Cand[] = [];
+        for (const id of movieIds) candidates.push({ id, isEpisode: false, loggedAt: logMap.get(id) ?? getWatchedAtISO(id) ?? new Date(0).toISOString() });
+        for (const epId of episodeIds) candidates.push({ id: epId, isEpisode: true, loggedAt: logMap.get(epId) ?? getWatchedAtISO(epId) ?? new Date(0).toISOString() });
 
-        const resolveItem = (id: string, loggedAt: string) => {
-          const raw = localStorage.getItem(`meta-${id}`);
-          const meta = raw ? JSON.parse(raw) : null;
-          const rv = rvMap.get(id);
-          const rating = localStorage.getItem(`movie-rating-${id}`);
-          if (meta || rv) {
-            items.push({
-              id,
-              title: meta?.title ?? rv?.title ?? '',
-              poster: meta?.poster ?? rv?.poster ?? '',
-              year: meta?.year ?? rv?.year ?? '',
-              loggedAt,
-              rating: rating ? Number(rating) : undefined,
-              tmdbRating: typeof meta?.tmdbRating === 'number' ? meta.tmdbRating : rv?.tmdbRating,
-            });
-          } else {
-            movieFetchIds.push(id);
-          }
-        };
-
-        // Movies and whole-show watched entries
-        for (const id of movieIds) {
-          resolveItem(id, logMap.get(id) ?? getWatchedAtISO(id) ?? new Date(0).toISOString());
-        }
-
-        // Fetch uncached movie metadata via the batch endpoint. NEVER fetch
-        // /api/movies/[id] per item here: a fresh login has zero meta- cache,
-        // so a big library fired hundreds of parallel detail requests, drained
-        // the per-IP rate bucket, and every movie page opened in that window
-        // died with "Title not found". One batch call per 100 ids instead.
-        if (movieFetchIds.length > 0) {
-          const movieMetaMap = await batchFetchMeta(movieFetchIds);
-          for (const id of movieFetchIds) {
-            const data = movieMetaMap[id];
-            if (!data?.title) continue;
-            const loggedAt = logMap.get(id) ?? getWatchedAtISO(id) ?? new Date(0).toISOString();
-            const rating = localStorage.getItem(`movie-rating-${id}`);
-            items.push({ id, title: data.title, poster: data.poster ?? '', year: data.year ?? '', loggedAt, rating: rating ? Number(rating) : undefined, tmdbRating: data.tmdbRating });
-          }
-        }
-
-        // Individual watched episodes — batch-fetch metadata
-        if (episodeIds.length > 0) {
-          const epMetaMap = await batchFetchMeta(episodeIds);
-          for (const epId of episodeIds) {
-            const m = epId.match(/^(.+)-S(\d+)E(\d+)$/);
-            if (!m) continue;
-            const showId = m[1];
-            const season = parseInt(m[2], 10);
-            const episode = parseInt(m[3], 10);
-            const data = epMetaMap[epId];
-            if (!data?.title) continue;
-            const rating = localStorage.getItem(`movie-rating-${epId}`);
-            items.push({
-              id: epId,
-              linkId: showId,
-              title: data.title.replace(/^S\d+E\d+\s·\s/, ''),
-              poster: data.poster ?? '',
-              year: data.year ?? '',
-              loggedAt: logMap.get(epId) ?? getWatchedAtISO(epId) ?? new Date(0).toISOString(),
-              rating: rating ? Number(rating) : undefined,
-              tmdbRating: data.tmdbRating,
-              isEpisode: true,
-              seasonNumber: data.seasonNumber ?? season,
-              episodeNumber: data.episodeNumber ?? episode,
-              showName: data.showName,
-            });
-          }
-        }
-
-        // Two tiers, matching the history page: titles marked watched IN THE APP
-        // come first (newest first), then imported titles by date — so a hand-marked
-        // film always leads the strip instead of being buried under "today"-dated imports.
-        items.sort((a, b) => {
+        candidates.sort((a, b) => {
           const am = getManualWatchISO(a.id);
           const bm = getManualWatchISO(b.id);
           if (am && !bm) return -1;
@@ -826,9 +762,55 @@ export default function ProfilePage() {
           if (am && bm) return new Date(bm).getTime() - new Date(am).getTime();
           return new Date(b.loggedAt).getTime() - new Date(a.loggedAt).getTime();
         });
+
+        const preview = candidates.slice(0, PREVIEW);
+        const readMeta = (id: string): Record<string, unknown> | null => {
+          try { const r = localStorage.getItem(`meta-${id}`); return r ? JSON.parse(r) : null; } catch { return null; }
+        };
+        // Fetch only the preview items missing from the meta cache — one small batch.
+        const uncached = preview.map(c => c.id).filter(id => !readMeta(id));
+        const fetched = uncached.length > 0 ? await batchFetchMeta(uncached) : {};
+        const getMeta = (id: string): Record<string, unknown> | null => readMeta(id) ?? (fetched[id] as unknown as Record<string, unknown> | undefined) ?? null;
+
+        const items: RecentItem[] = [];
+        for (const c of preview) {
+          const rv = rvMap.get(c.id);
+          const data = getMeta(c.id);
+          const title = (data?.title as string | undefined) ?? rv?.title;
+          if (!title) continue;
+          const rating = localStorage.getItem(`movie-rating-${c.id}`);
+          if (c.isEpisode) {
+            const m = c.id.match(/^(.+)-S(\d+)E(\d+)$/);
+            items.push({
+              id: c.id,
+              linkId: m ? m[1] : c.id,
+              title: title.replace(/^S\d+E\d+\s·\s/, ''),
+              poster: (data?.poster as string) ?? '',
+              year: (data?.year as string) ?? '',
+              loggedAt: c.loggedAt,
+              rating: rating ? Number(rating) : undefined,
+              tmdbRating: typeof data?.tmdbRating === 'number' ? data.tmdbRating : undefined,
+              isEpisode: true,
+              seasonNumber: (data?.seasonNumber as number) ?? (m ? parseInt(m[2], 10) : undefined),
+              episodeNumber: (data?.episodeNumber as number) ?? (m ? parseInt(m[3], 10) : undefined),
+              showName: data?.showName as string | undefined,
+            });
+          } else {
+            items.push({
+              id: c.id,
+              title,
+              poster: (data?.poster as string) ?? rv?.poster ?? '',
+              year: (data?.year as string) ?? rv?.year ?? '',
+              loggedAt: c.loggedAt,
+              rating: rating ? Number(rating) : undefined,
+              tmdbRating: typeof data?.tmdbRating === 'number' ? data.tmdbRating : rv?.tmdbRating,
+            });
+          }
+        }
+        // preview was already date-sorted, so keep that order.
         // A newer rebuild started while this one was fetching — discard this result.
         if (runId !== historyRunRef.current) return;
-        setRecentWatched(items.slice(0, 50));
+        setRecentWatched(items);
       } catch { /* ignore */ }
     };
     buildWatchHistory();
