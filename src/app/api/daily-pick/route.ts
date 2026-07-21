@@ -6,9 +6,25 @@ import { rateLimit } from '@/lib/rate-limit';
 import { canonicalId, isValidMediaId } from '@/lib/media-id';
 import { MediaType } from '@/generated/prisma/client';
 
-// Record the caller's Today's Pick so followers' feeds can show it. One pick
-// per user per server-day; create-only (the pick is fixed for the day, so a
-// re-post is ignored rather than overwriting).
+function today(): string {
+  return new Date().toISOString().slice(0, 10); // UTC YYYY-MM-DD
+}
+
+// Today's Pick for the caller — the server is the source of truth so every
+// device shows the same pick and it matches the feed. null = not generated yet.
+export async function GET(req: NextRequest) {
+  const auth = await getCurrentUser(req);
+  if (!auth) return err('Unauthorized', 401);
+
+  const pick = await prisma.dailyPick.findUnique({
+    where: { userId_day: { userId: auth.sub, day: today() } },
+  });
+  return ok(pick ? { tmdbId: pick.tmdbId, mediaType: pick.mediaType } : null);
+}
+
+// Record Today's Pick. One per user per day, create-only (the pick is a
+// commitment — a second generate on any device is ignored and the first,
+// authoritative pick is returned instead, keeping every device consistent).
 export async function POST(req: NextRequest) {
   const auth = await getCurrentUser(req);
   if (!auth) return err('Unauthorized', 401);
@@ -25,22 +41,26 @@ export async function POST(req: NextRequest) {
   const tmdbId = canonicalId(String(rawId));
   if (!isValidMediaId(tmdbId)) return err('Invalid tmdbId');
 
-  const day = new Date().toISOString().slice(0, 10); // UTC YYYY-MM-DD
+  const day = today();
 
   const existing = await prisma.dailyPick.findUnique({
     where: { userId_day: { userId: auth.sub, day } },
   });
-  if (existing) return ok(null, 'Already picked today');
+  // Already picked today (this or another device) — return the winning pick so
+  // the caller shows the authoritative one, not its own local roll.
+  if (existing) return ok({ tmdbId: existing.tmdbId, mediaType: existing.mediaType });
 
   try {
-    await prisma.dailyPick.create({
+    const created = await prisma.dailyPick.create({
       data: { userId: auth.sub, tmdbId, mediaType: mediaType as MediaType, day },
     });
+    return ok({ tmdbId: created.tmdbId, mediaType: created.mediaType });
   } catch (e) {
-    // Two loads racing on the same day — the unique (userId, day) constraint
-    // means the loser is a no-op, which is exactly what we want.
-    if ((e as { code?: string })?.code !== 'P2002') throw e;
+    // Race: another request created it first. Return that one.
+    if ((e as { code?: string })?.code === 'P2002') {
+      const winner = await prisma.dailyPick.findUnique({ where: { userId_day: { userId: auth.sub, day } } });
+      if (winner) return ok({ tmdbId: winner.tmdbId, mediaType: winner.mediaType });
+    }
+    throw e;
   }
-
-  return ok(null, 'Pick recorded');
 }

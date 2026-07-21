@@ -58,26 +58,31 @@ export function TodaysPick() {
   const [noReleased, setNoReleased] = useState(false);
   const [guestPrompt, setGuestPrompt] = useState(false);
 
-  const stampKey = `daily-pick-generated-${daySeed()}`;
+  const showPick = async (tmdbId: string) => {
+    try {
+      const r = await fetch(`/api/movies/${tmdbId}`);
+      const m = await r.json();
+      if (m && !m.error) setMovie(m as Movie);
+    } catch { /* ignore */ }
+  };
 
-  // If the user already generated today's pick, auto-reveal it on load — the
-  // pick is a commitment for the day, so it stays shown until tomorrow.
+  // The SERVER is the source of truth: ask it for today's pick on load, so every
+  // device shows the same locked pick and it matches the feed. localStorage is
+  // no longer used (that's what made the laptop and phone disagree).
   useEffect(() => {
     if (authLoading) return;
     if (!user) { setInitializing(false); return; }
-    let pickedId: string | null = null;
-    try { pickedId = localStorage.getItem(stampKey); } catch { /* ignore */ }
-    if (!pickedId) { setInitializing(false); return; }
     let cancelled = false;
-    fetch(`/api/movies/${pickedId}`)
+    fetchWithAuth('/api/daily-pick')
       .then(r => r.ok ? r.json() : null)
-      .then((m: (Movie & { error?: string }) | null) => {
-        if (!cancelled && m && !m.error) setMovie(m);
+      .then(async (json) => {
+        const pick = json?.data as { tmdbId: string } | null;
+        if (!cancelled && pick?.tmdbId) await showPick(pick.tmdbId);
       })
       .catch(() => {})
       .finally(() => { if (!cancelled) setInitializing(false); });
     return () => { cancelled = true; };
-  }, [user, authLoading, stampKey]);
+  }, [user, authLoading]);
 
   const generate = async () => {
     if (!user) { setGuestPrompt(true); return; }
@@ -88,21 +93,20 @@ export function TodaysPick() {
     const result = await pickWatchlistId();
     if (result === 'empty-list') { setEmptyWatchlist(true); setGenerating(false); return; }
     if (result === 'none-released') { setNoReleased(true); setGenerating(false); return; }
-    const pickedId = result.id;
     try {
-      const r = await fetch(`/api/movies/${pickedId}`);
-      const m = await r.json();
-      if (m && !m.error) {
-        setMovie(m);
-        try { localStorage.setItem(stampKey, pickedId); } catch { /* ignore */ }
-        // Record it so followers' feeds show the pick (accountability).
-        fetchWithAuth('/api/daily-pick', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ tmdbId: pickedId, mediaType: m.type === 'show' ? 'SHOW' : 'MOVIE' }),
-        }).catch(() => {});
-      }
-    } catch { /* ignore */ }
+      // Record my roll — the server returns the AUTHORITATIVE pick (mine, or the
+      // one already locked in today on another device), and I show that.
+      const res = await fetchWithAuth('/api/daily-pick', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tmdbId: result.id, mediaType: result.id.startsWith('tmdb-tv-') ? 'SHOW' : 'MOVIE' }),
+      });
+      const json = res.ok ? await res.json() : null;
+      const authoritativeId = (json?.data as { tmdbId: string } | null)?.tmdbId ?? result.id;
+      await showPick(authoritativeId);
+    } catch {
+      await showPick(result.id);
+    }
     setGenerating(false);
   };
 
