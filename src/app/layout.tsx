@@ -5,6 +5,7 @@ import { Analytics } from '@vercel/analytics/next';
 import './globals.css';
 import { Toaster } from '@/components/ui/toaster';
 import { AuthProvider } from '@/contexts/auth-context';
+import { OfflineBanner } from '@/components/offline-banner';
 
 export const metadata: Metadata = {
   title: 'Cinephilers — Track, Rate & Discuss with Friends',
@@ -81,6 +82,7 @@ export default async function RootLayout({
           className="fixed top-0 inset-x-0 z-[100] bg-background pointer-events-none"
           style={{ height: 'env(safe-area-inset-top)' }}
         />
+        <OfflineBanner />
         <AuthProvider>
           {children}
           <Toaster />
