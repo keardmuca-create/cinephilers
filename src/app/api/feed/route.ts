@@ -6,7 +6,7 @@ import { clampInt } from '@/lib/query-params';
 
 export interface FeedItem {
   id: string;
-  type: 'watched' | 'rewatched' | 'rated' | 'reviewed' | 'imported' | 'watchlist' | 'watchlist_batch';
+  type: 'watched' | 'rewatched' | 'rated' | 'reviewed' | 'imported' | 'watchlist' | 'watchlist_batch' | 'daily_pick';
   user: { id: string; username: string; displayName: string | null; avatarUrl: string | null };
   tmdbId: string;
   mediaType: string;
@@ -50,7 +50,7 @@ export async function GET(req: NextRequest) {
   const hiddenKeys = new Set(hidden.map(h => `${h.type}-${h.tmdbId}`));
 
   // Fetch recent activity from all tables in parallel
-  const [watched, rewatches, ratings, reviews, imports, watchlist] = await Promise.all([
+  const [watched, rewatches, ratings, reviews, imports, watchlist, dailyPicks] = await Promise.all([
     prisma.watchedItem.findMany({
       where: { userId: { in: followingIds }, watchedAt: { gte: since } },
       take: limit,
@@ -89,6 +89,12 @@ export async function GET(req: NextRequest) {
       where: { userId: { in: followingIds }, addedAt: { gte: since } },
       take: 200,
       orderBy: { addedAt: 'desc' },
+      include: { user: userSelect },
+    }),
+    prisma.dailyPick.findMany({
+      where: { userId: { in: followingIds }, createdAt: { gte: since } },
+      take: limit,
+      orderBy: { createdAt: 'desc' },
       include: { user: userSelect },
     }),
   ]);
@@ -156,6 +162,14 @@ export async function GET(req: NextRequest) {
 
   const items: FeedItem[] = [
     ...watchlistItems,
+    ...dailyPicks.map(p => ({
+      id: `daily_pick-${p.id}`,
+      type: 'daily_pick' as const,
+      user: p.user,
+      tmdbId: p.tmdbId,
+      mediaType: p.mediaType,
+      createdAt: p.createdAt.toISOString(),
+    })),
     ...watched
       .filter(w => !rewatchKeys.has(`${w.user.id}:${w.tmdbId}:${w.mediaType}`))
       .map(w => ({

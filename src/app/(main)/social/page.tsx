@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
-import { Heart, Star, Eye, Bookmark, Film, MoreHorizontal, Share2, Trash2, Users, MessageSquare, Loader2, UserPlus, Bell, User, Repeat } from 'lucide-react';
+import { Heart, Star, Eye, Bookmark, Film, MoreHorizontal, Share2, Trash2, Users, MessageSquare, Loader2, UserPlus, Bell, User, Repeat, Sparkles } from 'lucide-react';
 import { ActivityEntry, getFeed, removeActivity, dismissActivity, getDismissed, relativeTime } from '@/lib/activity';
 import { useAuth } from '@/contexts/auth-context';
 import { fetchWithAuth } from '@/lib/fetch-with-auth';
@@ -15,7 +15,7 @@ import { SpoilerWrap } from '@/components/spoiler-wrap';
 
 interface FeedItem {
   id: string;
-  type: 'watched' | 'rewatched' | 'rated' | 'reviewed' | 'imported' | 'watchlist' | 'watchlist_batch';
+  type: 'watched' | 'rewatched' | 'rated' | 'reviewed' | 'imported' | 'watchlist' | 'watchlist_batch' | 'daily_pick';
   user: { id: string; username: string; displayName: string | null; avatarUrl: string | null };
   tmdbId: string;
   mediaType: string;
@@ -88,7 +88,7 @@ function UserAvatar({ user, size = 40 }: {
 interface UnifiedItem {
   id: string;
   isMe: boolean;
-  type: 'watched' | 'rewatched' | 'rated' | 'reviewed' | 'watchlist' | 'watchlist_batch' | 'imported';
+  type: 'watched' | 'rewatched' | 'rated' | 'reviewed' | 'watchlist' | 'watchlist_batch' | 'daily_pick' | 'imported';
   user: { username: string; displayName: string | null; avatarUrl: string | null };
   tmdbId: string;
   meta?: { title: string; year: string; poster: string };
@@ -189,11 +189,12 @@ function ActivityCard({ item, onToggleLike, onRemove }: {
             {item.type === 'rated' && <><Star className="h-3.5 w-3.5 text-yellow-400" /><span>Rated</span></>}
             {item.type === 'reviewed' && <><MessageSquare className="h-3.5 w-3.5 text-green-400" /><span>Reviewed</span></>}
             {item.type === 'watchlist' && <><Bookmark className="h-3.5 w-3.5 text-primary" /><span>Added to watchlist</span></>}
+            {item.type === 'daily_pick' && <><Sparkles className="h-3.5 w-3.5 text-accent" /><span>Today&apos;s pick</span></>}
             <span>·</span>
             <span>{relativeTime(item.createdAt)}</span>
           </div>
         </div>
-        {item.isMe && (
+        {item.isMe && item.type !== 'daily_pick' && (
           <div className="relative" ref={menuRef}>
             <button onClick={() => setMenuOpen(v => !v)} className="h-8 w-8 flex items-center justify-center rounded-full hover:bg-muted/60 text-muted-foreground transition-colors">
               <MoreHorizontal className="h-4 w-4" />

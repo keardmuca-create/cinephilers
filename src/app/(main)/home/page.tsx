@@ -4,12 +4,13 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
-import { Play, Star, ChevronRight, Info, Eye } from 'lucide-react';
+import { Star, ChevronRight, Eye } from 'lucide-react';
 import { Movie } from '@/lib/types';
 import { MovieCard } from '@/components/movie-card';
 import { AIRecommendations } from '@/components/ai-recommendations';
 import { InstallPrompt } from '@/components/install-prompt';
 import { RecentlyViewed } from '@/components/recently-viewed';
+import { TodaysPick } from '@/components/todays-pick';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { usePopularMovies } from '@/hooks/use-movies';
@@ -118,12 +119,6 @@ const CardRowSkeleton = () => (
   </div>
 );
 
-const HeroSkeleton = () => (
-  <section className="relative h-[75vh] w-full px-6 pt-6">
-    <div className="h-full w-full rounded-[2.5rem] bg-muted animate-pulse" />
-  </section>
-);
-
 export default function HomePage() {
   const { data, loading } = usePopularMovies(EMPTY);
   const { user, loading: authLoading } = useAuth();
@@ -141,15 +136,13 @@ export default function HomePage() {
       .catch(() => {});
   }, []);
 
-  const { heroMovie, featured, top10 } = useMemo(() => {
-    if (!stablePool.daily.length) return { heroMovie: null, featured: [] as Movie[], top10: [] as Movie[] };
+  const { featured, top10 } = useMemo(() => {
+    if (!stablePool.daily.length) return { featured: [] as Movie[], top10: [] as Movie[] };
 
     const now = new Date();
     const daySeed = now.getFullYear() * 10000 + (now.getMonth() + 1) * 100 + now.getDate();
-
     const dailyPool = seededShuffle(stablePool.daily, daySeed);
 
-    const hero = dailyPool.find(m => m.type === 'movie') ?? null;
     const feat = dailyPool.slice(1, 16);
     // Genuine top 10 by weighted rating (not a random slice). The weekly pool
     // changes each week, so the ranking still rotates over time.
@@ -157,7 +150,7 @@ export default function HomePage() {
       .sort((a, b) => weightedScore(b) - weightedScore(a))
       .slice(0, 10);
 
-    return { heroMovie: hero, featured: feat, top10: t10 };
+    return { featured: feat, top10: t10 };
   }, [stablePool]);
 
   // Popular sections: all 25 items each
@@ -186,57 +179,10 @@ export default function HomePage() {
         </div>
       )}
 
-      {/* Hero Section */}
-      {loading || !heroMovie ? (
-        <HeroSkeleton />
-      ) : (
-        <section className="relative h-[75vh] w-full px-6 pt-6">
-          <div className="relative h-full w-full rounded-[2.5rem] overflow-hidden group shadow-2xl">
-            <Image
-              src={heroMovie.backdrop}
-              alt={heroMovie.title}
-              fill
-              className="object-cover"
-            />
-            <div className="absolute inset-0 cinematic-gradient" />
-
-            <div className="absolute bottom-0 left-0 right-0 p-5 md:p-8">
-              <div className="backdrop-blur-xl bg-black/30 border border-white/10 rounded-3xl p-6 md:p-8 space-y-4 max-w-2xl">
-                <div className="flex items-center gap-2">
-                  <span className="bg-primary text-primary-foreground px-3 py-1 rounded-md text-[10px] font-bold uppercase tracking-widest">
-                    Today&apos;s Pick
-                  </span>
-                  <div className="flex items-center gap-1 text-accent font-bold text-sm">
-                    <Star className="h-4 w-4 fill-current" />
-                    {heroMovie.rating.toFixed(1)}
-                  </div>
-                  <span className="text-[10px] font-bold uppercase tracking-widest text-white/40 border border-white/10 px-2 py-0.5 rounded-full">
-                    {heroMovie.genre.split(' ')[0]}
-                  </span>
-                </div>
-                <h1 className="text-3xl md:text-5xl font-headline font-bold leading-tight">
-                  {heroMovie.title}
-                </h1>
-                <p className="text-sm md:text-base text-white/70 line-clamp-2 font-medium">
-                  {heroMovie.description}
-                </p>
-                <div className="flex flex-wrap gap-3 pt-2">
-                  <Button asChild className="rounded-full h-12 px-8 bg-accent hover:bg-accent/90 text-white font-bold transition-all hover:scale-105 active:scale-95">
-                    <Link href={`/movie/${heroMovie.id}`}>
-                      <Play className="h-4 w-4 mr-2 fill-current" /> Watch Trailer
-                    </Link>
-                  </Button>
-                  <Button asChild variant="outline" className="rounded-full h-12 px-8 border-white/20 bg-white/5 hover:bg-white/10 text-white font-bold">
-                    <Link href={`/movie/${heroMovie.id}`}>
-                      <Info className="h-4 w-4 mr-2" /> More Info
-                    </Link>
-                  </Button>
-                </div>
-              </div>
-            </div>
-          </div>
-        </section>
-      )}
+      {/* Today's Pick — a Generate banner shown to everyone; logged-in users
+          reveal a released, unwatched film from their watchlist (locked for the
+          day, broadcast to followers); guests get a signup nudge. */}
+      <TodaysPick />
 
       {/* Featured Today */}
       <section className="space-y-4">

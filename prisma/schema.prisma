@@ -79,6 +79,7 @@ model User {
   hiddenActivities  HiddenActivity[]
   activityLikesGiven    ActivityLike[] @relation("ActivityLiker")
   activityLikesReceived ActivityLike[] @relation("ActivityOwner")
+  dailyPicks            DailyPick[]
 }
 
 model Rating {
@@ -131,6 +132,23 @@ model Review {
 
   @@unique([userId, tmdbId, mediaType])
   @@index([tmdbId])
+}
+
+// The user's "Today's Pick" — one released, unwatched film chosen from their
+// watchlist per day (computed client-side, seeded so it can't be rerolled).
+// Recorded so followers' feeds can show it — a public commitment to watch it.
+model DailyPick {
+  id        String   @id @default(uuid())
+  userId    String
+  tmdbId    String
+  mediaType MediaType
+  day       String   // server UTC day, YYYY-MM-DD — one pick per user per day
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, day])
+  @@index([createdAt])
 }
 
 // A like on a feed activity card (watched / rewatched / rated / reviewed).
