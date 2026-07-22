@@ -134,6 +134,9 @@ function ActivityCard({ item, onToggleLike, onRemove }: {
 
   const href = `/movie/${item.tmdbId}`;
   const liked = item.likedByMe ?? false;
+  // Your own activity mirrors to the right (avatar/name on the right, content
+  // right-aligned, subtle tint) — like your own messages in a chat app.
+  const mine = item.isMe;
 
   const handleShare = () => {
     setMenuOpen(false);
@@ -147,12 +150,12 @@ function ActivityCard({ item, onToggleLike, onRemove }: {
     const platformColor = item.importPlatform === 'letterboxd' ? 'text-orange-400 bg-orange-400/10' : 'text-yellow-400 bg-yellow-400/10';
     const platformLetter = item.importPlatform === 'letterboxd' ? 'L' : 'i';
     return (
-      <div className="bg-card rounded-3xl border border-border shadow-lg overflow-hidden">
-        <div className="flex items-center gap-3 px-5 py-4">
+      <div className={`rounded-3xl border shadow-lg overflow-hidden ${mine ? 'bg-primary/5 border-primary/30' : 'bg-card border-border'}`}>
+        <div className={`flex items-center gap-3 px-5 py-4 ${mine ? 'flex-row-reverse' : ''}`}>
           <Link href={item.isMe ? '/profile' : `/profile/${item.user.username}`}>
             <UserAvatar user={item.user} size={40} />
           </Link>
-          <div className="flex-1 min-w-0">
+          <div className={`flex-1 min-w-0 ${mine ? 'text-right' : ''}`}>
             <Link href={item.isMe ? '/profile' : `/profile/${item.user.username}`} className="text-sm font-bold font-headline hover:text-primary transition-colors">
               {item.user.displayName ?? item.user.username}
             </Link>
@@ -172,17 +175,17 @@ function ActivityCard({ item, onToggleLike, onRemove }: {
   }
 
   return (
-    <div className="bg-card rounded-3xl border border-border shadow-lg overflow-hidden">
+    <div className={`rounded-3xl border shadow-lg overflow-hidden ${mine ? 'bg-primary/5 border-primary/30' : 'bg-card border-border'}`}>
       {/* Header */}
-      <div className="flex items-center gap-3 px-5 pt-5 pb-3">
+      <div className={`flex items-center gap-3 px-5 pt-5 pb-3 ${mine ? 'flex-row-reverse' : ''}`}>
         <Link href={item.isMe ? '/profile' : `/profile/${item.user.username}`}>
           <UserAvatar user={item.user} size={40} />
         </Link>
-        <div className="flex-1 min-w-0">
+        <div className={`flex-1 min-w-0 ${mine ? 'text-right' : ''}`}>
           <Link href={item.isMe ? '/profile' : `/profile/${item.user.username}`} className="text-sm font-bold font-headline hover:text-primary transition-colors">
             {item.isMe ? (item.user.displayName ?? item.user.username) : (item.user.displayName ?? item.user.username)}
           </Link>
-          <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+          <div className={`flex items-center gap-1.5 text-xs text-muted-foreground ${mine ? 'justify-end' : ''}`}>
             {item.type === 'activity' && (
               <>
                 {item.watched && <Eye className="h-3.5 w-3.5 text-blue-400" />}
@@ -204,7 +207,7 @@ function ActivityCard({ item, onToggleLike, onRemove }: {
               <MoreHorizontal className="h-4 w-4" />
             </button>
             {menuOpen && (
-              <div className="absolute right-0 top-9 z-50 min-w-[140px] bg-card border border-border rounded-2xl shadow-xl overflow-hidden">
+              <div className={`absolute ${mine ? 'left-0' : 'right-0'} top-9 z-50 min-w-[140px] bg-card border border-border rounded-2xl shadow-xl overflow-hidden`}>
                 <button onClick={handleShare} className="flex items-center gap-2.5 w-full px-4 py-3 text-sm hover:bg-muted/50 transition-colors">
                   <Share2 className="h-4 w-4 text-muted-foreground" />Share
                 </button>
@@ -251,7 +254,7 @@ function ActivityCard({ item, onToggleLike, onRemove }: {
       {/* Like — real server-backed likes on every activity card (yours and
           friends'); the owner gets a notification when someone likes theirs */}
       {LIKEABLE_TYPES.includes(item.type) && item.tmdbId && (
-        <div className="px-5 pb-4">
+        <div className={`px-5 pb-4 ${mine ? 'flex justify-end' : ''}`}>
           <button onClick={() => onToggleLike?.(item)} className="flex items-center gap-1.5 text-xs font-bold text-muted-foreground hover:text-primary transition-colors">
             <Heart className={`h-5 w-5 transition-colors ${liked ? 'fill-primary text-primary' : ''}`} />
             {(item.likeCount ?? 0) > 0 && <span>{item.likeCount}</span>}
