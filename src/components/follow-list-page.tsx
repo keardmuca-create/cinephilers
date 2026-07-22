@@ -4,7 +4,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
-import { ChevronLeft, Loader2, User, MoreHorizontal, UserX, Share2 } from 'lucide-react';
+import { ChevronLeft, Loader2, User, MoreHorizontal, UserX, UserMinus, Share2 } from 'lucide-react';
 import { useAuth } from '@/contexts/auth-context';
 import { fetchWithAuth } from '@/lib/fetch-with-auth';
 import { toast } from '@/hooks/use-toast';
@@ -13,10 +13,12 @@ interface FollowUser { username: string; displayName: string | null; avatarUrl: 
 
 // One follower/following row. Owns its own three-dots menu (open state +
 // click-outside), so the menu only appears for the account owner's followers.
-function FollowRow({ u, canRemove, onRemove }: {
+function FollowRow({ u, canRemove, onRemove, canUnfollow, onUnfollow }: {
   u: FollowUser;
   canRemove: boolean;
   onRemove: (u: FollowUser) => Promise<void>;
+  canUnfollow: boolean;
+  onUnfollow: (u: FollowUser) => Promise<void>;
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -50,6 +52,14 @@ function FollowRow({ u, canRemove, onRemove }: {
     try { await onRemove(u); } finally { setBusy(false); }
   };
 
+  const unfollow = async (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setMenuOpen(false);
+    setBusy(true);
+    try { await onUnfollow(u); } finally { setBusy(false); }
+  };
+
   return (
     <Link
       href={`/profile/${u.username}`}
@@ -80,6 +90,11 @@ function FollowRow({ u, canRemove, onRemove }: {
             <button onClick={share} className="flex items-center gap-2.5 w-full px-4 py-3 text-sm hover:bg-muted/50 transition-colors">
               <Share2 className="h-4 w-4 text-muted-foreground" />Share profile
             </button>
+            {canUnfollow && (
+              <button onClick={unfollow} className="flex items-center gap-2.5 w-full px-4 py-3 text-sm hover:bg-muted/50 transition-colors text-destructive">
+                <UserMinus className="h-4 w-4" />Unfollow
+              </button>
+            )}
             {canRemove && (
               <button onClick={remove} className="flex items-center gap-2.5 w-full px-4 py-3 text-sm hover:bg-muted/50 transition-colors text-destructive">
                 <UserX className="h-4 w-4" />Remove follower
@@ -101,8 +116,11 @@ export function FollowListPage({ type }: { type: 'followers' | 'following' }) {
   const [users, setUsers] = useState<FollowUser[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // Only the account owner can remove people from their own followers list.
-  const canRemove = type === 'followers' && !!authUser && authUser.username.toLowerCase() === username?.toLowerCase();
+  // Actions are limited to the account owner viewing their own list: remove a
+  // follower (followers list) or unfollow someone (following list).
+  const isOwnList = !!authUser && authUser.username.toLowerCase() === username?.toLowerCase();
+  const canRemove = type === 'followers' && isOwnList;
+  const canUnfollow = type === 'following' && isOwnList;
 
   const removeFollower = async (u: FollowUser) => {
     try {
@@ -113,6 +131,17 @@ export function FollowListPage({ type }: { type: 'followers' | 'following' }) {
       toast({ title: 'Follower removed' });
     } catch {
       toast({ title: "Couldn't remove this follower — check your connection and try again.", variant: 'destructive' });
+    }
+  };
+
+  const unfollow = async (u: FollowUser) => {
+    try {
+      const res = await fetchWithAuth(`/api/users/${u.username}/follow`, { method: 'DELETE' });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      setUsers(prev => prev.filter(x => x.username !== u.username));
+      toast({ title: `Unfollowed @${u.username}` });
+    } catch {
+      toast({ title: "Couldn't unfollow — check your connection and try again.", variant: 'destructive' });
     }
   };
 
@@ -152,7 +181,7 @@ export function FollowListPage({ type }: { type: 'followers' | 'following' }) {
       ) : (
         <div className="divide-y divide-border">
           {users.map(u => (
-            <FollowRow key={u.username} u={u} canRemove={canRemove} onRemove={removeFollower} />
+            <FollowRow key={u.username} u={u} canRemove={canRemove} onRemove={removeFollower} canUnfollow={canUnfollow} onUnfollow={unfollow} />
           ))}
         </div>
       )}
