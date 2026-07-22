@@ -33,5 +33,16 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ user
     }),
   ]);
 
-  return paginated(items, page, limit, total);
+  // Attach the author's rating for each reviewed title, so the review card can
+  // show the star score alongside the text (helps others decide).
+  const ratings = items.length > 0
+    ? await prisma.rating.findMany({
+        where: { userId: user.id, tmdbId: { in: [...new Set(items.map(r => r.tmdbId))] } },
+        select: { tmdbId: true, mediaType: true, score: true },
+      })
+    : [];
+  const scoreMap = new Map(ratings.map(r => [`${r.tmdbId}:${r.mediaType}`, r.score]));
+  const withScore = items.map(r => ({ ...r, score: scoreMap.get(`${r.tmdbId}:${r.mediaType}`) ?? null }));
+
+  return paginated(withScore, page, limit, total);
 }

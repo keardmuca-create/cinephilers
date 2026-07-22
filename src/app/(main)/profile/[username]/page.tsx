@@ -4,7 +4,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { useParams, useRouter } from 'next/navigation';
-import { Star, Film, Eye, UserPlus, UserCheck, Loader2, Lock, User, MessageSquare, List, ChevronRight, Clock, Heart, Crown } from 'lucide-react';
+import { Star, Film, Eye, UserPlus, UserCheck, Loader2, Lock, User, MessageSquare, List, ChevronRight, ChevronLeft, Clock, Heart, Crown, Bookmark, Repeat } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { SpoilerWrap } from '@/components/spoiler-wrap';
 import { RING } from '@/components/favorites-section';
@@ -53,8 +53,14 @@ interface ReviewItem {
   body: string;
   containsSpoiler: boolean;
   likesCount: number;
+  score: number | null;
   createdAt: string;
   meta?: { title: string; year: string; poster: string };
+}
+
+interface ShelfItem {
+  tmdbId: string;
+  badge?: string; // e.g. rating "8" or rewatch "×3"
 }
 
 interface RecentItem {
@@ -140,28 +146,69 @@ function FavoriteRingPoster({ tmdbId, hero }: { tmdbId: string; hero?: boolean }
 function ReviewCard({ review }: { review: ReviewItem }) {
   const [meta, setMeta] = useState(review.meta ?? null);
   useEffect(() => { if (!meta) getMeta(review.tmdbId).then(m => { if (m) setMeta(m); }); }, [review.tmdbId, meta]);
+  const dateLabel = new Date(review.createdAt).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
   return (
-    <Link href={`/movie/${review.tmdbId}/reviews`} className="block bg-muted/30 hover:bg-muted/50 transition-colors rounded-2xl p-4 border border-border group">
-      <div className="flex gap-3">
-        <div className="relative w-10 shrink-0 rounded-lg overflow-hidden bg-muted shadow-sm" style={{ aspectRatio: '2/3' }}>
+    <Link href={`/movie/${review.tmdbId}/reviews`} className="block bg-card hover:bg-muted/50 transition-colors rounded-2xl p-4 border border-border group">
+      <div className="flex gap-4">
+        <div className="relative w-16 shrink-0 rounded-lg overflow-hidden bg-muted shadow-sm" style={{ aspectRatio: '2/3' }}>
           {meta?.poster
-            ? <Image src={meta.poster} alt={meta.title ?? ''} fill className="object-cover" sizes="40px" />
-            : <div className="w-full h-full flex items-center justify-center"><Film className="h-3 w-3 text-primary/60" /></div>
+            ? <Image src={meta.poster} alt={meta.title ?? ''} fill className="object-cover" sizes="64px" />
+            : <div className="w-full h-full flex items-center justify-center"><Film className="h-5 w-5 text-primary/60" /></div>
           }
         </div>
-        <div className="flex-1 min-w-0">
+        <div className="flex-1 min-w-0 space-y-1">
           {meta
-            ? <p className="text-sm font-bold group-hover:text-primary transition-colors line-clamp-1 mb-1">{meta.title}</p>
-            : <div className="h-3 bg-muted rounded-full w-2/3 animate-pulse mb-1" />
+            ? <p className="text-base font-bold group-hover:text-primary transition-colors line-clamp-1">{meta.title}</p>
+            : <div className="h-4 bg-muted rounded-full w-2/3 animate-pulse" />
           }
+          <p className="text-xs text-muted-foreground">{meta?.year ? `${meta.year} · ` : ''}{dateLabel}</p>
+          {review.score != null && (
+            <div className="flex items-center gap-1">
+              <Star className="h-3.5 w-3.5 fill-yellow-400 text-yellow-400" />
+              <span className="text-sm font-bold text-foreground">{review.score}/10</span>
+            </div>
+          )}
           <SpoilerWrap isSpoiler={review.containsSpoiler}>
-            <p className="text-xs text-muted-foreground line-clamp-3 leading-relaxed">
-              {review.body}
+            <p className="text-sm text-muted-foreground italic leading-relaxed line-clamp-3 pt-0.5">
+              &ldquo;{review.body}&rdquo;
             </p>
           </SpoilerWrap>
-          <p className="text-[10px] text-muted-foreground mt-1.5">{relativeTime(review.createdAt)}</p>
         </div>
       </div>
+    </Link>
+  );
+}
+
+// A horizontal poster shelf for a profile section (Watchlist, Rewatched, etc.).
+function ProfileShelf({ title, icon, items }: { title: string; icon: React.ReactNode; items: ShelfItem[] }) {
+  if (items.length === 0) return null;
+  return (
+    <section className="space-y-3">
+      <h2 className="text-lg font-headline font-bold flex items-center gap-2">{icon}{title}</h2>
+      <div className="flex gap-3 overflow-x-auto no-scrollbar -mx-4 px-4">
+        {items.map(it => <ShelfPoster key={it.tmdbId} tmdbId={it.tmdbId} badge={it.badge} />)}
+      </div>
+    </section>
+  );
+}
+
+function ShelfPoster({ tmdbId, badge }: { tmdbId: string; badge?: string }) {
+  const [meta, setMeta] = useState<{ title: string; year: string; poster: string } | null>(null);
+  useEffect(() => { getMeta(tmdbId).then(m => { if (m) setMeta(m); }); }, [tmdbId]);
+  return (
+    <Link href={`/movie/${tmdbId}`} className="shrink-0 w-24 group" aria-label={meta?.title ?? 'Title'}>
+      <div className="relative aspect-[2/3] rounded-xl overflow-hidden bg-muted shadow-md">
+        {meta?.poster
+          ? <Image src={meta.poster} alt={meta.title} fill className="object-cover" sizes="96px" />
+          : <div className="w-full h-full flex items-center justify-center"><Film className="h-6 w-6 text-primary/60" /></div>
+        }
+        {badge && (
+          <span className="absolute top-1 right-1 bg-black/70 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full flex items-center gap-0.5">
+            {badge}
+          </span>
+        )}
+      </div>
+      {meta && <p className="text-xs font-semibold line-clamp-1 mt-1.5 group-hover:text-primary transition-colors">{meta.title}</p>}
     </Link>
   );
 }
@@ -200,6 +247,10 @@ export default function PublicProfilePage() {
   const [recentActivity, setRecentActivity] = useState<RecentItem[]>([]);
   const [lists, setLists] = useState<PublicList[]>([]);
   const [favorites, setFavorites] = useState<FavoriteItem[]>([]);
+  const [watchHistory, setWatchHistory] = useState<ShelfItem[]>([]);
+  const [ratingsShelf, setRatingsShelf] = useState<ShelfItem[]>([]);
+  const [watchlist, setWatchlist] = useState<ShelfItem[]>([]);
+  const [rewatched, setRewatched] = useState<ShelfItem[]>([]);
   const [reviews, setReviews] = useState<ReviewItem[]>([]);
   const [badgeData, setBadgeData] = useState<BadgeData | null>(null);
   const [followLoading, setFollowLoading] = useState(false);
@@ -241,9 +292,46 @@ export default function PublicProfilePage() {
       fetch(`/api/users/${p.username}/reviews?limit=3`, { credentials: 'include' })
         .then(r => r.ok ? r.json() : null)
         .then(async json => {
-          if (!json?.data?.items) return;
-          await prewarmMetaCache(json.data.items.map((r: { tmdbId: string }) => r.tmdbId));
-          setReviews(json.data.items);
+          const items: ReviewItem[] = json?.data ?? [];
+          if (!items.length) return;
+          await prewarmMetaCache(items.map(r => r.tmdbId));
+          setReviews(items);
+        })
+        .catch(() => {});
+      fetch(`/api/users/${p.username}/watched?limit=15`, { credentials: 'include' })
+        .then(r => r.ok ? r.json() : null)
+        .then(async json => {
+          const items: { tmdbId: string }[] = json?.data ?? [];
+          if (!items.length) return;
+          await prewarmMetaCache(items.map(i => i.tmdbId));
+          setWatchHistory(items.map(i => ({ tmdbId: i.tmdbId })));
+        })
+        .catch(() => {});
+      fetch(`/api/users/${p.username}/ratings?limit=15`, { credentials: 'include' })
+        .then(r => r.ok ? r.json() : null)
+        .then(async json => {
+          const items: { tmdbId: string; score: number }[] = json?.data ?? [];
+          if (!items.length) return;
+          await prewarmMetaCache(items.map(i => i.tmdbId));
+          setRatingsShelf(items.map(i => ({ tmdbId: i.tmdbId, badge: `★${i.score}` })));
+        })
+        .catch(() => {});
+      fetch(`/api/users/${p.username}/watchlist?limit=15`, { credentials: 'include' })
+        .then(r => r.ok ? r.json() : null)
+        .then(async json => {
+          const items: { tmdbId: string }[] = json?.data ?? [];
+          if (!items.length) return;
+          await prewarmMetaCache(items.map(i => i.tmdbId));
+          setWatchlist(items.map(i => ({ tmdbId: i.tmdbId })));
+        })
+        .catch(() => {});
+      fetch(`/api/users/${p.username}/rewatched?min=2&sort=recent&limit=15`, { credentials: 'include' })
+        .then(r => r.ok ? r.json() : null)
+        .then(async json => {
+          const items: { tmdbId: string; count: number }[] = json?.data?.items ?? [];
+          if (!items.length) return;
+          await prewarmMetaCache(items.map(i => i.tmdbId));
+          setRewatched(items.map(i => ({ tmdbId: i.tmdbId, badge: `×${i.count}` })));
         })
         .catch(() => {});
       fetch(`/api/users/${p.username}/badges`, { credentials: 'include' })
@@ -308,7 +396,7 @@ export default function PublicProfilePage() {
     setLoadingMoreReviews(true);
     try {
       const res = await fetch(`/api/users/${profile.username}/reviews?limit=50`, { credentials: 'include' });
-      if (res.ok) { const json = await res.json(); setReviews(json.data?.items ?? []); setAllReviewsLoaded(true); }
+      if (res.ok) { const json = await res.json(); setReviews(json.data ?? []); setAllReviewsLoaded(true); }
     } catch { /* ignore */ }
     finally { setLoadingMoreReviews(false); }
   };
@@ -373,7 +461,12 @@ export default function PublicProfilePage() {
   const isVisible = !profile.isPrivate || profile.isFollowing;
 
   return (
-    <main className="max-w-xl mx-auto px-4 pt-10 pb-32 space-y-8">
+    <main className="max-w-xl mx-auto px-4 pt-6 pb-32 space-y-8">
+      {/* Back arrow — the installed PWA has no browser back button */}
+      <button onClick={() => router.back()} aria-label="Go back" className="rounded-full p-1 -ml-1 hover:bg-muted/60 transition-colors">
+        <ChevronLeft className="h-6 w-6" />
+      </button>
+
       {/* Header */}
       <div className="flex items-center gap-4">
         <Avatar user={profile} size={80} />
@@ -467,14 +560,14 @@ export default function PublicProfilePage() {
         </div>
       )}
 
-      {/* Recent activity */}
+      {/* Recent Activity — right below Favorites, capped at 5 with See All */}
       {isVisible && recentActivity.length > 0 && (
         <section className="space-y-3">
           <div className="flex items-center justify-between">
             <h2 className="text-lg font-headline font-bold flex items-center gap-2">
               <Eye className="h-5 w-5 text-primary" />Recent Activity
             </h2>
-            {profile.isFollowing && !allActivityLoaded && (
+            {!allActivityLoaded && recentActivity.length >= 5 && (
               <button onClick={loadAllActivity} disabled={loadingMoreActivity}
                 className="text-xs font-semibold text-primary hover:opacity-70 transition-opacity flex items-center gap-1">
                 {loadingMoreActivity ? <Loader2 className="h-3 w-3 animate-spin" /> : 'See All'}
@@ -482,7 +575,7 @@ export default function PublicProfilePage() {
             )}
           </div>
           <div className="bg-card rounded-3xl border border-border px-5 py-2">
-            {recentActivity.map(item => <RecentCard key={item.id} item={item} />)}
+            {(allActivityLoaded ? recentActivity : recentActivity.slice(0, 5)).map(item => <RecentCard key={item.id} item={item} />)}
           </div>
         </section>
       )}
@@ -495,6 +588,12 @@ export default function PublicProfilePage() {
         </div>
       )}
 
+      {/* Watch History → Rewatched → Ratings → Watchlist shelves (scroll freely) */}
+      {isVisible && <ProfileShelf title="Watch History" icon={<Eye className="h-5 w-5 text-primary" />} items={watchHistory} />}
+      {isVisible && <ProfileShelf title="Rewatched" icon={<Repeat className="h-5 w-5 text-primary" />} items={rewatched} />}
+      {isVisible && <ProfileShelf title="Ratings" icon={<Star className="h-5 w-5 text-primary" />} items={ratingsShelf} />}
+      {isVisible && <ProfileShelf title="Watchlist" icon={<Bookmark className="h-5 w-5 text-primary" />} items={watchlist} />}
+
       {/* Reviews */}
       {isVisible && reviews.length > 0 && (
         <section className="space-y-3">
@@ -502,7 +601,7 @@ export default function PublicProfilePage() {
             <h2 className="text-lg font-headline font-bold flex items-center gap-2">
               <MessageSquare className="h-5 w-5 text-primary" />Reviews
             </h2>
-            {profile.isFollowing && !allReviewsLoaded && (
+            {!allReviewsLoaded && reviews.length >= 3 && (
               <button onClick={loadAllReviews} disabled={loadingMoreReviews}
                 className="text-xs font-semibold text-primary hover:opacity-70 transition-opacity flex items-center gap-1">
                 {loadingMoreReviews ? <Loader2 className="h-3 w-3 animate-spin" /> : 'See All'}
@@ -522,7 +621,7 @@ export default function PublicProfilePage() {
             <h2 className="text-lg font-headline font-bold flex items-center gap-2">
               <List className="h-5 w-5 text-primary" />Lists
             </h2>
-            {profile.isFollowing && !allListsLoaded && lists.length >= 3 && (
+            {!allListsLoaded && lists.length >= 3 && (
               <button onClick={loadAllLists} disabled={loadingMoreLists}
                 className="text-xs font-semibold text-primary hover:opacity-70 transition-opacity flex items-center gap-1">
                 {loadingMoreLists ? <Loader2 className="h-3 w-3 animate-spin" /> : 'See All'}
