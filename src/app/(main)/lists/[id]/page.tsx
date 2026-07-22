@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { ChevronLeft, Search, X, Film, Lock, Globe, SlidersHorizontal, Trash2 } from 'lucide-react';
+import { ChevronLeft, Search, X, Film, Lock, Globe, SlidersHorizontal, Trash2, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { fetchWithAuth } from '@/lib/fetch-with-auth';
 import { persistRefine } from '@/lib/refine-sort';
@@ -63,6 +63,7 @@ export default function ListDetailPage() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [removingId, setRemovingId] = useState<string | null>(null);
+  const [privacyBusy, setPrivacyBusy] = useState(false);
 
   // Refine state — shares the accordion RefineSheet with Watchlist / History / Ratings.
   const [refine, setRefine] = useState<RefineValue>(DEFAULT_REFINE);
@@ -126,6 +127,32 @@ export default function ListDetailPage() {
       router.push('/lists');
     } catch {
       toast({ title: "Couldn't delete the list. Check your connection.", variant: 'destructive' });
+    }
+  };
+
+  // Flip the list between Private and Public. The privacy is set at creation but
+  // was never changeable afterwards — this lets the owner switch it any time.
+  const togglePrivacy = async () => {
+    if (!list || privacyBusy) return;
+    const makePublic = list.isPrivate; // currently private → we're making it public
+    setPrivacyBusy(true);
+    try {
+      const res = await fetchWithAuth(`/api/lists/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ isPublic: makePublic }),
+      });
+      if (!res.ok) { toast({ title: "Couldn't update the list. Try again.", variant: 'destructive' }); return; }
+      setList(prev => prev ? { ...prev, isPrivate: !makePublic } : prev);
+      try {
+        const stored: CustomList[] = JSON.parse(localStorage.getItem('user-lists') ?? '[]');
+        localStorage.setItem('user-lists', JSON.stringify(stored.map(l => l.id === id ? { ...l, isPublic: makePublic, isPrivate: !makePublic } : l)));
+      } catch { /* ignore */ }
+      toast({ title: makePublic ? 'List is now public' : 'List is now private' });
+    } catch {
+      toast({ title: "Couldn't update the list. Check your connection.", variant: 'destructive' });
+    } finally {
+      setPrivacyBusy(false);
     }
   };
 
@@ -217,10 +244,23 @@ export default function ListDetailPage() {
           <h1 className="text-lg font-headline font-bold truncate">{list?.name ?? 'List'}</h1>
           {list && (
             <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-              {list.isPrivate
-                ? <><Lock className="h-3 w-3" />Private</>
-                : <><Globe className="h-3 w-3" />Public</>
-              }
+              {isOwner ? (
+                <button
+                  onClick={togglePrivacy}
+                  disabled={privacyBusy}
+                  className="flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 hover:bg-muted/70 transition-colors disabled:opacity-50"
+                  aria-label={list.isPrivate ? 'Make list public' : 'Make list private'}
+                >
+                  {privacyBusy
+                    ? <Loader2 className="h-3 w-3 animate-spin" />
+                    : list.isPrivate ? <Lock className="h-3 w-3" /> : <Globe className="h-3 w-3" />}
+                  {list.isPrivate ? 'Private' : 'Public'}
+                </button>
+              ) : (
+                <span className="flex items-center gap-1">
+                  {list.isPrivate ? <><Lock className="h-3 w-3" />Private</> : <><Globe className="h-3 w-3" />Public</>}
+                </span>
+              )}
               <span>·</span>
               <span>{list.items.length} title{list.items.length !== 1 ? 's' : ''}</span>
             </div>
