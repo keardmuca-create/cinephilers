@@ -32,7 +32,15 @@ interface WatchlistItem {
   genre: string;         // comma-joined genres, for the Genre filter
 }
 
-function ItemCard({ item, onRemove }: { item: WatchlistItem; onRemove: () => void }) {
+// When sorting by release date, show the full date so the order reads clearly
+// (two 2026 films otherwise look identical). Falls back to the year.
+function releaseLabel(item: WatchlistItem): string {
+  if (!item.releaseDate) return item.year;
+  const d = new Date(item.releaseDate);
+  return Number.isNaN(d.getTime()) ? item.year : d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+}
+
+function ItemCard({ item, onRemove, showReleaseDate }: { item: WatchlistItem; onRemove: () => void; showReleaseDate?: boolean }) {
   // Await the server delete and confirm it before dropping the row locally — a
   // silently-failed delete leaves the DB row alive, which the next DB→local sync
   // resurrects. Also clears the legacy bare-numeric twin key.
@@ -70,7 +78,7 @@ function ItemCard({ item, onRemove }: { item: WatchlistItem; onRemove: () => voi
         <h3 className="text-sm font-semibold font-headline line-clamp-2 group-hover:text-primary transition-colors leading-snug mb-0.5">
           {item.title}
         </h3>
-        <p className="text-xs text-muted-foreground mb-1.5">{item.year}</p>
+        <p className="text-xs text-muted-foreground mb-1.5">{showReleaseDate ? releaseLabel(item) : item.year}</p>
         {item.tmdbRating !== undefined && item.tmdbRating > 0 && (
           <div className="flex items-center gap-0.5">
             <span className="text-xs text-yellow-400 font-bold">★</span>
@@ -335,7 +343,7 @@ export default function WatchlistPage() {
       ) : (
         <div className="px-6 divide-y divide-border">
           {sortedFiltered.map(item => (
-            <ItemCard key={item.id} item={item} onRemove={() => setItems(prev => prev.filter(i => i.id !== item.id))} />
+            <ItemCard key={item.id} item={item} showReleaseDate={refine.sortField === 'release'} onRemove={() => setItems(prev => prev.filter(i => i.id !== item.id))} />
           ))}
         </div>
       )}

@@ -16,6 +16,10 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ user
   const min = clampInt(searchParams.get('min'), 2, 1, 2);
   const sort = searchParams.get('sort') === 'recent' ? 'recent' : 'count';
   const dir = searchParams.get('dir') === 'asc' ? 'asc' : 'desc';
+  // ?year=YYYY restricts to titles watched 2+ times within that calendar year
+  // ("rewatched this year"); the count then reflects that year's watches.
+  const year = clampInt(searchParams.get('year'), 0, 0, 9999);
+  const yearWhere = year ? { watchedAt: { gte: new Date(year, 0, 1), lt: new Date(year + 1, 0, 1) } } : {};
 
   const user = await prisma.user.findUnique({
     where: { username: username.toLowerCase() },
@@ -37,7 +41,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ user
 
   const groups = await prisma.watchEvent.groupBy({
     by: ['tmdbId', 'mediaType'],
-    where: { userId: user.id },
+    where: { userId: user.id, ...yearWhere },
     _count: { _all: true },
     _max: { watchedAt: true },
     having: { tmdbId: { _count: { gte: min } } },

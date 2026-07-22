@@ -37,11 +37,45 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ user
     });
   }
 
+  // Row counts + this-year splits + the rating-distribution histogram for the
+  // public profile. Only computed once the profile is known to be visible.
+  const yearStart = new Date(new Date().getFullYear(), 0, 1);
+  const [watchlistCount, listsCount, reviewsCount, watchedThisYear, rewatchGroups, rewatchThisYearGroups, ratingGroups] = await Promise.all([
+    prisma.watchlistItem.count({ where: { userId: user.id } }),
+    prisma.customList.count({ where: { userId: user.id, ...(isOwner ? {} : { isPublic: true }) } }),
+    prisma.review.count({ where: { userId: user.id, hidden: false } }),
+    prisma.watchedItem.count({ where: { userId: user.id, watchedAt: { gte: yearStart } } }),
+    prisma.watchEvent.groupBy({
+      by: ['tmdbId', 'mediaType'],
+      where: { userId: user.id },
+      _count: { _all: true },
+      having: { tmdbId: { _count: { gte: 2 } } },
+    }),
+    // Films watched 2+ times within this year ("rewatched this year") — same
+    // definition the ?year= list uses, so the row count matches that view.
+    prisma.watchEvent.groupBy({
+      by: ['tmdbId', 'mediaType'],
+      where: { userId: user.id, watchedAt: { gte: yearStart } },
+      having: { tmdbId: { _count: { gte: 2 } } },
+    }),
+    prisma.rating.groupBy({ by: ['score'], where: { userId: user.id }, _count: { _all: true } }),
+  ]);
+
+  // 10 buckets, index 0 = score 1 … index 9 = score 10.
+  const ratingDistribution = Array.from({ length: 10 }, (_, i) => ratingGroups.find(g => g.score === i + 1)?._count._all ?? 0);
+
   return ok({
     ...user,
     followersCount: user._count.followers,
     followingCount: user._count.following,
     watchedCount: user._count.watched,
+    watchlistCount,
+    rewatchedCount: rewatchGroups.length,
+    listsCount,
+    reviewsCount,
+    watchedThisYear,
+    rewatchedThisYear: rewatchThisYearGroups.length,
+    ratingDistribution,
     isFollowing: isFollowingBool,
     isPendingRequest,
     isOwner,

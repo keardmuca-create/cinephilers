@@ -612,12 +612,14 @@ interface CinephilersReview {
   isOwn: boolean;
 }
 
-function ReviewsSection({ movie, writeOpen, setWriteOpen, myReview, setMyReview }: {
+function ReviewsSection({ movie, writeOpen, setWriteOpen, myReview, setMyReview, currentRating, onRate }: {
   movie: Movie;
   writeOpen: boolean;
   setWriteOpen: (v: boolean) => void;
   myReview: UserReview | null;
   setMyReview: (r: UserReview | null) => void;
+  currentRating: number;      // the user's live rating for this title
+  onRate: (score: number) => void;
 }) {
   const [draftContent, setDraftContent] = useState('');
   const [draftRating, setDraftRating] = useState(0);
@@ -637,10 +639,11 @@ function ReviewsSection({ movie, writeOpen, setWriteOpen, myReview, setMyReview 
   useEffect(() => {
     if (writeOpen) {
       setDraftContent(myReview?.content ?? '');
-      setDraftRating(myReview?.rating ?? 0);
+      // Reflect the user's live rating (they may have rated without reviewing).
+      setDraftRating(currentRating || myReview?.rating || 0);
       setDraftSpoiler(myReview?.containsSpoiler ?? false);
     }
-  }, [writeOpen, myReview]);
+  }, [writeOpen, myReview, currentRating]);
 
   const submitReview = () => {
     if (!draftContent.trim()) return;
@@ -661,6 +664,8 @@ function ReviewsSection({ movie, writeOpen, setWriteOpen, myReview, setMyReview 
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ tmdbId: movie.id, mediaType: movie.type === 'show' ? 'SHOW' : 'MOVIE', body: review.content, containsSpoiler: draftSpoiler }),
     }).catch(() => { /* background sync */ });
+    // Persist the rating too (rate + review in one go) when it was set/changed.
+    if (draftRating > 0 && draftRating !== currentRating) onRate(draftRating);
     setMyReview(review);
     setWriteOpen(false);
     logActivity({ action: 'reviewed', contentId: movie.id, contentTitle: movie.title, contentPoster: movie.poster, contentYear: movie.year });
@@ -806,6 +811,25 @@ function ReviewsSection({ movie, writeOpen, setWriteOpen, myReview, setMyReview 
             <DialogTitle className="font-headline text-xl">{myReview ? 'Edit Your Review' : 'Write a Review'}</DialogTitle>
           </DialogHeader>
           <div className="space-y-5 pt-2">
+            {/* Rating — rate + review in one go */}
+            <div>
+              <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground mb-2">Your Rating</p>
+              <div className="flex items-center gap-0.5" onMouseLeave={() => setHoverRating(0)}>
+                {Array.from({ length: 10 }, (_, i) => i + 1).map(n => (
+                  <button
+                    key={n}
+                    type="button"
+                    onClick={() => setDraftRating(n === draftRating ? 0 : n)}
+                    onMouseEnter={() => setHoverRating(n)}
+                    className="p-0.5"
+                    aria-label={`Rate ${n} out of 10`}
+                  >
+                    <Star className={`h-5 w-5 transition-colors ${(hoverRating || draftRating) >= n ? 'fill-yellow-400 text-yellow-400' : 'text-muted-foreground/40'}`} />
+                  </button>
+                ))}
+                <span className="ml-2 text-sm font-bold text-foreground w-12">{draftRating > 0 ? `${draftRating}/10` : ''}</span>
+              </div>
+            </div>
             <div>
               <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground mb-2">Your Thoughts</p>
               <textarea
@@ -1694,7 +1718,7 @@ export default function MovieDetailPage() {
         )}
 
         {/* Reviews */}
-        <ReviewsSection movie={movie} writeOpen={writeReviewOpen} setWriteOpen={setWriteReviewOpen} myReview={myReview} setMyReview={setMyReview} />
+        <ReviewsSection movie={movie} writeOpen={writeReviewOpen} setWriteOpen={setWriteReviewOpen} myReview={myReview} setMyReview={setMyReview} currentRating={userRating} onRate={applyRating} />
 
         {/* Quotes (kept for any future data) */}
         {movie.quotes.length > 0 && (
