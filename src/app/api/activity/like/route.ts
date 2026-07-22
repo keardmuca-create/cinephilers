@@ -6,7 +6,7 @@ import { canViewUserContent } from '@/lib/privacy';
 import { rateLimit } from '@/lib/rate-limit';
 import { canonicalId, isValidMediaId } from '@/lib/media-id';
 
-const TYPES = ['watched', 'rewatched', 'rated', 'reviewed', 'watchlist'];
+const TYPES = ['activity', 'rewatched', 'watchlist', 'watched', 'rated', 'reviewed'];
 
 // Toggle a like on a feed activity card. Activities have no single row id
 // across their source tables, so the like is keyed by (owner, type, tmdbId) —

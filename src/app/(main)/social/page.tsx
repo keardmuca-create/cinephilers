@@ -4,7 +4,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { Heart, Star, Eye, Bookmark, Film, MoreHorizontal, Share2, Trash2, Users, MessageSquare, Loader2, UserPlus, Bell, User, Repeat, Sparkles } from 'lucide-react';
-import { ActivityEntry, getFeed, removeActivity, dismissActivity, getDismissed, relativeTime } from '@/lib/activity';
+import { dismissActivity, getDismissed, relativeTime } from '@/lib/activity';
 import { useAuth } from '@/contexts/auth-context';
 import { fetchWithAuth } from '@/lib/fetch-with-auth';
 import { batchFetchMeta } from '@/lib/meta-batch';
@@ -15,10 +15,11 @@ import { SpoilerWrap } from '@/components/spoiler-wrap';
 
 interface FeedItem {
   id: string;
-  type: 'watched' | 'rewatched' | 'rated' | 'reviewed' | 'imported' | 'watchlist' | 'watchlist_batch' | 'daily_pick';
+  type: 'activity' | 'rewatched' | 'imported' | 'watchlist' | 'watchlist_batch' | 'daily_pick';
   user: { id: string; username: string; displayName: string | null; avatarUrl: string | null };
   tmdbId: string;
   mediaType: string;
+  watched?: boolean;
   rating?: number;
   reviewBody?: string;
   containsSpoiler?: boolean;
@@ -88,10 +89,11 @@ function UserAvatar({ user, size = 40 }: {
 interface UnifiedItem {
   id: string;
   isMe: boolean;
-  type: 'watched' | 'rewatched' | 'rated' | 'reviewed' | 'watchlist' | 'watchlist_batch' | 'daily_pick' | 'imported';
+  type: 'activity' | 'rewatched' | 'watchlist' | 'watchlist_batch' | 'daily_pick' | 'imported';
   user: { username: string; displayName: string | null; avatarUrl: string | null };
   tmdbId: string;
   meta?: { title: string; year: string; poster: string };
+  watched?: boolean;
   rating?: number;
   reviewBody?: string;
   containsSpoiler?: boolean;
@@ -100,15 +102,12 @@ interface UnifiedItem {
   batchCount?: number;
   batchTmdbIds?: string[];
   createdAt: string;
-  // server-backed social likes (watched/rewatched/rated/reviewed cards)
+  // server-backed social likes (activity/rewatched/watchlist cards)
   likeCount?: number;
   likedByMe?: boolean;
-  // my-activity-only fields
-  localId?: string;
-  likes?: string[];
 }
 
-const LIKEABLE_TYPES = ['watched', 'rewatched', 'rated', 'reviewed', 'watchlist'];
+const LIKEABLE_TYPES = ['activity', 'rewatched', 'watchlist'];
 
 function ActivityCard({ item, onToggleLike, onRemove }: {
   item: UnifiedItem;
@@ -184,10 +183,15 @@ function ActivityCard({ item, onToggleLike, onRemove }: {
             {item.isMe ? (item.user.displayName ?? item.user.username) : (item.user.displayName ?? item.user.username)}
           </Link>
           <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-            {item.type === 'watched' && <><Eye className="h-3.5 w-3.5 text-blue-400" /><span>Watched</span></>}
+            {item.type === 'activity' && (
+              <>
+                {item.watched && <Eye className="h-3.5 w-3.5 text-blue-400" />}
+                {item.rating !== undefined && <Star className="h-3.5 w-3.5 text-yellow-400 fill-current" />}
+                {item.reviewBody && <MessageSquare className="h-3.5 w-3.5 text-green-400" />}
+                <span>{[item.watched ? 'Watched' : null, item.rating !== undefined ? `Rated ${item.rating}/10` : null, item.reviewBody ? 'Reviewed' : null].filter(Boolean).join(' · ')}</span>
+              </>
+            )}
             {item.type === 'rewatched' && <><Repeat className="h-3.5 w-3.5 text-primary" /><span>Rewatched</span></>}
-            {item.type === 'rated' && <><Star className="h-3.5 w-3.5 text-yellow-400" /><span>Rated</span></>}
-            {item.type === 'reviewed' && <><MessageSquare className="h-3.5 w-3.5 text-green-400" /><span>Reviewed</span></>}
             {item.type === 'watchlist' && <><Bookmark className="h-3.5 w-3.5 text-primary" /><span>Added to watchlist</span></>}
             {item.type === 'daily_pick' && <><Sparkles className="h-3.5 w-3.5 text-accent" /><span>Today&apos;s pick</span></>}
             <span>·</span>
@@ -228,12 +232,12 @@ function ActivityCard({ item, onToggleLike, onRemove }: {
                   {meta.year && <p className="text-xs text-muted-foreground">{meta.year}</p>}</>
               : <><div className="h-4 bg-muted rounded-full w-3/4 animate-pulse" /><div className="h-3 bg-muted rounded-full w-1/4 animate-pulse mt-1" /></>
             }
-            {item.type === 'rated' && item.rating !== undefined && (
+            {item.type === 'activity' && item.rating !== undefined && (
               <div className="flex items-center gap-1 text-yellow-400 font-bold text-sm bg-yellow-400/10 w-fit px-2.5 py-0.5 rounded-full">
                 <Star className="h-3.5 w-3.5 fill-current" />{item.rating} / 10
               </div>
             )}
-            {item.type === 'reviewed' && item.reviewBody && (
+            {item.type === 'activity' && item.reviewBody && (
               <SpoilerWrap isSpoiler={item.containsSpoiler}>
                 <p className="text-xs text-muted-foreground line-clamp-2 italic leading-relaxed">
                   &ldquo;{item.reviewBody}&rdquo;
@@ -448,8 +452,7 @@ export default function SocialPage() {
   const { user, loading: authLoading } = useAuth();
   const [tab, setTab] = useState<Tab>('activity');
 
-  // Activity: merged my + friends
-  const [myLocalFeed, setMyLocalFeed] = useState<ActivityEntry[]>([]);
+  // Activity feed (server-fed: my activity + the people I follow)
   const [friendFeed, setFriendFeed] = useState<FeedItem[]>([]);
   const [activityLoading, setActivityLoading] = useState(false);
 
@@ -457,18 +460,6 @@ export default function SocialPage() {
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [notifLoading, setNotifLoading] = useState(false);
-
-  // Load local feed — refresh on storage changes (other tabs) and DB restore (cross-device sync)
-  useEffect(() => {
-    setMyLocalFeed(getFeed());
-    const handler = () => setMyLocalFeed(getFeed());
-    window.addEventListener('storage', handler);
-    window.addEventListener('cinephilers-db-restored', handler);
-    return () => {
-      window.removeEventListener('storage', handler);
-      window.removeEventListener('cinephilers-db-restored', handler);
-    };
-  }, []);
 
   const loadActivity = useCallback(async () => {
     if (!user) return;
@@ -533,7 +524,6 @@ export default function SocialPage() {
   useEffect(() => {
     const onVisible = () => {
       if (!user || document.visibilityState !== 'visible') return;
-      setMyLocalFeed(getFeed());
       loadActivity();
       loadNotifications();
     };
@@ -553,75 +543,36 @@ export default function SocialPage() {
     }
   }, [tab, unreadCount]);
 
-  // Build merged + sorted activity list
+  // The feed is entirely server-fed now (the server merges each film's watched
+  // + rated + reviewed into one 'activity' card and includes my own activity),
+  // so there's no local/server merge — just map, dismiss-filter, and sort.
   const mergedActivity: UnifiedItem[] = React.useMemo(() => {
     const dismissed = new Set(getDismissed());
-    // Films the server feed already shows as a rewatch by us — drop the local
-    // "watched" entry for those so a rewatch doesn't appear as both.
-    const myRewatchedIds = new Set(
-      friendFeed.filter(f => f.type === 'rewatched' && f.user.username === user?.username).map(f => f.tmdbId)
-    );
-    // Like data for our own cards comes from the server feed's copy of them
-    // (local log entries know nothing about likes).
-    const ownLikeData = new Map(
-      friendFeed.filter(f => f.user.username === user?.username)
-        .map(f => [`${f.type}-${f.tmdbId}`, { likeCount: f.likeCount ?? 0, likedByMe: f.likedByMe ?? false }])
-    );
-    const myItems: UnifiedItem[] = myLocalFeed
-      .filter(e => !dismissed.has(`${e.action}-${e.contentId}`))
-      .filter(e => !(e.action === 'watched' && myRewatchedIds.has(e.contentId)))
-      // Watchlist is now a server-fed activity (collapsed + likeable), so it no
-      // longer comes from the local log — the server copy of my own adds shows.
-      .filter(e => e.action !== 'watchlist')
-      .map(e => ({
-      id: `me-${e.id}`,
-      localId: e.id,
-      isMe: true,
-      type: e.action as UnifiedItem['type'],
-      user: { username: user?.username ?? '', displayName: user?.displayName ?? null, avatarUrl: user?.avatarUrl ?? null },
-      tmdbId: e.contentId,
-      meta: e.contentTitle ? { title: e.contentTitle, year: e.contentYear, poster: e.contentPoster } : undefined,
-      rating: e.rating,
-      likes: e.likes,
-      ...(ownLikeData.get(`${e.action}-${e.contentId}`) ?? {}),
-      createdAt: e.timestamp,
-    }));
-
-    // The server feed includes our own activity; skip entries already shown from the local log
-    const localKeys = new Set(myItems.map(i => `${i.type}-${i.tmdbId}`));
-    const friendItems: UnifiedItem[] = friendFeed
-      .filter(f => {
-        if (f.user.username !== user?.username) return true;
-        const k = `${f.type}-${f.tmdbId}`;
-        return !localKeys.has(k) && !dismissed.has(k);
-      })
+    return friendFeed
+      .filter(f => !dismissed.has(`${f.type}-${f.tmdbId}`))
       .map(f => ({
-      id: f.id,
-      // Own server-fed items (rewatches live ONLY in the server feed — diary
-      // data never mirrors to localStorage) still belong to us: without this
-      // flag they'd render without the three-dots menu.
-      isMe: f.user.username === user?.username,
-      type: f.type,
-      user: f.user,
-      tmdbId: f.tmdbId,
-      rating: f.rating,
-      reviewBody: f.reviewBody,
-      containsSpoiler: f.containsSpoiler,
-      importPlatform: f.importPlatform,
-      importCount: f.importCount,
-      batchCount: f.batchCount,
-      batchTmdbIds: f.batchTmdbIds,
-      likeCount: f.likeCount,
-      likedByMe: f.likedByMe,
-      createdAt: f.createdAt,
-    }));
+        id: f.id,
+        isMe: f.user.username === user?.username,
+        type: f.type,
+        user: f.user,
+        tmdbId: f.tmdbId,
+        watched: f.watched,
+        rating: f.rating,
+        reviewBody: f.reviewBody,
+        containsSpoiler: f.containsSpoiler,
+        importPlatform: f.importPlatform,
+        importCount: f.importCount,
+        batchCount: f.batchCount,
+        batchTmdbIds: f.batchTmdbIds,
+        likeCount: f.likeCount,
+        likedByMe: f.likedByMe,
+        createdAt: f.createdAt,
+      }))
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  }, [friendFeed, user]);
 
-    return [...myItems, ...friendItems].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-  }, [myLocalFeed, friendFeed, user]);
-
-  // Toggle a like on any activity card. The server answers with the new state
-  // + count; we write it into the friendFeed copy (source of truth for like
-  // data) so the memo re-renders every view of that card consistently.
+  // Toggle a like; the server returns the new state + count, written back into
+  // friendFeed (the single source of truth) so every view re-renders.
   const likeBusy = useRef(new Set<string>());
   const handleToggleLike = async (item: UnifiedItem) => {
     const key = `${item.user.username}:${item.type}:${item.tmdbId}`;
@@ -636,52 +587,24 @@ export default function SocialPage() {
       if (!res.ok) return;
       const json = await res.json();
       const { liked, count } = json.data as { liked: boolean; count: number };
-      setFriendFeed(prev => {
-        const hasEntry = prev.some(f => f.user.username === item.user.username && f.type === item.type && f.tmdbId === item.tmdbId);
-        const updated = prev.map(f =>
-          f.user.username === item.user.username && f.type === item.type && f.tmdbId === item.tmdbId
-            ? { ...f, likedByMe: liked, likeCount: count }
-            : f
-        );
-        // Own local-only cards have no server-feed copy to carry the like data —
-        // append a synthetic hidden carrier so ownLikeData picks it up.
-        return hasEntry ? updated : [...updated, {
-          id: `like-carrier-${key}`,
-          type: item.type as FeedItem['type'],
-          user: { id: '', username: item.user.username, displayName: item.user.displayName, avatarUrl: item.user.avatarUrl },
-          tmdbId: item.tmdbId,
-          mediaType: '',
-          createdAt: item.createdAt,
-          likeCount: count,
-          likedByMe: liked,
-        }];
-      });
+      setFriendFeed(prev => prev.map(f =>
+        f.user.username === item.user.username && f.type === item.type && f.tmdbId === item.tmdbId
+          ? { ...f, likedByMe: liked, likeCount: count }
+          : f
+      ));
     } catch { /* ignore */ }
     finally { likeBusy.current.delete(key); }
   };
+
   const handleRemove = (item: UnifiedItem) => {
-    const action = item.type;
-    // Local-log entries (watched/rated/reviewed/watchlist logged on this device)
-    if (item.localId) {
-      const entry = myLocalFeed.find(e => e.id === item.localId);
-      if (!entry) return;
-      dismissActivity(entry.action, entry.contentId);
-      removeActivity(entry.action, entry.contentId);
-      setMyLocalFeed(getFeed());
-    } else {
-      // Server-fed own items (rewatches, activity from other devices): dismiss
-      // locally and drop from the fetched feed right away.
-      dismissActivity(action, item.tmdbId);
-      setFriendFeed(prev => prev.filter(f => !(f.type === item.type && f.tmdbId === item.tmdbId && f.user.username === user?.username)));
-    }
-    // Persist server-side so the activity stays hidden on every device. All feed
-    // types (incl. watchlist now) are server-fed and hideable; the batch card
-    // has no menu so it never reaches here.
+    // Dismiss locally for instant removal, then persist the hide server-side.
+    dismissActivity(item.type, item.tmdbId);
+    setFriendFeed(prev => prev.filter(f => !(f.type === item.type && f.tmdbId === item.tmdbId && f.user.username === user?.username)));
     if (item.tmdbId) {
       fetchWithAuth('/api/feed/hidden', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ type: action, tmdbId: item.tmdbId }),
+        body: JSON.stringify({ type: item.type, tmdbId: item.tmdbId }),
       }).catch(() => {});
     }
   };
@@ -754,7 +677,7 @@ export default function SocialPage() {
       {/* Activity tab */}
       {tab === 'activity' && (
         <>
-          {activityLoading && friendFeed.length === 0 && myLocalFeed.length === 0 && (
+          {activityLoading && friendFeed.length === 0 && (
             <div className="space-y-4">
               {[1, 2, 3].map(i => (
                 <div key={i} className="bg-card rounded-3xl border border-border p-5 space-y-4">

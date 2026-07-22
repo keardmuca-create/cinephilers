@@ -3,7 +3,7 @@ import { prisma } from '@/lib/db';
 import { ok, err } from '@/lib/api-response';
 import { getCurrentUser } from '@/lib/auth-utils';
 
-const TYPES = ['watched', 'rewatched', 'rated', 'reviewed', 'watchlist'];
+const TYPES = ['activity', 'rewatched', 'watchlist', 'watched', 'rated', 'reviewed'];
 
 export async function POST(req: NextRequest) {
   const auth = await getCurrentUser(req);

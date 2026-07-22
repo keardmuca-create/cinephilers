@@ -6,10 +6,12 @@ import { clampInt } from '@/lib/query-params';
 
 export interface FeedItem {
   id: string;
-  type: 'watched' | 'rewatched' | 'rated' | 'reviewed' | 'imported' | 'watchlist' | 'watchlist_batch' | 'daily_pick';
+  // 'activity' = a single film's watched + rated + reviewed folded into one card.
+  type: 'activity' | 'rewatched' | 'imported' | 'watchlist' | 'watchlist_batch' | 'daily_pick';
   user: { id: string; username: string; displayName: string | null; avatarUrl: string | null };
   tmdbId: string;
   mediaType: string;
+  watched?: boolean;
   rating?: number;
   reviewBody?: string;
   containsSpoiler?: boolean;
@@ -160,6 +162,50 @@ export async function GET(req: NextRequest) {
     }
   }
 
+  // Fold each film's watched + rated + reviewed by the same user into ONE
+  // "activity" card, so watching + rating + reviewing a film is a single entry
+  // instead of three (the flood). Rewatches, watchlist, imports stay separate.
+  type Acc = {
+    user: { id: string; username: string; displayName: string | null; avatarUrl: string | null };
+    tmdbId: string; mediaType: string;
+    watched?: boolean; rating?: number; reviewBody?: string; containsSpoiler?: boolean;
+    latest: number;
+  };
+  const activityMap = new Map<string, Acc>();
+  const accKey = (uid: string, tmdbId: string, mt: string) => `${uid}:${tmdbId}:${mt}`;
+  const bump = (a: Acc, t: Date) => { a.latest = Math.max(a.latest, t.getTime()); };
+
+  for (const w of watched) {
+    if (rewatchKeys.has(`${w.user.id}:${w.tmdbId}:${w.mediaType}`)) continue; // rewatch card owns it
+    const k = accKey(w.user.id, w.tmdbId, w.mediaType);
+    const a = activityMap.get(k) ?? { user: w.user, tmdbId: w.tmdbId, mediaType: w.mediaType, latest: 0 };
+    a.watched = true; bump(a, w.watchedAt); activityMap.set(k, a);
+  }
+  for (const r of ratings) {
+    if (nearImport(r.user.id, r.updatedAt)) continue;
+    const k = accKey(r.user.id, r.tmdbId, r.mediaType);
+    const a = activityMap.get(k) ?? { user: r.user, tmdbId: r.tmdbId, mediaType: r.mediaType, latest: 0 };
+    a.rating = r.score; bump(a, r.updatedAt); activityMap.set(k, a);
+  }
+  for (const r of reviews) {
+    if (nearImport(r.user.id, r.createdAt)) continue;
+    const k = accKey(r.user.id, r.tmdbId, r.mediaType);
+    const a = activityMap.get(k) ?? { user: r.user, tmdbId: r.tmdbId, mediaType: r.mediaType, latest: 0 };
+    a.reviewBody = r.body; a.containsSpoiler = r.containsSpoiler; bump(a, r.createdAt); activityMap.set(k, a);
+  }
+  const activityItems: FeedItem[] = [...activityMap.values()].map(a => ({
+    id: `activity-${a.user.id}-${a.tmdbId}-${a.mediaType}`,
+    type: 'activity' as const,
+    user: a.user,
+    tmdbId: a.tmdbId,
+    mediaType: a.mediaType,
+    watched: a.watched,
+    rating: a.rating,
+    reviewBody: a.reviewBody,
+    containsSpoiler: a.containsSpoiler,
+    createdAt: new Date(a.latest).toISOString(),
+  }));
+
   const items: FeedItem[] = [
     ...watchlistItems,
     ...dailyPicks.map(p => ({
@@ -170,43 +216,13 @@ export async function GET(req: NextRequest) {
       mediaType: p.mediaType,
       createdAt: p.createdAt.toISOString(),
     })),
-    ...watched
-      .filter(w => !rewatchKeys.has(`${w.user.id}:${w.tmdbId}:${w.mediaType}`))
-      .map(w => ({
-        id: `watched-${w.id}`,
-        type: 'watched' as const,
-        user: w.user,
-        tmdbId: w.tmdbId,
-        mediaType: w.mediaType,
-        createdAt: w.watchedAt.toISOString(),
-      })),
+    ...activityItems,
     ...rewatches.map(r => ({
       id: `rewatched-${r.id}`,
       type: 'rewatched' as const,
       user: r.user,
       tmdbId: r.tmdbId,
       mediaType: r.mediaType,
-      createdAt: r.createdAt.toISOString(),
-    })),
-    ...ratings
-      .filter(r => !nearImport(r.user.id, r.updatedAt))
-      .map(r => ({
-        id: `rated-${r.id}`,
-        type: 'rated' as const,
-        user: r.user,
-        tmdbId: r.tmdbId,
-        mediaType: r.mediaType,
-        rating: r.score,
-        createdAt: r.updatedAt.toISOString(),
-      })),
-    ...reviews.filter(r => !nearImport(r.user.id, r.createdAt)).map(r => ({
-      id: `reviewed-${r.id}`,
-      type: 'reviewed' as const,
-      user: r.user,
-      tmdbId: r.tmdbId,
-      mediaType: r.mediaType,
-      reviewBody: r.body,
-      containsSpoiler: r.containsSpoiler,
       createdAt: r.createdAt.toISOString(),
     })),
     ...imports.map(i => ({
