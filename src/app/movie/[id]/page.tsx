@@ -22,7 +22,8 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Badge } from '@/components/ui/badge';
 import { toast } from '@/hooks/use-toast';
 import { appendWatchLog, removeFromWatchLog, saveMovieRating, ensureSignupDate } from '@/lib/badges';
-import { recordAddedAt, recordWatchedAt, recordManualWatch, removeManualWatch, legacyTwin } from '@/lib/media-id';
+import { recordAddedAt, recordWatchedAt, recordManualWatch, removeManualWatch, legacyTwin, parseEpisodeId } from '@/lib/media-id';
+import { EpisodePage } from '@/components/episode-page';
 import { RatingSheet } from '@/components/rating-sheet';
 import { logActivity, removeActivity, relativeTime } from '@/lib/activity';
 import { useAuth } from '@/contexts/auth-context';
@@ -927,7 +928,17 @@ function FriendsRatings({ tmdbId }: { tmdbId: string }) {
 
 // ─── Main page ────────────────────────────────────────────────────────────────
 
+// This route serves every media id, so an episode id (`tmdb-tv-{n}-S{s}E{e}`)
+// renders the full episode page instead. That keeps episode links from watch
+// history / ratings working and gives episodes a shareable URL of their own.
 export default function MovieDetailPage() {
+  const { id } = useParams<{ id: string }>();
+  const ep = parseEpisodeId(id);
+  if (ep) return <EpisodePage showTmdbId={ep.showId} season={ep.season} episodeNumber={ep.episode} />;
+  return <MovieDetailInner />;
+}
+
+function MovieDetailInner() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
 
@@ -1713,7 +1724,7 @@ export default function MovieDetailPage() {
             showTmdbId={showTmdbId}
             watchedEpisodes={watchedEpisodes}
             onToggleEpisodeWatched={toggleEpisodeWatched}
-            onEpisodeClick={(ep, seasonNumber) => setEpisodeModal({ ep, seasonNumber })}
+            onEpisodeClick={(ep, seasonNumber) => router.push(`/movie/${movie.id}-S${seasonNumber}E${ep.episode_number}`)}
           />
         )}
 

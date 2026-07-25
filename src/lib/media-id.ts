@@ -17,6 +17,24 @@ export function isValidMediaId(id: string): boolean {
   return /^tmdb-(?:tv-)?\d{1,10}$/.test(id);
 }
 
+// An individual episode id: `tmdb-tv-{n}-S{s}E{e}`.
+export function isEpisodeId(id: string): boolean {
+  return /^tmdb-tv-\d{1,10}-S\d{1,3}E\d{1,4}$/.test(id);
+}
+
+// Ids that may carry a rating or a review — films, shows, AND single episodes.
+// Deliberately broader than isValidMediaId: you rate one episode, but you
+// watchlist/favourite/daily-pick a whole show, so those stay strict.
+export function isRateableMediaId(id: string): boolean {
+  return isValidMediaId(id) || isEpisodeId(id);
+}
+
+// Parse an episode id into its parts, or null if it isn't one.
+export function parseEpisodeId(id: string): { showId: string; season: number; episode: number } | null {
+  const m = id.match(/^(tmdb-tv-\d{1,10})-S(\d{1,3})E(\d{1,4})$/);
+  return m ? { showId: m[1], season: Number(m[2]), episode: Number(m[3]) } : null;
+}
+
 // The bare-numeric legacy id for a canonical movie id, or null if there isn't one.
 // `tmdb-262504` → `262504`; `tmdb-tv-123` / episode ids → null.
 export function legacyTwin(id: string): string | null {

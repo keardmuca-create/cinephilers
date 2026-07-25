@@ -7,6 +7,7 @@ import {
   ChevronLeft, ChevronRight, Check,
 } from 'lucide-react';
 import { EpisodeDetail, TvEpisode } from '@/lib/types';
+import { fetchWithAuth } from '@/lib/fetch-with-auth';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarImage } from '@/components/ui/avatar';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -174,20 +175,33 @@ export function EpisodeModal({ showTmdbId, seasonNumber, episode, showTitle, isW
   const [playTrailer, setPlayTrailer] = useState(false);
   const [lightboxIdx, setLightboxIdx] = useState<number | null>(null);
 
-  const ratingKey = `ep-rating-${showTmdbId}-S${seasonNumber}E${episode.episode_number}`;
+  // Canonical episode id — the same shape the rest of the app uses, so the
+  // rating lands in the normal Ratings table and shows up under the
+  // "TV Episode" type filter alongside films.
+  const episodeId = `${showTmdbId}-S${seasonNumber}E${episode.episode_number}`;
+  const ratingKey = `movie-rating-${episodeId}`;
 
-  // Load persisted rating
+  // Load persisted rating (older builds stored it under an ep-rating- key)
   useEffect(() => {
     try {
-      const v = localStorage.getItem(ratingKey);
+      const legacyKey = `ep-rating-${showTmdbId}-S${seasonNumber}E${episode.episode_number}`;
+      const v = localStorage.getItem(ratingKey) ?? localStorage.getItem(legacyKey);
       if (v) setUserRating(parseInt(v, 10));
     } catch { /* ignore */ }
-  }, [ratingKey]);
+  }, [ratingKey, showTmdbId, seasonNumber, episode.episode_number]);
 
+  // Save locally for instant feedback, then persist to the server so the rating
+  // survives a device change and counts on the profile (it used to be
+  // localStorage-only, so episode ratings vanished on any other device).
   const handleRating = useCallback((v: number) => {
     setUserRating(v);
     try { localStorage.setItem(ratingKey, String(v)); } catch { /* ignore */ }
-  }, [ratingKey]);
+    fetchWithAuth('/api/ratings', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ tmdbId: episodeId, mediaType: 'SHOW', score: v }),
+    }).catch(() => { /* background sync */ });
+  }, [ratingKey, episodeId]);
 
   // Fetch episode detail
   useEffect(() => {
