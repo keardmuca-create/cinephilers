@@ -197,9 +197,9 @@ export function EpisodePage({ showTmdbId, season, episodeNumber }: {
   const people = [...(detail?.cast ?? []), ...(detail?.guestStars ?? [])];
 
   if (loading && !detail) return (
-    <main className="max-w-3xl mx-auto pb-32">
-      <Skeleton className="w-full aspect-video" />
-      <div className="px-5 pt-5 space-y-3">
+    <main className="min-h-screen pb-32 bg-background">
+      <Skeleton className="w-full h-[50vh]" />
+      <div className="px-6 pt-6 space-y-3">
         <Skeleton className="h-4 w-32" />
         <Skeleton className="h-7 w-2/3" />
         <Skeleton className="h-4 w-1/2" />
@@ -208,9 +208,10 @@ export function EpisodePage({ showTmdbId, season, episodeNumber }: {
   );
 
   return (
-    <main className="max-w-3xl mx-auto pb-32">
-      {/* Hero */}
-      <div className="relative w-full aspect-video bg-muted">
+    <main className="min-h-screen pb-32 bg-background">
+      {/* Hero — mirrors the film page: still as backdrop, trailer overlay when
+          TMDB has one, back + share as white circles over the image. */}
+      <section className="relative w-full h-[50vh] bg-black">
         {playTrailer && trailer ? (
           <iframe
             src={`https://www.youtube.com/embed/${trailer.key}?autoplay=1`}
@@ -222,32 +223,39 @@ export function EpisodePage({ showTmdbId, season, episodeNumber }: {
         ) : (
           <>
             {still
-              ? <Image src={still} alt={detail?.name ?? ''} fill className="object-cover" sizes="100vw" priority />
+              ? <Image src={still} alt={detail?.name ?? ''} fill className="object-cover opacity-60" priority />
               : <div className="w-full h-full flex items-center justify-center"><Clapperboard className="h-10 w-10 text-primary/50" /></div>
             }
+            <div className="absolute inset-0 bg-gradient-to-t from-background via-transparent to-transparent" />
+
             {trailer && (
               <button
                 onClick={() => setPlayTrailer(true)}
-                className="absolute inset-0 flex items-center justify-center bg-black/30 hover:bg-black/45 transition-colors"
-                aria-label="Play trailer"
+                className="absolute inset-0 flex items-center justify-center cursor-pointer group"
+                aria-label="Watch trailer"
               >
-                <span className="h-14 w-14 rounded-full bg-white/95 flex items-center justify-center">
-                  <Play className="h-6 w-6 text-black ml-0.5" />
+                <span className="flex flex-col items-center gap-4 transition-transform active:scale-95">
+                  <span className="h-20 w-20 rounded-full bg-white flex items-center justify-center shadow-2xl group-hover:bg-white/90 group-hover:scale-110 transition-all">
+                    <Play className="h-10 w-10 fill-black text-black ml-1" />
+                  </span>
+                  <span className="text-sm font-bold tracking-widest uppercase text-white/80 group-hover:text-white">Watch Trailer</span>
                 </span>
               </button>
             )}
           </>
         )}
-        <button
-          onClick={() => router.back()}
-          aria-label="Go back"
-          className="absolute top-3 left-3 h-9 w-9 rounded-full bg-black/60 text-white flex items-center justify-center hover:bg-black/80 transition-colors"
-        >
-          <ChevronLeft className="h-5 w-5" />
-        </button>
-      </div>
 
-      <div className="px-5 pt-5 space-y-6">
+        <header className="absolute top-0 left-0 right-0 px-6 pb-6 pt-[calc(env(safe-area-inset-top)+1.5rem)] flex justify-between items-center z-20">
+          <Button variant="outline" size="icon" className="rounded-full bg-white text-black border-white/80 hover:bg-white/90" onClick={() => router.back()}>
+            <ChevronLeft className="h-6 w-6" />
+          </Button>
+          <Button variant="outline" size="icon" className="rounded-full bg-white text-black border-white/80 hover:bg-white/90" onClick={share} aria-label="Share">
+            <Share2 className="h-5 w-5" />
+          </Button>
+        </header>
+      </section>
+
+      <div className="px-6 pt-6 space-y-8">
         {/* Title block */}
         <div className="space-y-2">
           <div className="flex items-center gap-2 flex-wrap">
@@ -267,62 +275,70 @@ export function EpisodePage({ showTmdbId, season, episodeNumber }: {
               </span>
             )}
             {!!detail?.runtime && <span className="flex items-center gap-1.5"><Clock className="h-4 w-4 text-primary" />{detail.runtime} min</span>}
-            {!!detail?.vote_average && detail.vote_average > 0 && (
-              <span className="flex items-center gap-1.5">
-                <Star className="h-4 w-4 fill-primary text-primary" />
-                <span className="font-bold text-foreground">{detail.vote_average.toFixed(1)}</span>
-                <span className="text-xs">({detail.vote_count} votes)</span>
-              </span>
-            )}
           </div>
         </div>
 
-        {/* Cinephilers community score */}
-        {cineRating?.hasEnough && cineRating.average != null && (
-          <div className="flex items-center gap-2 bg-muted/50 border border-border rounded-2xl px-4 py-3 w-fit">
-            <Star className="h-4 w-4 fill-yellow-400 text-yellow-400" />
-            <span className="font-bold">{cineRating.average.toFixed(1)}</span>
-            <span className="text-xs text-muted-foreground">Cinephilers · {cineRating.count} ratings</span>
-          </div>
-        )}
+        {detail?.overview && <p className="text-base text-foreground/80 leading-relaxed">{detail.overview}</p>}
 
-        {detail?.overview && <p className="text-sm text-foreground/80 leading-relaxed">{detail.overview}</p>}
-
-        {/* Actions */}
-        <div className="flex flex-wrap gap-2.5">
+        {/* Actions — same shape and weight as the film page buttons */}
+        <div className="flex flex-col md:flex-row gap-3">
           <Button
-            onClick={toggleWatched}
             variant={watched ? 'default' : 'outline'}
-            className="rounded-xl font-bold gap-2"
+            className={`h-14 px-8 rounded-2xl font-bold w-full md:w-auto text-base transition-all ${watched ? 'bg-accent border-accent' : 'border-2 border-foreground bg-background text-foreground'}`}
+            onClick={toggleWatched}
           >
-            {watched ? <Check className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-            {watched ? 'Watched' : 'Mark watched'}
-          </Button>
-          <Button onClick={() => (authUser ? setRateOpen(true) : toast({ title: 'Sign in to rate' }))} variant="outline" className="rounded-xl font-bold gap-2">
-            <Star className={`h-4 w-4 ${userRating ? 'fill-yellow-400 text-yellow-400' : ''}`} />
-            {userRating ? `${userRating}/10` : 'Rate'}
+            {watched ? <Check className="h-5 w-5 mr-2" /> : <Eye className="h-5 w-5 mr-2" />}
+            {watched ? 'Watched' : 'Mark Watched'}
           </Button>
           <Button
+            variant="outline"
+            className="h-14 px-8 rounded-2xl font-bold w-full md:w-auto text-base border-2 border-foreground bg-background text-foreground"
             onClick={() => {
               if (!authUser) { toast({ title: 'Sign in to review' }); return; }
               setDraftReview(myReview?.body ?? '');
               setDraftSpoiler(myReview?.containsSpoiler ?? false);
               setReviewOpen(true);
             }}
-            variant="outline"
-            className="rounded-xl font-bold gap-2"
           >
-            <MessageSquare className="h-4 w-4" />{myReview ? 'Edit review' : 'Review'}
-          </Button>
-          <Button onClick={share} variant="outline" className="rounded-xl font-bold gap-2">
-            <Share2 className="h-4 w-4" />Share
+            <MessageSquare className="h-5 w-5 mr-2" />{myReview ? 'Edit Review' : 'Review'}
           </Button>
         </div>
+
+        {/* Rating card — Cinephilers score once enough people have voted,
+            otherwise TMDB's, exactly like the film page. */}
+        {(() => {
+          const useCine = cineRating?.hasEnough && cineRating.average != null;
+          const score = useCine ? cineRating!.average! : (detail?.vote_average ?? 0);
+          const count = useCine ? cineRating!.count : (detail?.vote_count ?? 0);
+          if (!score) return null;
+          return (
+            <section className="bg-muted/50 border border-border rounded-3xl px-6 py-5 flex items-center justify-between gap-4">
+              <div className="space-y-3 min-w-0">
+                <h3 className="text-sm font-bold uppercase tracking-widest text-muted-foreground">{useCine ? 'Cinephilers Rating' : 'TMDB Rating'}</h3>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-5xl font-black font-headline text-foreground">{score.toFixed(1)}</span>
+                    <Star className="h-7 w-7 fill-yellow-400 text-yellow-400" />
+                  </div>
+                  <div className="text-xs text-muted-foreground font-bold mt-1.5">{count.toLocaleString()} ratings</div>
+                </div>
+              </div>
+              <Button
+                variant="outline"
+                onClick={() => { if (!authUser) { toast({ title: 'Sign in to rate' }); return; } setRateOpen(true); }}
+                className="rounded-full border-border font-bold shrink-0"
+              >
+                <Star className={`h-4 w-4 mr-2 ${userRating > 0 ? 'fill-yellow-400 text-yellow-400' : ''}`} />
+                {userRating > 0 ? `Your rating: ${userRating}/10` : 'Rate this'}
+              </Button>
+            </section>
+          );
+        })()}
 
         {/* Your review */}
         {myReview && (
           <section className="space-y-2">
-            <h2 className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Your review</h2>
+            <h3 className="text-xl font-headline font-bold flex items-center gap-2"><MessageSquare className="h-5 w-5 text-primary" /> Your review</h3>
             <div className="bg-card border border-border rounded-2xl p-4">
               <SpoilerWrap isSpoiler={myReview.containsSpoiler}>
                 <p className="text-sm text-muted-foreground italic leading-relaxed">&ldquo;{myReview.body}&rdquo;</p>
@@ -334,7 +350,7 @@ export function EpisodePage({ showTmdbId, season, episodeNumber }: {
         {/* Friends' ratings */}
         {friends.length > 0 && (
           <section className="space-y-3">
-            <h2 className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Friends&apos; ratings</h2>
+            <h3 className="text-xl font-headline font-bold flex items-center gap-2"><Users className="h-5 w-5 text-primary" /> Friends</h3>
             <div className="flex gap-4 overflow-x-auto no-scrollbar">
               {friends.map(f => (
                 <Link key={f.username} href={`/profile/${f.username}`} className="flex flex-col items-center gap-1.5 shrink-0 w-16 group">
@@ -356,9 +372,9 @@ export function EpisodePage({ showTmdbId, season, episodeNumber }: {
         {/* Cast & guest stars */}
         {people.length > 0 && (
           <section className="space-y-3">
-            <h2 className="text-xs font-bold uppercase tracking-widest text-muted-foreground flex items-center gap-2">
-              <Users className="h-4 w-4 text-primary" />Cast &amp; guest stars
-            </h2>
+            <h3 className="text-xl font-headline font-bold flex items-center gap-2">
+              <Users className="h-5 w-5 text-primary" /> Cast &amp; Guest Stars
+            </h3>
             <div className="flex gap-4 overflow-x-auto no-scrollbar pb-1">
               {people.map((p, i) => (
                 <Link key={`${p.id}-${i}`} href={`/person/${p.id}`} className="flex flex-col items-center gap-1.5 shrink-0 w-20 group">
@@ -376,9 +392,9 @@ export function EpisodePage({ showTmdbId, season, episodeNumber }: {
         {/* Crew */}
         {(detail?.crew?.length ?? 0) > 0 && (
           <section className="space-y-3">
-            <h2 className="text-xs font-bold uppercase tracking-widest text-muted-foreground flex items-center gap-2">
-              <Clapperboard className="h-4 w-4 text-primary" />Crew
-            </h2>
+            <h3 className="text-xl font-headline font-bold flex items-center gap-2">
+              <Clapperboard className="h-5 w-5 text-primary" /> Crew
+            </h3>
             <div className="grid grid-cols-2 gap-2">
               {detail!.crew.slice(0, 8).map((c, i) => (
                 <div key={i} className="bg-card border border-border rounded-xl px-3.5 py-2.5">

@@ -175,13 +175,15 @@ function RatingsPageInner() {
   // Options for the Type / Genre filters, computed from the rated items.
   const typeOptions = useMemo<CountOption[]>(() => {
     const withTitle = items.filter(i => i.title);
+    if (withTitle.length === 0) return [];
     const counts = new Map<TypeFilter, number>();
     for (const it of withTitle) counts.set(it.kind, (counts.get(it.kind) ?? 0) + 1);
-    const present = TYPE_ORDER.filter(t => t !== 'any' && (counts.get(t) ?? 0) > 0);
-    if (present.length <= 1) return [];
+    // Always list every type (TV Series, TV Episode, TV Movie, Short, …) rather
+    // than only the ones already rated — the full set makes it obvious what can
+    // be filtered, and counts show which are empty.
     return [
       { value: 'any', label: 'Any', count: withTitle.length },
-      ...present.map(t => ({ value: t, label: TYPE_LABELS[t], count: counts.get(t)! })),
+      ...TYPE_ORDER.filter(t => t !== 'any').map(t => ({ value: t, label: TYPE_LABELS[t], count: counts.get(t) ?? 0 })),
     ];
   }, [items]);
 
