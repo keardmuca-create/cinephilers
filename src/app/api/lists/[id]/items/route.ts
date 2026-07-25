@@ -3,7 +3,7 @@ import { prisma } from '@/lib/db';
 import { ok, err } from '@/lib/api-response';
 import { getCurrentUser } from '@/lib/auth-utils';
 import { MediaType } from '@/generated/prisma/client';
-import { canonicalId, isValidMediaId } from '@/lib/media-id';
+import { canonicalId, isRateableMediaId } from '@/lib/media-id';
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const auth = await getCurrentUser(req);
@@ -22,7 +22,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   if (!['MOVIE', 'SHOW'].includes(mediaType)) return err('mediaType must be MOVIE or SHOW');
   if (note && note.length > 500) return err('Note must be under 500 characters');
   const tmdbId = canonicalId(String(rawId));
-  if (!isValidMediaId(tmdbId)) return err('Invalid tmdbId');
+  if (!isRateableMediaId(tmdbId)) return err('Invalid tmdbId');
 
   const existingItem = await prisma.customListItem.findUnique({
     where: { listId_tmdbId_mediaType: { listId, tmdbId, mediaType: mediaType as MediaType } },

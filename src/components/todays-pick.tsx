@@ -10,6 +10,7 @@ import { useAuth } from '@/contexts/auth-context';
 import { fetchWithAuth } from '@/lib/fetch-with-auth';
 import { seededShuffle } from '@/lib/seed-shuffle';
 import { batchFetchMeta } from '@/lib/meta-batch';
+import { isEpisodeId } from '@/lib/media-id';
 
 // Stable per-day seed so the pick can't be rerolled — same movie all day,
 // a new one tomorrow.
@@ -29,6 +30,7 @@ async function pickWatchlistId(): Promise<PickResult> {
       if (!k?.startsWith('watchlist-')) continue;
       const id = k.slice('watchlist-'.length);
       if (localStorage.getItem(`watched-${id}`) === 'true') continue; // exclude watched
+      if (isEpisodeId(id)) continue; // single episodes can be saved, but the day's pick is a film night
       ids.push(id);
     }
   } catch { /* ignore */ }

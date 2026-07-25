@@ -6,7 +6,7 @@ import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import {
   Star, Clock, Calendar, Check, Eye, ChevronLeft, Users, Clapperboard,
-  MessageSquare, Share2, Play, Loader2,
+  MessageSquare, Share2, Play, Loader2, Plus, ListPlus, Pencil,
 } from 'lucide-react';
 import { EpisodeDetail } from '@/lib/types';
 import { Button } from '@/components/ui/button';
@@ -19,7 +19,7 @@ import { useAuth } from '@/contexts/auth-context';
 import { fetchWithAuth } from '@/lib/fetch-with-auth';
 import { toast } from '@/hooks/use-toast';
 import { batchFetchMeta } from '@/lib/meta-batch';
-import { recordWatchedAt, recordManualWatch, removeManualWatch } from '@/lib/media-id';
+import { recordWatchedAt, recordManualWatch, removeManualWatch, recordAddedAt } from '@/lib/media-id';
 import { logActivity, removeActivity } from '@/lib/activity';
 import type { CinephilersRating } from '@/lib/cinephilers-rating';
 
@@ -47,8 +47,14 @@ export function EpisodePage({ showTmdbId, season, episodeNumber }: {
   const [reviewOpen, setReviewOpen] = useState(false);
   const [draftReview, setDraftReview] = useState('');
   const [draftSpoiler, setDraftSpoiler] = useState(false);
+  const [draftRating, setDraftRating] = useState(0);
+  const [hoverRating, setHoverRating] = useState(0);
   const [myReview, setMyReview] = useState<{ body: string; containsSpoiler: boolean } | null>(null);
   const [savingReview, setSavingReview] = useState(false);
+
+  const [inWatchlist, setInWatchlist] = useState(false);
+  const [listOpen, setListOpen] = useState(false);
+  const [lists, setLists] = useState<{ id: string; name: string }[]>([]);
 
   // The canonical episode id — the same shape used for ratings, the watch log
   // and watch history, so everything lines up across the app.
@@ -57,6 +63,10 @@ export function EpisodePage({ showTmdbId, season, episodeNumber }: {
   // The TMDB routes take the bare numeric show id; everything else (ids,
   // storage keys, links) uses the canonical `tmdb-tv-` form.
   const numericShowId = showTmdbId.replace('tmdb-tv-', '').replace('tmdb-', '');
+
+  const still = detail?.still_path ? `https://image.tmdb.org/t/p/w780${detail.still_path}` : null;
+  const trailer = detail?.trailers?.[0];
+  const people = [...(detail?.cast ?? []), ...(detail?.guestStars ?? [])];
 
   useEffect(() => {
     setLoading(true);
@@ -83,6 +93,7 @@ export function EpisodePage({ showTmdbId, season, episodeNumber }: {
   useEffect(() => {
     try {
       setWatched(localStorage.getItem(`watched-ep-${showTmdbId}-${epKey}`) === 'true');
+      setInWatchlist(!!localStorage.getItem(`watchlist-${episodeId}`));
       const legacy = localStorage.getItem(`ep-rating-${showTmdbId}-${epKey}`);
       const v = localStorage.getItem(`movie-rating-${episodeId}`) ?? legacy;
       if (v) setUserRating(parseInt(v, 10));
@@ -164,6 +175,62 @@ export function EpisodePage({ showTmdbId, season, episodeNumber }: {
       .catch(() => { /* ignore */ });
   }, [episodeId, detail, showMeta]);
 
+  // Episodes can be saved for later too — you might want one episode because a
+  // favourite actor guest-stars, or because the show is an anthology. Today's
+  // Pick deliberately skips them so the daily pick stays a film night.
+  const toggleWatchlist = useCallback(async () => {
+    if (!authUser) { toast({ title: 'Sign in to use your watchlist' }); return; }
+    const next = !inWatchlist;
+    try {
+      const res = next
+        ? await fetchWithAuth('/api/watchlist', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ tmdbId: episodeId, mediaType: 'SHOW' }) })
+        : await fetchWithAuth(`/api/watchlist/${episodeId}?mediaType=SHOW`, { method: 'DELETE' });
+      if (!res.ok) throw new Error();
+    } catch {
+      toast({ title: "Couldn't update your watchlist. Check your connection.", variant: 'destructive' });
+      return;
+    }
+    setInWatchlist(next);
+    try {
+      if (next) {
+        localStorage.setItem(`watchlist-${episodeId}`, JSON.stringify({ id: episodeId, title: detail?.name ?? '', poster: still ?? showMeta?.poster ?? '', year: detail?.air_date?.slice(0, 4) ?? '', type: 'show' }));
+        recordAddedAt(episodeId);
+      } else {
+        localStorage.removeItem(`watchlist-${episodeId}`);
+      }
+    } catch { /* ignore */ }
+    if (next) logActivity({ action: 'watchlist', contentId: episodeId, contentTitle: detail?.name ?? '', contentPoster: still ?? '', contentYear: '' });
+    else removeActivity('watchlist', episodeId);
+    toast({ title: next ? 'Added to watchlist' : 'Removed from watchlist' });
+  }, [authUser, inWatchlist, episodeId, detail, still, showMeta]);
+
+  const openLists = useCallback(async () => {
+    if (!authUser) { toast({ title: 'Sign in to use lists' }); return; }
+    setListOpen(true);
+    try {
+      const res = await fetchWithAuth('/api/lists');
+      if (res.ok) { const j = await res.json(); setLists((j.data ?? []).map((l: { id: string; name: string }) => ({ id: l.id, name: l.name }))); }
+    } catch { /* ignore */ }
+  }, [authUser]);
+
+  const addToList = async (listId: string) => {
+    try {
+      const res = await fetchWithAuth(`/api/lists/${listId}/items`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          tmdbId: episodeId, mediaType: 'SHOW',
+          title: detail?.name ?? '', poster: still ?? '', year: detail?.air_date?.slice(0, 4) ?? '',
+        }),
+      });
+      if (!res.ok) throw new Error();
+      setListOpen(false);
+      toast({ title: 'Added to list' });
+    } catch {
+      toast({ title: "Couldn't add to that list. Try again.", variant: 'destructive' });
+    }
+  };
+
   const submitReview = async () => {
     if (!draftReview.trim()) return;
     setSavingReview(true);
@@ -174,6 +241,8 @@ export function EpisodePage({ showTmdbId, season, episodeNumber }: {
         body: JSON.stringify({ tmdbId: episodeId, mediaType: 'SHOW', body: draftReview.trim(), containsSpoiler: draftSpoiler }),
       });
       if (!res.ok) { toast({ title: "Couldn't save your review. Try again.", variant: 'destructive' }); return; }
+      // Rate and review in one go, matching the film review dialog.
+      if (draftRating > 0 && draftRating !== userRating) await applyRating(draftRating);
       setMyReview({ body: draftReview.trim(), containsSpoiler: draftSpoiler });
       setReviewOpen(false);
       logActivity({ action: 'reviewed', contentId: episodeId, contentTitle: detail?.name ?? '', contentPoster: showMeta?.poster ?? '', contentYear: '' });
@@ -191,10 +260,6 @@ export function EpisodePage({ showTmdbId, season, episodeNumber }: {
       else { await navigator.clipboard.writeText(url); toast({ title: 'Link copied' }); }
     } catch { /* user cancelled */ }
   };
-
-  const still = detail?.still_path ? `https://image.tmdb.org/t/p/w780${detail.still_path}` : null;
-  const trailer = detail?.trailers?.[0];
-  const people = [...(detail?.cast ?? []), ...(detail?.guestStars ?? [])];
 
   if (loading && !detail) return (
     <main className="min-h-screen pb-32 bg-background">
@@ -280,8 +345,33 @@ export function EpisodePage({ showTmdbId, season, episodeNumber }: {
 
         {detail?.overview && <p className="text-base text-foreground/80 leading-relaxed">{detail.overview}</p>}
 
+        {/* Review strip — the same tappable prompt the film page uses */}
+        <button
+          onClick={() => {
+            if (!authUser) { toast({ title: 'Sign in to review' }); return; }
+            setDraftReview(myReview?.body ?? '');
+            setDraftSpoiler(myReview?.containsSpoiler ?? false);
+            setDraftRating(userRating);
+            setReviewOpen(true);
+          }}
+          className="w-full flex items-center gap-3 bg-muted/50 hover:bg-muted rounded-2xl px-5 py-4 text-left transition-colors"
+        >
+          <Pencil className="h-4 w-4 text-muted-foreground shrink-0" />
+          <span className="text-sm text-muted-foreground truncate">
+            {myReview ? `Your review: "${myReview.body.slice(0, 50)}${myReview.body.length > 50 ? '…' : ''}"` : `Share your thoughts on ${detail?.name ?? 'this episode'}…`}
+          </span>
+        </button>
+
         {/* Actions — same shape and weight as the film page buttons */}
         <div className="flex flex-col md:flex-row gap-3">
+          <Button
+            variant="outline"
+            className="h-14 px-8 rounded-2xl font-bold w-full md:w-auto text-base border-2 border-foreground bg-background text-foreground"
+            onClick={toggleWatchlist}
+          >
+            {inWatchlist ? <Check className="h-5 w-5 mr-2" /> : <Plus className="h-5 w-5 mr-2" />}
+            {inWatchlist ? 'In Watchlist' : 'Add to Watchlist'}
+          </Button>
           <Button
             variant={watched ? 'default' : 'outline'}
             className={`h-14 px-8 rounded-2xl font-bold w-full md:w-auto text-base transition-all ${watched ? 'bg-accent border-accent' : 'border-2 border-foreground bg-background text-foreground'}`}
@@ -293,14 +383,9 @@ export function EpisodePage({ showTmdbId, season, episodeNumber }: {
           <Button
             variant="outline"
             className="h-14 px-8 rounded-2xl font-bold w-full md:w-auto text-base border-2 border-foreground bg-background text-foreground"
-            onClick={() => {
-              if (!authUser) { toast({ title: 'Sign in to review' }); return; }
-              setDraftReview(myReview?.body ?? '');
-              setDraftSpoiler(myReview?.containsSpoiler ?? false);
-              setReviewOpen(true);
-            }}
+            onClick={openLists}
           >
-            <MessageSquare className="h-5 w-5 mr-2" />{myReview ? 'Edit Review' : 'Review'}
+            <ListPlus className="h-5 w-5 mr-2" /> Add to List
           </Button>
         </div>
 
@@ -375,14 +460,17 @@ export function EpisodePage({ showTmdbId, season, episodeNumber }: {
             <h3 className="text-xl font-headline font-bold flex items-center gap-2">
               <Users className="h-5 w-5 text-primary" /> Cast &amp; Guest Stars
             </h3>
-            <div className="flex gap-4 overflow-x-auto no-scrollbar pb-1">
+            <div className="flex gap-5 overflow-x-auto no-scrollbar pb-4">
               {people.map((p, i) => (
-                <Link key={`${p.id}-${i}`} href={`/person/${p.id}`} className="flex flex-col items-center gap-1.5 shrink-0 w-20 group">
-                  <Avatar className="h-16 w-16">
-                    {p.profileImage && <AvatarImage src={p.profileImage} alt={p.name} />}
-                  </Avatar>
-                  <span className="text-[11px] font-semibold text-center leading-tight line-clamp-2 group-hover:text-primary transition-colors">{p.name}</span>
-                  {p.role && <span className="text-[10px] text-muted-foreground text-center leading-tight line-clamp-1">{p.role}</span>}
+                <Link key={`${p.id}-${i}`} href={`/person/${p.id}`} className="shrink-0 w-36 group cursor-pointer block">
+                  <div className="relative aspect-[2/3] rounded-2xl overflow-hidden mb-2 group-hover:ring-2 ring-primary ring-offset-2 ring-offset-background transition-all bg-muted flex items-center justify-center">
+                    {p.profileImage
+                      ? <Image src={p.profileImage} alt={p.name} fill className="object-cover" sizes="144px" />
+                      : <Users className="h-12 w-12 text-muted-foreground/40" />
+                    }
+                  </div>
+                  <h4 className="text-xs font-bold font-headline line-clamp-1">{p.name}</h4>
+                  {p.role && <p className="text-[10px] text-muted-foreground line-clamp-1">{p.role}</p>}
                 </Link>
               ))}
             </div>
@@ -417,6 +505,27 @@ export function EpisodePage({ showTmdbId, season, episodeNumber }: {
         onRate={score => { setRateOpen(false); applyRating(score); }}
       />
 
+      {/* Add to list */}
+      <Dialog open={listOpen} onOpenChange={setListOpen}>
+        <DialogContent className="max-w-sm rounded-3xl border-border">
+          <DialogHeader><DialogTitle className="font-headline">Add to List</DialogTitle></DialogHeader>
+          <div className="space-y-2 pt-2">
+            {lists.length === 0
+              ? <p className="text-sm text-muted-foreground py-4 text-center">You haven&apos;t made any lists yet.</p>
+              : lists.map(l => (
+                  <button
+                    key={l.id}
+                    onClick={() => addToList(l.id)}
+                    className="w-full text-left px-4 py-3 rounded-xl border border-border hover:bg-muted/60 transition-colors font-semibold text-sm"
+                  >
+                    {l.name}
+                  </button>
+                ))
+            }
+          </div>
+        </DialogContent>
+      </Dialog>
+
       {/* Review dialog */}
       <Dialog open={reviewOpen} onOpenChange={setReviewOpen}>
         <DialogContent className="max-w-lg rounded-3xl border-border">
@@ -424,6 +533,25 @@ export function EpisodePage({ showTmdbId, season, episodeNumber }: {
             <DialogTitle className="font-headline text-xl">{myReview ? 'Edit your review' : 'Write a review'}</DialogTitle>
           </DialogHeader>
           <div className="space-y-5 pt-2">
+            {/* Rate and review together, same as the film dialog */}
+            <div>
+              <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground mb-2">Your Rating</p>
+              <div className="flex items-center gap-0.5" onMouseLeave={() => setHoverRating(0)}>
+                {Array.from({ length: 10 }, (_, i) => i + 1).map(n => (
+                  <button
+                    key={n}
+                    type="button"
+                    onClick={() => setDraftRating(n === draftRating ? 0 : n)}
+                    onMouseEnter={() => setHoverRating(n)}
+                    className="p-0.5"
+                    aria-label={`Rate ${n} out of 10`}
+                  >
+                    <Star className={`h-5 w-5 transition-colors ${(hoverRating || draftRating) >= n ? 'fill-yellow-400 text-yellow-400' : 'text-muted-foreground/40'}`} />
+                  </button>
+                ))}
+                <span className="ml-2 text-sm font-bold text-foreground w-12">{draftRating > 0 ? `${draftRating}/10` : ''}</span>
+              </div>
+            </div>
             <textarea
               value={draftReview}
               onChange={e => setDraftReview(e.target.value)}
