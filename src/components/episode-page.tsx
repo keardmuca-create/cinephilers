@@ -288,7 +288,7 @@ export function EpisodePage({ showTmdbId, season, episodeNumber }: {
         ) : (
           <>
             {still
-              ? <Image src={still} alt={detail?.name ?? ''} fill className="object-cover opacity-60" priority />
+              ? <Image src={still} alt={detail?.name ?? ''} fill className="object-cover opacity-60" sizes="100vw" />
               : <div className="w-full h-full flex items-center justify-center"><Clapperboard className="h-10 w-10 text-primary/50" /></div>
             }
             <div className="absolute inset-0 bg-gradient-to-t from-background via-transparent to-transparent" />
