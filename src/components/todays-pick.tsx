@@ -8,15 +8,80 @@ import { Button } from '@/components/ui/button';
 import { Movie } from '@/lib/types';
 import { useAuth } from '@/contexts/auth-context';
 import { fetchWithAuth } from '@/lib/fetch-with-auth';
-import { seededShuffle } from '@/lib/seed-shuffle';
+import { seededShuffle, DAY_MS } from '@/lib/seed-shuffle';
 import { batchFetchMeta } from '@/lib/meta-batch';
-import { isEpisodeId } from '@/lib/media-id';
+import { isEpisodeId, getAddedAt } from '@/lib/media-id';
 
 // Stable per-day seed so the pick can't be rerolled — same movie all day,
 // a new one tomorrow.
 function daySeed(): number {
   const n = new Date();
   return n.getFullYear() * 10000 + (n.getMonth() + 1) * 100 + n.getDate();
+}
+
+// One line a day on the Generate banner. Seven of them, but the order is
+// reshuffled every week — indexing a 7-item list by day number would pin each
+// line to a weekday forever (Monday always the same joke).
+const TAGLINES = [
+  "We both know you'll scroll for an hour. Let's skip that part.",
+  "Your watchlist isn't a museum. Let's actually watch something.",
+  "You'll spend longer choosing than the film runs. Let us pick.",
+  "That watchlist isn't going to watch itself.",
+  'Nobody has ever reached the bottom of a watchlist.',
+  "Somewhere in that list is tonight's film. Let's go find it.",
+  "Choosing is the hard part. We'll handle that bit.",
+];
+
+function dayOfYear(): number {
+  const n = new Date();
+  return Math.floor(
+    (Date.UTC(n.getUTCFullYear(), n.getUTCMonth(), n.getUTCDate()) - Date.UTC(n.getUTCFullYear(), 0, 1)) / DAY_MS
+  );
+}
+
+// Shifting the index by the week number as well as the day means the sequence
+// advances one extra step each week: every line appears once a week, never on
+// two days running, and seven consecutive Mondays get seven different lines.
+function taglineOfDay(): string {
+  const d = dayOfYear();
+  return TAGLINES[(d + Math.floor(d / TAGLINES.length)) % TAGLINES.length];
+}
+
+// ── Why this film ─────────────────────────────────────────────────────────────
+// A true detail about the pick, never an invented reason (the pick is random).
+// Which KIND of fact we lead with rotates daily, and each kind has three
+// phrasings, so it rarely reads the same two days running — but a fact is only
+// used when it genuinely holds for that film.
+
+function runtimeFact(mins: number, v: number): string {
+  const h = Math.floor(mins / 60), m = mins % 60;
+  const t = h ? `${h}h ${m}m` : `${m}m`;
+  if (mins <= 100) return [`${t} — you've got time tonight`, `Short one tonight. ${t}.`, `${t}. Done before bed.`][v];
+  if (mins <= 150) return [`${t} — a proper evening`, `${t}. Settle in.`, `Give it ${t} tonight.`][v];
+  return [`${t} — clear your evening`, `${t}. A commitment, but that's the point.`, `Big one: ${t}.`][v];
+}
+
+function waitingFact(addedAt: number, v: number): string | null {
+  if (!addedAt) return null;
+  const days = Math.floor((Date.now() - addedAt) / DAY_MS);
+  if (days < 7) return null; // too recent to be worth mentioning
+  const span = days < 30
+    ? `${Math.floor(days / 7)} week${days < 14 ? '' : 's'}`
+    : days < 365
+      ? `${Math.floor(days / 30)} month${days < 60 ? '' : 's'}`
+      : 'over a year';
+  return [`On your watchlist for ${span}`, `You saved this ${span} ago — still waiting`, `${span} on your list. Tonight?`][v];
+}
+
+function friendsFact(friends: { name: string; rating: number }[], v: number): string | null {
+  if (friends.length === 0) return null;
+  if (friends.length === 1) {
+    const f = friends[0];
+    return [`${f.name} rated this ${f.rating}`, `${f.name} gave this a ${f.rating}`, `Your friend ${f.name} liked it — ${f.rating}/10`][v];
+  }
+  const avg = friends.reduce((s, f) => s + f.rating, 0) / friends.length;
+  const n = friends.length;
+  return [`${n} friends rated this ${avg.toFixed(1)}`, `${n} of your friends have seen this`, `Your friends gave this ${avg.toFixed(1)}`][v];
 }
 
 // The day's pick from the watchlist: released, not yet watched, deterministic.
@@ -68,12 +133,52 @@ export function TodaysPick() {
   const [allRecent, setAllRecent] = useState(false);
   const [guestPrompt, setGuestPrompt] = useState(false);
   const [recentIds, setRecentIds] = useState<string[]>([]);
+  // Picked after mount, never during render — the server and the browser can
+  // sit on different sides of midnight, and a mismatch breaks hydration.
+  const [tagline, setTagline] = useState(TAGLINES[0]);
+  const [pickFact, setPickFact] = useState<string | null>(null);
+  useEffect(() => { setTagline(taglineOfDay()); }, []);
+
+  // Lead with a different KIND of fact each day, but only ever show one that's
+  // actually true for this film — falling through to the next kind otherwise.
+  const loadFact = async (tmdbId: string, m: Movie) => {
+    let friends: { name: string; rating: number }[] = [];
+    try {
+      const res = await fetchWithAuth(`/api/movies/friends-ratings?tmdbId=${encodeURIComponent(tmdbId)}`);
+      if (res.ok) {
+        const j = await res.json();
+        friends = (j.data ?? [])
+          .filter((e: { rating: number | null }) => e.rating != null)
+          .map((e: { user: { username: string; displayName: string | null }; rating: number }) => ({
+            name: e.user.displayName ?? e.user.username,
+            rating: e.rating,
+          }));
+      }
+    } catch { /* ignore — the other facts still work */ }
+
+    const d = dayOfYear();
+    const v = Math.floor(d / 3) % 3; // which phrasing
+    const lead = d % 3;              // which kind leads today
+    const kinds = [
+      () => friendsFact(friends, v),
+      () => waitingFact(getAddedAt(tmdbId), v),
+      () => (m.runtime ? runtimeFact(m.runtime, v) : null),
+    ];
+    for (let i = 0; i < kinds.length; i++) {
+      const fact = kinds[(lead + i) % kinds.length]();
+      if (fact) { setPickFact(fact); return; }
+    }
+    setPickFact(null);
+  };
 
   const showPick = async (tmdbId: string) => {
     try {
       const r = await fetch(`/api/movies/${tmdbId}`);
       const m = await r.json();
-      if (m && !m.error) setMovie(m as Movie);
+      if (m && !m.error) {
+        setMovie(m as Movie);
+        loadFact(tmdbId, m as Movie);
+      }
     } catch { /* ignore */ }
   };
 
@@ -150,6 +255,11 @@ export function TodaysPick() {
                 {movie.year && <span>{movie.year}</span>}
                 {movie.rating > 0 && <span className="flex items-center gap-1 text-accent"><Star className="h-4 w-4 fill-current" />{movie.rating.toFixed(1)}</span>}
               </div>
+              {pickFact && (
+                <p className="flex items-center gap-1.5 text-xs text-primary font-semibold">
+                  <Sparkles className="h-3.5 w-3.5 shrink-0" />{pickFact}
+                </p>
+              )}
               <div className="flex flex-wrap gap-2 pt-1">
                 <Button asChild className="rounded-full h-10 px-5 bg-accent hover:bg-accent/90 text-white font-bold">
                   <Link href={`/movie/${movie.id}`}><Play className="h-4 w-4 mr-1.5 fill-current" /> Watch</Link>
@@ -212,7 +322,7 @@ export function TodaysPick() {
           <>
             <div className="space-y-1">
               <h2 className="text-xl font-headline font-bold">Today&apos;s Pick</h2>
-              <p className="text-sm text-muted-foreground max-w-md">We both know you&apos;ll scroll for an hour. Let&apos;s skip that part.</p>
+              <p className="text-sm text-muted-foreground max-w-md">{tagline}</p>
             </div>
             <Button onClick={generate} disabled={generating || initializing} className="rounded-full h-12 px-8 font-bold text-base">
               {generating || initializing ? <Loader2 className="h-5 w-5 animate-spin" /> : <><Sparkles className="h-5 w-5 mr-2" /> Generate</>}
