@@ -10,16 +10,30 @@ function today(): string {
   return new Date().toISOString().slice(0, 10); // UTC YYYY-MM-DD
 }
 
+// How many days a title stays out of the running after being picked, so the
+// same film can't come up two days in a row.
+const NO_REPEAT_DAYS = 14;
+
 // Today's Pick for the caller — the server is the source of truth so every
-// device shows the same pick and it matches the feed. null = not generated yet.
+// device shows the same pick and it matches the feed. `pick` is null when it
+// hasn't been generated yet; `recent` is what to avoid picking again.
 export async function GET(req: NextRequest) {
   const auth = await getCurrentUser(req);
   if (!auth) return err('Unauthorized', 401);
 
-  const pick = await prisma.dailyPick.findUnique({
-    where: { userId_day: { userId: auth.sub, day: today() } },
+  const since = new Date(Date.now() - NO_REPEAT_DAYS * 24 * 60 * 60 * 1000);
+  const [pick, recent] = await Promise.all([
+    prisma.dailyPick.findUnique({ where: { userId_day: { userId: auth.sub, day: today() } } }),
+    prisma.dailyPick.findMany({
+      where: { userId: auth.sub, createdAt: { gte: since } },
+      select: { tmdbId: true },
+    }),
+  ]);
+
+  return ok({
+    pick: pick ? { tmdbId: pick.tmdbId, mediaType: pick.mediaType } : null,
+    recent: [...new Set(recent.map(r => r.tmdbId))],
   });
-  return ok(pick ? { tmdbId: pick.tmdbId, mediaType: pick.mediaType } : null);
 }
 
 // Record Today's Pick. One per user per day, create-only (the pick is a

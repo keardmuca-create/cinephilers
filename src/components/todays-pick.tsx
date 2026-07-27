@@ -20,9 +20,9 @@ function daySeed(): number {
 }
 
 // The day's pick from the watchlist: released, not yet watched, deterministic.
-type PickResult = { id: string } | 'empty-list' | 'none-released';
+type PickResult = { id: string } | 'empty-list' | 'none-released' | 'all-recent';
 
-async function pickWatchlistId(): Promise<PickResult> {
+async function pickWatchlistId(recentIds: string[] = []): Promise<PickResult> {
   const ids: string[] = [];
   try {
     for (let i = 0; i < localStorage.length; i++) {
@@ -47,8 +47,15 @@ async function pickWatchlistId(): Promise<PickResult> {
   });
   if (released.length === 0) return 'none-released';
 
-  released.sort();
-  return { id: seededShuffle(released, daySeed())[0] };
+  // Don't serve the same film again for a fortnight. If that leaves nothing,
+  // say so rather than repeating — the pick exists to help you choose, and an
+  // empty pool means the watchlist itself needs more titles.
+  const recent = new Set(recentIds);
+  const fresh = released.filter(id => !recent.has(id));
+  if (fresh.length === 0) return 'all-recent';
+
+  fresh.sort();
+  return { id: seededShuffle(fresh, daySeed())[0] };
 }
 
 export function TodaysPick() {
@@ -58,7 +65,9 @@ export function TodaysPick() {
   const [initializing, setInitializing] = useState(true);
   const [emptyWatchlist, setEmptyWatchlist] = useState(false);
   const [noReleased, setNoReleased] = useState(false);
+  const [allRecent, setAllRecent] = useState(false);
   const [guestPrompt, setGuestPrompt] = useState(false);
+  const [recentIds, setRecentIds] = useState<string[]>([]);
 
   const showPick = async (tmdbId: string) => {
     try {
@@ -78,8 +87,10 @@ export function TodaysPick() {
     fetchWithAuth('/api/daily-pick')
       .then(r => r.ok ? r.json() : null)
       .then(async (json) => {
-        const pick = json?.data as { tmdbId: string } | null;
-        if (!cancelled && pick?.tmdbId) await showPick(pick.tmdbId);
+        const data = json?.data as { pick: { tmdbId: string } | null; recent?: string[] } | null;
+        if (cancelled) return;
+        setRecentIds(data?.recent ?? []);
+        if (data?.pick?.tmdbId) await showPick(data.pick.tmdbId);
       })
       .catch(() => {})
       .finally(() => { if (!cancelled) setInitializing(false); });
@@ -92,9 +103,11 @@ export function TodaysPick() {
     setGenerating(true);
     setEmptyWatchlist(false);
     setNoReleased(false);
-    const result = await pickWatchlistId();
+    setAllRecent(false);
+    const result = await pickWatchlistId(recentIds);
     if (result === 'empty-list') { setEmptyWatchlist(true); setGenerating(false); return; }
     if (result === 'none-released') { setNoReleased(true); setGenerating(false); return; }
+    if (result === 'all-recent') { setAllRecent(true); setGenerating(false); return; }
     try {
       // Record my roll — the server returns the AUTHORITATIVE pick (mine, or the
       // one already locked in today on another device), and I show that.
@@ -176,6 +189,14 @@ export function TodaysPick() {
             <div className="space-y-1">
               <h2 className="text-xl font-headline font-bold">Nothing to pick yet</h2>
               <p className="text-sm text-muted-foreground max-w-md">Add some released movies to your watchlist, then generate a pick to watch tonight.</p>
+            </div>
+            <Button asChild className="rounded-full h-11 px-6 font-bold"><Link href="/browse">Browse movies</Link></Button>
+          </>
+        ) : allRecent ? (
+          <>
+            <div className="space-y-1">
+              <h2 className="text-xl font-headline font-bold">You&apos;ve had them all recently</h2>
+              <p className="text-sm text-muted-foreground max-w-md">Every film on your watchlist has come up as a pick in the last couple of weeks. Add a few more and we&apos;ll have something new for you.</p>
             </div>
             <Button asChild className="rounded-full h-11 px-6 font-bold"><Link href="/browse">Browse movies</Link></Button>
           </>
