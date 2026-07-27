@@ -3,7 +3,7 @@ import { ChevronLeft, Film, Star, Users, BookOpen } from 'lucide-react';
 import type { Metadata } from 'next';
 
 export const metadata: Metadata = {
-  title: 'About — Cinephilers',
+  title: 'About | Cinephilers',
   description: 'Cinephilers is a social movie and TV tracking app. Track what you watch, rate titles, write reviews, and share with friends.',
   alternates: { canonical: '/about' },
 };

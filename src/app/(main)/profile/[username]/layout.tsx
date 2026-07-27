@@ -24,10 +24,10 @@ export async function generateMetadata({ params }: { params: Promise<{ username:
     });
   } catch { /* fall through to generic */ }
 
-  if (!user) return { title: 'Profile — Cinephilers' };
+  if (!user) return { title: 'Profile | Cinephilers' };
 
   const name = user.displayName?.trim() || user.username;
-  const title = `${name} (@${user.username}) — Cinephilers`;
+  const title = `${name} (@${user.username}) | Cinephilers`;
   const description = user.isPrivate
     ? `@${user.username}'s profile is private on Cinephilers.`
     : (user.bio?.trim()

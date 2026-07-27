@@ -3,7 +3,7 @@ import { ChevronLeft } from 'lucide-react';
 import type { Metadata } from 'next';
 
 export const metadata: Metadata = {
-  title: 'Terms of Service — Cinephilers',
+  title: 'Terms of Service | Cinephilers',
   description: 'Terms of Service for Cinephilers — the rules for using the platform.',
   alternates: { canonical: '/terms' },
 };

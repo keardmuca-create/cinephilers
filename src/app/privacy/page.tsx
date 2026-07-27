@@ -3,7 +3,7 @@ import { ChevronLeft } from 'lucide-react';
 import type { Metadata } from 'next';
 
 export const metadata: Metadata = {
-  title: 'Privacy Policy — Cinephilers',
+  title: 'Privacy Policy | Cinephilers',
   description: 'Privacy Policy for Cinephilers — how we collect, use, and protect your data.',
   alternates: { canonical: '/privacy' },
 };

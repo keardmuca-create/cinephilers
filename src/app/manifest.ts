@@ -2,7 +2,7 @@ import type { MetadataRoute } from 'next';
 
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: 'Cinephilers — Track, Rate & Discuss with Friends',
+    name: 'Cinephilers | Track, Rate & Discuss with Friends',
     short_name: 'Cinephilers',
     description: 'Log every movie and show you watch. Rate them, write reviews, build lists, and see what your friends are watching.',
     start_url: '/',

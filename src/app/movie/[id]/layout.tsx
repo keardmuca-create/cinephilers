@@ -37,7 +37,7 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
   const meta = await fetchMovieMeta(id);
   if (!meta) return { title: 'Cinephilers' };
 
-  const title = `${meta.title}${meta.year ? ` (${meta.year})` : ''} — Cinephilers`;
+  const title = `${meta.title}${meta.year ? ` (${meta.year})` : ''} | Cinephilers`;
   const description = meta.overview
     ? meta.overview.slice(0, 120) + (meta.overview.length > 120 ? '…' : '')
     : `Track, rate, and review ${meta.title} on Cinephilers.`;
