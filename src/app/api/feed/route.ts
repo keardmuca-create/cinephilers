@@ -7,7 +7,8 @@ import { clampInt } from '@/lib/query-params';
 export interface FeedItem {
   id: string;
   // 'activity' = a single film's watched + rated + reviewed folded into one card.
-  type: 'activity' | 'rewatched' | 'imported' | 'watchlist' | 'watchlist_batch' | 'daily_pick';
+  // 'episode_batch' = 3+ episodes of one show on one day, folded together.
+  type: 'activity' | 'rewatched' | 'imported' | 'watchlist' | 'watchlist_batch' | 'daily_pick' | 'episode_batch';
   user: { id: string; username: string; displayName: string | null; avatarUrl: string | null };
   tmdbId: string;
   mediaType: string;
@@ -17,9 +18,10 @@ export interface FeedItem {
   containsSpoiler?: boolean;
   importPlatform?: string;
   importCount?: number;
-  // watchlist_batch: a burst of watchlist adds collapsed into one card
+  // watchlist_batch / episode_batch: a burst collapsed into one card
   batchCount?: number;
   batchTmdbIds?: string[];
+  batchRated?: number; // episode_batch: how many of them were also rated
   createdAt: string;
   likeCount?: number;
   likedByMe?: boolean;
@@ -193,7 +195,7 @@ export async function GET(req: NextRequest) {
     const a = activityMap.get(k) ?? { user: r.user, tmdbId: r.tmdbId, mediaType: r.mediaType, latest: 0 };
     a.reviewBody = r.body; a.containsSpoiler = r.containsSpoiler; bump(a, r.createdAt); activityMap.set(k, a);
   }
-  const activityItems: FeedItem[] = [...activityMap.values()].map(a => ({
+  const toActivityItem = (a: Acc): FeedItem => ({
     id: `activity-${a.user.id}-${a.tmdbId}-${a.mediaType}`,
     type: 'activity' as const,
     user: a.user,
@@ -204,7 +206,42 @@ export async function GET(req: NextRequest) {
     reviewBody: a.reviewBody,
     containsSpoiler: a.containsSpoiler,
     createdAt: new Date(a.latest).toISOString(),
-  }));
+  });
+
+  // A binge is one card per episode, which buries everyone else. Collapse a
+  // user's episodes of the SAME show on the SAME day once there are 3+, the
+  // same rule the watchlist burst uses. One or two still show individually.
+  const isEpisode = (id: string) => /^tmdb-tv-\d{1,10}-S\d{1,3}E\d{1,4}$/.test(id);
+  const showOf = (id: string) => id.replace(/-S\d{1,3}E\d{1,4}$/, '');
+
+  const activityItems: FeedItem[] = [];
+  const epGroups = new Map<string, Acc[]>();
+  for (const a of activityMap.values()) {
+    if (!isEpisode(a.tmdbId)) { activityItems.push(toActivityItem(a)); continue; }
+    const day = new Date(a.latest).toISOString().slice(0, 10);
+    const k = `${a.user.id}:${showOf(a.tmdbId)}:${day}`;
+    const arr = epGroups.get(k) ?? [];
+    arr.push(a);
+    epGroups.set(k, arr);
+  }
+  for (const group of epGroups.values()) {
+    if (group.length < 3) { for (const a of group) activityItems.push(toActivityItem(a)); continue; }
+    const sorted = group.slice().sort((a, b) => b.latest - a.latest);
+    const first = sorted[0];
+    activityItems.push({
+      id: `episode-batch-${first.user.id}-${showOf(first.tmdbId)}-${new Date(first.latest).toISOString().slice(0, 10)}`,
+      type: 'episode_batch',
+      user: first.user,
+      // The SHOW id, so the card resolves the show's poster and title.
+      tmdbId: showOf(first.tmdbId),
+      mediaType: first.mediaType,
+      batchCount: group.length,
+      batchTmdbIds: sorted.slice(0, 6).map(a => a.tmdbId),
+      watched: group.some(a => a.watched),
+      batchRated: group.filter(a => a.rating !== undefined).length,
+      createdAt: new Date(first.latest).toISOString(),
+    });
+  }
 
   const items: FeedItem[] = [
     ...watchlistItems,

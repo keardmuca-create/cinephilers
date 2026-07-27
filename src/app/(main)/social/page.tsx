@@ -15,7 +15,7 @@ import { SpoilerWrap } from '@/components/spoiler-wrap';
 
 interface FeedItem {
   id: string;
-  type: 'activity' | 'rewatched' | 'imported' | 'watchlist' | 'watchlist_batch' | 'daily_pick';
+  type: 'activity' | 'rewatched' | 'imported' | 'watchlist' | 'watchlist_batch' | 'daily_pick' | 'episode_batch';
   user: { id: string; username: string; displayName: string | null; avatarUrl: string | null };
   tmdbId: string;
   mediaType: string;
@@ -27,6 +27,7 @@ interface FeedItem {
   importCount?: number;
   batchCount?: number;
   batchTmdbIds?: string[];
+  batchRated?: number;
   createdAt: string;
   likeCount?: number;
   likedByMe?: boolean;
@@ -89,7 +90,7 @@ function UserAvatar({ user, size = 40 }: {
 interface UnifiedItem {
   id: string;
   isMe: boolean;
-  type: 'activity' | 'rewatched' | 'watchlist' | 'watchlist_batch' | 'daily_pick' | 'imported';
+  type: 'activity' | 'rewatched' | 'watchlist' | 'watchlist_batch' | 'daily_pick' | 'imported' | 'episode_batch';
   user: { username: string; displayName: string | null; avatarUrl: string | null };
   tmdbId: string;
   meta?: { title: string; year: string; poster: string };
@@ -101,6 +102,7 @@ interface UnifiedItem {
   importCount?: number;
   batchCount?: number;
   batchTmdbIds?: string[];
+  batchRated?: number;
   createdAt: string;
   // server-backed social likes (activity/rewatched/watchlist cards)
   likeCount?: number;
@@ -269,6 +271,59 @@ function ActivityCard({ item, onToggleLike, onRemove }: {
 // A burst of watchlist adds collapsed into one card (poster strip), so a
 // browsing session doesn't flood followers. Informational — no like/menu,
 // matching the import summary card.
+// A binge collapsed into one card: 3+ episodes of the same show on the same
+// day. tmdbId is the SHOW, so the poster and title resolve to the series.
+function EpisodeBatchCard({ item }: { item: UnifiedItem }) {
+  const [meta, setMeta] = useState(item.meta ?? null);
+  useEffect(() => { if (!meta) fetchMeta(item.tmdbId).then(m => { if (m) setMeta(m); }); }, [item.tmdbId, meta]);
+
+  const n = item.batchCount ?? 0;
+  const rated = item.batchRated ?? 0;
+  const label = [
+    item.watched ? `Watched ${n} episode${n === 1 ? '' : 's'}` : `${n} episode${n === 1 ? '' : 's'}`,
+    rated > 0 ? `Rated ${rated}` : null,
+  ].filter(Boolean).join(' · ');
+
+  return (
+    <div className={`rounded-3xl border shadow-lg overflow-hidden ${item.isMe ? 'bg-primary/5 border-primary/30' : 'bg-card border-border'}`}>
+      <div className="flex items-center gap-3 px-5 pt-5 pb-3">
+        <Link href={item.isMe ? '/profile' : `/profile/${item.user.username}`}>
+          <UserAvatar user={item.user} size={40} />
+        </Link>
+        <div className="flex-1 min-w-0">
+          <Link href={item.isMe ? '/profile' : `/profile/${item.user.username}`} className="text-sm font-bold font-headline hover:text-primary transition-colors">
+            {item.user.displayName ?? item.user.username}
+          </Link>
+          <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+            <Eye className="h-3.5 w-3.5 text-blue-400" />
+            {rated > 0 && <Star className="h-3.5 w-3.5 text-yellow-400 fill-current" />}
+            <span className="truncate">{label}</span>
+            <span>·</span>
+            <span className="shrink-0">{relativeTime(item.createdAt)}</span>
+          </div>
+        </div>
+      </div>
+      <Link href={`/movie/${item.tmdbId}`} className="block mx-5 mb-4 group">
+        <div className="bg-muted/40 rounded-2xl p-3.5 flex gap-4 hover:bg-muted/70 transition-colors border border-border">
+          <div className="relative w-16 shrink-0 rounded-xl overflow-hidden shadow-md bg-muted" style={{ aspectRatio: '2/3' }}>
+            {meta?.poster
+              ? <Image src={meta.poster} alt={meta.title} fill className="object-cover" sizes="64px" />
+              : <div className="w-full h-full flex items-center justify-center"><Film className="h-6 w-6 text-primary/60" /></div>
+            }
+          </div>
+          <div className="flex flex-col justify-center gap-1.5 flex-1 min-w-0">
+            {meta
+              ? <><h3 className="font-bold font-headline text-base group-hover:text-primary transition-colors line-clamp-2 leading-snug">{meta.title}</h3>
+                  {meta.year && <p className="text-xs text-muted-foreground">{meta.year}</p>}</>
+              : <><div className="h-4 bg-muted rounded-full w-3/4 animate-pulse" /><div className="h-3 bg-muted rounded-full w-1/4 animate-pulse mt-1" /></>
+            }
+          </div>
+        </div>
+      </Link>
+    </div>
+  );
+}
+
 function WatchlistBatchCard({ item }: { item: UnifiedItem }) {
   const ids = item.batchTmdbIds ?? [];
   const [posters, setPosters] = useState<Record<string, string>>({});
@@ -567,6 +622,7 @@ export default function SocialPage() {
         importCount: f.importCount,
         batchCount: f.batchCount,
         batchTmdbIds: f.batchTmdbIds,
+        batchRated: f.batchRated,
         likeCount: f.likeCount,
         likedByMe: f.likedByMe,
         createdAt: f.createdAt,
@@ -723,7 +779,9 @@ export default function SocialPage() {
               {mergedActivity.map(item => (
                 item.type === 'watchlist_batch'
                   ? <WatchlistBatchCard key={item.id} item={item} />
-                  : <ActivityCard key={item.id} item={item} onToggleLike={handleToggleLike} onRemove={handleRemove} />
+                  : item.type === 'episode_batch'
+                    ? <EpisodeBatchCard key={item.id} item={item} />
+                    : <ActivityCard key={item.id} item={item} onToggleLike={handleToggleLike} onRemove={handleRemove} />
               ))}
             </div>
           )}
