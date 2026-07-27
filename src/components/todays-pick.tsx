@@ -212,7 +212,7 @@ export function TodaysPick() {
           <>
             <div className="space-y-1">
               <h2 className="text-xl font-headline font-bold">Today&apos;s Pick</h2>
-              <p className="text-sm text-muted-foreground max-w-md">Stop scrolling your watchlist — let us pick one film for you to watch today.</p>
+              <p className="text-sm text-muted-foreground max-w-md">We both know you&apos;ll scroll for an hour. Let&apos;s skip that part.</p>
             </div>
             <Button onClick={generate} disabled={generating || initializing} className="rounded-full h-12 px-8 font-bold text-base">
               {generating || initializing ? <Loader2 className="h-5 w-5 animate-spin" /> : <><Sparkles className="h-5 w-5 mr-2" /> Generate</>}
