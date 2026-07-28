@@ -5,7 +5,6 @@ import { useParams, useRouter } from 'next/navigation';
 import Image from 'next/image';
 import Link from 'next/link';
 import { Movie, Actor, TvEpisode, TvSeason, MovieCollection, CollectionItem } from '@/lib/types';
-import { EpisodeModal } from '@/components/episode-modal';
 import { SpoilerWrap } from '@/components/spoiler-wrap';
 import { Button } from '@/components/ui/button';
 import {
@@ -948,7 +947,6 @@ function MovieDetailInner() {
   const [isInWatchlist, setIsInWatchlist] = useState(false);
   const [userRating, setUserRating] = useState(0);
   const [lightboxImg, setLightboxImg] = useState<string | null>(null);
-  const [episodeModal, setEpisodeModal] = useState<{ ep: TvEpisode; seasonNumber: number } | null>(null);
   const [watchedEpisodes, setWatchedEpisodes] = useState<Set<string>>(new Set());
   const [writeReviewOpen, setWriteReviewOpen] = useState(false);
   const [myReview, setMyReview] = useState<UserReview | null>(null);
@@ -1756,19 +1754,6 @@ function MovieDetailInner() {
             <Image src={lightboxImg} alt="" fill className="object-contain" />
           </div>
         </div>
-      )}
-
-      {/* Episode detail modal */}
-      {episodeModal && (
-        <EpisodeModal
-          showTmdbId={showTmdbId}
-          seasonNumber={episodeModal.seasonNumber}
-          episode={episodeModal.ep}
-          showTitle={movie.title}
-          isWatched={watchedEpisodes.has(epKey(episodeModal.seasonNumber, episodeModal.ep.episode_number))}
-          onToggleWatched={() => toggleEpisodeWatched(episodeModal.seasonNumber, episodeModal.ep)}
-          onClose={() => setEpisodeModal(null)}
-        />
       )}
 
       <AuthGateModal
