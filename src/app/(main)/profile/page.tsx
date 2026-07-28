@@ -366,7 +366,7 @@ function FollowStatLink({ username, type, count }: { username: string; type: 'fo
   const label = type === 'following' ? 'Following' : 'Followers';
   return (
     <Link href={`/profile/${username}/${type}`} className="flex flex-col items-center hover:opacity-70 transition-opacity">
-      <span className="text-xl sm:text-2xl font-bold font-headline">{count}</span>
+      <span className="text-2xl font-bold font-headline">{count}</span>
       <span className="text-xs text-muted-foreground uppercase tracking-widest font-bold">{label}</span>
     </Link>
   );
@@ -1034,16 +1034,18 @@ export default function ProfilePage() {
   return (
     <main className="p-6 pt-12 pb-32 max-w-2xl mx-auto space-y-16">
       {/* Header */}
-      <div className="flex justify-between items-start gap-3">
-        {/* Avatar + follow stats sitting beside it */}
-        <div className="flex items-center gap-4 sm:gap-8 min-w-0">
+      {/* col-reverse: the action buttons are written second but render as the
+          top row, so the avatar + stats get the full width below them */}
+      <div className="flex flex-col-reverse gap-5">
+        {/* Avatar + follow stats sharing one full-width row */}
+        <div className="flex items-center gap-5">
           {/* Avatar + change photo link */}
           <div className="flex flex-col items-center gap-2 shrink-0">
             <button onClick={() => avatarInputRef.current?.click()} className="rounded-full focus:outline-none">
-              <Avatar className="h-20 w-20 sm:h-28 sm:w-28 ring-4 ring-primary/20 ring-offset-4 ring-offset-background shadow-2xl">
+              <Avatar className="h-28 w-28 sm:h-32 sm:w-32 ring-4 ring-primary/20 ring-offset-4 ring-offset-background shadow-2xl">
                 {authUser?.avatarUrl && <AvatarImage src={authUser.avatarUrl} alt={authUser.username ?? 'avatar'} />}
                 <AvatarFallback className="bg-primary/20">
-                  <User className="h-10 w-10 sm:h-14 sm:w-14 text-primary" />
+                  <User className="h-14 w-14 text-primary" />
                 </AvatarFallback>
               </Avatar>
             </button>
@@ -1055,12 +1057,12 @@ export default function ProfilePage() {
               onChange={e => { const f = e.target.files?.[0]; if (f) handleAvatarFile(f); e.target.value = ''; }}
             />
           </div>
-          <div className="flex gap-5 sm:gap-8">
+          <div className="flex flex-1 justify-around items-center min-w-0">
             <FollowStatLink username={authUser?.username ?? ''} type="following" count={authUser?.followingCount ?? 0} />
             <FollowStatLink username={authUser?.username ?? ''} type="followers" count={authUser?.followersCount ?? 0} />
           </div>
         </div>
-        <div className="flex items-center gap-2 shrink-0">
+        <div className="flex items-center justify-end gap-2">
           <Button variant="outline" size="icon" className="rounded-full border-border bg-muted hover:bg-muted/80" onClick={shareProfile} aria-label="Share profile">
             <Share2 className="h-5 w-5" />
           </Button>
