@@ -30,6 +30,22 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ user
     orderBy: { awardedAt: 'asc' },
   });
 
+  // Distinct languages watched, straight from the shared title metadata. This
+  // used to be counted in the browser from the meta cache, so it read low on a
+  // fresh device and was impossible to show for anyone else.
+  const watched = await prisma.watchedItem.findMany({
+    where: { userId: user.id },
+    select: { tmdbId: true },
+  });
+  const languages = watched.length
+    ? await prisma.filmMeta.findMany({
+        where: { tmdbId: { in: watched.map(w => w.tmdbId) }, language: { not: null } },
+        select: { language: true },
+        distinct: ['language'],
+      })
+    : [];
+  const distinctLanguages = languages.length;
+
   const currentTierIndex = TIER_ORDER.reduce((acc, tier, i) => {
     return user.ratingsCount >= TIER_THRESHOLDS[tier] ? i : acc;
   }, 0);
@@ -44,5 +60,6 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ user
     nextThreshold,
     progress: nextThreshold ? Math.round((user.ratingsCount / nextThreshold) * 100) : 100,
     memberSince: user.createdAt.toISOString(),
+    distinctLanguages,
   });
 }

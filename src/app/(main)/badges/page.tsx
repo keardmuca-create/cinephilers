@@ -6,15 +6,35 @@ import { readUserStats, computeAllBadges, ensureSignupDate, ComputedBadge } from
 import { BadgeCard, FeaturedSeasonalBadge, TierGuide } from '@/components/badge-card';
 import { Button } from '@/components/ui/button';
 import { ChevronLeft } from 'lucide-react';
+import { useAuth } from '@/contexts/auth-context';
+import { fetchWithAuth } from '@/lib/fetch-with-auth';
 
 export default function BadgesPage() {
   const router = useRouter();
   const [badges, setBadges] = useState<ComputedBadge[]>([]);
 
+  const { user } = useAuth();
+
   useEffect(() => {
     ensureSignupDate();
-    setBadges(computeAllBadges(readUserStats()));
-  }, []);
+    const stats = readUserStats();
+    setBadges(computeAllBadges(stats));
+    if (!user?.username) return;
+
+    // World Cinema counts languages, which live in the shared title metadata on
+    // the server — not in this browser. Counting locally reads low on a fresh
+    // device, so take the server's number whenever it's higher.
+    let cancelled = false;
+    fetchWithAuth(`/api/users/${user.username}/badges`)
+      .then(r => r.ok ? r.json() : null)
+      .then(json => {
+        const serverLangs = json?.data?.distinctLanguages;
+        if (cancelled || typeof serverLangs !== 'number' || serverLangs <= stats.distinctLanguages) return;
+        setBadges(computeAllBadges({ ...stats, distinctLanguages: serverLangs }));
+      })
+      .catch(() => { /* the local count still stands */ });
+    return () => { cancelled = true; };
+  }, [user]);
 
   const activeSeasonal = badges.filter(b => b.isSeasonal && b.isSeasonActive);
   const allTime = badges.filter(b => !b.isSeasonal);
