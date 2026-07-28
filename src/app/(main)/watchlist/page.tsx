@@ -65,7 +65,7 @@ function ItemCard({ item, onRemove, showReleaseDate }: { item: WatchlistItem; on
 
   return (
     <Link href={`/movie/${item.id}`} className="group relative flex items-center gap-4 py-3.5">
-      <div className="relative w-16 aspect-[2/3] overflow-hidden rounded-lg bg-muted shadow-md shrink-0">
+      <div className="relative w-20 aspect-[2/3] overflow-hidden rounded-lg bg-muted shadow-md shrink-0">
         {item.poster ? (
           <img src={item.poster} alt={item.title} className="w-full h-full object-cover" loading="lazy" />
         ) : (

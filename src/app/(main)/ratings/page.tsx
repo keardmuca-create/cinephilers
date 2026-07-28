@@ -39,7 +39,7 @@ function readMetaCache(id: string) {
 function ItemCard({ item }: { item: RatedItem }) {
   return (
     <Link href={`/movie/${item.id}`} className="group flex items-center gap-4 py-3.5">
-      <div className="relative w-16 aspect-[2/3] overflow-hidden rounded-lg bg-muted shadow-md shrink-0">
+      <div className="relative w-20 aspect-[2/3] overflow-hidden rounded-lg bg-muted shadow-md shrink-0">
         {item.poster ? (
           <img src={item.poster} alt={item.title} className="w-full h-full object-cover" loading="lazy" />
         ) : (
@@ -291,7 +291,7 @@ function RatingsPageInner() {
         <div className="px-6 divide-y divide-border">
           {Array(6).fill(0).map((_, i) => (
             <div key={i} className="flex gap-4 py-3.5">
-              <div className="w-16 aspect-[2/3] bg-muted rounded-lg animate-pulse shrink-0" />
+              <div className="w-20 aspect-[2/3] bg-muted rounded-lg animate-pulse shrink-0" />
               <div className="flex-1 space-y-2 py-1">
                 <div className="h-4 bg-muted rounded animate-pulse w-2/3" />
                 <div className="h-3 bg-muted rounded animate-pulse w-1/3" />

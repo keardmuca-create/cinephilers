@@ -102,7 +102,7 @@ function HistoryCard({ id, meta, userRating, addedAt, onRemove }: {
   if (!meta) {
     return (
       <div className="flex items-center gap-4 py-3.5">
-        <div className="w-16 aspect-[2/3] bg-muted rounded-lg animate-pulse shrink-0" />
+        <div className="w-20 aspect-[2/3] bg-muted rounded-lg animate-pulse shrink-0" />
         <div className="flex-1 space-y-2">
           <div className="h-4 bg-muted rounded animate-pulse w-2/3" />
           <div className="h-3 bg-muted rounded animate-pulse w-1/3" />
@@ -191,7 +191,7 @@ function HistoryCard({ id, meta, userRating, addedAt, onRemove }: {
   return (
     <Link href={`/movie/${linkId}`} className="group relative flex items-center gap-4 py-3.5">
       {/* Thumbnail */}
-      <div className="relative w-16 aspect-[2/3] overflow-hidden rounded-lg bg-muted shadow-md shrink-0">
+      <div className="relative w-20 aspect-[2/3] overflow-hidden rounded-lg bg-muted shadow-md shrink-0">
         {meta.poster ? (
           <img
             src={meta.poster}

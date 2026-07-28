@@ -152,9 +152,9 @@ function ReviewCard({ review }: { review: ReviewItem }) {
   return (
     <Link href={`/movie/${review.tmdbId}/reviews`} className="block bg-card hover:bg-muted/50 transition-colors rounded-2xl p-4 border border-border group">
       <div className="flex gap-4">
-        <div className="relative w-16 shrink-0 rounded-lg overflow-hidden bg-muted shadow-sm" style={{ aspectRatio: '2/3' }}>
+        <div className="relative w-20 shrink-0 rounded-lg overflow-hidden bg-muted shadow-sm" style={{ aspectRatio: '2/3' }}>
           {meta?.poster
-            ? <Image src={meta.poster} alt={meta.title ?? ''} fill className="object-cover" sizes="64px" />
+            ? <Image src={meta.poster} alt={meta.title ?? ''} fill className="object-cover" sizes="80px" />
             : <div className="w-full h-full flex items-center justify-center"><Film className="h-5 w-5 text-primary/60" /></div>
           }
         </div>
@@ -316,8 +316,8 @@ function SectionRow({ item, section }: { item: SectionItem; section: SectionKey 
   const dateLabel = item.date ? new Date(item.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : null;
   return (
     <Link href={`/movie/${item.tmdbId}`} className="flex gap-4 py-3 border-b border-border last:border-0 group">
-      <div className="relative w-14 shrink-0 rounded-lg overflow-hidden bg-muted shadow-sm" style={{ aspectRatio: '2/3' }}>
-        {meta?.poster ? <Image src={meta.poster} alt={meta.title ?? ''} fill className="object-cover" sizes="56px" /> : <div className="w-full h-full flex items-center justify-center"><Film className="h-5 w-5 text-primary/60" /></div>}
+      <div className="relative w-20 shrink-0 rounded-lg overflow-hidden bg-muted shadow-sm" style={{ aspectRatio: '2/3' }}>
+        {meta?.poster ? <Image src={meta.poster} alt={meta.title ?? ''} fill className="object-cover" sizes="80px" /> : <div className="w-full h-full flex items-center justify-center"><Film className="h-5 w-5 text-primary/60" /></div>}
       </div>
       <div className="flex-1 min-w-0 space-y-1 py-0.5">
         {meta ? <p className="text-sm font-bold group-hover:text-primary transition-colors line-clamp-1">{meta.title}</p> : <div className="h-4 bg-muted rounded-full w-2/3 animate-pulse" />}
