@@ -378,7 +378,7 @@ export function EpisodePage({ showTmdbId, season, episodeNumber }: {
             onClick={toggleWatched}
           >
             {watched ? <Check className="h-5 w-5 mr-2" /> : <Eye className="h-5 w-5 mr-2" />}
-            {watched ? 'Watched' : 'Mark Watched'}
+            {watched ? 'Watched' : 'Mark as Watched'}
           </Button>
           <Button
             variant="outline"

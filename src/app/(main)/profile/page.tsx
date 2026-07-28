@@ -1272,7 +1272,7 @@ export default function ProfilePage() {
         <p className="text-lg text-foreground/70 leading-relaxed max-w-md">
           {authUser?.bio ?? 'Set up your profile to track movies and connect with friends.'}
         </p>
-        <div className="flex gap-10 pt-4">
+        <div className="flex gap-10 pt-4 justify-center sm:justify-start">
           <FollowStatLink username={authUser?.username ?? ''} type="following" count={authUser?.followingCount ?? 0} />
           <FollowStatLink username={authUser?.username ?? ''} type="followers" count={authUser?.followersCount ?? 0} />
         </div>
