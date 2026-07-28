@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { fetchOneMeta } from '../_fetch';
+import { saveFilmMetaQuietly } from '@/lib/film-meta';
 import { rateLimit, getIp } from '@/lib/rate-limit';
 
 export interface ItemMeta {
@@ -16,6 +17,8 @@ export interface ItemMeta {
   tmdbStatus?: string;
   totalEps?: number;
   tmdbRating?: number;
+  director?: string;
+  topCast?: string[];
   showId?: string;  // set for episode entries — use to link back to the show page
   isEpisode?: boolean;
   showName?: string;       // episode entries: the parent show's name
@@ -40,6 +43,7 @@ export async function GET(
 
   try {
     const meta = await fetchOneMeta(id, key);
+    saveFilmMetaQuietly(meta);
     return NextResponse.json(meta, {
       headers: { 'Cache-Control': 'public, s-maxage=3600, stale-while-revalidate=86400' },
     });

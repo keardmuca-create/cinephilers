@@ -55,30 +55,30 @@ model User {
   // Per-user list sort preferences (Refine) — { history, ratings, watchlist,
   // list } → RefineValue. Stored on the account so they survive a browser-data
   // clear and stay consistent across devices.
-  listPrefs                Json?
+  listPrefs Json?
 
-  ratings          Rating[]
-  reviews          Review[]
-  watched          WatchedItem[]
-  watchEvents      WatchEvent[]
-  watchlist        WatchlistItem[]
-  favorites        Favorite[]
-  lists            CustomList[]
-  badges           Badge[]
-  reviewLikes      ReviewLike[]
-  watchedEpisodes  WatchedEpisode[]
-  followers         Follow[]          @relation("Following")
-  following         Follow[]          @relation("Follower")
-  notifications     Notification[]    @relation("NotificationRecipient")
-  sentNotifications Notification[]    @relation("NotificationSender")
-  sentRequests      FollowRequest[]   @relation("SentRequests")
-  receivedRequests  FollowRequest[]   @relation("ReceivedRequests")
-  reviewComments    ReviewComment[]
-  reports           Report[]
-  importActivities  ImportActivity[]
-  hiddenActivities  HiddenActivity[]
-  activityLikesGiven    ActivityLike[] @relation("ActivityLiker")
-  activityLikesReceived ActivityLike[] @relation("ActivityOwner")
+  ratings               Rating[]
+  reviews               Review[]
+  watched               WatchedItem[]
+  watchEvents           WatchEvent[]
+  watchlist             WatchlistItem[]
+  favorites             Favorite[]
+  lists                 CustomList[]
+  badges                Badge[]
+  reviewLikes           ReviewLike[]
+  watchedEpisodes       WatchedEpisode[]
+  followers             Follow[]         @relation("Following")
+  following             Follow[]         @relation("Follower")
+  notifications         Notification[]   @relation("NotificationRecipient")
+  sentNotifications     Notification[]   @relation("NotificationSender")
+  sentRequests          FollowRequest[]  @relation("SentRequests")
+  receivedRequests      FollowRequest[]  @relation("ReceivedRequests")
+  reviewComments        ReviewComment[]
+  reports               Report[]
+  importActivities      ImportActivity[]
+  hiddenActivities      HiddenActivity[]
+  activityLikesGiven    ActivityLike[]   @relation("ActivityLiker")
+  activityLikesReceived ActivityLike[]   @relation("ActivityOwner")
   dailyPicks            DailyPick[]
 }
 
@@ -104,9 +104,9 @@ model Rating {
 model MovieRating {
   tmdbId    String
   mediaType MediaType
-  count     Int      @default(0)
-  sum       Int      @default(0)
-  updatedAt DateTime @updatedAt
+  count     Int       @default(0)
+  sum       Int       @default(0)
+  updatedAt DateTime  @updatedAt
 
   @@id([tmdbId, mediaType])
 }
@@ -138,12 +138,12 @@ model Review {
 // watchlist per day (computed client-side, seeded so it can't be rerolled).
 // Recorded so followers' feeds can show it — a public commitment to watch it.
 model DailyPick {
-  id        String   @id @default(uuid())
+  id        String    @id @default(uuid())
   userId    String
   tmdbId    String
   mediaType MediaType
-  day       String   // server UTC day, YYYY-MM-DD — one pick per user per day
-  createdAt DateTime @default(now())
+  day       String // server UTC day, YYYY-MM-DD — one pick per user per day
+  createdAt DateTime  @default(now())
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -156,9 +156,9 @@ model DailyPick {
 // keyed by (owner, type, tmdbId) — the same identity the feed itself uses.
 model ActivityLike {
   id        String   @id @default(uuid())
-  userId    String   // who liked it
-  targetId  String   // whose activity it is
-  type      String   // watched | rewatched | rated | reviewed
+  userId    String // who liked it
+  targetId  String // whose activity it is
+  type      String // watched | rewatched | rated | reviewed
   tmdbId    String
   createdAt DateTime @default(now())
 
@@ -346,7 +346,7 @@ model ReviewComment {
 model ImportActivity {
   id        String   @id @default(cuid())
   userId    String
-  platform  String   // 'letterboxd' | 'imdb'
+  platform  String // 'letterboxd' | 'imdb'
   count     Int
   createdAt DateTime @default(now())
 
@@ -358,7 +358,7 @@ model ImportActivity {
 model HiddenActivity {
   id        String   @id @default(uuid())
   userId    String
-  type      String   // 'watched' | 'rated' | 'reviewed'
+  type      String // 'watched' | 'rated' | 'reviewed'
   tmdbId    String
   createdAt DateTime @default(now())
 
@@ -377,4 +377,28 @@ model Report {
   createdAt  DateTime @default(now())
 
   reporter User @relation(fields: [reporterId], references: [id], onDelete: Cascade)
+}
+
+// Shared, per-TITLE facts: what a film or show actually IS. Everything else in
+// this schema stores only a tmdbId, so genre, language, decade, runtime and
+// people existed solely in each browser's cache — which is why World Cinema
+// read 0 on other people's profiles. One row per title, shared by every user,
+// filled in as titles are looked up. Episodes are deliberately not stored:
+// they inherit their show's genre and language via the show id.
+model FilmMeta {
+  tmdbId      String    @id
+  mediaType   MediaType
+  title       String
+  year        String?
+  releaseDate String?
+  language    String?
+  genres      String[]
+  runtime     Int?
+  director    String?
+  topCast     String[]
+  voteAverage Float?
+  updatedAt   DateTime  @updatedAt
+
+  @@index([language])
+  @@index([year])
 }

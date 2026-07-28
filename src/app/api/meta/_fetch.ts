@@ -36,7 +36,9 @@ export async function fetchOneMeta(id: string, key: string): Promise<ItemMeta> {
   if (isNaN(num)) throw new Error('Invalid id');
 
   const path = isShow ? `/tv/${num}` : `/movie/${num}`;
-  const res = await fetch(`${BASE}${path}?api_key=${key}&language=en-US`, { next: { revalidate: 3600 } });
+  // append_to_response rides along in the SAME request, so credits cost no
+  // extra TMDB call — that's what gives us director and cast for free.
+  const res = await fetch(`${BASE}${path}?api_key=${key}&language=en-US&append_to_response=credits`, { next: { revalidate: 3600 } });
   if (!res.ok) throw new Error(`TMDB ${res.status}`);
   const d = await res.json();
 
@@ -45,11 +47,19 @@ export async function fetchOneMeta(id: string, key: string): Promise<ItemMeta> {
   const release = d.release_date ?? d.first_air_date ?? '';
   const year = release ? release.slice(0, 4) : '—';
   const genreNames: string[] = (d.genres ?? []).map((g: { name: string }) => g.name);
+  const crew: { job?: string; name: string }[] = d.credits?.crew ?? [];
+  // Shows credit a "Creator" rather than a director.
+  const director = crew.find(c => c.job === 'Director')?.name
+    ?? (d.created_by ?? [])[0]?.name
+    ?? undefined;
+  const topCast: string[] = (d.credits?.cast ?? []).slice(0, 5).map((a: { name: string }) => a.name);
 
   return {
     id, title, year, releaseDate: release, poster,
     type: isShow ? 'show' : 'movie',
     genre: genreNames.join(', ') || undefined,
+    director,
+    topCast: topCast.length ? topCast : undefined,
     // Movies always carry a numeric runtime (0 when TMDB has none) so the cache
     // can tell a pre-runtime entry (undefined) from one with no known length (0).
     runtime: isShow ? undefined : (typeof d.runtime === 'number' ? d.runtime : 0),

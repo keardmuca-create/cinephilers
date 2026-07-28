@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { fetchOneMeta } from './_fetch';
+import { saveFilmMetaQuietly } from '@/lib/film-meta';
 import { rateLimit, getIp } from '@/lib/rate-limit';
 import type { ItemMeta } from './[id]/route';
 
@@ -24,6 +25,9 @@ export async function GET(req: NextRequest) {
   ids.forEach((id, i) => {
     const r = results[i];
     out[id] = r.status === 'fulfilled' ? r.value : null;
+    // Every title the app displays passes through here, so the shared
+    // metadata table fills itself with no extra TMDB calls.
+    if (r.status === 'fulfilled') saveFilmMetaQuietly(r.value);
   });
   // Title metadata barely changes — cache per ids-combination for an hour and
   // serve stale for a day while revalidating in the background.
