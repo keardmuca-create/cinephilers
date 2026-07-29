@@ -274,19 +274,17 @@ function EpisodeRow({
   onToggleWatched: (e: React.MouseEvent) => void;
   onClick: () => void;
 }) {
-  // Older shows often have no episode stills on TMDB. Fall back to the season's
-  // own poster (then the show's) rather than an unrelated stock photo.
-  const still = ep.still_path
-    ? `https://image.tmdb.org/t/p/w300${ep.still_path}`
-    : fallbackImage;
-  const isPosterFallback = !ep.still_path;
+  // Every episode shows the season's poster (then the show's). TMDB only has
+  // stills for a scattering of episodes, so using them where they exist left the
+  // list looking broken — one wide still among a column of posters.
+  const still = fallbackImage;
 
   return (
     <div className={`flex gap-4 p-4 rounded-2xl border transition-colors ${isWatched ? 'bg-gray-50 border-gray-100' : 'bg-white border-gray-100 hover:bg-gray-50'}`}>
       {/* Still — opens modal */}
       <button className="relative aspect-video w-28 shrink-0 rounded-xl overflow-hidden group bg-gray-100" onClick={onClick}>
         {still
-          ? <Image src={still} alt={ep.name} fill className={isPosterFallback ? 'object-contain' : 'object-cover'} />
+          ? <Image src={still} alt={ep.name} fill className="object-contain" />
           : <span className="absolute inset-0 flex items-center justify-center"><Tv className="h-5 w-5 text-gray-400" /></span>
         }
         <div className="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity">
