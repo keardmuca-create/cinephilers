@@ -263,24 +263,32 @@ function ReleaseInfo({ movie }: { movie: Movie }) {
 
 function EpisodeRow({
   ep,
+  fallbackImage,
   isWatched,
   onToggleWatched,
   onClick,
 }: {
   ep: TvEpisode;
+  fallbackImage: string | null;
   isWatched: boolean;
   onToggleWatched: (e: React.MouseEvent) => void;
   onClick: () => void;
 }) {
+  // Older shows often have no episode stills on TMDB. Fall back to the season's
+  // own poster (then the show's) rather than an unrelated stock photo.
   const still = ep.still_path
     ? `https://image.tmdb.org/t/p/w300${ep.still_path}`
-    : `https://picsum.photos/seed/${ep.id}/300/170`;
+    : fallbackImage;
+  const isPosterFallback = !ep.still_path;
 
   return (
     <div className={`flex gap-4 p-4 rounded-2xl border transition-colors ${isWatched ? 'bg-gray-50 border-gray-100' : 'bg-white border-gray-100 hover:bg-gray-50'}`}>
       {/* Still — opens modal */}
-      <button className="relative aspect-video w-28 shrink-0 rounded-xl overflow-hidden group" onClick={onClick}>
-        <Image src={still} alt={ep.name} fill className="object-cover" />
+      <button className="relative aspect-video w-28 shrink-0 rounded-xl overflow-hidden group bg-gray-100" onClick={onClick}>
+        {still
+          ? <Image src={still} alt={ep.name} fill className={isPosterFallback ? 'object-contain' : 'object-cover'} />
+          : <span className="absolute inset-0 flex items-center justify-center"><Tv className="h-5 w-5 text-gray-400" /></span>
+        }
         <div className="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity">
           <Play className="h-6 w-6 fill-current text-white" />
         </div>
@@ -325,12 +333,14 @@ function EpisodeRow({
 function SeasonsSection({
   seasons,
   showTmdbId,
+  showPoster,
   watchedEpisodes,
   onToggleEpisodeWatched,
   onEpisodeClick,
 }: {
   seasons: TvSeason[];
   showTmdbId: string;
+  showPoster: string | null;
   watchedEpisodes: Set<string>;
   onToggleEpisodeWatched: (seasonNumber: number, ep: TvEpisode) => void;
   onEpisodeClick: (ep: TvEpisode, seasonNumber: number) => void;
@@ -366,9 +376,14 @@ function SeasonsSection({
         {seasons.map(season => {
           const sn = season.season_number;
           const isOpen = expanded === sn;
+          // Seasons without their own artwork borrow the show's poster; never a
+          // stock photo, which reads as a real still and misleads.
+          const seasonPoster = season.poster_path
+            ? `https://image.tmdb.org/t/p/w342${season.poster_path}`
+            : showPoster;
           const posterSrc = season.poster_path
             ? `https://image.tmdb.org/t/p/w154${season.poster_path}`
-            : `https://picsum.photos/seed/season-${season.id}/154/231`;
+            : showPoster;
           const { watched, total } = getProgress(sn, season.episode_count);
           const allWatched = total > 0 && watched >= total;
 
@@ -381,8 +396,11 @@ function SeasonsSection({
                   className="flex items-center gap-3 flex-1 min-w-0 text-left hover:opacity-80 transition-opacity"
                   onClick={() => toggle(sn)}
                 >
-                  <div className="relative w-10 aspect-[2/3] rounded-lg overflow-hidden shrink-0">
-                    <Image src={posterSrc} alt={season.name} fill className="object-cover" />
+                  <div className="relative w-10 aspect-[2/3] rounded-lg overflow-hidden shrink-0 bg-background">
+                    {posterSrc
+                      ? <Image src={posterSrc} alt={season.name} fill className="object-cover" />
+                      : <span className="absolute inset-0 flex items-center justify-center"><Tv className="h-4 w-4 text-muted-foreground" /></span>
+                    }
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="font-bold font-headline text-sm">{season.name}</p>
@@ -416,6 +434,7 @@ function SeasonsSection({
                     <EpisodeRow
                       key={ep.id}
                       ep={ep}
+                      fallbackImage={seasonPoster}
                       isWatched={watchedEpisodes.has(`S${sn}E${ep.episode_number}`)}
                       onToggleWatched={(e) => { e.stopPropagation(); onToggleEpisodeWatched(sn, ep); }}
                       onClick={() => onEpisodeClick(ep, sn)}
@@ -1720,6 +1739,7 @@ function MovieDetailInner() {
           <SeasonsSection
             seasons={movie.seasons}
             showTmdbId={showTmdbId}
+            showPoster={movie.poster && !movie.poster.includes('picsum') ? movie.poster : null}
             watchedEpisodes={watchedEpisodes}
             onToggleEpisodeWatched={toggleEpisodeWatched}
             onEpisodeClick={(ep, seasonNumber) => router.push(`/movie/${movie.id}-S${seasonNumber}E${ep.episode_number}`)}
