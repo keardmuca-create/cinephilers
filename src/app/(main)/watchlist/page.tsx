@@ -9,7 +9,8 @@ import { persistRefine } from '@/lib/refine-sort';
 import { fetchWithAuth } from '@/lib/fetch-with-auth';
 import { removeActivity } from '@/lib/activity';
 import { batchFetchMeta } from '@/lib/meta-batch';
-import { getItemType, TYPE_LABELS, TYPE_ORDER, type TypeFilter } from '@/lib/media-type';
+import { getItemType, sideOf, SIDE_TYPES, TYPE_LABELS, type TypeFilter, type MediaSide } from '@/lib/media-type';
+import { MediaToggle } from '@/components/media-toggle';
 import { RefineSheet, type RefineValue, type SortOption, type CountOption } from '@/components/refine-sheet';
 
 const SORT_OPTIONS: SortOption[] = [
@@ -108,6 +109,16 @@ export default function WatchlistPage() {
   // Server-safe default; the saved refine is restored from localStorage after
   // mount (reading it during render would mismatch the server and break hydration).
   const [refine, setRefine]         = useState<RefineValue>(DEFAULT_REFINE);
+  // Films and shows are listed separately here too, with no combined view.
+  const [side, setSide]             = useState<MediaSide>('movies');
+
+  const changeSide = (next: MediaSide) => {
+    setSide(next);
+    try { localStorage.setItem('watchlist-side', next); } catch { /* ignore */ }
+    // A type filter only exists on one side; carrying it across would empty the
+    // other side with no visible cause.
+    setRefine(prev => (prev.type !== 'any' ? { ...prev, type: 'any' } : prev));
+  };
 
   useEffect(() => {
     const readRefine = () => {
@@ -117,6 +128,10 @@ export default function WatchlistPage() {
       } catch { /* ignore */ }
     };
     readRefine();
+    try {
+      const savedSide = localStorage.getItem('watchlist-side');
+      if (savedSide === 'movies' || savedSide === 'shows') setSide(savedSide);
+    } catch { /* ignore */ }
     // Login sync may restore the account's saved sort into localStorage after
     // this page has already mounted — re-read it then so it applies immediately.
     window.addEventListener('cinephilers-db-restored', readRefine);
@@ -220,22 +235,38 @@ export default function WatchlistPage() {
     };
   }, []);
 
-  // Per-type counts for the Type filter — only offered when the list spans 2+ kinds.
+  // ─── Movies / Shows split ──────────────────────────────────────────────────
+  // Saved episodes are NOT folded into their show here. On the watchlist an
+  // episode is a deliberate, separate intent — an anthology instalment, or one
+  // a favourite actor guest-stars in — so collapsing it would erase the reason
+  // it was saved. Watch History collapses because there the show is the thing
+  // you're working through; here it isn't.
+
+  const sideItems = useMemo(() => items.filter(i => sideOf(i.kind as Exclude<TypeFilter, 'any'>) === side), [items, side]);
+
+  const sideCounts = useMemo(() => {
+    let movies = 0, shows = 0;
+    for (const it of items) (sideOf(it.kind as Exclude<TypeFilter, 'any'>) === 'shows' ? shows++ : movies++);
+    return { movies, shows };
+  }, [items]);
+
+  // Per-type counts for the Type filter, narrowed to this side's own sub-types
+  // and to the kinds actually present.
   const typeOptions = useMemo<CountOption[]>(() => {
     const counts = new Map<TypeFilter, number>();
-    for (const it of items) counts.set(it.kind, (counts.get(it.kind) ?? 0) + 1);
-    const present = TYPE_ORDER.filter(t => t !== 'any' && (counts.get(t) ?? 0) > 0);
+    for (const it of sideItems) counts.set(it.kind, (counts.get(it.kind) ?? 0) + 1);
+    const present = SIDE_TYPES[side].filter(t => (counts.get(t) ?? 0) > 0);
     if (present.length <= 1) return [];
     return [
-      { value: 'any', label: 'Any', count: items.length },
+      { value: 'any', label: 'Any', count: sideItems.length },
       ...present.map(t => ({ value: t, label: TYPE_LABELS[t], count: counts.get(t)! })),
     ];
-  }, [items]);
+  }, [sideItems, side]);
 
   // Per-genre counts, most common first.
   const genreOptions = useMemo<CountOption[]>(() => {
     const counts = new Map<string, number>();
-    for (const it of items) {
+    for (const it of sideItems) {
       for (const g of it.genre.split(',').map(s => s.trim()).filter(Boolean)) {
         counts.set(g, (counts.get(g) ?? 0) + 1);
       }
@@ -243,13 +274,13 @@ export default function WatchlistPage() {
     const entries = [...counts.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
     if (entries.length === 0) return [];
     return [
-      { value: 'any', label: 'Any', count: items.length },
+      { value: 'any', label: 'Any', count: sideItems.length },
       ...entries.map(([g, c]) => ({ value: g, label: g, count: c })),
     ];
-  }, [items]);
+  }, [sideItems]);
 
   const sortedFiltered = useMemo(() => {
-    let result = [...items];
+    let result = [...sideItems];
     if (search.trim()) {
       const q = search.trim().toLowerCase();
       result = result.filter(i => i.title.toLowerCase().includes(q));
@@ -282,7 +313,7 @@ export default function WatchlistPage() {
       });
     }
     return result;
-  }, [items, search, refine]);
+  }, [sideItems, search, refine]);
 
   const sortLabel = SORT_OPTIONS.find(s => s.value === refine.sortField)?.label ?? '';
   const filterNote =
@@ -299,8 +330,13 @@ export default function WatchlistPage() {
         <h1 className="text-lg font-headline font-bold truncate flex-1">Watchlist</h1>
       </div>
 
+      {/* Movies | Shows */}
+      <div className="px-6 pt-4">
+        <MediaToggle value={side} onChange={changeSide} counts={sideCounts} />
+      </div>
+
       {/* Search */}
-      <div className="px-6 pt-4 pb-3">
+      <div className="px-6 pt-3 pb-3">
         <div className="relative">
           <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <input type="text" placeholder="Search watchlist" value={search} onChange={e => setSearch(e.target.value)}
@@ -316,7 +352,7 @@ export default function WatchlistPage() {
       {/* Sort bar */}
       <div className="px-6 pb-4 flex items-center justify-between gap-3">
         <p className="text-xs text-muted-foreground truncate">
-          {sortedFiltered.length} title{sortedFiltered.length !== 1 ? 's' : ''} · {sortLabel}{filterNote}
+          {sortedFiltered.length} {side === 'shows' ? 'show' : 'title'}{sortedFiltered.length !== 1 ? 's' : ''} · {sortLabel}{filterNote}
         </p>
         <button onClick={() => setRefineOpen(true)}
           className="flex items-center gap-1.5 text-xs font-semibold text-primary hover:opacity-80 transition-opacity shrink-0">
@@ -330,10 +366,12 @@ export default function WatchlistPage() {
           <div className="h-8 w-8 rounded-full border-2 border-primary border-t-transparent animate-spin" />
           <p className="text-muted-foreground text-sm">Loading your watchlist…</p>
         </div>
-      ) : items.length === 0 ? (
+      ) : sideItems.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-20 gap-3 text-center px-6">
           <Bookmark className="h-12 w-12 text-muted-foreground/20" />
-          <p className="text-muted-foreground text-sm">Save movies to watch later</p>
+          <p className="text-muted-foreground text-sm">
+            {side === 'shows' ? 'Save shows to watch later' : 'Save movies to watch later'}
+          </p>
         </div>
       ) : sortedFiltered.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-20 gap-3 text-center px-6">
@@ -351,7 +389,7 @@ export default function WatchlistPage() {
       <RefineSheet
         open={refineOpen}
         onClose={() => setRefineOpen(false)}
-        total={items.length}
+        total={sideItems.length}
         sortOptions={SORT_OPTIONS}
         typeOptions={typeOptions}
         genreOptions={genreOptions}

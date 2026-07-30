@@ -5,9 +5,11 @@ import Link from 'next/link';
 import { Movie } from '@/lib/types';
 import { MovieCard } from './movie-card';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Sparkles, Film, Tv, ChevronRight } from 'lucide-react';
+import { Sparkles, ChevronRight } from 'lucide-react';
+import { MediaToggle } from './media-toggle';
+import type { MediaSide } from '@/lib/media-type';
 
-type Tab = 'movies' | 'shows';
+type Tab = MediaSide;
 
 export const AIRecommendations = () => {
   const [movies, setMovies] = useState<Movie[]>([]);
@@ -50,28 +52,9 @@ export const AIRecommendations = () => {
         </Link>
       </div>
 
-      {/* Movies / Shows toggle */}
+      {/* Movies / Shows toggle — the shared pill every list now uses. */}
       <div className="px-6">
-        <div className="flex items-center bg-muted rounded-full p-1 border border-border w-full">
-          <button
-            onClick={() => setTab('movies')}
-            className={[
-              'flex flex-1 items-center justify-center gap-1.5 py-2 rounded-full text-xs font-bold transition-all',
-              tab === 'movies' ? 'bg-primary text-white shadow' : 'text-muted-foreground hover:text-foreground',
-            ].join(' ')}
-          >
-            <Film className="h-3 w-3" /> Movies
-          </button>
-          <button
-            onClick={() => setTab('shows')}
-            className={[
-              'flex flex-1 items-center justify-center gap-1.5 py-2 rounded-full text-xs font-bold transition-all',
-              tab === 'shows' ? 'bg-primary text-white shadow' : 'text-muted-foreground hover:text-foreground',
-            ].join(' ')}
-          >
-            <Tv className="h-3 w-3" /> Shows
-          </button>
-        </div>
+        <MediaToggle value={tab} onChange={setTab} />
       </div>
 
       {/* Card row */}

@@ -10,8 +10,9 @@ import { persistRefine } from '@/lib/refine-sort';
 import { removeFromWatchLog } from '@/lib/badges';
 import { legacyTwin, normalizeLocalMediaIds, getWatchedAtISO, getManualWatchISO } from '@/lib/media-id';
 import { batchFetchMeta } from '@/lib/meta-batch';
-import { getItemType, TYPE_LABELS, TYPE_ORDER, type TypeFilter } from '@/lib/media-type';
+import { getItemType, sideOf, SIDE_TYPES, TYPE_LABELS, type TypeFilter, type MediaSide } from '@/lib/media-type';
 import { collapseShows, type CollapsedRow } from '@/lib/collapse-shows';
+import { MediaToggle } from '@/components/media-toggle';
 import { RefineSheet, type RefineValue, type SortOption, type CountOption } from '@/components/refine-sheet';
 
 // ─── Refine config ──────────────────────────────────────────────────────────
@@ -300,6 +301,24 @@ export default function HistoryPage() {
   // Server-safe default; the saved refine is restored from localStorage after
   // mount (reading it during render would mismatch the server and break hydration).
   const [refine, setRefine]         = useState<RefineValue>(DEFAULT_REFINE);
+  // Films and shows are counted and filtered separately, with no combined view.
+  // Server-safe default for the same hydration reason as the refine above.
+  const [side, setSide]             = useState<MediaSide>('movies');
+
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem('history-side');
+      if (saved === 'movies' || saved === 'shows') setSide(saved);
+    } catch { /* ignore */ }
+  }, []);
+
+  const changeSide = useCallback((next: MediaSide) => {
+    setSide(next);
+    try { localStorage.setItem('history-side', next); } catch { /* ignore */ }
+    // A type filter only exists on one side, so carrying it across would filter
+    // the other side down to nothing with no visible cause.
+    setRefine(prev => (prev.type !== 'any' ? { ...prev, type: 'any' } : prev));
+  }, []);
 
   useEffect(() => {
     const readRefine = () => {
@@ -480,30 +499,58 @@ export default function HistoryPage() {
     return () => window.removeEventListener('cinephilers-rating-changed', handler);
   }, []);
 
+  // ─── Movies / Shows split ──────────────────────────────────────────────────
+
+  // Which side a row belongs to. Meta may not have loaded yet, and a row with no
+  // meta would otherwise land on the wrong side and jump when it arrives — but
+  // the collapse already knows a show is a show from its id shape alone.
+  const sideForRow = useCallback((r: CollapsedRow): MediaSide => {
+    const meta = metaMap.get(r.id);
+    if (meta) return sideOf(getItemType(meta));
+    return r.isShow ? 'shows' : 'movies';
+  }, [metaMap]);
+
+  const sideRows = useMemo(() => rows.filter(r => sideForRow(r) === side), [rows, side, sideForRow]);
+
+  const sideCounts = useMemo(() => {
+    let movies = 0, shows = 0;
+    for (const r of rows) (sideForRow(r) === 'shows' ? shows++ : movies++);
+    return { movies, shows };
+  }, [rows, sideForRow]);
+
+  // Episodes are the unit of work on the Shows side — seven shows says far less
+  // about what you've watched than the episodes under them do.
+  const episodeTotal = useMemo(
+    () => rows.reduce((n, r) => n + (r.isShow ? r.watchedEpisodes : 0), 0),
+    [rows],
+  );
+
   // ─── Type counts ───────────────────────────────────────────────────────────
 
-  // Per-type counts → options for the Type filter (only kinds actually present).
-  // Counted per ROW, so a show counts once rather than once per episode.
+  // Per-type counts → options for the Type filter, narrowed to this side's own
+  // sub-types (Movie / TV Movie / Short, or TV Series / Mini Series / Episode)
+  // and to the kinds actually present. Counted per ROW, so a show counts once
+  // rather than once per episode.
   const typeOptions = useMemo<CountOption[]>(() => {
     const counts = new Map<TypeFilter, number>();
-    for (const row of rows) {
+    for (const row of sideRows) {
       const meta = metaMap.get(row.id);
       if (!meta) continue;
       const t = getItemType(meta);
       counts.set(t, (counts.get(t) ?? 0) + 1);
     }
-    const present = TYPE_ORDER.filter(t => t !== 'any' && (counts.get(t) ?? 0) > 0);
+    const present = SIDE_TYPES[side].filter(t => (counts.get(t) ?? 0) > 0);
     if (present.length === 0) return [];
     return [
-      { value: 'any', label: TYPE_LABELS.any, count: rows.length },
+      { value: 'any', label: TYPE_LABELS.any, count: sideRows.length },
       ...present.map(t => ({ value: t, label: TYPE_LABELS[t], count: counts.get(t)! })),
     ];
-  }, [rows, metaMap]);
+  }, [sideRows, metaMap, side]);
 
   // Per-genre counts, most common first.
   const genreOptions = useMemo<CountOption[]>(() => {
     const counts = new Map<string, number>();
-    for (const row of rows) {
+    for (const row of sideRows) {
       const meta = metaMap.get(row.id);
       if (!meta) continue;
       for (const g of (meta.genre ?? '').split(',').map(s => s.trim()).filter(Boolean)) {
@@ -513,15 +560,15 @@ export default function HistoryPage() {
     const entries = [...counts.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
     if (entries.length === 0) return [];
     return [
-      { value: 'any', label: 'Any', count: rows.length },
+      { value: 'any', label: 'Any', count: sideRows.length },
       ...entries.map(([g, c]) => ({ value: g, label: g, count: c })),
     ];
-  }, [rows, metaMap]);
+  }, [sideRows, metaMap]);
 
   // ─── Sort + filter ─────────────────────────────────────────────────────────
 
   const sortedFilteredRows = useMemo(() => {
-    let list = [...rows];
+    let list = [...sideRows];
 
     if (refine.type !== 'any') {
       list = list.filter(r => {
@@ -568,7 +615,7 @@ export default function HistoryPage() {
     }
 
     return list;
-  }, [rows, refine, search, metaMap, manualMap]);
+  }, [sideRows, refine, search, metaMap, manualMap]);
 
   // ─── Render ────────────────────────────────────────────────────────────────
 
@@ -582,10 +629,16 @@ export default function HistoryPage() {
           </button>
           <h1 className="text-3xl font-headline font-bold">Watch History</h1>
         </div>
+        {/* Counts are split, never mixed — films and shows hold different value. */}
         <p className="text-muted-foreground text-sm">
-          {rows.length} Title{rows.length !== 1 ? 's' : ''}
+          {sideCounts.movies} film{sideCounts.movies !== 1 ? 's' : ''} · {episodeTotal} episode{episodeTotal !== 1 ? 's' : ''}
           {fetching && <span className="ml-2 opacity-50">loading…</span>}
         </p>
+      </div>
+
+      {/* Movies | Shows */}
+      <div className="px-6 pb-3">
+        <MediaToggle value={side} onChange={changeSide} counts={sideCounts} />
       </div>
 
       {/* Search bar */}
@@ -610,7 +663,9 @@ export default function HistoryPage() {
       {/* Sorted by + Refine button */}
       <div className="px-6 pb-4 flex items-center justify-between">
         <p className="text-xs text-muted-foreground truncate">
-          {sortedFilteredRows.length} title{sortedFilteredRows.length !== 1 ? 's' : ''} · {SORT_OPTIONS.find(s => s.value === refine.sortField)?.label}
+          {sortedFilteredRows.length} {side === 'shows' ? 'show' : 'title'}{sortedFilteredRows.length !== 1 ? 's' : ''}
+          {side === 'shows' && episodeTotal > 0 && ` · ${episodeTotal} episode${episodeTotal !== 1 ? 's' : ''}`}
+          {' · '}{SORT_OPTIONS.find(s => s.value === refine.sortField)?.label}
           {refine.type !== 'any' && ` · ${TYPE_LABELS[refine.type as TypeFilter]}`}
           {refine.genre !== 'any' && ` · ${refine.genre}`}
         </p>
@@ -624,10 +679,12 @@ export default function HistoryPage() {
       </div>
 
       {/* List */}
-      {rows.length === 0 && !fetching ? (
+      {sideRows.length === 0 && !fetching ? (
         <div className="flex flex-col items-center justify-center py-20 gap-3 text-center px-6">
           <History className="h-12 w-12 text-muted-foreground/20" />
-          <p className="text-muted-foreground text-sm">Nothing here yet</p>
+          <p className="text-muted-foreground text-sm">
+            {side === 'shows' ? 'No shows watched yet' : 'No films watched yet'}
+          </p>
         </div>
       ) : (
         <div className="px-6">
@@ -648,7 +705,7 @@ export default function HistoryPage() {
       <RefineSheet
         open={refineOpen}
         onClose={() => setRefineOpen(false)}
-        total={rows.length}
+        total={sideRows.length}
         sortOptions={SORT_OPTIONS}
         typeOptions={typeOptions}
         genreOptions={genreOptions}
