@@ -51,10 +51,11 @@ async function restoreFromDb(me?: { createdAt?: string; followingCount?: number;
     const res = await fetch('/api/sync', { credentials: 'include' });
     if (!res.ok) return;
     const { data } = await res.json();
-    const { ratings: ratingsRaw, watchlist: watchlistRaw, watched: watchedRaw, reviews: reviewsRaw, favorites: favoritesRaw, lists: listsRaw, hidden } = data as {
+    const { ratings: ratingsRaw, watchlist: watchlistRaw, watched: watchedRaw, watchedEpisodes: watchedEpisodesRaw, reviews: reviewsRaw, favorites: favoritesRaw, lists: listsRaw, hidden } = data as {
       ratings: { tmdbId: string; mediaType: string; score: number; createdAt: string; updatedAt: string }[];
       watchlist: { tmdbId: string; mediaType: string; addedAt: string }[];
       watched: { tmdbId: string; mediaType: string; watchedAt: string }[];
+      watchedEpisodes?: { showTmdbId: string; season: number; episode: number; watchedAt: string }[];
       reviews: { tmdbId: string; mediaType: string; body: string; containsSpoiler: boolean; createdAt: string }[];
       favorites: { tmdbId: string; mediaType: string }[];
       lists: { id: string; name: string; isPublic: boolean; createdAt: string; items: { tmdbId: string; mediaType: string; title: string | null; poster: string | null; year: string | null }[] }[];
@@ -130,6 +131,35 @@ async function restoreFromDb(me?: { createdAt?: string; followingCount?: number;
     for (const w of watched) {
       try { localStorage.setItem(`watched-${w.tmdbId}`, 'true'); } catch { /* ignore */ }
       recordWatchedAt(w.tmdbId, w.watchedAt);
+    }
+
+    // ── Watched episodes: DB → local only, same one-way rule. ──
+    // Two key shapes have to be written, because two different screens read two
+    // different ones: the show page reads the per-show index, Watch History reads
+    // the individual keys. Restoring only the index (which is all the show page
+    // did) left a show looking unwatched in history on any device that hadn't
+    // ticked the episodes itself, even though the DB had them all along.
+    if (watchedEpisodesRaw?.length) {
+      const bySeries = new Map<string, string[]>();
+      for (const e of watchedEpisodesRaw) {
+        const epKey = `S${e.season}E${e.episode}`;
+        const epId = `${e.showTmdbId}-${epKey}`;
+        try { localStorage.setItem(`watched-ep-${epId}`, 'true'); } catch { /* ignore */ }
+        recordWatchedAt(epId, e.watchedAt);
+        const keys = bySeries.get(e.showTmdbId) ?? [];
+        keys.push(epKey);
+        bySeries.set(e.showTmdbId, keys);
+      }
+      // Merge into each show's index rather than replacing it, so an episode
+      // ticked offline on this device isn't dropped by the restore.
+      for (const [showId, keys] of bySeries) {
+        try {
+          const existingRaw = localStorage.getItem(`watched-eps-index-${showId}`);
+          const merged = new Set<string>(existingRaw ? JSON.parse(existingRaw) : []);
+          for (const k of keys) merged.add(k);
+          localStorage.setItem(`watched-eps-index-${showId}`, JSON.stringify([...merged]));
+        } catch { /* ignore */ }
+      }
     }
 
     // ── Reviews: DB → local only (same one-way rule — never upload local-only

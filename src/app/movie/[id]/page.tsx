@@ -1088,8 +1088,14 @@ function MovieDetailInner() {
             let changed = false;
             for (const k of dbKeys) { if (!merged.has(k)) { merged.add(k); changed = true; } }
             if (!changed) return prev;
-            // Update index in localStorage
-            try { localStorage.setItem(`watched-eps-index-${id}`, JSON.stringify([...merged])); } catch { /* ignore */ }
+            // Write BOTH key shapes. The index is what this page reads back, but
+            // Watch History reads the individual per-episode keys — updating only
+            // the index left a show looking unwatched in history on a device that
+            // hadn't ticked the episodes itself.
+            try {
+              localStorage.setItem(`watched-eps-index-${id}`, JSON.stringify([...merged]));
+              for (const k of dbKeys) localStorage.setItem(`watched-ep-${id}-${k}`, 'true');
+            } catch { /* ignore */ }
             return merged;
           });
         })
