@@ -1216,6 +1216,177 @@ function MovieDetailInner() {
 
   const epKey = (sn: number, epNum: number) => `S${sn}E${epNum}`;
 
+  // Tick (or untick) every episode of a show in one go, so marking a show
+  // watched leaves the same record as watching it episode by episode. Specials
+  // (season 0) are skipped: TMDB's episode count excludes them, so including
+  // them would make a "complete" show read more episodes than it has.
+  const markAllEpisodes = useCallback(async (nowWatched: boolean): Promise<boolean> => {
+    if (!movie?.seasons?.length) return true;
+    const seasons = movie.seasons.filter(s => s.season_number > 0);
+    // The season endpoint takes the bare TMDB number, not the prefixed id.
+    const numericId = movie.id.replace('tmdb-tv-', '').replace('tmdb-', '');
+
+    let all: { season: number; episode: number }[] = [];
+    try {
+      const lists = await Promise.all(
+        seasons.map(async s => {
+          const res = await fetch(`/api/tv/${numericId}/season/${s.season_number}`);
+          if (!res.ok) throw new Error(`season ${s.season_number}`);
+          const data = await res.json() as { episodes?: TvEpisode[] };
+          return (data.episodes ?? []).map(e => ({ season: s.season_number, episode: e.episode_number }));
+        }),
+      );
+      all = lists.flat();
+    } catch {
+      toast({ title: "Couldn't load the episode list. Check your connection and try again.", variant: 'destructive' });
+      return false;
+    }
+    if (all.length === 0) return true;
+
+    try {
+      const res = await fetchWithAuth('/api/watched/episodes/bulk', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ showTmdbId: id, episodes: all, watched: nowWatched }),
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    } catch {
+      toast({ title: "Couldn't update the episodes. Check your connection and try again.", variant: 'destructive' });
+      return false;
+    }
+
+    const keys = all.map(e => epKey(e.season, e.episode));
+    setWatchedEpisodes(nowWatched ? new Set(keys) : new Set());
+    try {
+      if (nowWatched) {
+        for (const k of keys) localStorage.setItem(`watched-ep-${id}-${k}`, 'true');
+        localStorage.setItem(`watched-eps-index-${id}`, JSON.stringify(keys));
+      } else {
+        for (const k of keys) localStorage.removeItem(`watched-ep-${id}-${k}`);
+        localStorage.removeItem(`watched-eps-index-${id}`);
+      }
+    } catch { /* ignore */ }
+    return true;
+  }, [movie, id, toast]);
+
+  // Marking a whole show rewrites every episode, so it asks first. null = closed;
+  // true/false = the pending watched value awaiting confirmation.
+  const [confirmShowMark, setConfirmShowMark] = useState<boolean | null>(null);
+  const [markingAll, setMarkingAll] = useState(false);
+
+  const applyWatchedToggle = useCallback(async (next: boolean) => {
+    const watchedMediaType = movie!.type === 'show' ? 'SHOW' : 'MOVIE';
+
+    // A show's watched state is the sum of its episodes, so write those FIRST
+    // and bail if they don't take. Doing the show record first meant a failed
+    // episode write left the show marked with nothing ticked under it.
+    if (movie?.type === 'show') {
+      setMarkingAll(true);
+      const done = await markAllEpisodes(next);
+      setMarkingAll(false);
+      if (!done) return;
+    }
+
+    // Confirm the server write before touching any local state. A
+    // fire-and-forget sync that silently fails leaves the DB and the local
+    // copy out of step, so a removed item reappears (or a marked one
+    // vanishes) on the next DB->local sync. Wait for the server, and bail
+    // without changing anything local if it didn't take.
+    try {
+      const res = next
+        ? await fetchWithAuth('/api/watched', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ tmdbId: id, mediaType: watchedMediaType }) })
+        : await fetchWithAuth(`/api/watched/${id}?mediaType=${watchedMediaType}`, { method: 'DELETE' });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    } catch {
+      toast({ title: next ? "Couldn't mark as watched. Check your connection and try again." : "Couldn't remove from watched. Check your connection and try again.", variant: 'destructive' });
+      return;
+    }
+
+    setIsWatched(next);
+    try {
+      localStorage.setItem(`watched-${id}`, String(next));
+      if (movie?.type === 'show') {
+        if (next) {
+          localStorage.setItem(`show-status-${id}`, 'completed');
+          // Store episode count so badge stats can credit whole-show watches
+          if (movie.totalEpisodes && movie.totalEpisodes > 0) {
+            localStorage.setItem(`watched-show-eps-${id}`, String(movie.totalEpisodes));
+          }
+        } else {
+          localStorage.removeItem(`watched-show-eps-${id}`);
+        }
+      }
+    } catch { /* ignore */ }
+
+    if (next && movie) {
+      // Only movies belong in the movie watch-log; whole-show watches are
+      // credited to the episode count via the watched-show-eps key above.
+      if (movie.type !== 'show') {
+        appendWatchLog({
+          id,
+          type: 'movie',
+          genre: movie.genre ?? '',
+          language: movie.originalLanguage ?? '',
+        });
+      }
+      // Stamp a watched date for everything (incl. shows) so watch history can
+      // sort it newest-first — the movie watch-log alone doesn't cover shows.
+      recordWatchedAt(id);
+      // Mark it as a hand-tapped watch so history ranks it above imports.
+      recordManualWatch(id);
+      logActivity({ action: 'watched', contentId: id, contentTitle: movie.title, contentPoster: movie.poster, contentYear: movie.year });
+    } else {
+      removeFromWatchLog(id, 'movie');
+      removeManualWatch(id);
+      removeActivity('watched', id);
+    }
+    window.dispatchEvent(new Event('cinephilers-watched-changed'));
+    toast({ title: next ? 'Marked as watched' : 'Removed from watched' });
+  }, [movie, id, toast, markAllEpisodes]);
+
+  // A show is watched when every episode is. Ticking the last one completes it;
+  // unticking any one un-completes it. Writes only the show's own record — it
+  // must never call applyWatchedToggle, which would re-mark every episode.
+  const syncShowCompletion = useCallback(async (watchedEpisodeCount: number) => {
+    if (movie?.type !== 'show') return;
+    const total = movie.totalEpisodes ?? 0;
+    if (total <= 0) return;
+    const complete = watchedEpisodeCount >= total;
+    if (complete === isWatched) return;
+
+    try {
+      const res = complete
+        ? await fetchWithAuth('/api/watched', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ tmdbId: id, mediaType: 'SHOW' }) })
+        : await fetchWithAuth(`/api/watched/${id}?mediaType=SHOW`, { method: 'DELETE' });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    } catch {
+      return; // leave the show record alone rather than let it drift from the episodes
+    }
+
+    setIsWatched(complete);
+    try {
+      localStorage.setItem(`watched-${id}`, String(complete));
+      if (complete) {
+        localStorage.setItem(`show-status-${id}`, 'completed');
+        localStorage.setItem(`watched-show-eps-${id}`, String(total));
+      } else {
+        localStorage.removeItem(`show-status-${id}`);
+        localStorage.removeItem(`watched-show-eps-${id}`);
+      }
+    } catch { /* ignore */ }
+
+    if (complete && movie) {
+      recordWatchedAt(id);
+      recordManualWatch(id);
+      logActivity({ action: 'watched', contentId: id, contentTitle: movie.title, contentPoster: movie.poster, contentYear: movie.year });
+      toast({ title: `You finished ${movie.title}` });
+    } else {
+      removeManualWatch(id);
+      removeActivity('watched', id);
+    }
+    window.dispatchEvent(new Event('cinephilers-watched-changed'));
+  }, [movie, id, isWatched, toast]);
+
   const toggleEpisodeWatched = useCallback((sn: number, ep: TvEpisode) => {
     if (!authUser) { setAuthGate('track episodes'); return; }
     const key   = epKey(sn, ep.episode_number);
@@ -1257,7 +1428,11 @@ function MovieDetailInner() {
     }
     // Sync to DB in background
     syncDb('POST', '/api/watched/episodes', { showTmdbId: id, season: sn, episode: ep.episode_number, watched: nowWatched });
-  }, [id, watchedEpisodes, movie, syncDb, authUser]);
+
+    // Ticking the last episode completes the show; unticking any one un-completes
+    // it. The set hasn't re-rendered yet, so derive the new count from the change.
+    void syncShowCompletion(watchedEpisodes.size + (nowWatched ? 1 : -1));
+  }, [id, watchedEpisodes, movie, syncDb, authUser, syncShowCompletion]);
 
   if (loading) return <DetailSkeleton />;
 
@@ -1461,70 +1636,49 @@ function MovieDetailInner() {
           <Button
             variant={isWatched ? 'default' : 'outline'}
             className={`h-14 px-8 rounded-2xl font-bold w-full md:w-auto text-base transition-all ${isWatched ? 'bg-accent border-accent' : 'border-2 border-foreground bg-background text-foreground'}`}
+            disabled={markingAll}
             onClick={async () => {
               if (!authUser) { setAuthGate('mark movies as watched'); return; }
               const next = !isWatched;
-              const watchedMediaType = movie!.type === 'show' ? 'SHOW' : 'MOVIE';
-
-              // Confirm the server write before touching any local state. A
-              // fire-and-forget sync that silently fails leaves the DB and the local
-              // copy out of step, so a removed item reappears (or a marked one
-              // vanishes) on the next DB->local sync. Wait for the server, and bail
-              // without changing anything local if it didn't take.
-              try {
-                const res = next
-                  ? await fetchWithAuth('/api/watched', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ tmdbId: id, mediaType: watchedMediaType }) })
-                  : await fetchWithAuth(`/api/watched/${id}?mediaType=${watchedMediaType}`, { method: 'DELETE' });
-                if (!res.ok) throw new Error(`HTTP ${res.status}`);
-              } catch {
-                toast({ title: next ? "Couldn't mark as watched. Check your connection and try again." : "Couldn't remove from watched. Check your connection and try again.", variant: 'destructive' });
-                return;
-              }
-
-              setIsWatched(next);
-              try {
-                localStorage.setItem(`watched-${id}`, String(next));
-                if (movie?.type === 'show') {
-                  if (next) {
-                    localStorage.setItem(`show-status-${id}`, 'completed');
-                    // Store episode count so badge stats can credit whole-show watches
-                    if (movie.totalEpisodes && movie.totalEpisodes > 0) {
-                      localStorage.setItem(`watched-show-eps-${id}`, String(movie.totalEpisodes));
-                    }
-                  } else {
-                    localStorage.removeItem(`watched-show-eps-${id}`);
-                  }
-                }
-              } catch { /* ignore */ }
-              if (next && movie) {
-                // Only movies belong in the movie watch-log; whole-show watches are
-                // credited to the episode count via the watched-show-eps key above.
-                if (movie.type !== 'show') {
-                  appendWatchLog({
-                    id,
-                    type: 'movie',
-                    genre: movie.genre ?? '',
-                    language: movie.originalLanguage ?? '',
-                  });
-                }
-                // Stamp a watched date for everything (incl. shows) so watch history can
-                // sort it newest-first — the movie watch-log alone doesn't cover shows.
-                recordWatchedAt(id);
-                // Mark it as a hand-tapped watch so history ranks it above imports.
-                recordManualWatch(id);
-                logActivity({ action: 'watched', contentId: id, contentTitle: movie.title, contentPoster: movie.poster, contentYear: movie.year });
-              } else {
-                removeFromWatchLog(id, 'movie');
-                removeManualWatch(id);
-                removeActivity('watched', id);
-              }
-              window.dispatchEvent(new Event('cinephilers-watched-changed'));
-              toast({ title: next ? 'Marked as watched' : 'Removed from watched' });
+              // Marking a show rewrites every one of its episodes, so ask first.
+              if (movie?.type === 'show') { setConfirmShowMark(next); return; }
+              await applyWatchedToggle(next);
             }}
           >
             {isWatched ? <Check className="h-5 w-5 mr-2" /> : <Play className="h-5 w-5 mr-2" />}
-            {isWatched ? 'Watched' : 'Mark as Watched'}
+            {markingAll ? 'Updating episodes…' : isWatched ? 'Watched' : 'Mark as Watched'}
           </Button>
+
+          {/* Marking a show watched writes every episode, so it's confirmed first */}
+          <Dialog open={confirmShowMark !== null} onOpenChange={open => { if (!open) setConfirmShowMark(null); }}>
+            <DialogContent className="max-w-sm rounded-3xl">
+              <DialogHeader>
+                <DialogTitle className="font-headline">
+                  {confirmShowMark ? 'Mark the whole show as watched?' : 'Remove the whole show?'}
+                </DialogTitle>
+              </DialogHeader>
+              <p className="text-sm text-muted-foreground leading-relaxed">
+                {confirmShowMark
+                  ? `This marks every episode of ${movie.title} as watched${movie.totalEpisodes ? ` — all ${movie.totalEpisodes} of them` : ''}. You can untick any episode afterwards.`
+                  : `This unmarks every episode of ${movie.title}.`}
+              </p>
+              <div className="flex gap-2 pt-2">
+                <Button variant="outline" className="flex-1 rounded-xl h-11" onClick={() => setConfirmShowMark(null)}>
+                  Cancel
+                </Button>
+                <Button
+                  className="flex-1 rounded-xl h-11"
+                  onClick={async () => {
+                    const next = confirmShowMark;
+                    setConfirmShowMark(null);
+                    if (next !== null) await applyWatchedToggle(next);
+                  }}
+                >
+                  {confirmShowMark ? 'Mark all' : 'Remove all'}
+                </Button>
+              </div>
+            </DialogContent>
+          </Dialog>
           <AddToListButton movie={movie} onRequireAuth={authUser ? null : () => setAuthGate('save movies to lists')} />
         </section>
 
