@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { History, Eye, Search, SlidersHorizontal, X, Trash2, Film, ChevronLeft } from 'lucide-react';
+import { History, Eye, Search, SlidersHorizontal, X, Trash2, Film, ChevronLeft, Check } from 'lucide-react';
 import type { ItemMeta } from '@/app/api/meta/[id]/route';
 import { fetchWithAuth } from '@/lib/fetch-with-auth';
 import { persistRefine } from '@/lib/refine-sort';
@@ -11,6 +11,7 @@ import { removeFromWatchLog } from '@/lib/badges';
 import { legacyTwin, normalizeLocalMediaIds, getWatchedAtISO, getManualWatchISO } from '@/lib/media-id';
 import { batchFetchMeta } from '@/lib/meta-batch';
 import { getItemType, TYPE_LABELS, TYPE_ORDER, type TypeFilter } from '@/lib/media-type';
+import { collapseShows, type CollapsedRow } from '@/lib/collapse-shows';
 import { RefineSheet, type RefineValue, type SortOption, type CountOption } from '@/components/refine-sheet';
 
 // ─── Refine config ──────────────────────────────────────────────────────────
@@ -53,17 +54,18 @@ function readLoggedAt(id: string, log: { id: string; loggedAt: string }[]): stri
 
 // Newest-first ordering with a top tier for titles marked watched IN THE APP.
 // Hand-marked items always sort above imported ones (whose Letterboxd log-dates
-// can be "today" and would otherwise bury genuine taps). `dateFor` supplies the
-// fallback watch date for the import tier.
-function recencyCompare(a: string, b: string, dateFor: (id: string) => string): number {
-  const am = getManualWatchISO(a);
-  const bm = getManualWatchISO(b);
+// can be "today" and would otherwise bury genuine taps). A collapsed show counts
+// as hand-marked if ANY of its episodes was — ticking one episode of an imported
+// show should lift the whole row, since the row is the thing you're working through.
+function rowRecencyCompare(a: CollapsedRow, b: CollapsedRow, manualFor: (r: CollapsedRow) => string | null): number {
+  const am = manualFor(a);
+  const bm = manualFor(b);
   if (am && !bm) return -1;
   if (!am && bm) return 1;
   // Id tie-break: bulk-imported items share one timestamp, and without a
   // deterministic tie-break their order reshuffles on every login sync.
-  if (am && bm) return (new Date(bm).getTime() - new Date(am).getTime()) || a.localeCompare(b);
-  return (new Date(dateFor(b)).getTime() - new Date(dateFor(a)).getTime()) || a.localeCompare(b);
+  if (am && bm) return (new Date(bm).getTime() - new Date(am).getTime()) || a.id.localeCompare(b.id);
+  return (new Date(b.watchedAt).getTime() - new Date(a.watchedAt).getTime()) || a.id.localeCompare(b.id);
 }
 
 function readMetaCache(id: string): ItemMeta | null {
@@ -90,15 +92,33 @@ function formatAddedDate(iso: string): string {
   } catch { return ''; }
 }
 
+// Forget one episode locally: its key, the phantom watched-<id> an old sync bug
+// left behind, its entry in the per-show index, and its watch-log line.
+function forgetEpisodeLocally(epId: string, showId: string, season: number, episode: number) {
+  try {
+    localStorage.removeItem(`watched-ep-${epId}`);
+    localStorage.removeItem(`watched-${epId}`);
+    const idxRaw = localStorage.getItem(`watched-eps-index-${showId}`);
+    if (idxRaw) {
+      const idx = JSON.parse(idxRaw) as string[];
+      localStorage.setItem(`watched-eps-index-${showId}`, JSON.stringify(idx.filter(k => k !== `S${season}E${episode}`)));
+    }
+  } catch { /* ignore */ }
+  removeFromWatchLog(epId, 'episode');
+}
+
+const EP_ID = /^(.+)-S(\d+)E(\d+)$/;
+
 // ─── Card ─────────────────────────────────────────────────────────────────────
 
-function HistoryCard({ id, meta, userRating, addedAt, onRemove }: {
-  id: string;
+function HistoryCard({ row, meta, userRating, onRemove }: {
+  row: CollapsedRow;
   meta: ItemMeta | undefined;
   userRating: number | undefined;
-  addedAt: string;
-  onRemove: () => void;
+  onRemove: (ids: string[]) => void;
 }) {
+  const id = row.id;
+
   if (!meta) {
     return (
       <div className="flex items-center gap-4 py-3.5">
@@ -112,61 +132,70 @@ function HistoryCard({ id, meta, userRating, addedAt, onRemove }: {
     );
   }
 
-  const dateStr = formatAddedDate(addedAt);
-  const linkId = meta.showId ?? id;
+  const dateStr = formatAddedDate(row.watchedAt);
   const mediaType = meta.type === 'show' ? 'SHOW' : 'MOVIE';
-
-  // Episode display: clean title + "S1·E1 ShowName" subtitle.
-  const idEpMatch = id.match(/-S(\d+)E(\d+)$/);
-  const isEpisode = meta.isEpisode || !!idEpMatch;
   // Strip any stale "S1E1 · " prefix from cached titles
   const displayTitle = meta.title.replace(/^S\d+E\d+\s·\s/, '');
-  const epSeason = meta.seasonNumber ?? (idEpMatch ? parseInt(idEpMatch[1], 10) : undefined);
-  const epNumber = meta.episodeNumber ?? (idEpMatch ? parseInt(idEpMatch[2], 10) : undefined);
-  const epSubtitle = isEpisode && epSeason !== undefined && epNumber !== undefined
-    ? `S${epSeason}·E${epNumber}${meta.showName ? ` · ${meta.showName}` : ''}`
+
+  // A collapsed show is one row for the whole series: progress instead of an
+  // episode subtitle, and a status label once you're all the way through.
+  // Progress only once episodes have actually been ticked — a show record from
+  // before Step 2 has none, and "0 / 62 episodes" reads as a bug rather than as
+  // a whole-show mark.
+  const progress = row.isShow && row.watchedEpisodes > 0
+    ? (row.totalEpisodes > 0
+        ? `${row.watchedEpisodes} / ${row.totalEpisodes} episodes`
+        : `${row.watchedEpisodes} episode${row.watchedEpisodes === 1 ? '' : 's'}`)
     : null;
+  const statusLabel = row.status === 'completed' ? 'Completed'
+    : row.status === 'up-to-date' ? 'Up to date'
+    : null;
+
+  const removeShow = async (ensureOk: (res: Response) => Promise<void>) => {
+    // Every episode this row folds in, plus the show's own watched record when
+    // one exists (whole-show marks still write it). One bulk request, not one
+    // per episode — unmarking Naruto would otherwise be 220 round trips.
+    const eps: { season: number; episode: number }[] = [];
+    for (const memberId of row.memberIds) {
+      const m = EP_ID.exec(memberId);
+      if (m) eps.push({ season: parseInt(m[2], 10), episode: parseInt(m[3], 10) });
+    }
+    if (eps.length > 0) {
+      for (const memberId of row.memberIds) {
+        const m = EP_ID.exec(memberId);
+        if (m) forgetEpisodeLocally(memberId, id, parseInt(m[2], 10), parseInt(m[3], 10));
+      }
+      await fetchWithAuth('/api/watched/episodes/bulk', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ showTmdbId: id, episodes: eps, watched: false }),
+      }).then(ensureOk);
+    }
+    // The show's own row: deleteMany is a no-op when there isn't one, so this is
+    // safe either way and still surfaces a genuine network failure.
+    try { localStorage.removeItem(`watched-${id}`); } catch { /* ignore */ }
+    removeFromWatchLog(id, 'movie');
+    await fetchWithAuth(`/api/watched/${id}?mediaType=SHOW`, { method: 'DELETE' }).then(ensureOk);
+  };
 
   const handleRemove = async (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    const epMatch = id.match(/^(tmdb-tv-\d+)-S(\d+)E(\d+)$/);
+
+    if (row.isShow && row.watchedEpisodes > 0) {
+      const count = row.watchedEpisodes;
+      if (!confirm(`Remove ${displayTitle} from your history? This unmarks ${count} watched episode${count === 1 ? '' : 's'}.`)) return;
+    }
+
     // Await the server delete(s). A failed delete leaves the DB row alive, which the
     // next DB→local sync resurrects — so we only drop it from the UI once the server
     // confirms. On failure we surface it and leave the row in place.
     const ensureOk = async (res: Response) => { if (!res.ok) throw new Error(`delete failed: ${res.status}`); };
     try {
-      if (epMatch) {
-        // Episode: clean the local key, the per-show index, and the watch-log,
-        // then delete on the server via the episodes endpoint. Hitting /api/watched
-        // here (the movie endpoint) left the DB record alive, so it re-synced back.
-        const [, showId, sStr, eStr] = epMatch;
-        const season = parseInt(sStr, 10);
-        const episode = parseInt(eStr, 10);
-        const epKey = `S${season}E${episode}`;
-        try {
-          localStorage.removeItem(`watched-ep-${id}`);
-          // Phantom key from an earlier sync bug that stored episode ids as watched-<id>
-          localStorage.removeItem(`watched-${id}`);
-          const idxRaw = localStorage.getItem(`watched-eps-index-${showId}`);
-          if (idxRaw) {
-            const idx = JSON.parse(idxRaw) as string[];
-            localStorage.setItem(`watched-eps-index-${showId}`, JSON.stringify(idx.filter(k => k !== epKey)));
-          }
-        } catch { /* ignore */ }
-        removeFromWatchLog(id, 'episode');
-        await fetchWithAuth('/api/watched/episodes', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ showTmdbId: showId, season, episode, watched: false }),
-        }).then(ensureOk);
-        // Remove any phantom row this episode left in the movie/show watched table.
-        // deleteMany returns OK even when there's no such row, so confirming this only
-        // trips on a real network/server failure — which we want to surface, since a
-        // silently-failed delete lets the phantom resync back into history.
-        await fetchWithAuth(`/api/watched/${id}?mediaType=SHOW`, { method: 'DELETE' }).then(ensureOk);
+      if (row.isShow) {
+        await removeShow(ensureOk);
       } else {
-        // Movie or whole show.
+        // Movie.
         try { localStorage.removeItem(`watched-${id}`); } catch { /* ignore */ }
         removeFromWatchLog(id, 'movie');
         await fetchWithAuth(`/api/watched/${id}?mediaType=${mediaType}`, { method: 'DELETE' }).then(ensureOk);
@@ -185,11 +214,11 @@ function HistoryCard({ id, meta, userRating, addedAt, onRemove }: {
       alert("Couldn't delete this on the server — please check your connection and try again.");
       return;
     }
-    onRemove();
+    onRemove(row.memberIds);
   };
 
   return (
-    <Link href={`/movie/${linkId}`} className="group relative flex items-center gap-4 py-3.5">
+    <Link href={`/movie/${id}`} className="group relative flex items-center gap-4 py-3.5">
       {/* Thumbnail */}
       <div className="relative w-20 aspect-[2/3] overflow-hidden rounded-lg bg-muted shadow-md shrink-0">
         {meta.poster ? (
@@ -211,8 +240,8 @@ function HistoryCard({ id, meta, userRating, addedAt, onRemove }: {
         <h3 className="text-sm font-semibold font-headline line-clamp-2 group-hover:text-primary transition-colors leading-snug mb-0.5">
           {displayTitle}
         </h3>
-        {epSubtitle && (
-          <p className="text-xs font-medium text-muted-foreground/90 mb-0.5">{epSubtitle}</p>
+        {progress && (
+          <p className="text-xs font-medium text-muted-foreground/90 mb-0.5">{progress}</p>
         )}
         <p className="text-xs text-muted-foreground mb-1.5">{meta.year}</p>
         <div className="flex items-center gap-2.5 flex-wrap">
@@ -228,10 +257,17 @@ function HistoryCard({ id, meta, userRating, addedAt, onRemove }: {
               <span className="text-xs font-bold text-blue-400">{userRating}</span>
             </div>
           )}
-          <div className="flex items-center gap-1 text-blue-400">
-            <Eye className="h-3.5 w-3.5" />
-            <span className="text-xs font-semibold">Watched</span>
-          </div>
+          {statusLabel ? (
+            <div className="flex items-center gap-1 text-primary">
+              <Check className="h-3.5 w-3.5" />
+              <span className="text-xs font-semibold">{statusLabel}</span>
+            </div>
+          ) : (
+            <div className="flex items-center gap-1 text-blue-400">
+              <Eye className="h-3.5 w-3.5" />
+              <span className="text-xs font-semibold">Watched</span>
+            </div>
+          )}
         </div>
         {dateStr && (
           <p className="text-[10px] text-muted-foreground/60 mt-1">{dateStr}</p>
@@ -281,10 +317,11 @@ export default function HistoryPage() {
   const fetchingRef = useRef(new Set<string>());
   const dateMapRef  = useRef(new Map<string, string>());
 
-  const removeId = useCallback((id: string) => {
-    setAllIds(prev => prev.filter(x => x !== id));
-    setMetaMap(prev => { const next = new Map(prev); next.delete(id); return next; });
-    setUserRatings(prev => { const next = new Map(prev); next.delete(id); return next; });
+  const removeIds = useCallback((ids: string[]) => {
+    const gone = new Set(ids);
+    setAllIds(prev => prev.filter(x => !gone.has(x)));
+    setMetaMap(prev => { const next = new Map(prev); for (const id of gone) next.delete(id); return next; });
+    setUserRatings(prev => { const next = new Map(prev); for (const id of gone) next.delete(id); return next; });
   }, []);
 
   // ─── Initial load ──────────────────────────────────────────────────────────
@@ -309,8 +346,6 @@ export default function HistoryPage() {
       if (r !== undefined) ratings.set(id, r);
     }
 
-    const sorted = [...ids].sort((a, b) => recencyCompare(a, b, id => dm.get(id) ?? new Date(0).toISOString()));
-
     setMetaMap(prev => {
       // Merge any cached meta we don't already hold; keep what we've fetched.
       const next = new Map(prev);
@@ -322,10 +357,13 @@ export default function HistoryPage() {
             // An entry cached before runtime/showType tracking is missing the field
             // its type is classified by — leave it out of the fetched set so the batch
             // fetch refreshes it (movie shorts by runtime, mini-series by showType)
-            // instead of staying stuck as plain "movie"/"tv-series".
+            // instead of staying stuck as plain "movie"/"tv-series". Episodes cached
+            // before totalEps rode along have no episode total, which is what a
+            // collapsed show row counts against — refresh those too.
             const needsRefresh =
               (m.type === 'movie' && !m.isEpisode && m.runtime === undefined) ||
-              (m.type === 'show'  && !m.isEpisode && m.showType === undefined);
+              (m.type === 'show'  && !m.isEpisode && m.showType === undefined) ||
+              (m.isEpisode === true && m.totalEps === undefined);
             if (m.tmdbRating !== undefined && !needsRefresh) fetchingRef.current.add(id);
           }
         }
@@ -333,7 +371,10 @@ export default function HistoryPage() {
       return next;
     });
     setUserRatings(ratings);
-    setAllIds(sorted);
+    // Rows are sorted properly below; this ordering is what the meta batch walks,
+    // so keeping it newest-first means the top of the list fills in first.
+    setAllIds([...ids].sort((a, b) =>
+      (new Date(dm.get(b) ?? 0).getTime() - new Date(dm.get(a) ?? 0).getTime()) || a.localeCompare(b)));
   }, []);
 
   useEffect(() => {
@@ -375,6 +416,55 @@ export default function HistoryPage() {
     runBatches();
   }, [allIds]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // ─── Collapse episodes into one row per show ──────────────────────────────
+
+  const rows = useMemo<CollapsedRow[]>(() => collapseShows(
+    allIds.map(id => {
+      const m = metaMap.get(id);
+      return {
+        id,
+        showId: m?.showId,
+        isEpisode: m?.isEpisode,
+        totalEpisodes: m?.totalEps,
+        showStatus: m?.tmdbStatus,
+        watchedAt: dateMapRef.current.get(id) ?? new Date(0).toISOString(),
+      };
+    }),
+  ), [allIds, metaMap]);
+
+  // A show you're partway through was never marked at show level, so its own
+  // meta is in nobody's list — but the row is titled and postered from it.
+  // Fetch it once the collapse tells us the show exists.
+  useEffect(() => {
+    const missing = rows.filter(r => r.isShow && !fetchingRef.current.has(r.id)).map(r => r.id);
+    if (missing.length === 0) return;
+    missing.forEach(id => fetchingRef.current.add(id));
+    (async () => {
+      const fetched = await batchFetchMeta(missing);
+      for (const [id, m] of Object.entries(fetched)) writeMetaCache(id, m);
+      setMetaMap(prev => {
+        const next = new Map(prev);
+        for (const [id, m] of Object.entries(fetched)) next.set(id, m);
+        return next;
+      });
+    })();
+  }, [rows]);
+
+  // Hand-marked timestamp per row, resolved once — the date sort reads it on
+  // every comparison and a show row has to scan all its episodes for it.
+  const manualMap = useMemo(() => {
+    const m = new Map<string, string | null>();
+    for (const row of rows) {
+      let best: string | null = null;
+      for (const memberId of row.memberIds) {
+        const iso = getManualWatchISO(memberId);
+        if (iso && (!best || iso > best)) best = iso;
+      }
+      m.set(row.id, best);
+    }
+    return m;
+  }, [rows]);
+
   // ─── Rating listener ───────────────────────────────────────────────────────
 
   useEffect(() => {
@@ -393,24 +483,29 @@ export default function HistoryPage() {
   // ─── Type counts ───────────────────────────────────────────────────────────
 
   // Per-type counts → options for the Type filter (only kinds actually present).
+  // Counted per ROW, so a show counts once rather than once per episode.
   const typeOptions = useMemo<CountOption[]>(() => {
     const counts = new Map<TypeFilter, number>();
-    for (const [, meta] of metaMap) {
+    for (const row of rows) {
+      const meta = metaMap.get(row.id);
+      if (!meta) continue;
       const t = getItemType(meta);
       counts.set(t, (counts.get(t) ?? 0) + 1);
     }
     const present = TYPE_ORDER.filter(t => t !== 'any' && (counts.get(t) ?? 0) > 0);
     if (present.length === 0) return [];
     return [
-      { value: 'any', label: TYPE_LABELS.any, count: allIds.length },
+      { value: 'any', label: TYPE_LABELS.any, count: rows.length },
       ...present.map(t => ({ value: t, label: TYPE_LABELS[t], count: counts.get(t)! })),
     ];
-  }, [allIds.length, metaMap]);
+  }, [rows, metaMap]);
 
   // Per-genre counts, most common first.
   const genreOptions = useMemo<CountOption[]>(() => {
     const counts = new Map<string, number>();
-    for (const [, meta] of metaMap) {
+    for (const row of rows) {
+      const meta = metaMap.get(row.id);
+      if (!meta) continue;
       for (const g of (meta.genre ?? '').split(',').map(s => s.trim()).filter(Boolean)) {
         counts.set(g, (counts.get(g) ?? 0) + 1);
       }
@@ -418,43 +513,43 @@ export default function HistoryPage() {
     const entries = [...counts.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
     if (entries.length === 0) return [];
     return [
-      { value: 'any', label: 'Any', count: allIds.length },
+      { value: 'any', label: 'Any', count: rows.length },
       ...entries.map(([g, c]) => ({ value: g, label: g, count: c })),
     ];
-  }, [allIds.length, metaMap]);
+  }, [rows, metaMap]);
 
   // ─── Sort + filter ─────────────────────────────────────────────────────────
 
-  const sortedFilteredIds = useMemo(() => {
-    let ids = [...allIds];
+  const sortedFilteredRows = useMemo(() => {
+    let list = [...rows];
 
     if (refine.type !== 'any') {
-      ids = ids.filter(id => {
-        const meta = metaMap.get(id);
+      list = list.filter(r => {
+        const meta = metaMap.get(r.id);
         return meta ? getItemType(meta) === refine.type : false;
       });
     }
     if (refine.genre !== 'any') {
-      ids = ids.filter(id => (metaMap.get(id)?.genre ?? '').split(',').map(s => s.trim()).includes(refine.genre));
+      list = list.filter(r => (metaMap.get(r.id)?.genre ?? '').split(',').map(s => s.trim()).includes(refine.genre));
     }
     if (search.trim()) {
       const q = search.trim().toLowerCase();
-      ids = ids.filter(id => (metaMap.get(id)?.title ?? '').toLowerCase().includes(q));
+      list = list.filter(r => (metaMap.get(r.id)?.title ?? '').toLowerCase().includes(q));
     }
 
     if (refine.sortField === 'title') {
-      ids.sort((a, b) => (metaMap.get(a)?.title ?? '').localeCompare(metaMap.get(b)?.title ?? ''));
-      if (refine.sortDir === 'desc') ids.reverse();
+      list.sort((a, b) => (metaMap.get(a.id)?.title ?? '').localeCompare(metaMap.get(b.id)?.title ?? ''));
+      if (refine.sortDir === 'desc') list.reverse();
     } else if (refine.sortField === 'release') {
       // Full release-date timestamp; falls back to Jan 1 of the year, null when unknown.
-      const ts = (id: string): number | null => {
-        const m = metaMap.get(id);
+      const ts = (r: CollapsedRow): number | null => {
+        const m = metaMap.get(r.id);
         const raw = m?.releaseDate || (m && /^\d{4}$/.test(m.year) ? `${m.year}-01-01` : '');
         const t = raw ? Date.parse(raw) : NaN;
         return Number.isNaN(t) ? null : t;
       };
       const dir = refine.sortDir === 'desc' ? -1 : 1;
-      ids.sort((a, b) => {
+      list.sort((a, b) => {
         const ta = ts(a), tb = ts(b);
         if (ta === null && tb === null) return 0;
         if (ta === null) return 1;   // unknown date sinks to the bottom
@@ -464,15 +559,16 @@ export default function HistoryPage() {
     } else {
       // Date watched. Newest-first tiers hand-marked titles above imports (whose
       // log-dates can be "today"); oldest-first is a plain ascending date sort.
+      // A show sits at its most recent episode, so it rises as you watch.
       if (refine.sortDir === 'desc') {
-        ids.sort((a, b) => recencyCompare(a, b, id => dateMapRef.current.get(id) ?? new Date(0).toISOString()));
+        list.sort((a, b) => rowRecencyCompare(a, b, r => manualMap.get(r.id) ?? null));
       } else {
-        ids.sort((a, b) => (new Date(dateMapRef.current.get(a) ?? 0).getTime() - new Date(dateMapRef.current.get(b) ?? 0).getTime()) || a.localeCompare(b));
+        list.sort((a, b) => (new Date(a.watchedAt).getTime() - new Date(b.watchedAt).getTime()) || a.id.localeCompare(b.id));
       }
     }
 
-    return ids;
-  }, [allIds, refine, search, metaMap]);
+    return list;
+  }, [rows, refine, search, metaMap, manualMap]);
 
   // ─── Render ────────────────────────────────────────────────────────────────
 
@@ -487,7 +583,7 @@ export default function HistoryPage() {
           <h1 className="text-3xl font-headline font-bold">Watch History</h1>
         </div>
         <p className="text-muted-foreground text-sm">
-          {allIds.length} Title{allIds.length !== 1 ? 's' : ''}
+          {rows.length} Title{rows.length !== 1 ? 's' : ''}
           {fetching && <span className="ml-2 opacity-50">loading…</span>}
         </p>
       </div>
@@ -514,7 +610,7 @@ export default function HistoryPage() {
       {/* Sorted by + Refine button */}
       <div className="px-6 pb-4 flex items-center justify-between">
         <p className="text-xs text-muted-foreground truncate">
-          {sortedFilteredIds.length} title{sortedFilteredIds.length !== 1 ? 's' : ''} · {SORT_OPTIONS.find(s => s.value === refine.sortField)?.label}
+          {sortedFilteredRows.length} title{sortedFilteredRows.length !== 1 ? 's' : ''} · {SORT_OPTIONS.find(s => s.value === refine.sortField)?.label}
           {refine.type !== 'any' && ` · ${TYPE_LABELS[refine.type as TypeFilter]}`}
           {refine.genre !== 'any' && ` · ${refine.genre}`}
         </p>
@@ -528,7 +624,7 @@ export default function HistoryPage() {
       </div>
 
       {/* List */}
-      {allIds.length === 0 && !fetching ? (
+      {rows.length === 0 && !fetching ? (
         <div className="flex flex-col items-center justify-center py-20 gap-3 text-center px-6">
           <History className="h-12 w-12 text-muted-foreground/20" />
           <p className="text-muted-foreground text-sm">Nothing here yet</p>
@@ -536,14 +632,13 @@ export default function HistoryPage() {
       ) : (
         <div className="px-6">
           <div className="divide-y divide-border">
-            {sortedFilteredIds.map(id => (
+            {sortedFilteredRows.map(row => (
               <HistoryCard
-                key={id}
-                id={id}
-                meta={metaMap.get(id)}
-                userRating={userRatings.get(id)}
-                addedAt={dateMapRef.current.get(id) ?? ''}
-                onRemove={() => removeId(id)}
+                key={row.id}
+                row={row}
+                meta={metaMap.get(row.id)}
+                userRating={userRatings.get(row.id)}
+                onRemove={removeIds}
               />
             ))}
           </div>
@@ -553,7 +648,7 @@ export default function HistoryPage() {
       <RefineSheet
         open={refineOpen}
         onClose={() => setRefineOpen(false)}
-        total={allIds.length}
+        total={rows.length}
         sortOptions={SORT_OPTIONS}
         typeOptions={typeOptions}
         genreOptions={genreOptions}

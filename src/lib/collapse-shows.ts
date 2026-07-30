@@ -37,6 +37,12 @@ export interface CollapsedRow {
   showStatus?: string;
   /** Most recent episode date for a show; the film's own date otherwise. */
   watchedAt: string;
+  /**
+   * Every entry id folded into this row — the episode ids for a show, or just
+   * the film's own id. The callers need them to delete a whole show at once and
+   * to tell a hand-marked row from an imported one.
+   */
+  memberIds: string[];
 }
 
 const EP_ID = /^(.*)-S\d+E\d+$/;
@@ -54,7 +60,12 @@ export function parentShowId(entry: CollapseInput): string | null {
   return m ? m[1] : null;
 }
 
-function statusFor(watched: number, total: number, showStatus?: string): ShowProgressStatus {
+/**
+ * Completed / Up to date / still watching, from a count against a total. Exported
+ * because the profile shelf resolves its totals after collapsing (it slices to a
+ * preview before fetching meta) and must land on the same answer as the list.
+ */
+export function statusFor(watched: number, total: number, showStatus?: string): ShowProgressStatus {
   if (total > 0 && watched >= total) {
     // A finished series you've finished is Completed; a running one is merely
     // up to date, because more is coming.
@@ -81,12 +92,14 @@ export function collapseShows(entries: CollapseInput[]): CollapsedRow[] {
         status: null,
         showStatus: entry.showStatus,
         watchedAt: entry.watchedAt,
+        memberIds: [entry.id],
       });
       continue;
     }
 
     // Merge: a show can arrive as its own entry AND as episodes. Count episodes
     // only, keep the newest date, and take a total from whichever entry has one.
+    existing.memberIds.push(entry.id);
     if (showId) existing.watchedEpisodes += 1;
     if (isShowRow) existing.isShow = true;
     if (!existing.totalEpisodes && entry.totalEpisodes) existing.totalEpisodes = entry.totalEpisodes;

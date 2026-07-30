@@ -2,6 +2,7 @@ import { NextRequest } from 'next/server';
 import { prisma } from '@/lib/db';
 import { ok, err } from '@/lib/api-response';
 import { getCurrentUser } from '@/lib/auth-utils';
+import { countWatchedRows } from '@/lib/watched-rows';
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ username: string }> }) {
   const { username } = await params;
@@ -40,11 +41,16 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ user
   // Row counts + this-year splits + the rating-distribution histogram for the
   // public profile. Only computed once the profile is known to be visible.
   const yearStart = new Date(new Date().getFullYear(), 0, 1);
-  const [watchlistCount, listsCount, reviewsCount, watchedThisYear, rewatchGroups, rewatchThisYearGroups, ratingGroups] = await Promise.all([
+  const thisYear = yearStart.getFullYear();
+  const [watchlistCount, listsCount, reviewsCount, watchedCount, watchedThisYear, rewatchGroups, rewatchThisYearGroups, ratingGroups] = await Promise.all([
     prisma.watchlistItem.count({ where: { userId: user.id } }),
     prisma.customList.count({ where: { userId: user.id, ...(isOwner ? {} : { isPublic: true }) } }),
     prisma.review.count({ where: { userId: user.id, hidden: false } }),
-    prisma.watchedItem.count({ where: { userId: user.id, watchedAt: { gte: yearStart } } }),
+    // Counted per title, not per episode — the same way the list is built, so
+    // the number on the row matches the list it opens. _count.watched would
+    // count the WatchedItem table alone and miss ticked episodes entirely.
+    countWatchedRows(user.id),
+    countWatchedRows(user.id, { year: thisYear }),
     prisma.watchEvent.groupBy({
       by: ['tmdbId', 'mediaType'],
       where: { userId: user.id },
@@ -68,7 +74,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ user
     ...user,
     followersCount: user._count.followers,
     followingCount: user._count.following,
-    watchedCount: user._count.watched,
+    watchedCount,
     watchlistCount,
     rewatchedCount: rewatchGroups.length,
     listsCount,

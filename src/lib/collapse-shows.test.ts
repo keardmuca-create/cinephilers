@@ -79,6 +79,20 @@ describe('collapseShows', () => {
     expect(collapseShows(all)[0].status).toBe('up-to-date');
   });
 
+  it('keeps every folded id, so a whole show can be unmarked in one go', () => {
+    const rows = collapseShows([
+      { id: 'tmdb-tv-1396', totalEpisodes: 62, watchedAt: '2026-01-01' },
+      ep('tmdb-tv-1396', 1, 1, '2026-01-05'),
+      ep('tmdb-tv-1396', 1, 2, '2026-01-06'),
+    ]);
+    expect(rows[0].memberIds).toEqual(['tmdb-tv-1396', 'tmdb-tv-1396-S1E1', 'tmdb-tv-1396-S1E2']);
+  });
+
+  it('gives a film its own id as its only member', () => {
+    const rows = collapseShows([{ id: 'tmdb-550', watchedAt: '2026-01-02' }]);
+    expect(rows[0].memberIds).toEqual(['tmdb-550']);
+  });
+
   it('is Watching while episodes remain', () => {
     const rows = collapseShows([
       ep('tmdb-tv-1396', 1, 1, '2026-01-01', { totalEpisodes: 62, showStatus: 'Ended' }),

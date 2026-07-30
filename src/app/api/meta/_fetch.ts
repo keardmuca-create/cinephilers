@@ -27,6 +27,14 @@ export async function fetchOneMeta(id: string, key: string): Promise<ItemMeta> {
       seasonNumber: season,
       episodeNumber: epNum,
       tmdbRating: typeof epData.vote_average === 'number' ? epData.vote_average : undefined,
+      // Carried from the parent show, which this request already fetched. Watch
+      // History collapses episodes into one show row and needs the total and the
+      // airing status to say "45 / 62" and Completed vs Up to date — and a show
+      // you're halfway through was never marked at show level, so its own meta
+      // is never loaded. Free here; a separate lookup otherwise.
+      showType: showData.type ?? undefined,
+      tmdbStatus: showData.status ?? undefined,
+      totalEps: showData.number_of_episodes ?? undefined,
     };
   }
 

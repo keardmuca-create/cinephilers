@@ -3,6 +3,7 @@ import { prisma } from '@/lib/db';
 import { paginated, err } from '@/lib/api-response';
 import { getCurrentUser } from '@/lib/auth-utils';
 import { clampInt } from '@/lib/query-params';
+import { listWatchedRows } from '@/lib/watched-rows';
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ username: string }> }) {
   const { username } = await params;
@@ -11,7 +12,6 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ user
   const limit = clampInt(searchParams.get('limit'), 20, 1, 100);
   // ?year=YYYY restricts to titles watched in that calendar year.
   const year = clampInt(searchParams.get('year'), 0, 0, 9999);
-  const yearWhere = year ? { watchedAt: { gte: new Date(year, 0, 1), lt: new Date(year + 1, 0, 1) } } : {};
 
   const user = await prisma.user.findUnique({ where: { username: username.toLowerCase() }, select: { id: true, isPrivate: true } });
   if (!user) return err('User not found', 404);
@@ -26,26 +26,20 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ user
     }
   }
 
-  const [total, items] = await Promise.all([
-    prisma.watchedItem.count({ where: { userId: user.id, ...yearWhere } }),
-    prisma.watchedItem.findMany({
-      where: { userId: user.id, ...yearWhere },
-      skip: (page - 1) * limit,
-      take: limit,
-      orderBy: { watchedAt: 'desc' },
-    }),
-  ]);
+  // Films and per-episode show progress merged into one row per title, so other
+  // people see the same library the owner does — see lib/watched-rows.
+  const { rows, total } = await listWatchedRows(user.id, { page, limit, year: year || undefined });
 
   // Attach the owner's own rating for each watched title on this page (one
   // bounded query over the page's ids) so the profile can show it inline.
-  const ratings = items.length
+  const ratings = rows.length
     ? await prisma.rating.findMany({
-        where: { userId: user.id, tmdbId: { in: items.map(i => i.tmdbId) } },
+        where: { userId: user.id, tmdbId: { in: rows.map(r => r.tmdbId) } },
         select: { tmdbId: true, mediaType: true, score: true },
       })
     : [];
   const scoreMap = new Map(ratings.map(r => [`${r.tmdbId}:${r.mediaType}`, r.score]));
-  const withScore = items.map(i => ({ ...i, score: scoreMap.get(`${i.tmdbId}:${i.mediaType}`) ?? null }));
+  const withScore = rows.map(r => ({ ...r, score: scoreMap.get(`${r.tmdbId}:${r.mediaType}`) ?? null }));
 
   return paginated(withScore, page, limit, total);
 }

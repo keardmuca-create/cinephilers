@@ -278,6 +278,11 @@ interface SectionItem {
   score?: number;
   rewatchCount?: number;
   date?: string;
+  // Watch History only: a show arrives as ONE row carrying its episode progress,
+  // never as a run of individual episodes.
+  watchedEpisodes?: number;
+  totalEpisodes?: number;
+  status?: 'completed' | 'up-to-date' | 'watching';
 }
 
 async function fetchSectionPage(key: SectionKey, uname: string, page: number, year?: number): Promise<{ items: SectionItem[]; hasMore: boolean }> {
@@ -293,11 +298,18 @@ async function fetchSectionPage(key: SectionKey, uname: string, page: number, ye
     const res = await fetch(`/api/users/${uname}/${key}?limit=${SECTION_PAGE_SIZE}&page=${page}${yearParam}`, { credentials: 'include' });
     if (!res.ok) return { items: [], hasMore: false };
     const json = await res.json();
-    const rows: { tmdbId: string; score?: number | null; watchedAt?: string; addedAt?: string; updatedAt?: string; createdAt?: string }[] = json.data ?? [];
+    const rows: {
+      tmdbId: string; score?: number | null;
+      watchedAt?: string; addedAt?: string; updatedAt?: string; createdAt?: string;
+      watchedEpisodes?: number; totalEpisodes?: number; status?: SectionItem['status'];
+    }[] = json.data ?? [];
     const items: SectionItem[] = rows.map(i => ({
       tmdbId: i.tmdbId,
       score: i.score ?? undefined,
       date: i.watchedAt ?? i.addedAt ?? i.updatedAt ?? i.createdAt,
+      watchedEpisodes: i.watchedEpisodes,
+      totalEpisodes: i.totalEpisodes,
+      status: i.status,
     }));
     const total: number = json.pagination?.total ?? rows.length;
     return { items, hasMore: page * SECTION_PAGE_SIZE < total };
@@ -312,7 +324,17 @@ function SectionRow({ item, section }: { item: SectionItem; section: SectionKey 
   // The label only adds info for watched/rewatched — for ratings the blue score
   // says it all, and on the Watchlist page "Watchlist" is redundant.
   const showLabel = section === 'watched' || section === 'rewatched';
-  const label = section === 'rewatched' && item.rewatchCount ? `Rewatched ×${item.rewatchCount}` : cfg.label;
+  // A show row earns its status in place of the plain "Watched". Progress only
+  // once episodes are actually ticked — a show marked whole before episodes were
+  // tracked has none, and "0 / 62" reads as a bug rather than as a whole-show mark.
+  const episodes = item.watchedEpisodes ?? 0;
+  const progress = episodes > 0
+    ? (item.totalEpisodes ? `${episodes} / ${item.totalEpisodes} episodes` : `${episodes} episodes`)
+    : null;
+  const label = section === 'rewatched' && item.rewatchCount ? `Rewatched ×${item.rewatchCount}`
+    : item.status === 'completed' ? 'Completed'
+    : item.status === 'up-to-date' ? 'Up to date'
+    : cfg.label;
   const dateLabel = item.date ? new Date(item.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : null;
   return (
     <Link href={`/movie/${item.tmdbId}`} className="flex gap-4 py-3 border-b border-border last:border-0 group">
@@ -322,6 +344,7 @@ function SectionRow({ item, section }: { item: SectionItem; section: SectionKey 
       <div className="flex-1 min-w-0 space-y-1 py-0.5">
         {meta ? <p className="text-sm font-bold group-hover:text-primary transition-colors line-clamp-1">{meta.title}</p> : <div className="h-4 bg-muted rounded-full w-2/3 animate-pulse" />}
         {meta?.year && <p className="text-xs text-muted-foreground">{meta.year}</p>}
+        {progress && <p className="text-xs font-medium text-muted-foreground/90">{progress}</p>}
         <div className="flex items-center gap-3 flex-wrap pt-0.5">
           {meta?.tmdbRating != null && meta.tmdbRating > 0 && (
             <span className="flex items-center gap-1 text-sm font-bold"><Star className="h-3.5 w-3.5 fill-yellow-400 text-yellow-400" />{meta.tmdbRating.toFixed(1)}</span>

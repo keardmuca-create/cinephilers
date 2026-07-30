@@ -20,6 +20,7 @@ import { Progress } from '@/components/ui/progress';
 import { toast } from '@/hooks/use-toast';
 import { fetchWithAuth } from '@/lib/fetch-with-auth';
 import { batchFetchMeta } from '@/lib/meta-batch';
+import { collapseShows, parentShowId, statusFor, type CollapsedRow, type ShowProgressStatus } from '@/lib/collapse-shows';
 import { useAuth } from '@/contexts/auth-context';
 import { readSavedRefine, applyRefineSort } from '@/lib/refine-sort';
 import type { RefineValue } from '@/components/refine-sheet';
@@ -165,7 +166,9 @@ const EmptyRow = ({ message }: { message: string }) => (
   </div>
 );
 
-interface RecentItem { id: string; title: string; poster: string; year: string; loggedAt: string; rating?: number; tmdbRating?: number; linkId?: string; isEpisode?: boolean; seasonNumber?: number; episodeNumber?: number; showName?: string; }
+// One card on the Watch History strip. Episodes no longer appear individually —
+// they collapse into a single show card carrying progress and a status label.
+interface RecentItem { id: string; title: string; poster: string; year: string; loggedAt: string; rating?: number; tmdbRating?: number; isShow?: boolean; watchedEpisodes?: number; totalEpisodes?: number; status?: ShowProgressStatus; }
 interface UserReview { movieId: string; movieTitle: string; moviePoster: string; movieYear: string; content: string; rating: number; date: string; }
 interface UserList { id: string; title: string; isPrivate: boolean; createdAt: string; items: { movieId: string; title: string; poster: string; year: string; type: string }[]; }
 
@@ -696,15 +699,18 @@ export default function ProfilePage() {
     ensureSignupDate();
     setBadges(computeAllBadges(readUserStats()));
 
-    // Count total watched titles
+    // Count total watched titles. Counted the same way the strip below is built —
+    // one per show, not one per episode — so the header number and the cards agree.
+    // parentShowId works off the id shape alone, so this stays synchronous.
     try {
       const allWatchedIds = new Set<string>();
+      const add = (id: string) => allWatchedIds.add(parentShowId({ id, watchedAt: '' }) ?? id);
       for (let i = 0; i < localStorage.length; i++) {
         const k = localStorage.key(i)!;
         if (k.startsWith('watched-') && !k.startsWith('watched-ep-') && localStorage.getItem(k) === 'true')
-          allWatchedIds.add(k.slice('watched-'.length));
+          add(k.slice('watched-'.length));
         if (k.startsWith('watched-ep-'))
-          allWatchedIds.add(k.slice('watched-ep-'.length));
+          add(k.slice('watched-ep-'.length));
       }
       setWatchedCount(allWatchedIds.size);
     } catch { /* ignore */ }
@@ -749,63 +755,83 @@ export default function ProfilePage() {
         // matches the history page: hand-marked titles first (newest), then the
         // rest by watch date.
         const PREVIEW = 50;
-        type Cand = { id: string; isEpisode: boolean; loggedAt: string };
-        const candidates: Cand[] = [];
-        for (const id of movieIds) candidates.push({ id, isEpisode: false, loggedAt: logMap.get(id) ?? getWatchedAtISO(id) ?? new Date(0).toISOString() });
-        for (const epId of episodeIds) candidates.push({ id: epId, isEpisode: true, loggedAt: logMap.get(epId) ?? getWatchedAtISO(epId) ?? new Date(0).toISOString() });
-
-        candidates.sort((a, b) => {
-          const am = getManualWatchISO(a.id);
-          const bm = getManualWatchISO(b.id);
-          if (am && !bm) return -1;
-          if (!am && bm) return 1;
-          if (am && bm) return new Date(bm).getTime() - new Date(am).getTime();
-          return new Date(b.loggedAt).getTime() - new Date(a.loggedAt).getTime();
-        });
-
-        const preview = candidates.slice(0, PREVIEW);
         const readMeta = (id: string): Record<string, unknown> | null => {
           try { const r = localStorage.getItem(`meta-${id}`); return r ? JSON.parse(r) : null; } catch { return null; }
         };
-        // Fetch only the preview items missing from the meta cache — one small batch.
-        const uncached = preview.map(c => c.id).filter(id => !readMeta(id));
+        const dateOf = (id: string) => logMap.get(id) ?? getWatchedAtISO(id) ?? new Date(0).toISOString();
+
+        // Collapse BEFORE slicing. Sixty-two episodes of one show would otherwise
+        // fill the whole fifty-card preview and bury everything else — which is the
+        // problem the show row exists to fix. Grouping only needs the id shape, so
+        // it works off the meta cache with no network; the episode totals that turn
+        // "45" into "45 / 62" are filled in after the preview batch below.
+        const entries = [
+          ...[...movieIds].map(id => ({ id, episode: false })),
+          ...episodeIds.map(id => ({ id, episode: true })),
+        ].map(c => {
+          const cached = readMeta(c.id);
+          return {
+            id: c.id,
+            showId: cached?.showId as string | undefined,
+            isEpisode: c.episode || cached?.isEpisode === true,
+            totalEpisodes: cached?.totalEps as number | undefined,
+            showStatus: cached?.tmdbStatus as string | undefined,
+            watchedAt: dateOf(c.id),
+          };
+        });
+
+        // Hand-marked titles sort above imports, whose log-dates can all be "today".
+        // A show counts as hand-marked if any of its episodes was.
+        const manualOf = (r: CollapsedRow): string | null => {
+          let best: string | null = null;
+          for (const memberId of r.memberIds) {
+            const iso = getManualWatchISO(memberId);
+            if (iso && (!best || iso > best)) best = iso;
+          }
+          return best;
+        };
+        const collapsed = collapseShows(entries);
+        collapsed.sort((a, b) => {
+          const am = manualOf(a);
+          const bm = manualOf(b);
+          if (am && !bm) return -1;
+          if (!am && bm) return 1;
+          if (am && bm) return new Date(bm).getTime() - new Date(am).getTime();
+          return new Date(b.watchedAt).getTime() - new Date(a.watchedAt).getTime();
+        });
+
+        const preview = collapsed.slice(0, PREVIEW);
+        // Fetch only the preview rows missing from the meta cache — one small batch.
+        const uncached = preview.map(r => r.id).filter(id => !readMeta(id));
         const fetched = uncached.length > 0 ? await batchFetchMeta(uncached) : {};
         const getMeta = (id: string): Record<string, unknown> | null => readMeta(id) ?? (fetched[id] as unknown as Record<string, unknown> | undefined) ?? null;
 
         const items: RecentItem[] = [];
-        for (const c of preview) {
-          const rv = rvMap.get(c.id);
-          const data = getMeta(c.id);
+        for (const r of preview) {
+          const rv = rvMap.get(r.id);
+          const data = getMeta(r.id);
           const title = (data?.title as string | undefined) ?? rv?.title;
           if (!title) continue;
-          const rating = localStorage.getItem(`movie-rating-${c.id}`);
-          if (c.isEpisode) {
-            const m = c.id.match(/^(.+)-S(\d+)E(\d+)$/);
-            items.push({
-              id: c.id,
-              linkId: m ? m[1] : c.id,
-              title: title.replace(/^S\d+E\d+\s·\s/, ''),
-              poster: (data?.poster as string) ?? '',
-              year: (data?.year as string) ?? '',
-              loggedAt: c.loggedAt,
-              rating: rating ? Number(rating) : undefined,
-              tmdbRating: typeof data?.tmdbRating === 'number' ? data.tmdbRating : undefined,
-              isEpisode: true,
-              seasonNumber: (data?.seasonNumber as number) ?? (m ? parseInt(m[2], 10) : undefined),
-              episodeNumber: (data?.episodeNumber as number) ?? (m ? parseInt(m[3], 10) : undefined),
-              showName: data?.showName as string | undefined,
-            });
-          } else {
-            items.push({
-              id: c.id,
-              title,
-              poster: (data?.poster as string) ?? rv?.poster ?? '',
-              year: (data?.year as string) ?? rv?.year ?? '',
-              loggedAt: c.loggedAt,
-              rating: rating ? Number(rating) : undefined,
-              tmdbRating: typeof data?.tmdbRating === 'number' ? data.tmdbRating : rv?.tmdbRating,
-            });
-          }
+          const rating = localStorage.getItem(`movie-rating-${r.id}`);
+          // A whole-show mark with nothing cached looks like a film until its meta
+          // lands, so settle showness here, once the fetch has actually happened.
+          const isShow = r.isShow || (data?.type === 'show' && data?.isEpisode !== true);
+          const total = r.totalEpisodes || (data?.totalEps as number | undefined) || 0;
+          items.push({
+            id: r.id,
+            title: title.replace(/^S\d+E\d+\s·\s/, ''),
+            poster: (data?.poster as string) ?? rv?.poster ?? '',
+            year: (data?.year as string) ?? rv?.year ?? '',
+            loggedAt: r.watchedAt,
+            rating: rating ? Number(rating) : undefined,
+            tmdbRating: typeof data?.tmdbRating === 'number' ? data.tmdbRating : rv?.tmdbRating,
+            isShow,
+            watchedEpisodes: isShow ? r.watchedEpisodes : undefined,
+            totalEpisodes: isShow ? total : undefined,
+            status: isShow
+              ? statusFor(r.watchedEpisodes, total, (r.showStatus ?? data?.tmdbStatus) as string | undefined)
+              : undefined,
+          });
         }
         // preview was already date-sorted, so keep that order.
         // A newer rebuild started while this one was fetching — discard this result.
@@ -1311,7 +1337,7 @@ export default function ProfilePage() {
         {recentWatched.length > 0 ? (
           <div className="flex overflow-x-auto gap-4 pb-4 no-scrollbar -mx-6 px-6">
             {sortedWatched.map(item => (
-              <Link key={item.id} href={`/movie/${item.linkId ?? item.id}`} className="group shrink-0 w-36">
+              <Link key={item.id} href={`/movie/${item.id}`} className="group shrink-0 w-36">
                 <div className="relative aspect-[2/3] overflow-hidden rounded-xl bg-muted shadow-lg movie-card-hover mb-2">
                   {item.poster ? (
                     <img src={item.poster} alt={item.title} className="w-full h-full object-cover" />
@@ -1339,9 +1365,13 @@ export default function ProfilePage() {
                 <p className="text-xs font-semibold font-headline line-clamp-2 group-hover:text-primary transition-colors leading-snug">
                   {item.title} {item.year ? `(${item.year})` : ''}
                 </p>
-                {item.isEpisode && item.seasonNumber !== undefined && item.episodeNumber !== undefined && (
+                {/* Progress only once episodes have actually been ticked — a
+                    pre-Step-2 show record has none, and "0 / 62" reads as a bug. */}
+                {item.isShow && (item.watchedEpisodes ?? 0) > 0 && (
                   <p className="text-[11px] text-muted-foreground line-clamp-1 mt-0.5">
-                    S{item.seasonNumber}·E{item.episodeNumber}{item.showName ? ` · ${item.showName}` : ''}
+                    {item.totalEpisodes ? `${item.watchedEpisodes} / ${item.totalEpisodes} episodes` : `${item.watchedEpisodes} episodes`}
+                    {item.status === 'completed' && ' · Completed'}
+                    {item.status === 'up-to-date' && ' · Up to date'}
                   </p>
                 )}
               </Link>
