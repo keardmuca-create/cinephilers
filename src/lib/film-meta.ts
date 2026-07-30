@@ -22,6 +22,9 @@ export async function saveFilmMeta(meta: ItemMeta): Promise<void> {
     director: meta.director ?? null,
     topCast: meta.topCast ?? [],
     voteAverage: typeof meta.tmdbRating === 'number' ? meta.tmdbRating : null,
+    episodeCount: typeof meta.totalEps === 'number' && meta.totalEps > 0 ? meta.totalEps : null,
+    showStatus: meta.tmdbStatus ?? null,
+    showType: meta.showType ?? null,
   };
 
   await prisma.filmMeta.upsert({

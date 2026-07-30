@@ -397,6 +397,16 @@ model FilmMeta {
   director    String?
   topCast     String[]
   voteAverage Float?
+
+  // Shows only. episodeCount lets the server credit a whole-show mark with its
+  // real episode count; showStatus ("Ended", "Returning Series") separates a
+  // completed series from one that's merely up to date; showType ("Miniseries",
+  // "Scripted") is what tells a mini-series apart. All three already ride along
+  // on the TMDB detail call the meta route makes, so they cost nothing extra.
+  episodeCount Int?
+  showStatus   String?
+  showType     String?
+
   updatedAt   DateTime  @updatedAt
 
   @@index([language])
