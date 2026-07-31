@@ -60,6 +60,27 @@ export async function POST(req: NextRequest) {
     await awardBadgeIfEarned(auth.sub, user.ratingsCount);
   }
 
+  // Rating an episode marks THAT EPISODE watched, in the episodes table where a
+  // watched episode belongs. Sending it down the path below instead wrote a
+  // WatchedItem row keyed by the episode's id — a phantom the sync then deletes
+  // on sight, so the auto-mark silently achieved nothing and the episode stayed
+  // unwatched. Nobody had rated an episode yet, which is the only reason this
+  // hadn't bitten.
+  const epMatch = /^(tmdb-tv-\d+)-S(\d+)E(\d+)$/.exec(tmdbId);
+  if (epMatch) {
+    const [, showTmdbId, season, episode] = epMatch;
+    await prisma.watchedEpisode.upsert({
+      where: {
+        userId_showTmdbId_season_episode: {
+          userId: auth.sub, showTmdbId, season: parseInt(season, 10), episode: parseInt(episode, 10),
+        },
+      },
+      create: { userId: auth.sub, showTmdbId, season: parseInt(season, 10), episode: parseInt(episode, 10) },
+      update: {},
+    });
+    return ok(rating, existing ? 'Rating updated' : 'Rating saved', { status: existing ? 200 : 201 });
+  }
+
   // Auto-mark as watched when rated. upsert isn't atomic, so two ratings for the
   // same film landing together (rapid taps, or a flaky-network retry) can both
   // try to INSERT — the loser hits the unique constraint. That just means it's
