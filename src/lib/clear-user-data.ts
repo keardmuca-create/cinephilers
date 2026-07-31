@@ -13,7 +13,9 @@ export function clearUserData() {
       // ratings-refine / list-refine) across logout and account switch — they're
       // device-level UI prefs, not user data. Without this, "watchlist-refine" would
       // be wiped by the "watchlist-" prefix rule below, resetting the sort on login.
-      if (k.endsWith('-refine')) continue;
+      // Same for the chosen Movies/Shows side (watchlist-side would otherwise be
+      // wiped by the "watchlist-" rule below while history-side survived).
+      if (k.endsWith('-refine') || k.endsWith('-side')) continue;
       if (
         k === 'cinephilers_user' ||
         k === 'recently-viewed' ||
