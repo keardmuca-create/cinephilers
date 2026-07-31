@@ -37,6 +37,19 @@ export function parentShowId(id: string): string | null {
 }
 
 /**
+ * What a rating is actually for, from the shape of its id.
+ *
+ * Every rating is stored under the same `movie-rating-` prefix whatever it's for,
+ * so anything counting by key prefix cannot tell them apart — which is exactly how
+ * the badge counters came to read every rating as a film and every rated episode
+ * as another show rated.
+ */
+export function ratingKind(id: string): 'film' | 'show' | 'episode' {
+  if (EP_ID.test(id)) return 'episode';
+  return id.startsWith('tmdb-tv-') ? 'show' : 'film';
+}
+
+/**
  * The number a show row sorts and filters by: what the user said about the
  * series if they said anything, otherwise their episode average. Without the
  * fallback, someone who only rates episodes has every show sort as unrated.

@@ -2,6 +2,7 @@
 // Badge system — definitions, tier computation, localStorage helpers
 
 import { recordAddedAt } from '@/lib/media-id';
+import { ratingKind } from '@/lib/collapse-ratings';
 
 export type BadgeTier = 'locked' | 'grey' | 'bronze' | 'silver' | 'gold';
 
@@ -359,23 +360,30 @@ export function readUserStats(): UserStats {
     }
   } catch { /* ignore */ }
 
+  // Every rating is stored under one prefix whatever it's for — movie-rating-550,
+  // movie-rating-tmdb-tv-1396, movie-rating-tmdb-tv-1396-S1E2 — so counting by key
+  // prefix cannot tell them apart. It read every rating as a film, read each rated
+  // EPISODE as another show rated (an episode key starts with the show prefix too),
+  // and left Episodes Rated permanently 0 against a prefix nothing ever writes.
+  // Classify by the shape of the id instead, the way the lists already do.
   let moviesRated = 0;
-  try {
-    for (let i = 0; i < localStorage.length; i++) {
-      const key = localStorage.key(i);
-      if (key?.startsWith('movie-rating-')) moviesRated++;
-    }
-  } catch { /* ignore */ }
-
   let episodesRated = 0;
-  let showsRated = 0;
+  const showsRatedIds = new Set<string>();
   try {
     for (let i = 0; i < localStorage.length; i++) {
       const key = localStorage.key(i);
-      if (key?.startsWith('episode-rating-')) episodesRated++;
-      if (key?.startsWith('movie-rating-tmdb-tv-')) showsRated++;
+      if (!key?.startsWith('movie-rating-')) continue;
+      const id = key.slice('movie-rating-'.length);
+      // Rating episodes is not rating the series, so an episode does NOT count as
+      // a show rated — that happens only when the show itself is given a score.
+      switch (ratingKind(id)) {
+        case 'episode': episodesRated++; break;
+        case 'show': showsRatedIds.add(id); break;
+        default: moviesRated++;
+      }
     }
   } catch { /* ignore */ }
+  const showsRated = showsRatedIds.size;
 
   // Episodes watched: individual ep keys + whole-show-watched credits
   let episodesWatched = 0;

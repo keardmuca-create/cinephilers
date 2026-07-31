@@ -1,5 +1,24 @@
 import { describe, it, expect } from 'vitest';
-import { collapseRatings, effectiveScore, parentShowId } from './collapse-ratings';
+import { collapseRatings, effectiveScore, parentShowId, ratingKind } from './collapse-ratings';
+
+describe('ratingKind', () => {
+  it('tells a film, a series and an episode apart', () => {
+    expect(ratingKind('tmdb-550')).toBe('film');
+    expect(ratingKind('tmdb-tv-1396')).toBe('show');
+    expect(ratingKind('tmdb-tv-1396-S1E2')).toBe('episode');
+  });
+
+  // The badge counters matched key prefixes, so a rated episode also matched the
+  // show prefix and counted as another show rated. 62 episodes read as 62 shows.
+  it('does not count a rated episode as a rated show', () => {
+    expect(ratingKind('tmdb-tv-1396-S5E16')).not.toBe('show');
+  });
+
+  it('does not count a rated show or episode as a film', () => {
+    expect(ratingKind('tmdb-tv-1396')).not.toBe('film');
+    expect(ratingKind('tmdb-tv-1396-S1E1')).not.toBe('film');
+  });
+});
 
 describe('parentShowId', () => {
   it('reads the show out of an episode rating id', () => {
