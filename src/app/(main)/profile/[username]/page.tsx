@@ -310,17 +310,16 @@ interface SectionItem {
   status?: 'completed' | 'up-to-date' | 'watching';
 }
 
-async function fetchSectionPage(key: SectionKey, uname: string, page: number, year?: number): Promise<{ items: SectionItem[]; hasMore: boolean }> {
-  const yearParam = year ? `&year=${year}` : '';
+async function fetchSectionPage(key: SectionKey, uname: string, page: number): Promise<{ items: SectionItem[]; hasMore: boolean }> {
   try {
     if (key === 'rewatched') {
-      const res = await fetch(`/api/users/${uname}/rewatched?min=2&sort=recent&limit=${SECTION_PAGE_SIZE}&page=${page}${yearParam}`, { credentials: 'include' });
+      const res = await fetch(`/api/users/${uname}/rewatched?min=2&sort=recent&limit=${SECTION_PAGE_SIZE}&page=${page}`, { credentials: 'include' });
       if (!res.ok) return { items: [], hasMore: false };
       const json = await res.json();
       const rows: { tmdbId: string; count: number; lastWatchedAt?: string }[] = json.data?.items ?? [];
       return { items: rows.map(i => ({ tmdbId: i.tmdbId, rewatchCount: i.count, date: i.lastWatchedAt })), hasMore: !!json.data?.hasMore };
     }
-    const res = await fetch(`/api/users/${uname}/${key}?limit=${SECTION_PAGE_SIZE}&page=${page}${yearParam}`, { credentials: 'include' });
+    const res = await fetch(`/api/users/${uname}/${key}?limit=${SECTION_PAGE_SIZE}&page=${page}`, { credentials: 'include' });
     if (!res.ok) return { items: [], hasMore: false };
     const json = await res.json();
     const rows: {
@@ -438,9 +437,6 @@ export default function PublicProfilePage() {
   const [sectionLoading, setSectionLoading] = useState(false);
   const [reviewsLoading, setReviewsLoading] = useState(false);
   const [listsLoading, setListsLoading] = useState(false);
-  // Watch History / Rewatched full views: filter to this calendar year
-  const [yearOnly, setYearOnly] = useState(false);
-  const thisYear = new Date().getFullYear();
 
   const loadActivity = async (uname: string) => {
     try {
@@ -495,31 +491,23 @@ export default function PublicProfilePage() {
     }
   }, [username, router]);
 
-  // (Re)load page 1 of a poster section, optionally filtered to this year.
-  const loadSectionFirstPage = async (key: SectionKey, year?: number) => {
+  // (Re)load page 1 of a poster section.
+  const loadSectionFirstPage = async (key: SectionKey) => {
     if (!profile) return;
     setSectionItems([]);
     setSectionPage(1);
     setSectionHasMore(false);
     setSectionLoading(true);
-    const { items, hasMore } = await fetchSectionPage(key, profile.username, 1, year);
+    const { items, hasMore } = await fetchSectionPage(key, profile.username, 1);
     await prewarmMetaCache(items.map(i => i.tmdbId));
     setSectionItems(items);
     setSectionHasMore(hasMore);
     setSectionLoading(false);
   };
 
-  const toggleYearOnly = () => {
-    if (!openSection || (openSection !== 'watched' && openSection !== 'rewatched')) return;
-    const next = !yearOnly;
-    setYearOnly(next);
-    loadSectionFirstPage(openSection, next ? thisYear : undefined);
-  };
-
   const openSectionView = async (key: OpenKey) => {
     if (!profile) return;
     setOpenSection(key);
-    setYearOnly(false);
     window.scrollTo(0, 0);
 
     if (key === 'reviews') {
@@ -552,7 +540,7 @@ export default function PublicProfilePage() {
     if (!profile || !openSection || openSection === 'reviews' || openSection === 'lists' || sectionLoading) return;
     const next = sectionPage + 1;
     setSectionLoading(true);
-    const { items, hasMore } = await fetchSectionPage(openSection, profile.username, next, yearOnly ? thisYear : undefined);
+    const { items, hasMore } = await fetchSectionPage(openSection, profile.username, next);
     await prewarmMetaCache(items.map(i => i.tmdbId));
     setSectionItems(prev => [...prev, ...items]);
     setSectionPage(next);
@@ -614,19 +602,10 @@ export default function PublicProfilePage() {
           <h1 className="text-xl font-headline font-bold flex items-center gap-2">{meta.icon}{meta.title}</h1>
         </div>
 
-        {/* All / This Year filter — Watch History and Rewatched only */}
-        {(openSection === 'watched' || openSection === 'rewatched') && (
-          <div className="flex gap-1 p-1 bg-muted rounded-full w-fit">
-            <button onClick={() => { if (yearOnly) toggleYearOnly(); }}
-              className={`px-4 py-1.5 rounded-full text-xs font-bold transition-colors ${!yearOnly ? 'bg-card shadow text-foreground' : 'text-muted-foreground'}`}>
-              All Time
-            </button>
-            <button onClick={() => { if (!yearOnly) toggleYearOnly(); }}
-              className={`px-4 py-1.5 rounded-full text-xs font-bold transition-colors ${yearOnly ? 'bg-card shadow text-foreground' : 'text-muted-foreground'}`}>
-              {thisYear}
-            </button>
-          </div>
-        )}
+        {/* No All / This Year filter. Someone else's profile is for seeing what
+            they've watched, not for slicing it — and a year total counts films and
+            shows together, which is the one thing the split exists to stop. Your
+            own year breakdowns live on the stats page. */}
 
         {openSection === 'reviews' ? (
           reviewsLoading && reviews.length === 0 ? posterSkeleton
