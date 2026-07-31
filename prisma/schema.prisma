@@ -407,6 +407,13 @@ model FilmMeta {
   showStatus   String?
   showType     String?
 
+  // Episodes per season, keyed by season number: {"1":7,"2":13}. Specials
+  // (season 0) are excluded, matching episodeCount. Lets the app say someone
+  // finished SEASON ONE rather than "13 / 62" — people talk in seasons, and
+  // ticking a season through is already how they get there. Rides along on the
+  // same TMDB detail call as the three fields above, so it costs nothing.
+  seasonCounts Json?
+
   updatedAt   DateTime  @updatedAt
 
   @@index([language])

@@ -16,6 +16,8 @@ export interface ItemMeta {
   showType?: string;
   tmdbStatus?: string;
   totalEps?: number;
+  /** Shows only: episodes per season, keyed by season number ({"1":7,"2":13}). */
+  seasonCounts?: Record<string, number>;
   tmdbRating?: number;
   director?: string;
   topCast?: string[];

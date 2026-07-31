@@ -25,6 +25,7 @@ export async function saveFilmMeta(meta: ItemMeta): Promise<void> {
     episodeCount: typeof meta.totalEps === 'number' && meta.totalEps > 0 ? meta.totalEps : null,
     showStatus: meta.tmdbStatus ?? null,
     showType: meta.showType ?? null,
+    seasonCounts: meta.seasonCounts ?? undefined,
   };
 
   await prisma.filmMeta.upsert({

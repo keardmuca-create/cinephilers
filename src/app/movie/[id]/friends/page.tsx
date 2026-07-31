@@ -14,6 +14,8 @@ interface FriendRatingEntry {
   watched: boolean;
   reviewed: boolean;
   inWatchlist: boolean;
+  /** Shows only: "Completed", "Season 1", "13 / 62", "1 episode". */
+  progress?: string;
 }
 
 export default function MovieFriendsPage() {
@@ -138,10 +140,15 @@ export default function MovieFriendsPage() {
                 }
               </div>
 
-              {/* Name + username */}
+              {/* Name + username, and for a show how far through it they are.
+                  The label goes here rather than in the icon row because
+                  "Seasons 1–2" won't fit a fixed slot. */}
               <div className="flex-1 min-w-0">
                 <p className="font-bold truncate">{e.user.displayName ?? e.user.username}</p>
                 <p className="text-sm text-muted-foreground truncate">@{e.user.username}</p>
+                {e.progress && (
+                  <p className="text-xs font-medium text-blue-400/90 truncate mt-0.5">{e.progress}</p>
+                )}
               </div>
 
               {/* Three constant slots, always in the same order: watched eye ·
@@ -150,7 +157,7 @@ export default function MovieFriendsPage() {
                   eye shows even if the watched flag never got set. */}
               <div className="flex items-center gap-3 shrink-0">
                 <span className="w-5 flex justify-center">
-                  {(e.watched || e.rating !== null || e.reviewed)
+                  {(e.watched || e.rating !== null || e.reviewed || e.progress)
                     ? <Eye className="h-4 w-4 text-blue-400" />
                     : <span className="text-sm text-muted-foreground/50">—</span>}
                 </span>

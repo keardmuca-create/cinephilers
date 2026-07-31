@@ -3,6 +3,18 @@ import type { ItemMeta } from './[id]/route';
 const BASE = 'https://api.themoviedb.org/3';
 const IMG  = 'https://image.tmdb.org/t/p';
 
+/** {"1":7,"2":13} from TMDB's season list, specials dropped. */
+function seasonCountsFrom(seasons: unknown): Record<string, number> | undefined {
+  if (!Array.isArray(seasons)) return undefined;
+  const out: Record<string, number> = {};
+  for (const s of seasons as { season_number?: number; episode_count?: number }[]) {
+    if (typeof s?.season_number !== 'number' || s.season_number <= 0) continue;
+    if (typeof s.episode_count !== 'number' || s.episode_count <= 0) continue;
+    out[String(s.season_number)] = s.episode_count;
+  }
+  return Object.keys(out).length > 0 ? out : undefined;
+}
+
 export async function fetchOneMeta(id: string, key: string): Promise<ItemMeta> {
   const epMatch = id.match(/^(tmdb-tv-(\d+))-S(\d+)E(\d+)$/);
   if (epMatch) {
@@ -75,6 +87,9 @@ export async function fetchOneMeta(id: string, key: string): Promise<ItemMeta> {
     showType: isShow ? (d.type ?? undefined) : undefined,
     tmdbStatus: d.status ?? undefined,
     totalEps: isShow ? (d.number_of_episodes ?? undefined) : undefined,
+    // Episodes per season, so the app can say someone finished season one rather
+    // than "13 / 62". Specials (season 0) excluded, matching number_of_episodes.
+    seasonCounts: isShow ? seasonCountsFrom(d.seasons) : undefined,
     tmdbRating: typeof d.vote_average === 'number' ? d.vote_average : undefined,
   };
 }
