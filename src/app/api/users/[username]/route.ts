@@ -42,7 +42,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ user
   // public profile. Only computed once the profile is known to be visible.
   const yearStart = new Date(new Date().getFullYear(), 0, 1);
   const thisYear = yearStart.getFullYear();
-  const [watchlistCount, listsCount, reviewsCount, watchedCount, watchedThisYear, rewatchGroups, rewatchThisYearGroups, ratingGroups, watchedSplit, ratingRows, watchlistGroups] = await Promise.all([
+  const [watchlistCount, listsCount, reviewsCount, watchedCount, rewatchGroups, rewatchThisYearGroups, ratingGroups, watchedSplit, ratingRows, watchlistGroups] = await Promise.all([
     prisma.watchlistItem.count({ where: { userId: user.id } }),
     prisma.customList.count({ where: { userId: user.id, ...(isOwner ? {} : { isPublic: true }) } }),
     prisma.review.count({ where: { userId: user.id, hidden: false } }),
@@ -50,7 +50,6 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ user
     // the number on the row matches the list it opens. _count.watched would
     // count the WatchedItem table alone and miss ticked episodes entirely.
     countWatchedRows(user.id),
-    countWatchedRows(user.id, { year: thisYear }),
     prisma.watchEvent.groupBy({
       by: ['tmdbId', 'mediaType'],
       where: { userId: user.id },
@@ -104,7 +103,6 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ user
     rewatchedCount: rewatchGroups.length,
     listsCount,
     reviewsCount,
-    watchedThisYear,
     rewatchedThisYear: rewatchThisYearGroups.length,
     ratingDistribution,
     isFollowing: isFollowingBool,

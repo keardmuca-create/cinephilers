@@ -35,7 +35,6 @@ interface ProfileUser {
   watchlistCount: number;
   rewatchedCount: number;
   listsCount: number;
-  watchedThisYear: number;
   rewatchedThisYear: number;
   ratingDistribution: number[];
   followersCount: number;
@@ -802,7 +801,10 @@ export default function PublicProfilePage() {
       {/* Stat rows — each opens the full-screen list */}
       {isVisible && (
         <section className="bg-card rounded-2xl border border-border px-4">
-          <StatRow icon={<Eye className="h-5 w-5 text-primary" />} label="Watch History" count={profile.watchedCount} split={{ films: profile.watchedFilms ?? 0, shows: profile.watchedShows ?? 0 }} thisYear={profile.watchedThisYear} onClick={() => openSectionView('watched')} />
+          {/* No "this year" here: it counted films and shows together, which is the
+              one thing the split exists to stop. Rewatched keeps its own, being
+              films only. */}
+          <StatRow icon={<Eye className="h-5 w-5 text-primary" />} label="Watch History" count={profile.watchedCount} split={{ films: profile.watchedFilms ?? 0, shows: profile.watchedShows ?? 0 }} onClick={() => openSectionView('watched')} />
           {/* Rewatched is films-only, so it keeps its single number. */}
           <StatRow icon={<Repeat className="h-5 w-5 text-primary" />} label="Rewatched" count={profile.rewatchedCount} thisYear={profile.rewatchedThisYear} onClick={() => openSectionView('rewatched')} />
           <StatRow icon={<Star className="h-5 w-5 text-primary" />} label="Ratings" count={(profile.ratingDistribution ?? []).reduce((a, b) => a + b, 0)} split={{ films: profile.ratedFilms ?? 0, shows: profile.ratedShows ?? 0 }} onClick={() => openSectionView('ratings')} />
