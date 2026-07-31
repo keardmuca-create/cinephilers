@@ -20,7 +20,7 @@ import { Progress } from '@/components/ui/progress';
 import { toast } from '@/hooks/use-toast';
 import { fetchWithAuth } from '@/lib/fetch-with-auth';
 import { batchFetchMeta } from '@/lib/meta-batch';
-import { collapseShows, parentShowId, statusFor, type CollapsedRow, type ShowProgressStatus } from '@/lib/collapse-shows';
+import { collapseShows, statusFor, type CollapsedRow, type ShowProgressStatus } from '@/lib/collapse-shows';
 import { useAuth } from '@/contexts/auth-context';
 import { readSavedRefine, applyRefineSort } from '@/lib/refine-sort';
 import type { RefineValue } from '@/components/refine-sheet';
@@ -580,7 +580,6 @@ export default function ProfilePage() {
 
   const [badges, setBadges] = useState<ComputedBadge[]>([]);
   const [recentWatched, setRecentWatched] = useState<RecentItem[]>([]);
-  const [watchedCount, setWatchedCount] = useState(0);
   const [watchlist, setWatchlist] = useState<Movie[]>([]);
   const [userReviews, setUserReviews] = useState<UserReview[]>([]);
   const [ratedItems, setRatedItems] = useState<RatedItem[]>([]);
@@ -699,21 +698,8 @@ export default function ProfilePage() {
     ensureSignupDate();
     setBadges(computeAllBadges(readUserStats()));
 
-    // Count total watched titles. Counted the same way the strip below is built —
-    // one per show, not one per episode — so the header number and the cards agree.
-    // parentShowId works off the id shape alone, so this stays synchronous.
-    try {
-      const allWatchedIds = new Set<string>();
-      const add = (id: string) => allWatchedIds.add(parentShowId({ id, watchedAt: '' }) ?? id);
-      for (let i = 0; i < localStorage.length; i++) {
-        const k = localStorage.key(i)!;
-        if (k.startsWith('watched-') && !k.startsWith('watched-ep-') && localStorage.getItem(k) === 'true')
-          add(k.slice('watched-'.length));
-        if (k.startsWith('watched-ep-'))
-          add(k.slice('watched-ep-'.length));
-      }
-      setWatchedCount(allWatchedIds.size);
-    } catch { /* ignore */ }
+    // No watched total is computed here any more: the shelf shows no number, and
+    // the count that means something is the per-side one on /history.
 
     // Build recent watch preview — movies as individual cards, episodes grouped by show
     const buildWatchHistory = async () => {
@@ -1323,10 +1309,10 @@ export default function ProfilePage() {
             <div className="w-1 h-6 bg-primary rounded-full" />
             <h3 className="text-2xl font-headline font-bold flex items-center gap-2">
               <History className="h-6 w-6 text-primary" />
+              {/* No number here. Films and shows are separate lists now, and one
+                  mixed total describes neither — See All is where you pick a side
+                  and get a count that means something. */}
               Watch history
-              {watchedCount > 0 && (
-                <span className="text-2xl font-bold text-foreground">{watchedCount}</span>
-              )}
             </h3>
           </div>
           <Link href="/history" className="text-xs text-primary border border-primary/30 rounded-full px-3 py-1 hover:bg-primary/10 transition-colors font-semibold flex items-center gap-1">
@@ -1390,8 +1376,8 @@ export default function ProfilePage() {
         <div className="flex items-center justify-between mb-6">
           <h3 className="text-2xl font-headline font-bold flex items-center gap-3">
             <Star className="h-6 w-6 text-primary" />
+            {/* Split list, so no mixed total — see the Watch history note above. */}
             Ratings
-            {ratedItems.length > 0 && <span className="text-2xl font-bold text-foreground">{ratedItems.length}</span>}
           </h3>
           {ratedItems.length > 0 && (
             <Link href="/ratings" className="text-xs text-primary border border-primary/30 rounded-full px-3 py-1 hover:bg-primary/10 transition-colors font-semibold flex items-center gap-1">
@@ -1463,10 +1449,10 @@ export default function ProfilePage() {
 
       {/* Watchlist */}
       <section>
+        {/* No count passed: split list, so no mixed total — see Watch history above. */}
         <SectionHeader
           title="Watchlist"
           icon={Bookmark}
-          count={watchlist.length}
           seeAllContent={watchlist.length > 0 ? (
             <Link href="/watchlist" className="text-xs text-primary border border-primary/30 rounded-full px-3 py-1 hover:bg-primary/10 transition-colors font-semibold flex items-center gap-1">
               See All <ChevronRight className="h-3 w-3" />

@@ -120,6 +120,37 @@ export async function listWatchedRows(
 }
 
 /**
+ * Films and shows counted separately, the way every list now presents them.
+ * A profile showing one mixed number says nothing once the list it opens is
+ * split in two, so the profile answers both instead of neither.
+ *
+ * A show is one row whether it was marked whole, ticked episode by episode, or
+ * both — matching what the Shows side of the list actually shows.
+ */
+export async function countWatchedSplit(
+  userId: string,
+  { year }: { year?: number } = {},
+): Promise<{ films: number; shows: number }> {
+  const yearWhere = year
+    ? { watchedAt: { gte: new Date(year, 0, 1), lt: new Date(year + 1, 0, 1) } }
+    : {};
+
+  const [films, showItems, episodeShows] = await Promise.all([
+    prisma.watchedItem.count({ where: { userId, mediaType: 'MOVIE', ...yearWhere } }),
+    prisma.watchedItem.findMany({
+      where: { userId, mediaType: 'SHOW', ...yearWhere },
+      select: { tmdbId: true },
+    }),
+    prisma.watchedEpisode.groupBy({ by: ['showTmdbId'], where: { userId, ...yearWhere } }),
+  ]);
+
+  const shows = new Set(showItems.map(s => s.tmdbId));
+  for (const g of episodeShows) shows.add(g.showTmdbId);
+
+  return { films, shows: shows.size };
+}
+
+/**
  * How many rows that history has, counted the same way it's listed — one per
  * show rather than one per episode, so the profile's number matches its list.
  */

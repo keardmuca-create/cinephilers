@@ -2,7 +2,7 @@ import { NextRequest } from 'next/server';
 import { prisma } from '@/lib/db';
 import { ok, err } from '@/lib/api-response';
 import { getCurrentUser } from '@/lib/auth-utils';
-import { countWatchedRows } from '@/lib/watched-rows';
+import { countWatchedRows, countWatchedSplit } from '@/lib/watched-rows';
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ username: string }> }) {
   const { username } = await params;
@@ -42,7 +42,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ user
   // public profile. Only computed once the profile is known to be visible.
   const yearStart = new Date(new Date().getFullYear(), 0, 1);
   const thisYear = yearStart.getFullYear();
-  const [watchlistCount, listsCount, reviewsCount, watchedCount, watchedThisYear, rewatchGroups, rewatchThisYearGroups, ratingGroups] = await Promise.all([
+  const [watchlistCount, listsCount, reviewsCount, watchedCount, watchedThisYear, rewatchGroups, rewatchThisYearGroups, ratingGroups, watchedSplit, ratingRows, watchlistGroups] = await Promise.all([
     prisma.watchlistItem.count({ where: { userId: user.id } }),
     prisma.customList.count({ where: { userId: user.id, ...(isOwner ? {} : { isPublic: true }) } }),
     prisma.review.count({ where: { userId: user.id, hidden: false } }),
@@ -65,16 +65,41 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ user
       having: { tmdbId: { _count: { gte: 2 } } },
     }),
     prisma.rating.groupBy({ by: ['score'], where: { userId: user.id }, _count: { _all: true } }),
+    // Films / shows split for the profile rows. Every list is split in two now,
+    // so one mixed number on the row that opens them says nothing.
+    countWatchedSplit(user.id),
+    prisma.rating.findMany({ where: { userId: user.id }, select: { tmdbId: true, mediaType: true } }),
+    prisma.watchlistItem.groupBy({ by: ['mediaType'], where: { userId: user.id }, _count: { _all: true } }),
   ]);
 
   // 10 buckets, index 0 = score 1 … index 9 = score 10.
   const ratingDistribution = Array.from({ length: 10 }, (_, i) => ratingGroups.find(g => g.score === i + 1)?._count._all ?? 0);
+
+  // Ratings split. Episode ratings collapse into their show, matching the list —
+  // rating 62 episodes is one show rated, not 62 things rated.
+  const ratedShows = new Set<string>();
+  let ratedFilms = 0;
+  for (const r of ratingRows) {
+    if (r.mediaType === 'SHOW') ratedShows.add(r.tmdbId.replace(/-S\d+E\d+$/, ''));
+    else ratedFilms++;
+  }
+
+  // The watchlist deliberately does NOT collapse episodes — a saved episode is
+  // its own intent there — so its shows side counts rows, episodes included.
+  const watchlistFilms = watchlistGroups.find(g => g.mediaType === 'MOVIE')?._count._all ?? 0;
+  const watchlistShows = watchlistGroups.find(g => g.mediaType === 'SHOW')?._count._all ?? 0;
 
   return ok({
     ...user,
     followersCount: user._count.followers,
     followingCount: user._count.following,
     watchedCount,
+    watchedFilms: watchedSplit.films,
+    watchedShows: watchedSplit.shows,
+    ratedFilms,
+    ratedShows: ratedShows.size,
+    watchlistFilms,
+    watchlistShows,
     watchlistCount,
     rewatchedCount: rewatchGroups.length,
     listsCount,

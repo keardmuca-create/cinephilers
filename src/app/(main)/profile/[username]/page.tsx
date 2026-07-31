@@ -24,6 +24,14 @@ interface ProfileUser {
   ratingsCount: number;
   reviewsCount: number;
   watchedCount: number;
+  // Films and shows counted separately — the lists these rows open are split in
+  // two, so a single mixed number here would answer neither side.
+  watchedFilms: number;
+  watchedShows: number;
+  ratedFilms: number;
+  ratedShows: number;
+  watchlistFilms: number;
+  watchlistShows: number;
   watchlistCount: number;
   rewatchedCount: number;
   listsCount: number;
@@ -233,14 +241,32 @@ function RatingGraph({ distribution }: { distribution: number[] }) {
 }
 
 // One tappable stat row on the profile (Watch History, Ratings, …).
-function StatRow({ icon, label, count, thisYear, onClick }: { icon: React.ReactNode; label: string; count: number; thisYear?: number; onClick: () => void }) {
+//
+// `split` replaces the single count on rows whose list is split into Movies and
+// Shows: one mixed number can't describe two separate lists, but removing it
+// entirely would leave a stranger's first look at the profile blank. So it
+// answers both sides rather than neither.
+function StatRow({ icon, label, count, split, thisYear, onClick }: {
+  icon: React.ReactNode;
+  label: string;
+  count: number;
+  split?: { films: number; shows: number };
+  thisYear?: number;
+  onClick: () => void;
+}) {
   return (
     <button onClick={onClick} disabled={count === 0}
       className="w-full flex items-center gap-3 py-4 border-b border-border last:border-0 text-left disabled:opacity-40 disabled:cursor-default hover:opacity-70 transition-opacity">
       {icon}
       <span className="flex-1 font-semibold">{label}</span>
-      <span className="text-sm text-muted-foreground">
-        {count.toLocaleString()}
+      <span className="text-sm text-muted-foreground text-right">
+        {split ? (
+          <>
+            {split.films.toLocaleString()} film{split.films !== 1 ? 's' : ''}
+            <span className="text-muted-foreground/60"> · </span>
+            {split.shows.toLocaleString()} show{split.shows !== 1 ? 's' : ''}
+          </>
+        ) : count.toLocaleString()}
         {thisYear != null && thisYear > 0 && <span className="text-muted-foreground/60"> · {thisYear} this year</span>}
       </span>
       <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
@@ -776,10 +802,11 @@ export default function PublicProfilePage() {
       {/* Stat rows — each opens the full-screen list */}
       {isVisible && (
         <section className="bg-card rounded-2xl border border-border px-4">
-          <StatRow icon={<Eye className="h-5 w-5 text-primary" />} label="Watch History" count={profile.watchedCount} thisYear={profile.watchedThisYear} onClick={() => openSectionView('watched')} />
+          <StatRow icon={<Eye className="h-5 w-5 text-primary" />} label="Watch History" count={profile.watchedCount} split={{ films: profile.watchedFilms ?? 0, shows: profile.watchedShows ?? 0 }} thisYear={profile.watchedThisYear} onClick={() => openSectionView('watched')} />
+          {/* Rewatched is films-only, so it keeps its single number. */}
           <StatRow icon={<Repeat className="h-5 w-5 text-primary" />} label="Rewatched" count={profile.rewatchedCount} thisYear={profile.rewatchedThisYear} onClick={() => openSectionView('rewatched')} />
-          <StatRow icon={<Star className="h-5 w-5 text-primary" />} label="Ratings" count={(profile.ratingDistribution ?? []).reduce((a, b) => a + b, 0)} onClick={() => openSectionView('ratings')} />
-          <StatRow icon={<Bookmark className="h-5 w-5 text-primary" />} label="Watchlist" count={profile.watchlistCount} onClick={() => openSectionView('watchlist')} />
+          <StatRow icon={<Star className="h-5 w-5 text-primary" />} label="Ratings" count={(profile.ratingDistribution ?? []).reduce((a, b) => a + b, 0)} split={{ films: profile.ratedFilms ?? 0, shows: profile.ratedShows ?? 0 }} onClick={() => openSectionView('ratings')} />
+          <StatRow icon={<Bookmark className="h-5 w-5 text-primary" />} label="Watchlist" count={profile.watchlistCount} split={{ films: profile.watchlistFilms ?? 0, shows: profile.watchlistShows ?? 0 }} onClick={() => openSectionView('watchlist')} />
           <StatRow icon={<List className="h-5 w-5 text-primary" />} label="Custom Lists" count={profile.listsCount} onClick={() => openSectionView('lists')} />
           <StatRow icon={<MessageSquare className="h-5 w-5 text-primary" />} label="Reviews" count={profile.reviewsCount} onClick={() => openSectionView('reviews')} />
         </section>
