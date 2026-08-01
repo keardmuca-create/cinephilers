@@ -11,7 +11,7 @@ import {
   Play, Check, Plus, Star, ChevronLeft, Share2, ListPlus, Quote,
   Info, Film, Calendar, Clock, Globe, Building2, Tv, ChevronDown, ChevronUp,
   DollarSign, Images, Clapperboard, PenLine, Eye, ChevronRight, User, Users, MessageSquare, Trash2,
-  Repeat,
+  Repeat, CheckCircle2,
 } from 'lucide-react';
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
@@ -334,6 +334,7 @@ function SeasonsSection({
   showPoster,
   watchedEpisodes,
   onToggleEpisodeWatched,
+  onToggleSeasonWatched,
   onEpisodeClick,
 }: {
   seasons: TvSeason[];
@@ -341,22 +342,42 @@ function SeasonsSection({
   showPoster: string | null;
   watchedEpisodes: Set<string>;
   onToggleEpisodeWatched: (seasonNumber: number, ep: TvEpisode) => void;
+  onToggleSeasonWatched: (seasonNumber: number, episodes: TvEpisode[]) => void | Promise<void>;
   onEpisodeClick: (ep: TvEpisode, seasonNumber: number) => void;
 }) {
   const [expanded, setExpanded] = useState<number | null>(null);
   const [cache, setCache] = useState<Record<number, TvEpisode[]>>({});
   const [expandLoading, setExpandLoading] = useState<number | null>(null);
+  const [markLoading, setMarkLoading] = useState<number | null>(null);
+
+  // The episode list for a season, fetched once and reused. Marking a season
+  // needs it just as much as expanding one does — the numbers can't be assumed
+  // from the count, since seasons aren't always numbered from 1 without gaps.
+  const ensureEpisodes = async (n: number): Promise<TvEpisode[]> => {
+    if (cache[n]) return cache[n];
+    const res = await fetch(`/api/tv/${showTmdbId}/season/${n}`);
+    const data = await res.json() as { episodes?: TvEpisode[] };
+    const episodes = data.episodes ?? [];
+    setCache(prev => ({ ...prev, [n]: episodes }));
+    return episodes;
+  };
 
   const toggle = async (n: number) => {
     if (expanded === n) { setExpanded(null); return; }
     if (cache[n]) { setExpanded(n); return; }
     setExpandLoading(n);
     try {
-      const res = await fetch(`/api/tv/${showTmdbId}/season/${n}`);
-      const data = await res.json() as { episodes?: TvEpisode[] };
-      setCache(prev => ({ ...prev, [n]: data.episodes ?? [] }));
+      await ensureEpisodes(n);
       setExpanded(n);
     } finally { setExpandLoading(null); }
+  };
+
+  const markSeason = async (n: number) => {
+    setMarkLoading(n);
+    try {
+      const episodes = await ensureEpisodes(n);
+      await onToggleSeasonWatched(n, episodes);
+    } finally { setMarkLoading(null); }
   };
 
   const getProgress = (sn: number, total: number) => {
@@ -413,6 +434,22 @@ function SeasonsSection({
                       )}
                     </div>
                   </div>
+                </button>
+
+                {/* Mark the whole season — the same thirteen ticks, one tap */}
+                <button
+                  onClick={(e) => { e.stopPropagation(); void markSeason(sn); }}
+                  disabled={markLoading === sn}
+                  aria-label={allWatched ? `Remove season ${sn} from watched` : `Mark season ${sn} as watched`}
+                  title={allWatched ? 'Remove season from watched' : 'Mark season as watched'}
+                  className={`shrink-0 rounded-full p-1.5 transition-colors disabled:opacity-50 ${
+                    allWatched ? 'text-primary hover:bg-primary/10' : 'text-muted-foreground hover:text-primary hover:bg-primary/10'
+                  }`}
+                >
+                  {markLoading === sn
+                    ? <div className="h-4 w-4 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+                    : <CheckCircle2 className={`h-5 w-5 ${allWatched ? 'fill-primary/20' : ''}`} />
+                  }
                 </button>
 
                 {/* Chevron */}
@@ -1393,6 +1430,75 @@ function MovieDetailInner() {
     window.dispatchEvent(new Event('cinephilers-watched-changed'));
   }, [movie, id, isWatched, toast]);
 
+  // Tick or untick a whole season in one request. People already complete seasons
+  // an episode at a time — this just saves the thirteen taps, and leaves exactly
+  // the same record behind, so nothing downstream can tell the difference.
+  const toggleSeasonWatched = useCallback(async (sn: number, episodes: TvEpisode[]) => {
+    if (!authUser) { setAuthGate('track episodes'); return; }
+    if (episodes.length === 0) return;
+
+    const keys = episodes.map(ep => epKey(sn, ep.episode_number));
+    // Partly-watched counts as unwatched, so the button finishes the season.
+    const nowWatched = !keys.every(k => watchedEpisodes.has(k));
+
+    try {
+      const res = await fetchWithAuth('/api/watched/episodes/bulk', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          showTmdbId: id,
+          episodes: episodes.map(ep => ({ season: sn, episode: ep.episode_number })),
+          watched: nowWatched,
+        }),
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    } catch {
+      toast({ title: "Couldn't update the season. Check your connection and try again.", variant: 'destructive' });
+      return;
+    }
+
+    setWatchedEpisodes(prev => {
+      const next = new Set(prev);
+      for (const k of keys) nowWatched ? next.add(k) : next.delete(k);
+      return next;
+    });
+
+    try {
+      const indexRaw = localStorage.getItem(`watched-eps-index-${id}`);
+      const index = new Set<string>(indexRaw ? JSON.parse(indexRaw) : []);
+      for (const k of keys) {
+        const logId = `${id}-${k}`;
+        if (nowWatched) {
+          localStorage.setItem(`watched-ep-${id}-${k}`, 'true');
+          index.add(k);
+          recordWatchedAt(logId);
+          recordManualWatch(logId);
+        } else {
+          localStorage.removeItem(`watched-ep-${id}-${k}`);
+          index.delete(k);
+          removeFromWatchLog(logId, 'episode');
+          removeManualWatch(logId);
+          removeActivity('watched', logId);
+        }
+      }
+      localStorage.setItem(`watched-eps-index-${id}`, JSON.stringify([...index]));
+    } catch { /* ignore */ }
+
+    toast({
+      title: nowWatched
+        ? `Season ${sn} marked as watched — all ${keys.length} episodes`
+        : `Season ${sn} removed from watched`,
+    });
+
+    // Same completion rule as a single tick: finishing the last season completes
+    // the show, unticking one un-completes it.
+    const delta = nowWatched
+      ? keys.filter(k => !watchedEpisodes.has(k)).length
+      : -keys.filter(k => watchedEpisodes.has(k)).length;
+    void syncShowCompletion(watchedEpisodes.size + delta);
+    window.dispatchEvent(new Event('cinephilers-watched-changed'));
+  }, [authUser, id, watchedEpisodes, toast, syncShowCompletion]);
+
   const toggleEpisodeWatched = useCallback((sn: number, ep: TvEpisode) => {
     if (!authUser) { setAuthGate('track episodes'); return; }
     const key   = epKey(sn, ep.episode_number);
@@ -1900,6 +2006,7 @@ function MovieDetailInner() {
             showPoster={movie.poster && !movie.poster.includes('picsum') ? movie.poster : null}
             watchedEpisodes={watchedEpisodes}
             onToggleEpisodeWatched={toggleEpisodeWatched}
+            onToggleSeasonWatched={toggleSeasonWatched}
             onEpisodeClick={(ep, seasonNumber) => router.push(`/movie/${movie.id}-S${seasonNumber}E${ep.episode_number}`)}
           />
         )}

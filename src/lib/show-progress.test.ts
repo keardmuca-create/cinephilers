@@ -24,6 +24,23 @@ describe('describeShowProgress', () => {
     expect(describeShowProgress(by([[1, 7], [3, 13]]), BB, 62).label).toBe('Seasons 1, 3');
   });
 
+  it('keeps a long run as a range, however many seasons it spans', () => {
+    const long: SeasonCounts = { '1': 6, '2': 13, '3': 16, '4': 16, '5': 16, '6': 16, '7': 16 };
+    const watched = by([[1, 6], [2, 13], [3, 16], [4, 16], [5, 16], [6, 16], [7, 16]]);
+    expect(describeShowProgress(watched, long, 177).label).toBe('Seasons 1–7');
+  });
+
+  // "9 seasons" would claim a which-ness it can't deliver; the count doesn't.
+  it('gives the count rather than name too many scattered seasons', () => {
+    const long: SeasonCounts = { '1': 6, '2': 13, '3': 16, '4': 16, '5': 16, '6': 16, '7': 16 };
+    const watched = by([[1, 6], [3, 16], [5, 16], [7, 16]]);
+    expect(describeShowProgress(watched, long, 177).label).toBe('54 / 177');
+  });
+
+  it('still lists up to three scattered seasons in full', () => {
+    expect(describeShowProgress(by([[1, 7], [3, 13], [5, 16]]), BB, 62).label).toBe('Seasons 1, 3, 5');
+  });
+
   it('falls back to a count when a season is only part-watched', () => {
     expect(describeShowProgress(by([[1, 7], [2, 4]]), BB, 62).label).toBe('11 / 62');
   });

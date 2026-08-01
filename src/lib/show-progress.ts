@@ -18,14 +18,23 @@ export interface ShowProgress {
 /** Episodes per season keyed by season number, as stored on FilmMeta. */
 export type SeasonCounts = Record<string, number>;
 
-function formatSeasons(seasons: number[]): string {
+// A gappy list longer than this would truncate on a phone, and a truncated list
+// of seasons is worse than no list — it names some and hides the rest.
+const MAX_LISTED_SEASONS = 3;
+
+/** The season label, or null when it can't name them all. */
+function formatSeasons(seasons: number[]): string | null {
   const sorted = [...seasons].sort((a, b) => a - b);
   if (sorted.length === 1) return `Season ${sorted[0]}`;
-  // A straight run reads as a range; anything gappy is listed.
+  // A straight run reads as a range, however many seasons it spans.
   const contiguous = sorted.every((s, i) => i === 0 || s === sorted[i - 1] + 1);
-  return contiguous
-    ? `Seasons ${sorted[0]}–${sorted[sorted.length - 1]}`
-    : `Seasons ${sorted.join(', ')}`;
+  if (contiguous) return `Seasons ${sorted[0]}–${sorted[sorted.length - 1]}`;
+  // Gappy and short enough to list in full.
+  if (sorted.length <= MAX_LISTED_SEASONS) return `Seasons ${sorted.join(', ')}`;
+  // Otherwise say nothing about seasons rather than something partial. "9
+  // seasons" would be worse than the count it replaced: it claims a which-ness
+  // it can't deliver, leaving the reader wondering WHICH nine.
+  return null;
 }
 
 /**
@@ -55,7 +64,9 @@ export function describeShowProgress(
       return typeof total === 'number' && total > 0 && watchedBySeason.get(s)! >= total;
     });
     if (allWhole) {
-      return { label: formatSeasons(seasons), watchedEpisodes, totalEpisodes, complete: false };
+      const label = formatSeasons(seasons);
+      if (label) return { label, watchedEpisodes, totalEpisodes, complete: false };
+      // Too many scattered seasons to name — fall through to the count.
     }
   }
 
