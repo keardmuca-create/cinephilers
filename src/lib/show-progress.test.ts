@@ -20,8 +20,10 @@ describe('describeShowProgress', () => {
     expect(describeShowProgress(by([[1, 7], [2, 13]]), BB, 62).label).toBe('Seasons 1–2');
   });
 
-  it('lists finished seasons that are not next to each other', () => {
-    expect(describeShowProgress(by([[1, 7], [3, 13]]), BB, 62).label).toBe('Seasons 1, 3');
+  // Watching seasons 1 and 3 isn't a story about seasons, it's one about
+  // episodes — and a list of them tells you less than the number does.
+  it('counts episodes when the seasons are not a run', () => {
+    expect(describeShowProgress(by([[1, 7], [3, 13]]), BB, 62).label).toBe('20 / 62');
   });
 
   it('keeps a long run as a range, however many seasons it spans', () => {
@@ -30,15 +32,15 @@ describe('describeShowProgress', () => {
     expect(describeShowProgress(watched, long, 177).label).toBe('Seasons 1–7');
   });
 
-  // "9 seasons" would claim a which-ness it can't deliver; the count doesn't.
-  it('gives the count rather than name too many scattered seasons', () => {
+  it('counts episodes however many scattered seasons there are', () => {
     const long: SeasonCounts = { '1': 6, '2': 13, '3': 16, '4': 16, '5': 16, '6': 16, '7': 16 };
-    const watched = by([[1, 6], [3, 16], [5, 16], [7, 16]]);
-    expect(describeShowProgress(watched, long, 177).label).toBe('54 / 177');
+    expect(describeShowProgress(by([[1, 6], [3, 16], [5, 16], [7, 16]]), long, 177).label).toBe('54 / 177');
+    expect(describeShowProgress(by([[1, 7], [3, 13], [5, 16]]), BB, 62).label).toBe('36 / 62');
   });
 
-  it('still lists up to three scattered seasons in full', () => {
-    expect(describeShowProgress(by([[1, 7], [3, 13], [5, 16]]), BB, 62).label).toBe('Seasons 1, 3, 5');
+  // A run that starts late is still a run, so it still gets named.
+  it('names a run that does not start at season 1', () => {
+    expect(describeShowProgress(by([[3, 13], [4, 13]]), BB, 62).label).toBe('Seasons 3–4');
   });
 
   it('falls back to a count when a season is only part-watched', () => {

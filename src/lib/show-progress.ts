@@ -18,23 +18,21 @@ export interface ShowProgress {
 /** Episodes per season keyed by season number, as stored on FilmMeta. */
 export type SeasonCounts = Record<string, number>;
 
-// A gappy list longer than this would truncate on a phone, and a truncated list
-// of seasons is worse than no list — it names some and hides the rest.
-const MAX_LISTED_SEASONS = 3;
-
-/** The season label, or null when it can't name them all. */
+/**
+ * The season label, or null when there's no clean season story to tell.
+ *
+ * Only an unbroken run gets named — "Season 1", "Seasons 1–7". Watching seasons
+ * 1, 3 and 5 isn't a story about seasons, it's a story about episodes, so it
+ * falls back to the count. Listing them was worse than the number it replaced:
+ * long lists truncate on a phone into "Seasons 1, 2, 4, 7…", which names some and
+ * hides the rest, and even a short list is noise where a total would do.
+ */
 function formatSeasons(seasons: number[]): string | null {
   const sorted = [...seasons].sort((a, b) => a - b);
   if (sorted.length === 1) return `Season ${sorted[0]}`;
-  // A straight run reads as a range, however many seasons it spans.
   const contiguous = sorted.every((s, i) => i === 0 || s === sorted[i - 1] + 1);
-  if (contiguous) return `Seasons ${sorted[0]}–${sorted[sorted.length - 1]}`;
-  // Gappy and short enough to list in full.
-  if (sorted.length <= MAX_LISTED_SEASONS) return `Seasons ${sorted.join(', ')}`;
-  // Otherwise say nothing about seasons rather than something partial. "9
-  // seasons" would be worse than the count it replaced: it claims a which-ness
-  // it can't deliver, leaving the reader wondering WHICH nine.
-  return null;
+  if (!contiguous) return null;
+  return `Seasons ${sorted[0]}–${sorted[sorted.length - 1]}`;
 }
 
 /**
@@ -66,7 +64,7 @@ export function describeShowProgress(
     if (allWhole) {
       const label = formatSeasons(seasons);
       if (label) return { label, watchedEpisodes, totalEpisodes, complete: false };
-      // Too many scattered seasons to name — fall through to the count.
+      // Scattered seasons — no run to name, so fall through to the count.
     }
   }
 
