@@ -7,6 +7,8 @@ import { Search, X, ChevronRight, Film, Loader2, User } from 'lucide-react';
 import { Movie } from '@/lib/mock-data';
 import { MovieCard } from '@/components/movie-card';
 import { useSearch, PersonResult } from '@/hooks/use-movies';
+import { MediaToggle } from '@/components/media-toggle';
+import type { MediaSide } from '@/lib/media-type';
 
 interface RecentItem {
   id: string;
@@ -135,7 +137,7 @@ export default function SearchPage() {
   const [focused, setFocused]         = useState(false);
   const [recentItems, setRecentItems] = useState<RecentItem[]>([]);
 
-  const [comingSoonTab, setComingSoonTab] = useState<'movie' | 'show'>('movie');
+  const [comingSoonTab, setComingSoonTab] = useState<MediaSide>('movies');
   const [searchTab, setSearchTab] = useState<'titles' | 'people'>('titles');
 
   const { combined: searchCombined, loading: searchLoading } = useSearch(searchTerm, []);
@@ -158,7 +160,7 @@ export default function SearchPage() {
       .catch(() => {});
   }, []);
 
-  const comingSoonList   = comingSoonTab === 'movie' ? upcomingMovies : upcomingShows;
+  const comingSoonList   = comingSoonTab === 'movies' ? upcomingMovies : upcomingShows;
   const isSearching = searchTerm.trim().length > 0;
   const showOverlay  = focused || isSearching; // search bar active
 
@@ -315,36 +317,18 @@ export default function SearchPage() {
             )}
           </div>
           <div className="space-y-4">
-            <SectionHeader title="Coming Soon" seeAllHref={comingSoonTab === 'show' ? '/see-all/coming-soon-shows' : '/see-all/coming-soon'} />
-            {/* Full-width Movie / Show toggle */}
-            <div className="flex mx-6 rounded-2xl overflow-hidden border border-border">
-              <button
-                onClick={() => setComingSoonTab('movie')}
-                className={`flex-1 py-2.5 text-sm font-semibold transition-colors ${
-                  comingSoonTab === 'movie'
-                    ? 'bg-primary text-primary-foreground'
-                    : 'bg-muted text-muted-foreground hover:text-foreground'
-                }`}
-              >
-                Movie
-              </button>
-              <button
-                onClick={() => setComingSoonTab('show')}
-                className={`flex-1 py-2.5 text-sm font-semibold transition-colors ${
-                  comingSoonTab === 'show'
-                    ? 'bg-primary text-primary-foreground'
-                    : 'bg-muted text-muted-foreground hover:text-foreground'
-                }`}
-              >
-                Show
-              </button>
+            <SectionHeader title="Coming Soon" seeAllHref={comingSoonTab === 'shows' ? '/see-all/coming-soon-shows' : '/see-all/coming-soon'} />
+            {/* The same Movies | Shows pill every other list uses. This one had
+                its own square full-width version with singular labels. */}
+            <div className="px-6">
+              <MediaToggle value={comingSoonTab} onChange={setComingSoonTab} />
             </div>
             {comingSoonList.length > 0 ? (
               <div className="flex overflow-x-auto gap-4 px-6 pb-4 no-scrollbar">
                 {comingSoonList.slice(0, 10).map(movie => <MovieCard key={movie.id} movie={movie} />)}
               </div>
             ) : (
-              <EmptyState message={`No ${comingSoonTab === 'movie' ? 'movies' : 'shows'} coming soon yet.`} />
+              <EmptyState message={`No ${comingSoonTab === 'movies' ? 'movies' : 'shows'} coming soon yet.`} />
             )}
           </div>
         </div>

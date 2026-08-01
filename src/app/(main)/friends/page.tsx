@@ -3,9 +3,10 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
-import { Search, Users, UserPlus, UserCheck, UserX, Loader2, User, Clock } from 'lucide-react';
+import { Search, Users, UserPlus, UserCheck, UserX, Loader2, User, Clock, ChevronLeft } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
+import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/auth-context';
 
 interface UserResult {
@@ -114,6 +115,7 @@ function UserCard({ user, onChange }: { user: UserResult; onChange: (username: s
 }
 
 export default function FriendsPage() {
+  const router = useRouter();
   const { user, loading: authLoading } = useAuth();
   const [query, setQuery] = useState('');
   const [searchResults, setSearchResults] = useState<UserResult[]>([]);
@@ -185,7 +187,7 @@ export default function FriendsPage() {
 
   if (!authLoading && !user) {
     return (
-      <main className="max-w-xl mx-auto px-4 pt-10 pb-32 space-y-6">
+      <main className="max-w-xl mx-auto px-4 pt-[calc(env(safe-area-inset-top)+1.5rem)] pb-32 space-y-6">
         <div className="bg-primary/10 border border-primary/20 rounded-2xl p-5 flex flex-col gap-3">
           <div className="space-y-1">
             <p className="font-bold text-base">Join Cinephilers</p>
@@ -203,8 +205,14 @@ export default function FriendsPage() {
   const showSearch = query.trim().length > 0;
 
   return (
-    <main className="max-w-xl mx-auto px-4 pt-10 pb-32 space-y-6">
-      <h1 className="text-3xl font-headline font-bold px-1">Find People</h1>
+    <main className="max-w-xl mx-auto px-4 pt-[calc(env(safe-area-inset-top)+1.5rem)] pb-32 space-y-6">
+      {/* Back arrow — the installed PWA has no browser back button */}
+      <div className="flex items-center gap-2">
+        <button onClick={() => router.back()} aria-label="Go back" className="rounded-full p-1 -ml-2 hover:bg-muted/60 transition-colors">
+          <ChevronLeft className="h-6 w-6" />
+        </button>
+        <h1 className="text-3xl font-headline font-bold">Find People</h1>
+      </div>
 
       {/* Search bar */}
       <div className="relative">
