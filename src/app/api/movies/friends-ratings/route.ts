@@ -28,7 +28,10 @@ export async function GET(req: NextRequest) {
   // three whole seasons) appeared nowhere at all, not merely without an eye.
   // Grouped by season rather than fetched episode by episode: naming a finished
   // season only needs counts.
-  const isShow = tmdbId.startsWith('tmdb-tv-');
+  // An episode id starts with tmdb-tv- too, and this route serves episode pages
+  // as well — but an episode has no episodes of its own, so treating one as a
+  // show just costs two queries that can't match anything.
+  const isShow = tmdbId.startsWith('tmdb-tv-') && !/-S\d+E\d+$/.test(tmdbId);
 
   const [ratings, watched, reviews, watchlisted, episodeGroups, showMeta] = await Promise.all([
     prisma.rating.findMany({
