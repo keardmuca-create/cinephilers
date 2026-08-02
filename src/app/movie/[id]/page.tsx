@@ -20,7 +20,7 @@ import { Separator } from '@/components/ui/separator';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Badge } from '@/components/ui/badge';
 import { toast } from '@/hooks/use-toast';
-import { appendWatchLog, removeFromWatchLog, saveMovieRating, ensureSignupDate } from '@/lib/badges';
+import { appendWatchLog, removeFromWatchLog, saveMovieRating } from '@/lib/watch-log';
 import { recordAddedAt, recordWatchedAt, recordManualWatch, removeManualWatch, legacyTwin, parseEpisodeId } from '@/lib/media-id';
 import { EpisodePage } from '@/components/episode-page';
 import { RatingSheet } from '@/components/rating-sheet';
@@ -1101,7 +1101,6 @@ function MovieDetailInner() {
 
   useEffect(() => {
     if (!id) return;
-    ensureSignupDate();
     try {
       setIsWatched(localStorage.getItem(`watched-${id}`) === 'true');
       setIsInWatchlist(localStorage.getItem(`watchlist-${id}`) !== null);

@@ -3,7 +3,6 @@ import { cookies } from 'next/headers';
 import { prisma } from '@/lib/db';
 import { ok, err } from '@/lib/api-response';
 import { verifyAccessToken } from '@/lib/auth-utils';
-import { awardBadgeIfEarned } from '@/lib/badge-service';
 import { sanitizeText } from '@/lib/sanitize';
 import { rateLimit } from '@/lib/rate-limit';
 import { canonicalId, isValidMediaId } from '@/lib/media-id';
@@ -178,7 +177,6 @@ export async function POST(req: NextRequest) {
   });
 
   // Award any newly earned badges
-  await awardBadgeIfEarned(userId, totalRatings);
 
   return ok({ watchedAdded, ratingsAdded, watchlistAdded, reviewsAdded, rewatchesAdded, failed });
 }

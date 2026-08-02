@@ -4,7 +4,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { Movie } from '@/lib/types';
-import { readUserStats, computeAllBadges, ensureSignupDate, ComputedBadge } from '@/lib/badges';
 import { normalizeLocalMediaIds, getAddedAt, getWatchedAtISO, getManualWatchISO } from '@/lib/media-id';
 
 import { BadgeList, FounderChip, type EarnedBadge } from '@/components/badge-row';
@@ -579,7 +578,7 @@ export default function ProfilePage() {
     reader.readAsDataURL(file);
   }, [updateUserLocally]);
 
-  const [badges, setBadges] = useState<ComputedBadge[]>([]);
+
   // The nine server-computed badges. Kept separate from the local set above,
   // which now only survives to name the Founder flair chip.
   const [serverBadges, setServerBadges] = useState<EarnedBadge[] | null>(null);
@@ -712,8 +711,8 @@ export default function ProfilePage() {
 
   const loadFromStorage = useCallback(() => {
     normalizeLocalMediaIds();
-    ensureSignupDate();
-    setBadges(computeAllBadges(readUserStats()));
+
+
 
     // No watched total is computed here any more: the shelf shows no number, and
     // the count that means something is the per-side one on /history.
@@ -994,21 +993,16 @@ export default function ProfilePage() {
 
   useEffect(() => { loadFromStorage(); }, [loadFromStorage]);
 
-  const recomputeStats = useCallback(() => {
-    ensureSignupDate();
-    setBadges(computeAllBadges(readUserStats()));
-  }, []);
-
   // Refresh follower/following counts from DB on mount
   useEffect(() => { refetch(); }, [refetch]);
 
-  // Re-run stats AND watch history when DB restore finishes (new cross-device data
+  // Re-run the watch history when DB restore finishes (new cross-device data
   // just landed), when a title is marked watched in-app, and when the page becomes
   // visible again — Next's router cache can serve this page without remounting, so a
   // freshly-marked title wouldn't otherwise reach the top of the strip.
   useEffect(() => {
     const handler = () => {
-      recomputeStats();
+
       loadFromStorage();
     };
     const onVisible = () => { if (document.visibilityState === 'visible') handler(); };
@@ -1022,7 +1016,7 @@ export default function ProfilePage() {
       window.removeEventListener('focus', handler);
       document.removeEventListener('visibilitychange', onVisible);
     };
-  }, [recomputeStats, loadFromStorage]);
+  }, [loadFromStorage]);
 
   const ratingData = [1,2,3,4,5,6,7,8,9,10].map(n => ({
     rating: String(n),

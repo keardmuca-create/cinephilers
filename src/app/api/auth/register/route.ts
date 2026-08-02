@@ -46,8 +46,6 @@ export async function POST(req: NextRequest) {
     },
   });
 
-  // Award GREY badge immediately
-  await prisma.badge.create({ data: { userId: user.id, tier: 'GREY' } });
 
   try {
     await sendVerificationEmail(user.email, emailVerificationToken);

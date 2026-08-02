@@ -216,16 +216,9 @@ async function restoreFromDb(me?: { createdAt?: string; followingCount?: number;
       }
     } catch { /* ignore */ }
 
-    // Always sync signup-date and following-count so badges work on every device.
-    // Sourced from the user object refetch() already fetched — no extra request.
-    try {
-      if (me?.createdAt) {
-        localStorage.setItem('signup-date', me.createdAt);
-      }
-      if (typeof me?.followingCount === 'number') {
-        localStorage.setItem('following-count', String(me.followingCount));
-      }
-    } catch { /* ignore */ }
+    // signup-date and following-count used to be mirrored here for the
+    // client-side badge system. Badges are computed on the server now and read
+    // the account directly, so neither copy is read by anything.
 
     // ── Favorites: always overwrite from DB — DB is the source of truth ─────────
     if (favorites.length > 0) {
@@ -351,9 +344,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const fresh = data.data as AuthUser;
         setUser(fresh);
         saveUserToStorage(fresh);
-        if (typeof fresh.followingCount === 'number') {
-          try { localStorage.setItem('following-count', String(fresh.followingCount)); } catch { /* ignore */ }
-        }
         // Restore user data from DB into localStorage. Pass the user object we
         // just fetched so restoreFromDb doesn't re-request /api/users/me.
         restoreFromDb(data.data);

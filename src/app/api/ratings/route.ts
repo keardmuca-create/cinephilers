@@ -2,7 +2,6 @@ import { NextRequest } from 'next/server';
 import { prisma } from '@/lib/db';
 import { ok, err } from '@/lib/api-response';
 import { getCurrentUser } from '@/lib/auth-utils';
-import { awardBadgeIfEarned } from '@/lib/badge-service';
 import { MediaType } from '@/generated/prisma/client';
 import { canonicalId, isRateableMediaId } from '@/lib/media-id';
 
@@ -52,12 +51,10 @@ export async function POST(req: NextRequest) {
   }
 
   if (!existing) {
-    const user = await prisma.user.update({
+    await prisma.user.update({
       where: { id: auth.sub },
       data: { ratingsCount: { increment: 1 } },
-      select: { ratingsCount: true },
     });
-    await awardBadgeIfEarned(auth.sub, user.ratingsCount);
   }
 
   // Rating an episode marks THAT EPISODE watched, in the episodes table where a

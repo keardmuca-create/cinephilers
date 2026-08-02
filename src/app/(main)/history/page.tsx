@@ -7,7 +7,7 @@ import { History, Eye, Search, SlidersHorizontal, X, Trash2, Film, ChevronLeft, 
 import type { ItemMeta } from '@/app/api/meta/[id]/route';
 import { fetchWithAuth } from '@/lib/fetch-with-auth';
 import { persistRefine } from '@/lib/refine-sort';
-import { removeFromWatchLog } from '@/lib/badges';
+import { removeFromWatchLog } from '@/lib/watch-log';
 import { legacyTwin, normalizeLocalMediaIds, getWatchedAtISO, getManualWatchISO } from '@/lib/media-id';
 import { batchFetchMeta } from '@/lib/meta-batch';
 import { getItemType, sideOf, SIDE_TYPES, TYPE_LABELS, type TypeFilter, type MediaSide } from '@/lib/media-type';

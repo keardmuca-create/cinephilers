@@ -5,7 +5,7 @@ import JSZip from 'jszip';
 import { X, Upload, Loader2, CheckCircle, AlertCircle, ChevronRight, Film, Check, Search } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { fetchWithAuth } from '@/lib/fetch-with-auth';
-import type { WatchEntry } from '@/lib/badges';
+import type { WatchEntry } from '@/lib/watch-log';
 import type { Movie } from '@/lib/types';
 import { recordAddedAt, recordWatchedAt } from '@/lib/media-id';
 

@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button';
 import { toast } from '@/hooks/use-toast';
 import { fetchWithAuth } from '@/lib/fetch-with-auth';
 import { batchFetchMeta } from '@/lib/meta-batch';
-import { removeFromWatchLog } from '@/lib/badges';
+import { removeFromWatchLog } from '@/lib/watch-log';
 import { removeManualWatch } from '@/lib/media-id';
 import { readSavedRefine, persistRefine } from '@/lib/refine-sort';
 import { RefineSheet, type RefineValue } from '@/components/refine-sheet';
