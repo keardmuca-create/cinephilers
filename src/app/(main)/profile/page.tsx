@@ -4,7 +4,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { Movie } from '@/lib/types';
-import { normalizeLocalMediaIds, getAddedAt, getWatchedAtISO, getManualWatchISO } from '@/lib/media-id';
+import { normalizeLocalMediaIds, getAddedAt, getWatchedAtISO, getManualWatchISO, canonicalId, legacyTwin } from '@/lib/media-id';
 
 import { BadgeList, FounderChip, type EarnedBadge } from '@/components/badge-row';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -683,7 +683,14 @@ export default function ProfilePage() {
 
   const deleteReview = (movieId: string) => {
     if (!window.confirm('Delete this review? This cannot be undone.')) return;
-    try { localStorage.removeItem(`review-${movieId}`); } catch { /* ignore */ }
+    // Clear the legacy bare-numeric twin too. The list now folds both ids into
+    // one row, so leaving the other key behind would bring the review straight
+    // back on the next load.
+    try {
+      localStorage.removeItem(`review-${movieId}`);
+      const twin = legacyTwin(movieId);
+      if (twin) localStorage.removeItem(`review-${twin}`);
+    } catch { /* ignore */ }
     setUserReviews(prev => prev.filter(r => r.movieId !== movieId));
     const mediaType = movieId.startsWith('tmdb-tv-') ? 'SHOW' : 'MOVIE';
     fetchWithAuth(`/api/reviews?tmdbId=${encodeURIComponent(movieId)}&mediaType=${mediaType}`, { method: 'DELETE' }).catch(() => {});
@@ -914,14 +921,27 @@ export default function ProfilePage() {
 
     // Load user-written reviews
     try {
-      const reviews: UserReview[] = [];
+      // Keyed by canonical id, not by the storage key: a film reviewed under the
+      // old bare-numeric id and again under `tmdb-{n}` sits in two separate keys
+      // but is one review of one film. Listing both showed it twice and collided
+      // in React, which is how it surfaced. Newest wins.
+      const byId = new Map<string, UserReview>();
       for (let i = 0; i < localStorage.length; i++) {
         const k = localStorage.key(i)!;
         if (!k.startsWith('review-')) continue;
         const raw = localStorage.getItem(k);
         if (!raw) continue;
-        try { reviews.push(JSON.parse(raw)); } catch { /* ignore */ }
+        try {
+          const parsed = JSON.parse(raw) as UserReview;
+          if (!parsed?.movieId) continue;
+          const id = canonicalId(parsed.movieId);
+          const existing = byId.get(id);
+          if (!existing || new Date(parsed.date).getTime() > new Date(existing.date).getTime()) {
+            byId.set(id, { ...parsed, movieId: id });
+          }
+        } catch { /* ignore */ }
       }
+      const reviews = [...byId.values()];
       setUserReviews(reviews.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()));
 
       const reviewsMissing = reviews.filter(r => !r.movieTitle || !r.moviePoster);
