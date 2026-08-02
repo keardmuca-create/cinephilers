@@ -6,7 +6,8 @@ import { useRouter } from 'next/navigation';
 import { Movie } from '@/lib/types';
 import { readUserStats, computeAllBadges, ensureSignupDate, ComputedBadge } from '@/lib/badges';
 import { normalizeLocalMediaIds, getAddedAt, getWatchedAtISO, getManualWatchISO } from '@/lib/media-id';
-import { BadgeCard, FeaturedSeasonalBadge, FounderFlairChip } from '@/components/badge-card';
+
+import { BadgeList, FounderChip, type EarnedBadge } from '@/components/badge-row';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import Link from 'next/link';
@@ -579,6 +580,10 @@ export default function ProfilePage() {
   }, [updateUserLocally]);
 
   const [badges, setBadges] = useState<ComputedBadge[]>([]);
+  // The nine server-computed badges. Kept separate from the local set above,
+  // which now only survives to name the Founder flair chip.
+  const [serverBadges, setServerBadges] = useState<EarnedBadge[] | null>(null);
+  const [memberSince, setMemberSince] = useState<string | undefined>();
   const [recentWatched, setRecentWatched] = useState<RecentItem[]>([]);
   const [watchlist, setWatchlist] = useState<Movie[]>([]);
   const [userReviews, setUserReviews] = useState<UserReview[]>([]);
@@ -692,6 +697,18 @@ export default function ProfilePage() {
   // overwrite the complete strip with a partial one. Only the latest run may
   // write its result.
   const historyRunRef = useRef(0);
+
+  // Badges come from the server, forced fresh for your own profile so rating
+  // something and coming here shows the new number rather than a cached one.
+  useEffect(() => {
+    if (!authUser?.username) { setServerBadges([]); return; }
+    let cancelled = false;
+    fetchWithAuth(`/api/users/${authUser.username}/badges`)
+      .then(r => r.ok ? r.json() : null)
+      .then(json => { if (cancelled) return; setServerBadges(json?.data?.earned ?? []); setMemberSince(json?.data?.memberSince); })
+      .catch(() => { if (!cancelled) setServerBadges([]); });
+    return () => { cancelled = true; };
+  }, [authUser?.username]);
 
   const loadFromStorage = useCallback(() => {
     normalizeLocalMediaIds();
@@ -1014,10 +1031,6 @@ export default function ProfilePage() {
   const maxRatingCount = Math.max(...ratingData.map(d => d.count), 1);
   const yDomainMax = Math.ceil(maxRatingCount / 0.65);
 
-  const activeSeasonal = badges.filter(b => b.isSeasonal && b.isSeasonActive);
-  const founderBadge = badges.find(b => b.isSpecial);
-  // Founder is promoted to its own featured card, so keep it out of the carousel.
-  const otherBadges = badges.filter(b => !(b.isSeasonal && b.isSeasonActive) && !b.isSpecial);
 
   const shareProfile = async () => {
     const username = authUser?.username;
@@ -1284,9 +1297,9 @@ export default function ProfilePage() {
             {authUser?.displayName ?? authUser?.username ?? 'Your Profile'}
           </h1>
           <p className="text-muted-foreground text-lg">@{authUser?.username ?? 'username'}</p>
-          {founderBadge && (
+          {memberSince && (
             <div className="mt-2">
-              <FounderFlairChip badge={founderBadge} />
+              <FounderChip memberSince={memberSince} />
             </div>
           )}
         </div>
@@ -1563,38 +1576,22 @@ export default function ProfilePage() {
           ) : undefined}
         />
 
-        {/* Active seasonal badges — full-width featured cards */}
-        {activeSeasonal.length > 0 && (
+        {/* Server-computed badges — the same rows other people see on your
+            profile, so there's one answer rather than a device-local one. */}
+        {serverBadges === null ? (
           <div className="space-y-3">
-            <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Seasonal</p>
-            {activeSeasonal.map(badge => (
-              <FeaturedSeasonalBadge key={badge.id} badge={badge} />
+            {Array.from({ length: 4 }).map((_, i) => (
+              <div key={i} className="flex items-center gap-4 py-3.5">
+                <div className="h-14 w-14 rounded-full bg-muted animate-pulse shrink-0" />
+                <div className="flex-1 space-y-2">
+                  <div className="h-4 bg-muted rounded animate-pulse w-1/3" />
+                  <div className="h-3 bg-muted rounded animate-pulse w-1/2" />
+                </div>
+              </div>
             ))}
           </div>
-        )}
-
-        {/* All-time badges — horizontal scroll carousel (matches Ratings row) */}
-        {otherBadges.slice(0, 5).length > 0 && (
-          <div className="space-y-3">
-            <div className="flex items-center justify-between">
-              <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground">All Time</p>
-              {otherBadges.length > 5 && (
-                <Link
-                  href="/badges"
-                  className="text-xs text-primary border border-primary/30 rounded-full px-3 py-1 hover:bg-primary/10 transition-colors font-semibold flex items-center gap-1"
-                >
-                  See All <ChevronRight className="h-3 w-3" />
-                </Link>
-              )}
-            </div>
-            <div className="flex overflow-x-auto gap-4 pb-4 no-scrollbar -mx-6 px-6">
-              {otherBadges.slice(0, 5).map(badge => (
-                <div key={badge.id} className="shrink-0 w-44">
-                  <BadgeCard badge={badge} />
-                </div>
-              ))}
-            </div>
-          </div>
+        ) : (
+          <BadgeList badges={serverBadges} memberSince={memberSince} />
         )}
       </section>
 

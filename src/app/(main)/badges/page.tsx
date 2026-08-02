@@ -2,43 +2,32 @@
 
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { readUserStats, computeAllBadges, ensureSignupDate, ComputedBadge } from '@/lib/badges';
-import { BadgeCard, FeaturedSeasonalBadge, TierGuide } from '@/components/badge-card';
 import { Button } from '@/components/ui/button';
 import { ChevronLeft } from 'lucide-react';
 import { useAuth } from '@/contexts/auth-context';
 import { fetchWithAuth } from '@/lib/fetch-with-auth';
+import { BadgeList, type EarnedBadge } from '@/components/badge-row';
 
+// Badges come from the server now, not from this browser's localStorage. That's
+// what lets them appear on other people's profiles — and it means they read the
+// same on a fresh phone as they do here.
 export default function BadgesPage() {
   const router = useRouter();
-  const [badges, setBadges] = useState<ComputedBadge[]>([]);
-
   const { user } = useAuth();
+  const [badges, setBadges] = useState<EarnedBadge[] | null>(null);
+  const [memberSince, setMemberSince] = useState<string | undefined>();
 
   useEffect(() => {
-    ensureSignupDate();
-    const stats = readUserStats();
-    setBadges(computeAllBadges(stats));
-    if (!user?.username) return;
-
-    // World Cinema counts languages, which live in the shared title metadata on
-    // the server — not in this browser. Counting locally reads low on a fresh
-    // device, so take the server's number whenever it's higher.
+    if (!user?.username) { setBadges([]); return; }
     let cancelled = false;
     fetchWithAuth(`/api/users/${user.username}/badges`)
       .then(r => r.ok ? r.json() : null)
-      .then(json => {
-        const serverLangs = json?.data?.distinctLanguages;
-        if (cancelled || typeof serverLangs !== 'number' || serverLangs <= stats.distinctLanguages) return;
-        setBadges(computeAllBadges({ ...stats, distinctLanguages: serverLangs }));
-      })
-      .catch(() => { /* the local count still stands */ });
+      .then(json => { if (cancelled) return; setBadges(json?.data?.earned ?? []); setMemberSince(json?.data?.memberSince); })
+      .catch(() => { if (!cancelled) setBadges([]); });
     return () => { cancelled = true; };
   }, [user]);
 
-  const activeSeasonal = badges.filter(b => b.isSeasonal && b.isSeasonActive);
-  const allTime = badges.filter(b => !b.isSeasonal);
-  const otherSeasonal = badges.filter(b => b.isSeasonal && !b.isSeasonActive);
+  const earnedCount = badges?.filter(b => b.tier).length ?? 0;
 
   return (
     <main className="max-w-2xl mx-auto px-6 pt-[calc(env(safe-area-inset-top)+1.5rem)] pb-32 space-y-6">
@@ -46,40 +35,32 @@ export default function BadgesPage() {
         <Button variant="ghost" size="icon" className="rounded-full shrink-0" onClick={() => router.back()}>
           <ChevronLeft className="h-5 w-5" />
         </Button>
-        <h1 className="text-2xl font-headline font-bold">Badges &amp; Achievements</h1>
+        <div>
+          <h1 className="text-2xl font-headline font-bold">Badges</h1>
+          {badges && (
+            <p className="text-sm text-muted-foreground">
+              {earnedCount} of {badges.length} earned
+            </p>
+          )}
+        </div>
       </div>
 
-      <TierGuide />
-
-      {activeSeasonal.length > 0 && (
-        <div className="space-y-3">
-          <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Seasonal</p>
-          {activeSeasonal.map(badge => (
-            <FeaturedSeasonalBadge key={badge.id} badge={badge} />
+      {!user ? (
+        <p className="text-sm text-muted-foreground">Sign in to earn badges.</p>
+      ) : badges === null ? (
+        <div className="space-y-4">
+          {Array.from({ length: 5 }).map((_, i) => (
+            <div key={i} className="flex items-center gap-4 py-3.5">
+              <div className="h-14 w-14 rounded-full bg-muted animate-pulse shrink-0" />
+              <div className="flex-1 space-y-2">
+                <div className="h-4 bg-muted rounded animate-pulse w-1/3" />
+                <div className="h-3 bg-muted rounded animate-pulse w-1/2" />
+              </div>
+            </div>
           ))}
         </div>
-      )}
-
-      {allTime.length > 0 && (
-        <div className="space-y-3">
-          <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground">All Time</p>
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-            {allTime.map(badge => (
-              <BadgeCard key={badge.id} badge={badge} />
-            ))}
-          </div>
-        </div>
-      )}
-
-      {otherSeasonal.length > 0 && (
-        <div className="space-y-3">
-          <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Upcoming Seasonal</p>
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-            {otherSeasonal.map(badge => (
-              <BadgeCard key={badge.id} badge={badge} />
-            ))}
-          </div>
-        </div>
+      ) : (
+        <BadgeList badges={badges} memberSince={memberSince} />
       )}
     </main>
   );

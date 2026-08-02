@@ -2,6 +2,7 @@ import { NextRequest } from 'next/server';
 import { prisma } from '@/lib/db';
 import { ok, err } from '@/lib/api-response';
 import { getCurrentUser } from '@/lib/auth-utils';
+import { getBadges } from '@/lib/badge-compute';
 
 const TIER_THRESHOLDS = { GREY: 0, BRONZE: 25, SILVER: 100, GOLD: 500 };
 const TIER_ORDER = ['GREY', 'BRONZE', 'SILVER', 'GOLD'] as const;
@@ -15,15 +16,19 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ user
   });
   if (!user) return err('User not found', 404);
 
-  if (user.isPrivate) {
-    const auth = await getCurrentUser(req);
-    const isOwner = auth?.sub === user.id;
-    if (!isOwner) {
-      if (!auth) return err('This account is private', 403);
-      const follow = await prisma.follow.findUnique({ where: { followerId_followingId: { followerId: auth.sub, followingId: user.id } } });
-      if (!follow) return err('This account is private', 403);
-    }
+  const auth = await getCurrentUser(req);
+  const isOwner = auth?.sub === user.id;
+
+  if (user.isPrivate && !isOwner) {
+    if (!auth) return err('This account is private', 403);
+    const follow = await prisma.follow.findUnique({ where: { followerId_followingId: { followerId: auth.sub, followingId: user.id } } });
+    if (!follow) return err('This account is private', 403);
   }
+
+  // The nine computed badges, which is what anyone actually sees. Your own are
+  // always rebuilt so rating something and opening your profile shows the new
+  // number; everyone else's come from the stored copy until it goes stale.
+  const snapshot = await getBadges(user.id, { force: isOwner });
 
   const badges = await prisma.badge.findMany({
     where: { userId: user.id },
@@ -53,6 +58,9 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ user
   const nextThreshold = nextTier ? TIER_THRESHOLDS[nextTier] : null;
 
   return ok({
+    earned: snapshot.badges,
+    computedAt: snapshot.computedAt,
+    // Kept for the founder chip and the ratings-tier flair, which read these.
     badges,
     ratingsCount: user.ratingsCount,
     currentTier: TIER_ORDER[currentTierIndex],

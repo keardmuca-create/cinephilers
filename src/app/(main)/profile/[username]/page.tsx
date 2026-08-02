@@ -4,7 +4,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { useParams, useRouter } from 'next/navigation';
-import { Star, Film, Eye, UserPlus, UserCheck, Loader2, Lock, User, MessageSquare, List, ChevronRight, ChevronLeft, Clock, Heart, Crown, Bookmark, Repeat } from 'lucide-react';
+import { Star, Film, Eye, UserPlus, UserCheck, Loader2, Lock, User, MessageSquare, List, ChevronRight, ChevronLeft, Clock, Heart, Crown, Bookmark, Repeat, Award } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { SpoilerWrap } from '@/components/spoiler-wrap';
 import { RING } from '@/components/favorites-section';
@@ -12,6 +12,7 @@ import { useAuth } from '@/contexts/auth-context';
 import { relativeTime } from '@/lib/activity';
 import { fetchWithAuth } from '@/lib/fetch-with-auth';
 import { batchFetchMeta } from '@/lib/meta-batch';
+import { BadgeList, FounderChip, type EarnedBadge } from '@/components/badge-row';
 
 interface ProfileUser {
   id: string;
@@ -45,6 +46,8 @@ interface ProfileUser {
 }
 
 interface BadgeData {
+  /** The nine computed badges — this is what makes them visible to other people. */
+  earned?: EarnedBadge[];
   currentTier: string;
   nextTier: string | null;
   nextThreshold: number | null;
@@ -274,7 +277,7 @@ function StatRow({ icon, label, count, split, thisYear, onClick }: {
 }
 
 type SectionKey = 'watched' | 'rewatched' | 'ratings' | 'watchlist';
-type OpenKey = SectionKey | 'reviews' | 'lists';
+type OpenKey = SectionKey | 'reviews' | 'lists' | 'badges';
 
 // Per-poster-section config for the full-list rows.
 const SECTION_META: Record<SectionKey, { label: string; statusIcon: React.ElementType }> = {
@@ -292,6 +295,7 @@ const OPEN_META: Record<OpenKey, { title: string; icon: React.ReactNode }> = {
   watchlist: { title: 'Watchlist', icon: <Bookmark className="h-5 w-5 text-primary" /> },
   reviews: { title: 'Reviews', icon: <MessageSquare className="h-5 w-5 text-primary" /> },
   lists: { title: 'Custom Lists', icon: <List className="h-5 w-5 text-primary" /> },
+  badges: { title: 'Badges', icon: <Award className="h-5 w-5 text-primary" /> },
 };
 
 const SECTION_PAGE_SIZE = 60;
@@ -426,6 +430,9 @@ export default function PublicProfilePage() {
   const [favorites, setFavorites] = useState<FavoriteItem[]>([]);
   const [reviews, setReviews] = useState<ReviewItem[]>([]);
   const [badgeData, setBadgeData] = useState<BadgeData | null>(null);
+  // Only earned badges ever leave this profile — how close someone is to one
+  // they have not won is their business, not a visitor's.
+  const earnedBadges = (badgeData?.earned ?? []).filter(b => b.tier);
   const [followLoading, setFollowLoading] = useState(false);
   const [activityExpanded, setActivityExpanded] = useState(false);
 
@@ -510,6 +517,9 @@ export default function PublicProfilePage() {
     setOpenSection(key);
     window.scrollTo(0, 0);
 
+    // Badges are already loaded with the profile — nothing to fetch.
+    if (key === 'badges') return;
+
     if (key === 'reviews') {
       if (reviews.length === 0) {
         setReviewsLoading(true);
@@ -537,7 +547,7 @@ export default function PublicProfilePage() {
   };
 
   const loadMoreSection = async () => {
-    if (!profile || !openSection || openSection === 'reviews' || openSection === 'lists' || sectionLoading) return;
+    if (!profile || !openSection || openSection === 'reviews' || openSection === 'lists' || openSection === 'badges' || sectionLoading) return;
     const next = sectionPage + 1;
     setSectionLoading(true);
     const { items, hasMore } = await fetchSectionPage(openSection, profile.username, next);
@@ -607,7 +617,10 @@ export default function PublicProfilePage() {
             shows together, which is the one thing the split exists to stop. Your
             own year breakdowns live on the stats page. */}
 
-        {openSection === 'reviews' ? (
+        {openSection === 'badges' ? (
+          earnedBadges.length === 0 ? emptyState
+            : <div className="bg-card rounded-3xl border border-border px-5 py-1"><BadgeList badges={earnedBadges} memberSince={badgeData?.memberSince} /></div>
+        ) : openSection === 'reviews' ? (
           reviewsLoading && reviews.length === 0 ? posterSkeleton
             : reviews.length === 0 ? emptyState
             : <div className="space-y-2">{reviews.map(r => <ReviewCard key={r.id} review={r} />)}</div>
@@ -685,9 +698,9 @@ export default function PublicProfilePage() {
               </div>
               <p className="text-sm text-muted-foreground">@{profile.username}</p>
               {badgeData?.memberSince && (
-                <span className="mt-1.5 inline-flex items-center gap-1.5 text-xs font-bold" style={{ color: '#8a6d00' }}>
-                  Founding Member · since {new Date(badgeData.memberSince).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}
-                </span>
+                <div className="mt-1.5">
+                  <FounderChip memberSince={badgeData.memberSince} />
+                </div>
               )}
               {profile.bio && isVisible && <p className="text-sm text-foreground/80 leading-relaxed mt-1">{profile.bio}</p>}
             </div>
@@ -790,6 +803,9 @@ export default function PublicProfilePage() {
           <StatRow icon={<Bookmark className="h-5 w-5 text-primary" />} label="Watchlist" count={profile.watchlistCount} split={{ films: profile.watchlistFilms ?? 0, shows: profile.watchlistShows ?? 0 }} onClick={() => openSectionView('watchlist')} />
           <StatRow icon={<List className="h-5 w-5 text-primary" />} label="Custom Lists" count={profile.listsCount} onClick={() => openSectionView('lists')} />
           <StatRow icon={<MessageSquare className="h-5 w-5 text-primary" />} label="Reviews" count={profile.reviewsCount} onClick={() => openSectionView('reviews')} />
+          {/* Only earned ones are counted — how close someone else is to a badge
+              they haven't won is their business, not a visitor's. */}
+          <StatRow icon={<Award className="h-5 w-5 text-primary" />} label="Badges" count={earnedBadges.length} onClick={() => openSectionView('badges')} />
         </section>
       )}
     </main>

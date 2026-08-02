@@ -65,6 +65,7 @@ model User {
   favorites             Favorite[]
   lists                 CustomList[]
   badges                Badge[]
+  badgeSnapshot         UserBadges?
   reviewLikes           ReviewLike[]
   watchedEpisodes       WatchedEpisode[]
   followers             Follow[]         @relation("Following")
@@ -289,6 +290,17 @@ model Follow {
 
   @@id([followerId, followingId])
   @@index([followingId])
+}
+
+// A user's computed badges, cached so a profile view doesn't recount someone's
+// whole library. Rebuilt from scratch whenever it goes stale rather than being
+// nudged by each write — see lib/badge-compute.
+model UserBadges {
+  userId     String   @id
+  badges     Json
+  computedAt DateTime
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
 model Badge {
