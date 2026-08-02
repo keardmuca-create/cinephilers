@@ -23,12 +23,8 @@ async function main() {
     },
   });
 
-  // Grey badge
-  await prisma.badge.upsert({
-    where: { id: 'seed-badge-grey' },
-    update: {},
-    create: { id: 'seed-badge-grey', userId: demo.id, tier: 'GREY' },
-  });
+  // No badge is seeded: badges are computed from the library on demand, so the
+  // demo user's fall out of the ratings and watched rows below.
 
   // Sample ratings
   const ratings = [
