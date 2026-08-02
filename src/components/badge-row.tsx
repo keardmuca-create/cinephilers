@@ -107,7 +107,7 @@ export function FounderChip({ memberSince }: { memberSince?: string }) {
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="inline-flex items-center gap-1.5 text-sm font-bold transition-transform active:scale-95"
+        className="inline-flex items-center gap-1.5 text-sm font-bold whitespace-nowrap transition-transform active:scale-95"
         style={{ color: '#8a6d00' }}
       >
         Founding Member · since {date}

@@ -113,13 +113,17 @@ async function prewarmMetaCache(ids: string[]) {
   }
 }
 
+// Same round, ringed avatar as your own profile — a person should look the same
+// whichever side of the app you're seeing them from.
 function Avatar({ user, size = 80 }: { user: { username: string; displayName?: string | null; avatarUrl?: string | null }; size?: number }) {
-  const initials = (user.displayName ?? user.username).slice(0, 2).toUpperCase();
   return (
-    <div className="rounded-3xl bg-primary/20 flex items-center justify-center shrink-0 overflow-hidden" style={{ width: size, height: size }}>
+    <div
+      className="rounded-full bg-primary/20 flex items-center justify-center shrink-0 overflow-hidden ring-4 ring-primary/20 ring-offset-4 ring-offset-background shadow-2xl"
+      style={{ width: size, height: size }}
+    >
       {user.avatarUrl
         ? <img src={user.avatarUrl} alt={user.username} className="w-full h-full object-cover" />
-        : <span className="text-primary font-bold text-xl">{initials}</span>
+        : <User className="text-primary" style={{ width: size * 0.5, height: size * 0.5 }} />
       }
     </div>
   );
@@ -565,17 +569,22 @@ export default function PublicProfilePage() {
     setFollowLoading(true);
     const isUnfollow = profile.isFollowing || profile.isPendingRequest;
     const method = isUnfollow ? 'DELETE' : 'POST';
-    const res = await fetch(`/api/users/${profile.username}/follow`, { method, credentials: 'include' });
-    if (res.ok) {
-      const json = await res.json();
-      const requested = json.data?.requested ?? false;
-      setProfile(p => p ? ({
-        ...p,
-        isFollowing: !isUnfollow && !requested,
-        isPendingRequest: requested,
-        followersCount: p.followersCount + (!isUnfollow && !requested ? 1 : isUnfollow && p.isFollowing ? -1 : 0),
-      }) : p);
-    }
+    // A dropped connection used to throw straight out of here: nothing caught it,
+    // so the button kept spinning for good and the follow state stayed a lie.
+    // Leave the profile untouched unless the server actually confirmed.
+    try {
+      const res = await fetch(`/api/users/${profile.username}/follow`, { method, credentials: 'include' });
+      if (res.ok) {
+        const json = await res.json();
+        const requested = json.data?.requested ?? false;
+        setProfile(p => p ? ({
+          ...p,
+          isFollowing: !isUnfollow && !requested,
+          isPendingRequest: requested,
+          followersCount: p.followersCount + (!isUnfollow && !requested ? 1 : isUnfollow && p.isFollowing ? -1 : 0),
+        }) : p);
+      }
+    } catch { /* offline or server down — the button simply resets below */ }
     setFollowLoading(false);
   };
 
@@ -685,54 +694,58 @@ export default function PublicProfilePage() {
         <ChevronLeft className="h-6 w-6" />
       </button>
 
-      {/* Header */}
-      <div className="flex items-center gap-4">
-        <Avatar user={profile} size={80} />
-        <div className="flex-1 min-w-0">
-          <div className="flex items-start justify-between gap-2">
-            <div className="min-w-0">
-              <div className="flex items-center gap-2">
-                <h1 className="text-xl font-bold font-headline truncate">{profile.displayName ?? profile.username}</h1>
-                {profile.isVerified && <span className="text-[10px] bg-primary/20 text-primary px-1.5 py-0.5 rounded-full font-bold shrink-0">✓</span>}
-                {profile.isPrivate && <Lock className="h-3.5 w-3.5 text-muted-foreground shrink-0" />}
-              </div>
-              <p className="text-sm text-muted-foreground">@{profile.username}</p>
-              {badgeData?.memberSince && (
-                <div className="mt-1.5">
-                  <FounderChip memberSince={badgeData.memberSince} />
-                </div>
-              )}
-              {profile.bio && isVisible && <p className="text-sm text-foreground/80 leading-relaxed mt-1">{profile.bio}</p>}
-            </div>
-            {me && (
-              <Button
-                size="sm"
-                variant={profile.isFollowing || profile.isPendingRequest ? 'outline' : 'default'}
-                className="rounded-xl font-bold gap-1.5 shrink-0"
-                onClick={toggleFollow}
-                disabled={followLoading}
-              >
-                {followLoading
-                  ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                  : profile.isFollowing
-                    ? <><UserCheck className="h-3.5 w-3.5" />Following</>
-                    : profile.isPendingRequest
-                      ? <><Clock className="h-3.5 w-3.5" />Requested</>
-                      : <><UserPlus className="h-3.5 w-3.5" />Follow</>
-                }
-              </Button>
-            )}
+      {/* Header — laid out like your own profile: the follow button on the top
+          row, then the avatar and the follow stats sharing the full width, then
+          the name. col-reverse puts the button first visually while letting the
+          avatar row keep the whole width beneath it. */}
+      <div className="flex flex-col-reverse gap-5">
+        <div className="flex items-center gap-5">
+          <Avatar user={profile} size={112} />
+          <div className="flex flex-1 justify-around items-center min-w-0">
+            <FollowStatLink username={profile.username} type="following" count={profile.followingCount} />
+            <FollowStatLink username={profile.username} type="followers" count={profile.followersCount} />
           </div>
         </div>
+        {me && (
+          <div className="flex items-center justify-end">
+            <Button
+              size="sm"
+              variant={profile.isFollowing || profile.isPendingRequest ? 'outline' : 'default'}
+              className="rounded-xl font-bold gap-1.5 shrink-0"
+              onClick={toggleFollow}
+              disabled={followLoading}
+            >
+              {followLoading
+                ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                : profile.isFollowing
+                  ? <><UserCheck className="h-3.5 w-3.5" />Following</>
+                  : profile.isPendingRequest
+                    ? <><Clock className="h-3.5 w-3.5" />Requested</>
+                    : <><UserPlus className="h-3.5 w-3.5" />Follow</>
+              }
+            </Button>
+          </div>
+        )}
       </div>
 
-      {/* Stats — only Following / Followers (the rest live in the rows below) */}
-      {isVisible && (
-        <div className="flex gap-10">
-          <FollowStatLink username={profile.username} type="following" count={profile.followingCount} />
-          <FollowStatLink username={profile.username} type="followers" count={profile.followersCount} />
+      <div className="space-y-4">
+        <div>
+          <div className="flex items-center gap-2">
+            <h1 className="text-4xl font-headline font-bold truncate">{profile.displayName ?? profile.username}</h1>
+            {profile.isVerified && <span className="text-[10px] bg-primary/20 text-primary px-1.5 py-0.5 rounded-full font-bold shrink-0">✓</span>}
+            {profile.isPrivate && <Lock className="h-4 w-4 text-muted-foreground shrink-0" />}
+          </div>
+          <p className="text-muted-foreground text-lg">@{profile.username}</p>
+          {badgeData?.memberSince && (
+            <div className="mt-2">
+              <FounderChip memberSince={badgeData.memberSince} />
+            </div>
+          )}
         </div>
-      )}
+        {profile.bio && isVisible && (
+          <p className="text-lg text-foreground/70 leading-relaxed max-w-md">{profile.bio}</p>
+        )}
+      </div>
 
       {/* Favorites — ring layout: a crowned #1 hero with 6 orbiting it */}
       {isVisible && favorites.length > 0 && (
