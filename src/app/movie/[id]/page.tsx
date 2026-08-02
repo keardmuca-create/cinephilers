@@ -1046,18 +1046,15 @@ function MovieDetailInner() {
     if (movie) logActivity({ action: 'rated', contentId: id, contentTitle: movie.title, contentPoster: movie.poster, contentYear: movie.year, rating: i });
     toast({ title: `You rated it ${i}/10!` });
     window.dispatchEvent(new CustomEvent('cinephilers-rating-changed', { detail: { id, rating: i } }));
-    if (!isWatched) {
-      try {
-        localStorage.setItem(`watched-${id}`, 'true');
-        if (movie?.type === 'show') {
-          localStorage.setItem(`show-status-${id}`, 'completed');
-          if (movie.totalEpisodes && movie.totalEpisodes > 0) localStorage.setItem(`watched-show-eps-${id}`, String(movie.totalEpisodes));
-        }
-      } catch { /* ignore */ }
+    // Rating a FILM marks it watched — you can't rate what you haven't seen.
+    // Rating a SERIES marks nothing: its watched state is the sum of its
+    // episodes, and a rating doesn't say which ones you saw.
+    if (!isWatched && movie?.type !== 'show') {
+      try { localStorage.setItem(`watched-${id}`, 'true'); } catch { /* ignore */ }
       setIsWatched(true);
-      syncDb('POST', '/api/watched', { tmdbId: id, mediaType: movie?.type === 'show' ? 'SHOW' : 'MOVIE' });
+      syncDb('POST', '/api/watched', { tmdbId: id, mediaType: 'MOVIE' });
       if (movie) {
-        if (movie.type !== 'show') appendWatchLog({ id, type: 'movie', genre: movie.genre ?? '', language: movie.originalLanguage ?? '' });
+        appendWatchLog({ id, type: 'movie', genre: movie.genre ?? '', language: movie.originalLanguage ?? '' });
         recordWatchedAt(id);
         recordManualWatch(id);
         logActivity({ action: 'watched', contentId: id, contentTitle: movie.title, contentPoster: movie.poster, contentYear: movie.year });
@@ -1308,6 +1305,15 @@ function MovieDetailInner() {
         localStorage.removeItem(`watched-eps-index-${id}`);
       }
     } catch { /* ignore */ }
+
+    // Stamp each episode. The show has no watched record of its own any more, so
+    // Watch History dates its row from the episodes underneath — unstamped, a
+    // freshly marked show would sort as though it were watched in 1970.
+    for (const k of keys) {
+      const logId = `${id}-${k}`;
+      if (nowWatched) { recordWatchedAt(logId); recordManualWatch(logId); }
+      else { removeManualWatch(logId); }
+    }
     return true;
   }, [movie, id, toast]);
 
@@ -1329,34 +1335,36 @@ function MovieDetailInner() {
       if (!done) return;
     }
 
+    // A show keeps no watched record of its own — the episodes marked above ARE
+    // the record, and a second one alongside them is the thing that used to
+    // disagree with them. Films still write theirs.
+    //
     // Confirm the server write before touching any local state. A
     // fire-and-forget sync that silently fails leaves the DB and the local
     // copy out of step, so a removed item reappears (or a marked one
     // vanishes) on the next DB->local sync. Wait for the server, and bail
     // without changing anything local if it didn't take.
-    try {
-      const res = next
-        ? await fetchWithAuth('/api/watched', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ tmdbId: id, mediaType: watchedMediaType }) })
-        : await fetchWithAuth(`/api/watched/${id}?mediaType=${watchedMediaType}`, { method: 'DELETE' });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    } catch {
-      toast({ title: next ? "Couldn't mark as watched. Check your connection and try again." : "Couldn't remove from watched. Check your connection and try again.", variant: 'destructive' });
-      return;
+    if (movie?.type !== 'show') {
+      try {
+        const res = next
+          ? await fetchWithAuth('/api/watched', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ tmdbId: id, mediaType: watchedMediaType }) })
+          : await fetchWithAuth(`/api/watched/${id}?mediaType=${watchedMediaType}`, { method: 'DELETE' });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      } catch {
+        toast({ title: next ? "Couldn't mark as watched. Check your connection and try again." : "Couldn't remove from watched. Check your connection and try again.", variant: 'destructive' });
+        return;
+      }
     }
 
     setIsWatched(next);
     try {
-      localStorage.setItem(`watched-${id}`, String(next));
       if (movie?.type === 'show') {
-        if (next) {
-          localStorage.setItem(`show-status-${id}`, 'completed');
-          // Store episode count so badge stats can credit whole-show watches
-          if (movie.totalEpisodes && movie.totalEpisodes > 0) {
-            localStorage.setItem(`watched-show-eps-${id}`, String(movie.totalEpisodes));
-          }
-        } else {
-          localStorage.removeItem(`watched-show-eps-${id}`);
-        }
+        // No watched-<showId> key either: Watch History builds the show's row
+        // from its episodes, and a stray key would just be a second answer.
+        if (next) localStorage.setItem(`show-status-${id}`, 'completed');
+        else localStorage.removeItem(`show-status-${id}`);
+      } else {
+        localStorage.setItem(`watched-${id}`, String(next));
       }
     } catch { /* ignore */ }
 
@@ -1387,34 +1395,24 @@ function MovieDetailInner() {
   }, [movie, id, toast, markAllEpisodes]);
 
   // A show is watched when every episode is. Ticking the last one completes it;
-  // unticking any one un-completes it. Writes only the show's own record — it
-  // must never call applyWatchedToggle, which would re-mark every episode.
-  const syncShowCompletion = useCallback(async (watchedEpisodeCount: number) => {
+  // unticking any one un-completes it.
+  //
+  // There is no longer a show record to write: completion is a fact ABOUT the
+  // episodes, derived wherever it's needed rather than stored beside them. This
+  // only moves the local flag and posts the activity, so it can't drift from
+  // what the episodes say. It must never call applyWatchedToggle, which would
+  // re-mark every episode.
+  const syncShowCompletion = useCallback((watchedEpisodeCount: number) => {
     if (movie?.type !== 'show') return;
     const total = movie.totalEpisodes ?? 0;
     if (total <= 0) return;
     const complete = watchedEpisodeCount >= total;
     if (complete === isWatched) return;
 
-    try {
-      const res = complete
-        ? await fetchWithAuth('/api/watched', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ tmdbId: id, mediaType: 'SHOW' }) })
-        : await fetchWithAuth(`/api/watched/${id}?mediaType=SHOW`, { method: 'DELETE' });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    } catch {
-      return; // leave the show record alone rather than let it drift from the episodes
-    }
-
     setIsWatched(complete);
     try {
-      localStorage.setItem(`watched-${id}`, String(complete));
-      if (complete) {
-        localStorage.setItem(`show-status-${id}`, 'completed');
-        localStorage.setItem(`watched-show-eps-${id}`, String(total));
-      } else {
-        localStorage.removeItem(`show-status-${id}`);
-        localStorage.removeItem(`watched-show-eps-${id}`);
-      }
+      if (complete) localStorage.setItem(`show-status-${id}`, 'completed');
+      else localStorage.removeItem(`show-status-${id}`);
     } catch { /* ignore */ }
 
     if (complete && movie) {
@@ -1428,6 +1426,15 @@ function MovieDetailInner() {
     }
     window.dispatchEvent(new Event('cinephilers-watched-changed'));
   }, [movie, id, isWatched, toast]);
+
+  // A show's watched state is derived, not stored: it's watched when every
+  // episode is. Reading a watched-<showId> key would be reading the second
+  // record this model exists to get rid of.
+  useEffect(() => {
+    if (movie?.type !== 'show') return;
+    const total = movie.totalEpisodes ?? 0;
+    setIsWatched(total > 0 && watchedEpisodes.size >= total);
+  }, [movie, watchedEpisodes]);
 
   // Tick or untick a whole season in one request. People already complete seasons
   // an episode at a time — this just saves the thirteen taps, and leaves exactly

@@ -78,6 +78,15 @@ export async function POST(req: NextRequest) {
     return ok(rating, existing ? 'Rating updated' : 'Rating saved', { status: existing ? 200 : 201 });
   }
 
+  // Rating a SERIES marks nothing watched. A show's watched state is the sum of
+  // its episodes, and a rating says which episodes you saw about as well as it
+  // says when — so writing a show-level watched row here would be inventing the
+  // second record the model exists to avoid, and marking 62 episodes off one
+  // rating would be worse.
+  if (mediaType === 'SHOW') {
+    return ok(rating, existing ? 'Rating updated' : 'Rating saved', { status: existing ? 200 : 201 });
+  }
+
   // Auto-mark as watched when rated. upsert isn't atomic, so two ratings for the
   // same film landing together (rapid taps, or a flaky-network retry) can both
   // try to INSERT — the loser hits the unique constraint. That just means it's
