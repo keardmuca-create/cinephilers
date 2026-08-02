@@ -47,10 +47,14 @@ export const BADGES: BadgeDef[] = [
     tiers: { bronze: 100, silver: 500, gold: 1000 },
   },
   {
+    // The id stays 'show-watcher' because stored snapshots are keyed by it, but
+    // the NAME had to change: Watch History counts shows you've touched and this
+    // counts shows you've finished, so two different numbers were both called
+    // "shows". "Completionist" says which one this is without having to be told.
     id: 'show-watcher',
     // Completed only — a show you're partway through is progress, not a finish.
     // Mini-series count: finishing one is finishing a show.
-    name: 'Show watcher',
+    name: 'Completionist',
     description: 'Finish shows and mini-series from first episode to last.',
     unit: 'completed',
     icon: 'tv',

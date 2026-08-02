@@ -61,7 +61,12 @@ export function BadgeRow({ badge, onOpen }: { badge: EarnedBadge; onOpen: (b: Ea
   );
 }
 
-export function BadgeList({ badges, memberSince }: { badges: EarnedBadge[]; memberSince?: string }) {
+export function BadgeList({ badges, memberSince, limit }: {
+  badges: EarnedBadge[];
+  memberSince?: string;
+  /** Show only the first N after sorting — the profile shows a taste, /badges shows all. */
+  limit?: number;
+}) {
   const [open, setOpen] = useState<EarnedBadge | null>(null);
 
   // Founder always leads: it's the one everybody has and the one that says when
@@ -77,9 +82,11 @@ export function BadgeList({ badges, memberSince }: { badges: EarnedBadge[]; memb
     return progressOf(b) - progressOf(a);
   });
 
+  const shown = limit ? sorted.slice(0, limit) : sorted;
+
   return (
     <>
-      <div>{sorted.map(b => <BadgeRow key={b.id} badge={b} onOpen={setOpen} />)}</div>
+      <div>{shown.map(b => <BadgeRow key={b.id} badge={b} onOpen={setOpen} />)}</div>
       <BadgeDetail badge={open} open={open !== null} onClose={() => setOpen(null)} memberSince={memberSince} />
     </>
   );
