@@ -95,11 +95,6 @@ export function RecentlyViewed() {
                     className="object-cover"
                     sizes="176px"
                   />
-                  <div className="absolute bottom-2 left-2">
-                    <span className="text-[9px] font-bold uppercase tracking-wider bg-black/60 backdrop-blur-sm text-white/80 px-2 py-0.5 rounded-full border border-white/10">
-                      {item.type === 'show' ? 'TV' : 'Film'}
-                    </span>
-                  </div>
                 </div>
                 <div className="space-y-0.5 px-0.5">
                   <div className="flex items-start justify-between gap-1">
