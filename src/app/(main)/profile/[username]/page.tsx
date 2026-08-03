@@ -613,7 +613,7 @@ export default function PublicProfilePage() {
       </div>
     );
     return (
-      <main className="max-w-xl mx-auto px-4 pt-[calc(env(safe-area-inset-top)+1.5rem)] pb-32 space-y-6">
+      <main className="max-w-xl mx-auto px-4 pt-6 pb-32 space-y-6">
         <div className="flex items-center gap-2">
           <button onClick={() => setOpenSection(null)} aria-label="Go back" className="rounded-full p-1 -ml-1 hover:bg-muted/60 transition-colors">
             <ChevronLeft className="h-6 w-6" />
@@ -688,7 +688,7 @@ export default function PublicProfilePage() {
   const isVisible = !profile.isPrivate || profile.isFollowing;
 
   return (
-    <main className="max-w-xl mx-auto px-4 pt-[calc(env(safe-area-inset-top)+1.5rem)] pb-32 space-y-8">
+    <main className="max-w-xl mx-auto px-4 pt-6 pb-32 space-y-8">
       {/* Back arrow — the installed PWA has no browser back button */}
       <button onClick={() => router.back()} aria-label="Go back" className="rounded-full p-1 -ml-1 hover:bg-muted/60 transition-colors">
         <ChevronLeft className="h-6 w-6" />

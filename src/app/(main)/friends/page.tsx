@@ -187,7 +187,7 @@ export default function FriendsPage() {
 
   if (!authLoading && !user) {
     return (
-      <main className="max-w-xl mx-auto px-4 pt-[calc(env(safe-area-inset-top)+1.5rem)] pb-32 space-y-6">
+      <main className="max-w-xl mx-auto px-4 pt-6 pb-32 space-y-6">
         <div className="bg-primary/10 border border-primary/20 rounded-2xl p-5 flex flex-col gap-3">
           <div className="space-y-1">
             <p className="font-bold text-base">Join Cinephilers</p>
@@ -205,7 +205,7 @@ export default function FriendsPage() {
   const showSearch = query.trim().length > 0;
 
   return (
-    <main className="max-w-xl mx-auto px-4 pt-[calc(env(safe-area-inset-top)+1.5rem)] pb-32 space-y-6">
+    <main className="max-w-xl mx-auto px-4 pt-6 pb-32 space-y-6">
       {/* Back arrow — the installed PWA has no browser back button */}
       <div className="flex items-center gap-2">
         <button onClick={() => router.back()} aria-label="Go back" className="rounded-full p-1 -ml-2 hover:bg-muted/60 transition-colors">

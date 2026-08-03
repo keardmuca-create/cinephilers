@@ -59,7 +59,7 @@ export default function ReviewsPage() {
   }, []);
 
   return (
-    <main className="max-w-xl mx-auto px-4 pt-[calc(env(safe-area-inset-top)+1.5rem)] pb-32 space-y-6">
+    <main className="max-w-xl mx-auto px-4 pt-6 pb-32 space-y-6">
       <div className="flex items-center gap-3">
         <Button variant="ghost" size="icon" className="rounded-full shrink-0" onClick={() => router.back()}>
           <ChevronLeft className="h-5 w-5" />
