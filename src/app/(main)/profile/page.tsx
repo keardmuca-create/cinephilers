@@ -25,6 +25,11 @@ import { useAuth } from '@/contexts/auth-context';
 import { readSavedRefine, applyRefineSort } from '@/lib/refine-sort';
 import type { RefineValue } from '@/components/refine-sheet';
 
+// How long a rebuild trigger waits for its siblings before the profile rebuilds.
+// Long enough to swallow the focus/visibilitychange/db-restored burst of a PWA open,
+// short enough that a title marked watched elsewhere still appears to arrive at once.
+const REBUILD_DEBOUNCE_MS = 200;
+
 interface RatedItem { id: string; title: string; poster: string; year: string; tmdbRating?: number; userRating: number; }
 
 interface DiaryShelfItem { id: string; count: number; lastWatchedAt: string | null; title: string; poster: string; year: string; tmdbRating?: number; userRating?: number }
@@ -697,12 +702,13 @@ export default function ProfilePage() {
     toast({ title: 'Review deleted' });
   };
 
-  // PWA opens fire several rebuild triggers at once (focus + visibilitychange +
-  // db-restored). buildWatchHistory is async, so overlapping runs finish out of
-  // order and a stale early run (started before the sync wrote its data) can
-  // overwrite the complete strip with a partial one. Only the latest run may
-  // write its result.
-  const historyRunRef = useRef(0);
+  // Every section of this page is rebuilt by one pass of loadFromStorage, and each
+  // section finishes with an async metadata batch. Overlapping passes therefore land
+  // their results out of order: the watch strip can be overwritten by an earlier,
+  // partial run, and the additive backfills below can re-add an item that was removed
+  // while their fetch was in flight. One counter, bumped once per pass, lets every
+  // async write check whether it is still the newest pass before touching state.
+  const rebuildRunRef = useRef(0);
 
   // Badges come from the server, forced fresh for your own profile so rating
   // something and coming here shows the new number rather than a cached one.
@@ -719,6 +725,11 @@ export default function ProfilePage() {
   const loadFromStorage = useCallback(() => {
     normalizeLocalMediaIds();
 
+    // Claim this pass. Anything async below writes state only while this is still
+    // the current run.
+    const runId = ++rebuildRunRef.current;
+    const isCurrent = () => runId === rebuildRunRef.current;
+
 
 
     // No watched total is computed here any more: the shelf shows no number, and
@@ -726,7 +737,6 @@ export default function ProfilePage() {
 
     // Build recent watch preview — movies as individual cards, episodes grouped by show
     const buildWatchHistory = async () => {
-      const runId = ++historyRunRef.current;
       try {
         const rvMap = new Map<string, { title: string; poster: string; year: string; type: string; tmdbRating?: number }>();
         try {
@@ -844,7 +854,7 @@ export default function ProfilePage() {
         }
         // preview was already date-sorted, so keep that order.
         // A newer rebuild started while this one was fetching — discard this result.
-        if (runId !== historyRunRef.current) return;
+        if (!isCurrent()) return;
         setRecentWatched(items);
       } catch { /* ignore */ }
     };
@@ -895,6 +905,9 @@ export default function ProfilePage() {
       if (wlMissing.length > 0) {
         (async () => {
           const metaMap = await batchFetchMeta(wlMissing);
+          // Superseded while fetching: a newer pass has already read localStorage,
+          // and appending here would re-add anything removed in between.
+          if (!isCurrent()) return;
           const fetched: Movie[] = wlMissing.flatMap(id => {
             const m = metaMap[id];
             if (!m?.title) return [];
@@ -948,6 +961,7 @@ export default function ProfilePage() {
       if (reviewsMissing.length > 0) {
         (async () => {
           const metaMap = await batchFetchMeta(reviewsMissing.map(r => r.movieId));
+          if (!isCurrent()) return;
           const patched: UserReview[] = reviewsMissing.flatMap(r => {
             const m = metaMap[r.movieId];
             if (!m?.title) return [];
@@ -994,6 +1008,7 @@ export default function ProfilePage() {
       if (ratedMissing.length > 0) {
         (async () => {
           const metaMap = await batchFetchMeta(ratedMissing.map(r => r.id));
+          if (!isCurrent()) return;
           const fetched: RatedItem[] = ratedMissing.flatMap(({ id, userRating }) => {
             const m = metaMap[id];
             if (!m?.title) return [];
@@ -1020,10 +1035,17 @@ export default function ProfilePage() {
   // just landed), when a title is marked watched in-app, and when the page becomes
   // visible again — Next's router cache can serve this page without remounting, so a
   // freshly-marked title wouldn't otherwise reach the top of the strip.
+  //
+  // Opening the PWA fires focus, visibilitychange AND db-restored within a second,
+  // so these are coalesced: a burst schedules exactly one rebuild on the trailing
+  // edge instead of three or four overlapping ones. The delay is short enough to be
+  // invisible when marking a title and coming straight here, and db-restored is the
+  // last of the burst to arrive, so the single run reads the freshest data.
   useEffect(() => {
+    let timer: ReturnType<typeof setTimeout> | null = null;
     const handler = () => {
-
-      loadFromStorage();
+      if (timer) clearTimeout(timer);
+      timer = setTimeout(() => { timer = null; loadFromStorage(); }, REBUILD_DEBOUNCE_MS);
     };
     const onVisible = () => { if (document.visibilityState === 'visible') handler(); };
     window.addEventListener('cinephilers-db-restored', handler);
@@ -1031,6 +1053,7 @@ export default function ProfilePage() {
     window.addEventListener('focus', handler);
     document.addEventListener('visibilitychange', onVisible);
     return () => {
+      if (timer) clearTimeout(timer);
       window.removeEventListener('cinephilers-db-restored', handler);
       window.removeEventListener('cinephilers-watched-changed', handler);
       window.removeEventListener('focus', handler);
