@@ -164,7 +164,7 @@ function ActivityCard({ item, onToggleLike, onRemove }: {
             <p className="text-xs text-muted-foreground mt-0.5">{relativeTime(item.createdAt)}</p>
           </div>
         </div>
-        <div className="mx-5 mb-4 flex items-center gap-3 bg-muted/40 rounded-2xl p-3.5 border border-border">
+        <div className="mx-5 mb-3 flex items-center gap-3 bg-muted/40 rounded-2xl p-3 border border-border">
           <div className={`h-9 w-9 rounded-xl flex items-center justify-center shrink-0 font-black text-base ${platformColor}`}>
             {platformLetter}
           </div>
@@ -179,7 +179,7 @@ function ActivityCard({ item, onToggleLike, onRemove }: {
   return (
     <div className={`rounded-3xl border shadow-lg overflow-hidden ${mine ? 'bg-primary/5 border-primary/30' : 'bg-card border-border'}`}>
       {/* Header */}
-      <div className="flex items-center gap-3 px-5 pt-5 pb-3">
+      <div className="flex items-center gap-3 px-5 pt-4 pb-2.5">
         <Link href={item.isMe ? '/profile' : `/profile/${item.user.username}`}>
           <UserAvatar user={item.user} size={40} />
         </Link>
@@ -223,8 +223,8 @@ function ActivityCard({ item, onToggleLike, onRemove }: {
       </div>
 
       {/* Movie card */}
-      <Link href={href} className="block mx-5 mb-4 group">
-        <div className="bg-muted/40 rounded-2xl p-3.5 flex gap-4 hover:bg-muted/70 transition-colors border border-border">
+      <Link href={href} className="block mx-5 mb-3 group">
+        <div className="bg-muted/40 rounded-2xl p-3 flex gap-4 hover:bg-muted/70 transition-colors border border-border">
           <div className="relative w-16 shrink-0 rounded-xl overflow-hidden shadow-md bg-muted" style={{ aspectRatio: '2/3' }}>
             {meta?.poster
               ? <Image src={meta.poster} alt={meta.title} fill className="object-cover" sizes="64px" />
@@ -256,7 +256,7 @@ function ActivityCard({ item, onToggleLike, onRemove }: {
       {/* Like — real server-backed likes on every activity card (yours and
           friends'); the owner gets a notification when someone likes theirs */}
       {LIKEABLE_TYPES.includes(item.type) && item.tmdbId && (
-        <div className="px-5 pb-4">
+        <div className="px-5 pb-3">
           <button onClick={() => onToggleLike?.(item)} className="flex items-center gap-1.5 text-xs font-bold text-muted-foreground hover:text-primary transition-colors">
             <Heart className={`h-5 w-5 transition-colors ${liked ? 'fill-primary text-primary' : ''}`} />
             {(item.likeCount ?? 0) > 0 && <span>{item.likeCount}</span>}
@@ -286,7 +286,7 @@ function EpisodeBatchCard({ item }: { item: UnifiedItem }) {
 
   return (
     <div className={`rounded-3xl border shadow-lg overflow-hidden ${item.isMe ? 'bg-primary/5 border-primary/30' : 'bg-card border-border'}`}>
-      <div className="flex items-center gap-3 px-5 pt-5 pb-3">
+      <div className="flex items-center gap-3 px-5 pt-4 pb-2.5">
         <Link href={item.isMe ? '/profile' : `/profile/${item.user.username}`}>
           <UserAvatar user={item.user} size={40} />
         </Link>
@@ -303,8 +303,8 @@ function EpisodeBatchCard({ item }: { item: UnifiedItem }) {
           </div>
         </div>
       </div>
-      <Link href={`/movie/${item.tmdbId}`} className="block mx-5 mb-4 group">
-        <div className="bg-muted/40 rounded-2xl p-3.5 flex gap-4 hover:bg-muted/70 transition-colors border border-border">
+      <Link href={`/movie/${item.tmdbId}`} className="block mx-5 mb-3 group">
+        <div className="bg-muted/40 rounded-2xl p-3 flex gap-4 hover:bg-muted/70 transition-colors border border-border">
           <div className="relative w-16 shrink-0 rounded-xl overflow-hidden shadow-md bg-muted" style={{ aspectRatio: '2/3' }}>
             {meta?.poster
               ? <Image src={meta.poster} alt={meta.title} fill className="object-cover" sizes="64px" />
@@ -343,7 +343,7 @@ function WatchlistBatchCard({ item }: { item: UnifiedItem }) {
 
   return (
     <div className="bg-card rounded-3xl border border-border shadow-lg overflow-hidden">
-      <div className="flex items-center gap-3 px-5 pt-5 pb-3">
+      <div className="flex items-center gap-3 px-5 pt-4 pb-2.5">
         <Link href={item.isMe ? '/profile' : `/profile/${item.user.username}`}>
           <UserAvatar user={item.user} size={40} />
         </Link>
@@ -359,7 +359,7 @@ function WatchlistBatchCard({ item }: { item: UnifiedItem }) {
           </div>
         </div>
       </div>
-      <div className="flex gap-2 px-5 pb-5 overflow-x-auto no-scrollbar">
+      <div className="flex gap-2 px-5 pb-4 overflow-x-auto no-scrollbar">
         {ids.map(id => (
           <Link key={id} href={`/movie/${id}`} className="shrink-0 w-14 aspect-[2/3] rounded-lg overflow-hidden bg-muted shadow-sm">
             {posters[id]
@@ -745,7 +745,7 @@ export default function SocialPage() {
       {tab === 'activity' && (
         <>
           {activityLoading && friendFeed.length === 0 && (
-            <div className="space-y-4">
+            <div className="space-y-3">
               {[1, 2, 3].map(i => (
                 <div key={i} className="bg-card rounded-3xl border border-border p-5 space-y-4">
                   <div className="flex items-center gap-3">
@@ -755,7 +755,7 @@ export default function SocialPage() {
                       <div className="h-3 bg-muted rounded-full w-1/4 animate-pulse" />
                     </div>
                   </div>
-                  <div className="bg-muted/40 rounded-2xl p-3.5 flex gap-4">
+                  <div className="bg-muted/40 rounded-2xl p-3 flex gap-4">
                     <div className="w-16 rounded-xl bg-muted animate-pulse" style={{ aspectRatio: '2/3' }} />
                     <div className="flex-1 space-y-2 pt-2">
                       <div className="h-4 bg-muted rounded-full w-3/4 animate-pulse" />
@@ -783,7 +783,7 @@ export default function SocialPage() {
           )}
 
           {mergedActivity.length > 0 && (
-            <div className="space-y-4">
+            <div className="space-y-3">
               {mergedActivity.map(item => (
                 item.type === 'watchlist_batch'
                   ? <WatchlistBatchCard key={item.id} item={item} />
