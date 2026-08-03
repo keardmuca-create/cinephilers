@@ -32,20 +32,29 @@ export async function GET(req: NextRequest) {
   // deletes it), so compute each one's LIVE status — otherwise the card shows
   // Accept/Deny forever and pressing them 404s against the deleted request.
   const requestNotifs = notifications.filter(n => n.type === 'follow_request');
-  const [pendingRequests, acceptedFollows] = requestNotifs.length === 0
-    ? [[], []]
-    : await Promise.all([
-        prisma.followRequest.findMany({
-          where: { id: { in: requestNotifs.map(n => n.refId).filter((r): r is string => !!r) } },
-          select: { id: true },
-        }),
-        prisma.follow.findMany({
-          where: { followingId: auth.sub, followerId: { in: requestNotifs.map(n => n.fromId) } },
-          select: { followerId: true },
-        }),
-      ]);
+  const senderIds = [...new Set(notifications.map(n => n.fromId))];
+
+  const [pendingRequests, acceptedFollows, myOutgoingRequests] = await Promise.all([
+    requestNotifs.length === 0 ? Promise.resolve([]) : prisma.followRequest.findMany({
+      where: { id: { in: requestNotifs.map(n => n.refId).filter((r): r is string => !!r) } },
+      select: { id: true },
+    }),
+    requestNotifs.length === 0 ? Promise.resolve([]) : prisma.follow.findMany({
+      where: { followingId: auth.sub, followerId: { in: requestNotifs.map(n => n.fromId) } },
+      select: { followerId: true },
+    }),
+    // Requests YOU have sent to these people, which is a different question from
+    // whether you follow them. Following a private account is a request that sits
+    // waiting, so without this the Follow back button knows only "not following"
+    // and offers to send a request that was already sent.
+    senderIds.length === 0 ? Promise.resolve([]) : prisma.followRequest.findMany({
+      where: { requesterId: auth.sub, targetId: { in: senderIds } },
+      select: { targetId: true },
+    }),
+  ]);
   const pendingIds = new Set(pendingRequests.map(r => r.id));
   const acceptedFromIds = new Set(acceptedFollows.map(f => f.followerId));
+  const requestedToIds = new Set(myOutgoingRequests.map(r => r.targetId));
   const requestStatus = (n: { refId: string | null; fromId: string }) =>
     n.refId && pendingIds.has(n.refId) ? 'pending' : acceptedFromIds.has(n.fromId) ? 'accepted' : 'denied';
 
@@ -61,6 +70,7 @@ export async function GET(req: NextRequest) {
       displayName: n.from.displayName,
       avatarUrl: n.from.avatarUrl,
       isFollowingBack: n.from.followers.length > 0,
+      hasPendingRequest: requestedToIds.has(n.fromId),
     },
   }));
 

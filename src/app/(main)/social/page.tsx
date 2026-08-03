@@ -42,7 +42,7 @@ interface NotificationItem {
   // follow_request notifications only: the request's live server-side state,
   // so an already-handled request never shows Accept/Deny again.
   requestStatus?: 'pending' | 'accepted' | 'denied';
-  from: { username: string; displayName: string | null; avatarUrl: string | null; isFollowingBack: boolean };
+  from: { username: string; displayName: string | null; avatarUrl: string | null; isFollowingBack: boolean; hasPendingRequest: boolean };
 }
 
 // ─── Shared helpers ────────────────────────────────────────────────────────────
@@ -385,7 +385,12 @@ function NotificationCard({ notif, onFollowBack, onRequestHandled }: {
   onFollowBack: (username: string) => void;
   onRequestHandled: (notifId: string) => void;
 }) {
-  const [followState, setFollowState] = useState<'idle' | 'loading' | 'following' | 'requested'>(notif.from.isFollowingBack ? 'following' : 'idle');
+  // A request you sent to a private account is not a follow, so "not following" is
+  // not the same as "nothing sent". Reading both means Requested survives a reload
+  // instead of reverting to Follow back and inviting you to send it again.
+  const [followState, setFollowState] = useState<'idle' | 'loading' | 'following' | 'requested'>(
+    notif.from.isFollowingBack ? 'following' : notif.from.hasPendingRequest ? 'requested' : 'idle'
+  );
   const [requestState, setRequestState] = useState<'pending' | 'loading' | 'accepted' | 'denied'>(notif.requestStatus ?? 'pending');
   const [movieMeta, setMovieMeta] = useState<{ title: string; poster: string } | null>(null);
 
