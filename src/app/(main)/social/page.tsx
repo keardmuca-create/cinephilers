@@ -486,8 +486,11 @@ function NotificationCard({ notif, onFollowBack, onRequestHandled }: {
         )}
       </div>
 
-      {/* Follow back button for regular follows */}
-      {notif.type === 'follow' && (
+      {/* Follow back — on a plain follow, and on a request you accepted, where you
+          have just decided you want this person around and had no way to say so from
+          here. Denied requests get nothing, and neither do ones still pending: the
+          answer to "can I follow you" is the Accept button above, not this. */}
+      {(notif.type === 'follow' || (notif.type === 'follow_request' && requestState === 'accepted')) && (
         followState === 'following'
           ? <span className="text-xs text-muted-foreground font-bold px-3 py-1.5 rounded-xl border border-border shrink-0">Following</span>
           : followState === 'requested'
