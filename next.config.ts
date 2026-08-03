@@ -21,6 +21,18 @@ const securityHeaders = [
 
 const nextConfig: NextConfig = {
   images: {
+    // Posters come from image.tmdb.org already resized — the app asks for w185,
+    // w342, w500, w780 by name — and TMDB is a global CDN that has cached them.
+    // Optimising them again means Vercel downloads an image that is already the
+    // right size, re-encodes it, bills a transformation, and serves it as egress.
+    // Unoptimised, the browser fetches TMDB directly: Vercel never touches the
+    // image, so both the transformation count and the bandwidth go to zero.
+    //
+    // Layout is unaffected — width/height/fill/sizes still drive it. The cost is
+    // the user's own data, a full JPEG instead of a downscaled WebP, which is
+    // small next to a quota that can't be raised. Half the app already does this
+    // with plain <img> tags and looks no different.
+    unoptimized: true,
     remotePatterns: [
       { protocol: 'https', hostname: 'placehold.co', port: '', pathname: '/**' },
       { protocol: 'https', hostname: 'image.tmdb.org', port: '', pathname: '/**' },
