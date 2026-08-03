@@ -23,7 +23,17 @@ import { recordWatchedAt, recordManualWatch, removeManualWatch, recordAddedAt } 
 import { logActivity, removeActivity } from '@/lib/activity';
 import type { CinephilersRating } from '@/lib/cinephilers-rating';
 
-interface FriendRating { username: string; displayName: string | null; avatarUrl: string | null; rating: number | null }
+// Mirrors /api/movies/friends-ratings exactly. It was previously declared flat
+// (`username`, `avatarUrl` at the top level) while the endpoint has always nested
+// them under `user` — so every card here rendered a blank name, no avatar, and a
+// link to /profile/undefined. Silent, because TypeScript was told the wrong shape.
+interface FriendRating {
+  user: { id: string; username: string; displayName: string | null; avatarUrl: string | null };
+  rating: number | null;
+  watched: boolean;
+  reviewed: boolean;
+  inWatchlist: boolean;
+}
 
 export function EpisodePage({ showTmdbId, season, episodeNumber }: {
   showTmdbId: string;
@@ -42,6 +52,9 @@ export function EpisodePage({ showTmdbId, season, episodeNumber }: {
   const [rateOpen, setRateOpen] = useState(false);
   const [cineRating, setCineRating] = useState<CinephilersRating | null>(null);
   const [friends, setFriends] = useState<FriendRating[]>([]);
+  // See the matching note on the movie page: the row holds its height from the
+  // first paint so the sections under it never get shoved down when it lands.
+  const [friendsLoaded, setFriendsLoaded] = useState(false);
   const [playTrailer, setPlayTrailer] = useState(false);
 
   const [reviewOpen, setReviewOpen] = useState(false);
@@ -107,10 +120,14 @@ export function EpisodePage({ showTmdbId, season, episodeNumber }: {
       .then(j => { if (j?.data) setCineRating(j.data as CinephilersRating); })
       .catch(() => { /* ignore */ });
     if (!authUser) return;
+    setFriendsLoaded(false);
     fetchWithAuth(`/api/movies/friends-ratings?tmdbId=${encodeURIComponent(episodeId)}`)
       .then(r => r.ok ? r.json() : null)
-      .then(j => { if (j?.data) setFriends((j.data as FriendRating[]).filter(f => f.rating != null)); })
-      .catch(() => { /* ignore */ });
+      // Everyone the endpoint returns, not just friends who rated it — someone who
+      // watchlisted the episode belongs in this row, and saying "no friend activity"
+      // while quietly filtering them out would be a lie.
+      .then(j => { setFriends((j?.data ?? []) as FriendRating[]); setFriendsLoaded(true); })
+      .catch(() => { setFriendsLoaded(true); });
   }, [episodeId, authUser]);
 
   // Existing review for this episode
@@ -433,24 +450,53 @@ export function EpisodePage({ showTmdbId, season, episodeNumber }: {
         )}
 
         {/* Friends' ratings */}
-        {friends.length > 0 && (
+        {authUser && (
           <section className="space-y-3">
             <h3 className="text-xl font-headline font-bold flex items-center gap-2"><Users className="h-5 w-5 text-primary" /> Friends</h3>
+            {!friendsLoaded ? (
+              // Deliberately the real item markup with blank content — a hand-built
+              // box would have to guess the line heights, and guessing wrong is the
+              // jump this is here to prevent.
+              <div className="flex gap-4 overflow-x-auto no-scrollbar" aria-hidden>
+                {Array.from({ length: 4 }).map((_, i) => (
+                  <div key={i} className="flex flex-col items-center gap-1.5 shrink-0 w-16 animate-pulse">
+                    <Avatar className="h-11 w-11" />
+                    <span className="text-[11px] font-semibold w-full text-center">&nbsp;</span>
+                    <span className="flex items-center gap-0.5 text-xs font-bold">&nbsp;</span>
+                  </div>
+                ))}
+              </div>
+            ) : friends.length === 0 ? (
+              // The zero-width invisible item is what makes this the same height as
+              // the row it replaces — an avatar plus two lines of text isn't a single
+              // Tailwind height, and hardcoding a guess is how the jump creeps back.
+              <div className="flex items-center gap-4">
+                <div className="flex flex-col items-center gap-1.5 shrink-0 w-0 overflow-hidden invisible" aria-hidden>
+                  <Avatar className="h-11 w-11" />
+                  <span className="text-[11px] font-semibold">&nbsp;</span>
+                  <span className="flex items-center gap-0.5 text-xs font-bold">&nbsp;</span>
+                </div>
+                <p className="text-sm text-muted-foreground">No friend activity yet.</p>
+              </div>
+            ) : (
             <div className="flex gap-4 overflow-x-auto no-scrollbar">
               {friends.map(f => (
-                <Link key={f.username} href={`/profile/${f.username}`} className="flex flex-col items-center gap-1.5 shrink-0 w-16 group">
+                <Link key={f.user.id} href={`/profile/${f.user.username}`} className="flex flex-col items-center gap-1.5 shrink-0 w-16 group">
                   <Avatar className="h-11 w-11">
-                    {f.avatarUrl && <AvatarImage src={f.avatarUrl} alt={f.username} />}
+                    {f.user.avatarUrl && <AvatarImage src={f.user.avatarUrl} alt={f.user.username} />}
                   </Avatar>
                   <span className="text-[11px] font-semibold truncate w-full text-center group-hover:text-primary transition-colors">
-                    {f.displayName ?? f.username}
+                    {f.user.displayName ?? f.user.username}
                   </span>
+                  {/* A friend who only watchlisted it has no score to show, but the
+                      line still has to occupy its height or the row goes ragged. */}
                   <span className="flex items-center gap-0.5 text-xs font-bold text-yellow-400">
-                    <Star className="h-3 w-3 fill-current" />{f.rating}
+                    {f.rating != null ? <><Star className="h-3 w-3 fill-current" />{f.rating}</> : <>&nbsp;</>}
                   </span>
                 </Link>
               ))}
             </div>
+            )}
           </section>
         )}
 

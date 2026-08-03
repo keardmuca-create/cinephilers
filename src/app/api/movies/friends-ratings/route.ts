@@ -11,13 +11,11 @@ export async function GET(req: NextRequest) {
   const tmdbId = req.nextUrl.searchParams.get('tmdbId');
   if (!tmdbId) return err('tmdbId required', 400);
 
-  const following = await prisma.follow.findMany({
-    where: { followerId: auth.sub },
-    select: { followingId: true },
-  });
-  const followingIds = following.map(f => f.followingId);
-
-  if (followingIds.length === 0) return ok([]);
+  // Every query below filters on "belongs to someone I follow" directly rather than
+  // fetching the follow list first and waiting for it. That list was one full round
+  // trip to the database that every other query sat behind, and this page's whole
+  // job is to appear promptly. One trip now, not two.
+  const followedByMe = { followers: { some: { followerId: auth.sub } } };
 
   const userSelect = {
     select: { id: true, username: true, displayName: true, avatarUrl: true },
@@ -33,28 +31,38 @@ export async function GET(req: NextRequest) {
   // show just costs two queries that can't match anything.
   const isShow = tmdbId.startsWith('tmdb-tv-') && !/-S\d+E\d+$/.test(tmdbId);
 
-  const [ratings, watched, reviews, watchlisted, episodeGroups, showMeta] = await Promise.all([
+  // Friends who only ever ticked episodes have no row in any of the other tables, so
+  // their user records are fetched too. That used to wait on the groupBy to learn
+  // which ids to ask for; asked this way it describes the same people without needing
+  // the answer first, so it joins the parallel batch instead of trailing it.
+  const [ratings, watched, reviews, watchlisted, episodeGroups, episodeUsers, showMeta] = await Promise.all([
     prisma.rating.findMany({
-      where: { userId: { in: followingIds }, tmdbId },
+      where: { tmdbId, user: followedByMe },
       include: { user: userSelect },
     }),
     prisma.watchedItem.findMany({
-      where: { userId: { in: followingIds }, tmdbId },
+      where: { tmdbId, user: followedByMe },
       include: { user: userSelect },
     }),
     prisma.review.findMany({
-      where: { userId: { in: followingIds }, tmdbId, hidden: false },
+      where: { tmdbId, hidden: false, user: followedByMe },
       include: { user: userSelect },
     }),
     prisma.watchlistItem.findMany({
-      where: { userId: { in: followingIds }, tmdbId },
+      where: { tmdbId, user: followedByMe },
       include: { user: userSelect },
     }),
     isShow
       ? prisma.watchedEpisode.groupBy({
           by: ['userId', 'season'],
-          where: { userId: { in: followingIds }, showTmdbId: tmdbId },
+          where: { showTmdbId: tmdbId, user: followedByMe },
           _count: { _all: true },
+        })
+      : Promise.resolve([]),
+    isShow
+      ? prisma.user.findMany({
+          where: { ...followedByMe, watchedEpisodes: { some: { showTmdbId: tmdbId } } },
+          select: { id: true, username: true, displayName: true, avatarUrl: true },
         })
       : Promise.resolve([]),
     isShow
@@ -64,16 +72,6 @@ export async function GET(req: NextRequest) {
         })
       : Promise.resolve(null),
   ]);
-
-  // Friends who only ever ticked episodes have no row in any table above, so
-  // they need their user record fetched to appear at all.
-  const episodeUserIds = [...new Set(episodeGroups.map(g => g.userId))];
-  const episodeUsers = episodeUserIds.length
-    ? await prisma.user.findMany({
-        where: { id: { in: episodeUserIds } },
-        select: { id: true, username: true, displayName: true, avatarUrl: true },
-      })
-    : [];
 
   const map = new Map<string, {
     user: { id: string; username: string; displayName: string | null; avatarUrl: string | null };

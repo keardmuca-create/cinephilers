@@ -109,8 +109,10 @@ export default function MovieFriendsPage() {
             <Users className="h-8 w-8 text-muted-foreground" />
           </div>
           <div>
-            <p className="font-bold font-headline text-lg">No friends activity yet</p>
-            <p className="text-sm text-muted-foreground mt-1">None of the people you follow have watched or rated this title</p>
+            <p className="font-bold font-headline text-lg">No friend activity yet</p>
+            {/* "watched or rated" undersold what this page checks — it also lists
+                friends who reviewed or watchlisted the title. */}
+            <p className="text-sm text-muted-foreground mt-1">Nothing yet from the people you follow</p>
           </div>
         </div>
       )}

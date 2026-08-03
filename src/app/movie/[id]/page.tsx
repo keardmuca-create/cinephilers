@@ -929,16 +929,26 @@ const FRIENDS_VISIBLE = 6;
 function FriendsRatings({ tmdbId }: { tmdbId: string }) {
   const { user: authUser } = useAuth();
   const [entries, setEntries] = useState<FriendRatingEntry[]>([]);
+  // The section used to render nothing until the fetch landed, so it appeared
+  // late and shoved everything below it down the page. It now occupies its final
+  // height from the first paint: avatar-shaped placeholders while loading, a line
+  // of text if no friend has touched this title. Nothing below it ever moves.
+  const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
     if (!authUser) return;
+    let cancelled = false;
+    setLoaded(false);
     fetchWithAuth(`/api/movies/friends-ratings?tmdbId=${encodeURIComponent(tmdbId)}`)
       .then(r => r.ok ? r.json() : null)
-      .then(json => { if (json?.data?.length) setEntries(json.data); })
-      .catch(() => {});
+      .then(json => { if (!cancelled) { setEntries(json?.data ?? []); setLoaded(true); } })
+      .catch(() => { if (!cancelled) setLoaded(true); });
+    return () => { cancelled = true; };
   }, [tmdbId, authUser]);
 
-  if (!authUser || entries.length === 0) return null;
+  // Logged out there is nothing to say, so the section stays absent entirely
+  // rather than reserving space for a row that can never fill.
+  if (!authUser) return null;
 
   const visible = entries.slice(0, FRIENDS_VISIBLE);
 
@@ -948,14 +958,32 @@ function FriendsRatings({ tmdbId }: { tmdbId: string }) {
         <h3 className="text-xl font-headline font-bold flex items-center gap-2">
           <Users className="h-5 w-5 text-primary" /> Friends
         </h3>
-        <Link
-          href={`/movie/${tmdbId}/friends`}
-          className="text-xs text-primary border border-primary/30 rounded-full px-3 py-1 hover:bg-primary/10 transition-colors font-semibold"
-        >
-          See All
-        </Link>
+        {entries.length > 0 && (
+          <Link
+            href={`/movie/${tmdbId}/friends`}
+            className="text-xs text-primary border border-primary/30 rounded-full px-3 py-1 hover:bg-primary/10 transition-colors font-semibold"
+          >
+            See All
+          </Link>
+        )}
       </div>
 
+      {!loaded ? (
+        // Same 64px squares and 12px gaps as the real row, so the swap is invisible.
+        <div className="flex gap-3" aria-hidden>
+          {Array.from({ length: FRIENDS_VISIBLE }).map((_, i) => (
+            <div key={i} className="h-16 w-16 rounded-2xl bg-muted animate-pulse shrink-0" />
+          ))}
+        </div>
+      ) : entries.length === 0 ? (
+        // Holds the same vertical space the avatar row would.
+        // Deliberately not "watched": this row lists a friend who rated, reviewed
+        // or watchlisted it too, so a "nobody watched it" line would be denying
+        // something narrower than what was actually checked.
+        <div className="h-16 flex items-center">
+          <p className="text-sm text-muted-foreground">No friend activity yet.</p>
+        </div>
+      ) : (
       <div className="flex gap-3">
         {visible.map(e => (
           <Link key={e.user.id} href={`/profile/${e.user.username}`} className="shrink-0 group">
@@ -975,6 +1003,7 @@ function FriendsRatings({ tmdbId }: { tmdbId: string }) {
           </Link>
         )}
       </div>
+      )}
     </section>
   );
 }
