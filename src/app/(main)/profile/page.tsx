@@ -1094,7 +1094,7 @@ export default function ProfilePage() {
   if (guestView) return guestView;
 
   return (
-    <main className="p-6 pt-12 pb-32 max-w-2xl mx-auto space-y-16">
+    <main className="p-6 pt-6 pb-32 max-w-2xl mx-auto space-y-10">
       {/* Header */}
       {/* col-reverse: the action buttons are written second but render as the
           top row, so the avatar + stats get the full width below them */}
@@ -1345,7 +1345,10 @@ export default function ProfilePage() {
         </p>
       </div>
 
-      <Separator className="bg-muted" />
+      {/* No rule between the bio and Favorites. As a child of a space-y stack it
+          took the full gap above AND below itself — about 129px spent drawing a
+          hairline, in the one place where the page most needs to get on with it.
+          The gap alone separates them. */}
 
       {/* Favorites */}
       <section>
