@@ -20,7 +20,7 @@ export default function PrivacyPage() {
           <h1 className="text-2xl font-headline font-bold">Privacy Policy</h1>
         </div>
 
-        <p className="text-sm text-muted-foreground mb-8">Last updated: July 2026</p>
+        <p className="text-sm text-muted-foreground mb-8">Last updated: August 2026</p>
 
         <div className="space-y-8 text-muted-foreground leading-relaxed">
 
@@ -76,7 +76,27 @@ export default function PrivacyPage() {
           </section>
 
           <section>
-            <h2 className="text-xl font-headline font-bold text-foreground mb-3">5. Data retention</h2>
+            <h2 className="text-xl font-headline font-bold text-foreground mb-3">5. Storage on your device</h2>
+            <p>
+              Cinephilers keeps a copy of your own library — your watchlist, ratings, watch history, and the film details
+              needed to display them — in your browser&rsquo;s local storage. This is what lets the app open instantly and keep
+              working when your connection drops, and it is only ever your own data. It is never used to track you, and it is
+              never shared with anyone.
+            </p>
+            <p className="mt-3">
+              We also set two cookies, <strong className="text-foreground">access_token</strong> and{' '}
+              <strong className="text-foreground">refresh_token</strong>, which are what keep you signed in. They are strictly
+              necessary for the service to work, so we do not ask for consent to set them. We use no advertising cookies and no
+              tracking cookies of any kind.
+            </p>
+            <p className="mt-3">
+              Clearing your browser data removes this local copy. Nothing is lost — your account data lives on our servers and
+              comes back the next time you sign in. You can also sign out, which deletes the cookies immediately.
+            </p>
+          </section>
+
+          <section>
+            <h2 className="text-xl font-headline font-bold text-foreground mb-3">6. Data retention</h2>
             <p>
               Your data is kept for as long as your account exists. If you delete your account, your personal data, activity, and reviews will be permanently deleted.
               Contact us at <a href="mailto:support@cinephilers.app" className="text-primary hover:underline">support@cinephilers.app</a> to request account deletion.
@@ -84,7 +104,7 @@ export default function PrivacyPage() {
           </section>
 
           <section>
-            <h2 className="text-xl font-headline font-bold text-foreground mb-3">6. Your rights</h2>
+            <h2 className="text-xl font-headline font-bold text-foreground mb-3">7. Your rights</h2>
             <p>You have the right to:</p>
             <ul className="space-y-2 list-disc list-inside mt-2">
               <li>Access the personal data we hold about you.</li>
@@ -96,7 +116,7 @@ export default function PrivacyPage() {
           </section>
 
           <section>
-            <h2 className="text-xl font-headline font-bold text-foreground mb-3">7. Security</h2>
+            <h2 className="text-xl font-headline font-bold text-foreground mb-3">8. Security</h2>
             <p>
               Passwords are hashed using bcrypt. All connections are encrypted via HTTPS. We apply rate limiting to sensitive endpoints (login, password reset) to protect against brute-force attacks.
               No system is perfectly secure — if you discover a vulnerability, please report it to us.
@@ -104,14 +124,14 @@ export default function PrivacyPage() {
           </section>
 
           <section>
-            <h2 className="text-xl font-headline font-bold text-foreground mb-3">8. Children</h2>
+            <h2 className="text-xl font-headline font-bold text-foreground mb-3">9. Children</h2>
             <p>
               Cinephilers is not intended for users under the age of 13. We do not knowingly collect data from children.
             </p>
           </section>
 
           <section>
-            <h2 className="text-xl font-headline font-bold text-foreground mb-3">9. Changes to this policy</h2>
+            <h2 className="text-xl font-headline font-bold text-foreground mb-3">10. Changes to this policy</h2>
             <p>
               We may update this policy from time to time. Significant changes will be communicated via email or an in-app notice. The date at the top of this page shows when it was last updated.
             </p>
