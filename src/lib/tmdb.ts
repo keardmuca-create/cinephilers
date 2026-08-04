@@ -840,3 +840,85 @@ export async function getPersonCredits(personId: number): Promise<{
     upcoming: toSections(byUpcoming),
   };
 }
+
+// ─── Where to watch ──────────────────────────────────────────────────────────
+// TMDB's watch-provider data comes from JustWatch, whose terms require the
+// attribution shown alongside it in the UI. Availability differs per country, so
+// the region is a parameter rather than a guess — see the providers route for
+// how it is chosen and why it is not folded into the main detail payload.
+
+export interface WatchProvider {
+  id: number;
+  name: string;
+  logo: string;
+}
+
+export interface WatchProviders {
+  region: string;
+  /** JustWatch page for this title — the "where to watch" deep link TMDB gives us. */
+  link?: string;
+  /** Included with a subscription. The only kind most people care about. */
+  streaming: WatchProvider[];
+  rent: WatchProvider[];
+  buy: WatchProvider[];
+  /** Free with ads. */
+  free: WatchProvider[];
+}
+
+interface TmdbProvider {
+  provider_id: number;
+  provider_name: string;
+  logo_path: string | null;
+  display_priority?: number;
+}
+
+interface TmdbProviderRegion {
+  link?: string;
+  flatrate?: TmdbProvider[];
+  rent?: TmdbProvider[];
+  buy?: TmdbProvider[];
+  free?: TmdbProvider[];
+  ads?: TmdbProvider[];
+}
+
+export async function getWatchProviders(
+  tmdbId: number,
+  isShow: boolean,
+  region: string,
+): Promise<WatchProviders | null> {
+  const path = `${isShow ? '/tv' : '/movie'}/${tmdbId}/watch/providers`;
+  try {
+    const data = await tmdbFetch<{ results?: Record<string, TmdbProviderRegion> }>(path);
+    const forRegion = data.results?.[region.toUpperCase()] ?? {};
+
+    const map = (list?: TmdbProvider[]): WatchProvider[] =>
+      (list ?? [])
+        .sort((a, b) => (a.display_priority ?? 99) - (b.display_priority ?? 99))
+        .map(p => ({
+          id: p.provider_id,
+          name: p.provider_name,
+          logo: p.logo_path ? `${IMAGE_BASE}/w92${p.logo_path}` : '',
+        }));
+
+    // "Free" folds in ad-supported: from a viewer's side of the screen, both mean
+    // "you can watch this now without paying".
+    const free = map([...(forRegion.free ?? []), ...(forRegion.ads ?? [])]);
+    const providers: WatchProviders = {
+      region: region.toUpperCase(),
+      link: forRegion.link,
+      streaming: map(forRegion.flatrate),
+      rent: map(forRegion.rent),
+      buy: map(forRegion.buy),
+      free,
+    };
+
+    // Returned even when every list is empty. "We asked and found nothing" and
+    // "we could not ask" are different facts, and the page says different things
+    // about them — so null is reserved for the failure below, never for an
+    // answer that happens to be empty.
+    return providers;
+  } catch {
+    // Never let this break a title page — it is an extra, not the point.
+    return null;
+  }
+}

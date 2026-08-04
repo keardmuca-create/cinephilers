@@ -79,8 +79,8 @@ export default function PrivacyPage() {
             <h2 className="text-xl font-headline font-bold text-foreground mb-3">5. Storage on your device</h2>
             <p>
               Cinephilers keeps a copy of your own library — your watchlist, ratings, watch history, and the film details
-              needed to display them — in your browser&rsquo;s local storage. This is what lets the app open instantly and keep
-              working when your connection drops, and it is only ever your own data. It is never used to track you, and it is
+              needed to display them — in your browser&rsquo;s local storage. This is what lets your lists appear instantly
+              instead of being fetched every time, and it is only ever your own data. It is never used to track you, and it is
               never shared with anyone.
             </p>
             <p className="mt-3">

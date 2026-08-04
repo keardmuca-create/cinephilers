@@ -1,0 +1,112 @@
+"use client"
+
+import React, { useEffect, useState } from 'react';
+import Image from 'next/image';
+import { Tv } from 'lucide-react';
+import type { WatchProviders, WatchProvider } from '@/lib/tmdb';
+
+// The region TMDB is asked about. There is no country on the account, so this
+// reads the browser's own locale — a phone set to en-GB is telling us where its
+// owner is far more reliably than anything we could infer server-side, and it
+// works signed out. US is the fallback because it is TMDB's best-populated region,
+// so an unknown locale still sees something rather than an empty section.
+function browserRegion(): string {
+  try {
+    const loc = navigator.languages?.[0] ?? navigator.language ?? '';
+    const region = new Intl.Locale(loc).region;
+    if (region && /^[A-Z]{2}$/.test(region)) return region;
+  } catch { /* older browsers, odd locales */ }
+  return 'US';
+}
+
+function regionName(code: string): string {
+  try {
+    return new Intl.DisplayNames(undefined, { type: 'region' }).of(code) ?? code;
+  } catch { return code; }
+}
+
+function ProviderRow({ label, providers }: { label: string; providers: WatchProvider[] }) {
+  if (providers.length === 0) return null;
+  return (
+    <div className="flex items-center gap-3">
+      <span className="text-xs font-bold text-muted-foreground w-12 shrink-0">{label}</span>
+      <div className="flex gap-2 flex-wrap">
+        {providers.map(p => (
+          <div key={p.id} className="relative h-9 w-9 rounded-lg overflow-hidden bg-muted shrink-0" title={p.name}>
+            {p.logo
+              ? <Image src={p.logo} alt={p.name} fill className="object-cover" sizes="36px" />
+              : <span className="flex h-full w-full items-center justify-center text-[9px] font-bold px-0.5 text-center">{p.name.slice(0, 4)}</span>
+            }
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+export function WhereToWatch({ tmdbId, title }: { tmdbId: string; title: string }) {
+  const [data, setData] = useState<WatchProviders | null>(null);
+  const [loaded, setLoaded] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoaded(false);
+    fetch(`/api/movies/${encodeURIComponent(tmdbId)}/providers?region=${browserRegion()}`)
+      .then(r => r.ok ? r.json() : null)
+      .then(j => { if (!cancelled) { setData(j ?? null); setLoaded(true); } })
+      .catch(() => { if (!cancelled) setLoaded(true); });
+    return () => { cancelled = true; };
+  }, [tmdbId]);
+
+  // No data at all means the lookup itself failed. Saying "nothing found" then
+  // would be reporting a result we never got, so the section stays away.
+  if (!loaded || !data) return null;
+
+  const count = data.streaming.length + data.rent.length + data.buy.length + data.free.length;
+  const where = regionName(data.region);
+  const search = `https://www.justwatch.com/${data.region.toLowerCase()}/search?q=${encodeURIComponent(title)}`;
+
+  return (
+    <section className="space-y-3">
+      <h3 className="text-xl font-headline font-bold flex items-center gap-2">
+        <Tv className="h-5 w-5 text-primary" /> Where to watch
+      </h3>
+
+      <div className="space-y-2.5 bg-muted/40 border border-border rounded-2xl p-4">
+        {count > 0 ? (
+          <>
+            <ProviderRow label="Free" providers={data.free} />
+            <ProviderRow label="Stream" providers={data.streaming} />
+            <ProviderRow label="Rent" providers={data.rent} />
+            <ProviderRow label="Buy" providers={data.buy} />
+          </>
+        ) : (
+          // Deliberately "found nothing", not "is not streaming". Letterboxd does
+          // say "Not streaming." and on spot checks our data agrees with theirs —
+          // but availability is per-country and moves weekly, this answer is a
+          // day-old cache, and the region is inferred from the browser's locale
+          // rather than known. Three ways to be confidently wrong about someone
+          // else's country is enough to describe the lookup instead of the world.
+          // The link then sends them to the source, which is a better answer than
+          // a verdict either way.
+          <p className="text-sm text-muted-foreground">
+            No streaming options found for {where}.{' '}
+            <a href={search} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">
+              Check JustWatch
+            </a>
+          </p>
+        )}
+
+        {/* JustWatch supply this data through TMDB and their terms require the
+            credit, so it is not optional decoration. */}
+        <p className="text-[11px] text-muted-foreground pt-1">
+          Availability in {data.region} ·{' '}
+          {data.link
+            ? <a href={data.link} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">Powered by JustWatch</a>
+            : <span>Powered by JustWatch</span>
+          }
+        </p>
+      </div>
+    </section>
+  );
+}

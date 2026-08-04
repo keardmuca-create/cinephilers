@@ -6,6 +6,8 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { Movie, Actor, TvEpisode, TvSeason, MovieCollection, CollectionItem } from '@/lib/types';
 import { SpoilerWrap } from '@/components/spoiler-wrap';
+import { WhereToWatch } from '@/components/where-to-watch';
+import { UpNext } from '@/components/up-next';
 import { Button } from '@/components/ui/button';
 import {
   Play, Check, Plus, Star, ChevronLeft, Share2, ListPlus, Quote,
@@ -2034,6 +2036,20 @@ function MovieDetailInner() {
         <ReleaseInfo movie={movie} />
 
         {/* Seasons & Episodes (TV only) */}
+        {/* Up next — above the season list, because "which one now" is the question
+            someone mid-series actually arrives with. The season list answers "what
+            exists", which is a different and rarer question. */}
+        {movie.type === 'show' && movie.seasons && movie.seasons.length > 0 && (
+          <UpNext
+            seasons={movie.seasons}
+            showTmdbId={showTmdbId}
+            showPoster={movie.poster && !movie.poster.includes('picsum') ? movie.poster : null}
+            watchedEpisodes={watchedEpisodes}
+            onOpen={(seasonNumber, ep) => router.push(`/movie/${movie.id}-S${seasonNumber}E${ep.episode_number}`)}
+            onMarkWatched={toggleEpisodeWatched}
+          />
+        )}
+
         {movie.type === 'show' && movie.seasons && movie.seasons.length > 0 && (
           <SeasonsSection
             seasons={movie.seasons}
@@ -2062,6 +2078,9 @@ function MovieDetailInner() {
             </div>
           </section>
         )}
+
+        {/* Where to watch — last on the page, Keard's call. */}
+        <WhereToWatch tmdbId={id} title={movie.title} />
       </div>
 
       {/* Lightbox */}
