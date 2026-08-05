@@ -8,6 +8,7 @@ import { Movie, Actor, TvEpisode, TvSeason, MovieCollection, CollectionItem } fr
 import { SpoilerWrap } from '@/components/spoiler-wrap';
 import { WhereToWatch } from '@/components/where-to-watch';
 import { UpNext } from '@/components/up-next';
+import { NextAiring } from '@/components/next-airing';
 import { Button } from '@/components/ui/button';
 import {
   Play, Check, Plus, Star, ChevronLeft, Share2, ListPlus, Quote,
@@ -2040,6 +2041,11 @@ function MovieDetailInner() {
         <ReleaseInfo movie={movie} />
 
         {/* Seasons & Episodes (TV only) */}
+        {/* When the next one lands, above what to watch now — a show still running
+            has two different questions attached to it, and this is the one with a
+            date on it. Absent entirely for anything that has finished. */}
+        {movie.type === 'show' && <NextAiring next={movie.nextEpisode} />}
+
         {/* Up next — above the season list, because "which one now" is the question
             someone mid-series actually arrives with. The season list answers "what
             exists", which is a different and rarer question. */}

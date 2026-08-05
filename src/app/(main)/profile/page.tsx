@@ -10,7 +10,7 @@ import { BadgeList, FounderChip, type EarnedBadge } from '@/components/badge-row
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import Link from 'next/link';
-import { Settings, Star, Film, List, MessageSquare, ChevronRight, Award, History, Bookmark, User, Eye, Plus, Heart, TrendingUp, Download, Trash2, Share2, Repeat } from 'lucide-react';
+import { Settings, Star, Film, List, MessageSquare, ChevronRight, Award, History, Bookmark, User, Eye, Plus, Heart, TrendingUp, Download, Upload, Trash2, Share2, Repeat } from 'lucide-react';
 import { ImportDialog } from '@/components/import-dialog';
 import { FavoritesSection } from '@/components/favorites-section';
 import { BarChart, Bar, XAxis, ResponsiveContainer, Cell, YAxis, Tooltip as ChartTooltip } from 'recharts';
@@ -1175,6 +1175,15 @@ export default function ProfilePage() {
                     <Button variant="ghost" className="w-full justify-start text-sm h-12 rounded-xl" onClick={() => { setShowSettings(false); setShowImport(true); }}>
                       <Download className="h-4 w-4 mr-2 text-muted-foreground" />
                       Import from Letterboxd / IMDb <ChevronRight className="h-4 w-4 ml-auto" />
+                    </Button>
+                    {/* The other direction. We already told people they could take
+                        their history out of Letterboxd; leaving with it from here
+                        should be no harder. */}
+                    <Button variant="ghost" className="w-full justify-start text-sm h-12 rounded-xl" asChild>
+                      <a href="/api/users/me/export" download onClick={() => setShowSettings(false)}>
+                        <Upload className="h-4 w-4 mr-2 text-muted-foreground" />
+                        Download your data <ChevronRight className="h-4 w-4 ml-auto" />
+                      </a>
                     </Button>
                   </div>
                   <div className="space-y-2">

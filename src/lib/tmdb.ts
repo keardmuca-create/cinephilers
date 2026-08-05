@@ -114,6 +114,13 @@ interface TmdbShowFull extends TmdbMovie {
     overview: string;
     poster_path: string | null;
   }[];
+  next_episode_to_air?: {
+    season_number: number;
+    episode_number: number;
+    name: string;
+    air_date: string | null;
+    episode_type?: string;
+  } | null;
   credits?: TmdbCredits;
   /**
    * Everyone who appeared across the whole series, not just the regulars.
@@ -640,6 +647,17 @@ export async function getShowDetail(tmdbId: number): Promise<Movie> {
     productionCompanies: detail.production_companies?.map(c => c.name).slice(0, 4),
     totalEpisodes: detail.number_of_episodes,
     showType: detail.type,
+    // Only when TMDB actually has a date. A next episode with no air date tells
+    // a reader nothing, and "coming soon" is not worth a line on the page.
+    nextEpisode: detail.next_episode_to_air?.air_date
+      ? {
+          season: detail.next_episode_to_air.season_number,
+          episode: detail.next_episode_to_air.episode_number,
+          name: detail.next_episode_to_air.name,
+          airDate: detail.next_episode_to_air.air_date,
+          episodeType: detail.next_episode_to_air.episode_type,
+        }
+      : undefined,
   };
 }
 

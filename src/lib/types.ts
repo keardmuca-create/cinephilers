@@ -25,6 +25,15 @@ export interface Trailer {
   type: string;
 }
 
+export interface NextEpisode {
+  season: number;
+  episode: number;
+  name: string;
+  airDate: string;
+  /** TMDB's own label — "finale", "mid_season", "standard". */
+  episodeType?: string;
+}
+
 export interface TvEpisode {
   id: number;
   name: string;
@@ -114,6 +123,8 @@ export interface Movie {
   productionCompanies?: string[];
   totalEpisodes?: number;
   showType?: string;
+  /** Shows still running — the next episode TMDB has a date for. */
+  nextEpisode?: NextEpisode;
   collection?: MovieCollection;  // movies only — other films in the same franchise
 }
 
