@@ -4,7 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Image from 'next/image';
 import Link from 'next/link';
-import { Movie } from '@/lib/types';
+import { Movie, Actor } from '@/lib/types';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -16,8 +16,13 @@ export default function CastCrewPage() {
   const id = params.id as string;
 
   const [movie, setMovie] = useState<Movie | null>(null);
+  const [fullCast, setFullCast] = useState<Actor[] | null>(null);
   const [loading, setLoading] = useState(true);
 
+  // Two requests on purpose. The title payload carries the twenty names its own
+  // page draws; the complete list — every guest star across a series, hundreds of
+  // people on a long-running show — is fetched only here, where it is actually
+  // read. Both are cached, and this page is opened rarely.
   useEffect(() => {
     fetch(`/api/movies/${id}`)
       .then(r => r.json())
@@ -26,9 +31,17 @@ export default function CastCrewPage() {
       })
       .catch(() => {})
       .finally(() => setLoading(false));
+
+    fetch(`/api/movies/${id}/cast`)
+      .then(r => r.ok ? r.json() : null)
+      .then((data: Actor[] | null) => { if (Array.isArray(data)) setFullCast(data); })
+      .catch(() => { /* falls back to the title payload's twenty */ });
   }, [id]);
 
   const crew = (movie?.crew ?? []).filter(c => c.id);
+  // The full list when it arrives, otherwise what the title payload already gave
+  // us — a short cast beats an empty page if the second request fails.
+  const cast = fullCast ?? movie?.cast ?? [];
 
   return (
     <main className="max-w-xl mx-auto px-4 pt-[calc(env(safe-area-inset-top)+1.5rem)] pb-32 space-y-6">
@@ -58,11 +71,11 @@ export default function CastCrewPage() {
 
       {!loading && movie && (
         <div>
-          {movie.cast.length > 0 && (
+          {cast.length > 0 && (
             <>
               <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground px-2 mb-2">Cast</p>
               <div className="space-y-0.5">
-                {movie.cast.map(actor => (
+                {cast.map(actor => (
                   <Link
                     key={actor.id}
                     href={`/person/${actor.id}`}

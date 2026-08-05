@@ -112,6 +112,21 @@ interface TmdbShowFull extends TmdbMovie {
     poster_path: string | null;
   }[];
   credits?: TmdbCredits;
+  /**
+   * Everyone who appeared across the whole series, not just the regulars.
+   * `credits` on a TV show returns the main cast ONLY — five people for King of
+   * the Hill — so every guest star was invisible, including ones the app's own
+   * person pages send you here to find.
+   */
+  aggregate_credits?: {
+    cast: {
+      id: number;
+      name: string;
+      profile_path: string | null;
+      total_episode_count?: number;
+      roles?: { character: string; episode_count: number }[];
+    }[];
+  };
   videos?: { results: TmdbVideoResult[] };
   images?: { backdrops: { file_path: string }[] };
   reviews?: { results: TmdbReview[] };
@@ -153,6 +168,29 @@ function buildCast(credits?: TmdbCredits): Actor[] {
     bio: '',
     knownFor: [],
   }));
+}
+
+/** How many names the title page itself draws before its "See All" link. */
+const TITLE_PAGE_CAST = 20;
+
+/**
+ * A show's whole cast, regulars first. TMDB's plain `credits` for a series
+ * returns ONLY the main cast — five people for King of the Hill — so anyone who
+ * guest-starred was missing entirely. `aggregate_credits` is everyone who ever
+ * appeared, which is what a viewer arriving from an actor's page is looking for.
+ */
+function sortedAggregateCast(detail: TmdbShowFull): Actor[] {
+  return (detail.aggregate_credits?.cast ?? [])
+    .slice()
+    .sort((a, b) => (b.total_episode_count ?? 0) - (a.total_episode_count ?? 0))
+    .map(a => ({
+      id: String(a.id),
+      name: a.name,
+      role: a.roles?.[0]?.character ?? '',
+      profileImage: profileUrl(a.profile_path),
+      bio: '',
+      knownFor: [],
+    }));
 }
 
 function parseReviews(results: TmdbReview[]): Review[] {
@@ -366,6 +404,28 @@ export type CombinedSearchResult =
 // Departments considered "main talent" — shown after movies without requiring a full-name match
 const MAIN_TALENT_DEPTS = new Set(['Acting', 'Directing']);
 
+/**
+ * How strongly a search result should rank. See the note in searchTmdb for why
+ * the title match multiplies rather than adds.
+ */
+function searchScore(raw: TmdbMovie & { popularity?: number }, query: string): number {
+  const title = (raw.title ?? raw.name ?? '').toLowerCase().trim();
+  const q = query.toLowerCase().trim();
+
+  // Votes say what people have actually seen; popularity carries titles that are
+  // anticipated but unrated, so a sequel out next month is not buried beneath
+  // decades-old obscurities that have collected a handful of votes.
+  const known = (raw.vote_count ?? 0) + (raw.popularity ?? 0) * 50;
+
+  if (title === q) return known * 3;
+  if (title.startsWith(q)) return known * 1.5;
+  if (title.includes(q)) return known;
+  // TMDB matched this on something invisible to the reader — a keyword, a cast
+  // member. Searching "dune" surfaced Anatomy of a Fall this way. Kept, because
+  // the match may still be meaningful, but never above a real title match.
+  return known * 0.15;
+}
+
 export async function searchTmdb(query: string): Promise<{ results: Movie[]; people: PersonResult[]; combined: CombinedSearchResult[] }> {
   const multiData = await tmdbFetch<{
     results: (TmdbMovie & { media_type: string; profile_path?: string | null; known_for_department?: string })[]
@@ -378,10 +438,15 @@ export async function searchTmdb(query: string): Promise<{ results: Movie[]; peo
 
   const queryLower = query.toLowerCase().trim();
 
+  // Raw items kept alongside the mapped ones: ranking needs vote_count and
+  // popularity, which Movie does not carry.
+  const scored: { movie: Movie; raw: TmdbMovie }[] = [];
+
   for (const item of multiData.results ?? []) {
     if (item.media_type === 'movie' || item.media_type === 'tv') {
       const movie = tmdbToMovie(item as TmdbMovie);
       results.push(movie);
+      scored.push({ movie, raw: item as TmdbMovie });
     } else if (item.media_type === 'person') {
       const person: PersonResult = {
         id: String(item.id),
@@ -403,24 +468,26 @@ export async function searchTmdb(query: string): Promise<{ results: Movie[]; peo
     }
   }
 
-  // Among results sharing the same title, surface the one with more votes first
-  // (the popular/iconic title users usually mean). TMDB's relevance order is
-  // preserved across different titles — votes only break ties within a title.
-  const firstIdxByTitle = new Map<string, number>();
-  results.forEach((m, i) => {
-    const key = m.title.toLowerCase().trim();
-    if (!firstIdxByTitle.has(key)) firstIdxByTitle.set(key, i);
-  });
-  const orderedResults = results
-    .map((m, i) => ({ m, i }))
+  // TMDB's own order weights the title match far above how known a title is, so
+  // searching "batman" led with the 1966 series (609 votes) and pushed Batman
+  // Begins (22,899) to fourth; "alien" led with Resident Alien; "godfather" put
+  // Godfather of Harlem above Part II.
+  //
+  // Each result is scored on how known it is, then MULTIPLIED by how well its
+  // title matches. Multiplied, not added: a flat bonus for exact matches let
+  // every obscure film literally called "Joker" outrank Joker: Folie a Deux,
+  // which was worse than the problem being fixed. A multiplier amplifies a
+  // title's own standing instead of overriding it, which keeps the opposite case
+  // working too — searching "ariel" still finds Kaurismaki's 1988 film, because
+  // an exact match on a little-known title still beats a loose match on a famous
+  // one.
+  const orderedResults = scored
+    .map((s, i) => ({ ...s, i }))
     .sort((a, b) => {
-      const ga = firstIdxByTitle.get(a.m.title.toLowerCase().trim())!;
-      const gb = firstIdxByTitle.get(b.m.title.toLowerCase().trim())!;
-      if (ga !== gb) return ga - gb;
-      if (b.m.votes !== a.m.votes) return b.m.votes - a.m.votes;
-      return a.i - b.i;
+      const diff = searchScore(b.raw, query) - searchScore(a.raw, query);
+      return diff !== 0 ? diff : a.i - b.i;
     })
-    .map(x => x.m);
+    .map(s => s.movie);
 
   const movieItems: CombinedSearchResult[] = orderedResults.map(m => ({ kind: 'movie', data: m }));
   const combined: CombinedSearchResult[] = [...movieItems, ...talentItems, ...crewItems];
@@ -478,7 +545,8 @@ export async function getMovieDetail(tmdbId: number): Promise<Movie> {
 
   return {
     ...base,
-    cast: buildCast(detail.credits),
+    // Twenty here, the rest from /api/movies/[id]/cast — see getFullCast.
+    cast: buildCast(detail.credits).slice(0, TITLE_PAGE_CAST),
     trailers: parseTrailers(detail.videos?.results ?? []),
     images: parseImages(detail.images?.backdrops ?? []),
     reviews: parseReviews(detail.reviews?.results ?? []),
@@ -498,7 +566,7 @@ export async function getMovieDetail(tmdbId: number): Promise<Movie> {
 export async function getShowDetail(tmdbId: number): Promise<Movie> {
   const detail = await tmdbFetch<TmdbShowFull>(
     `/tv/${tmdbId}`,
-    { append_to_response: 'credits,videos,images,reviews' },
+    { append_to_response: 'credits,aggregate_credits,videos,images,reviews' },
   );
 
   const base = tmdbToMovie({ ...detail, media_type: 'tv' }, detail.credits);
@@ -521,9 +589,17 @@ export async function getShowDetail(tmdbId: number): Promise<Movie> {
       poster_path: s.poster_path,
     }));
 
+  // Only what the title page draws. The full list — every guest star across the
+  // series, which for King of the Hill is 384 people — is served separately by
+  // getFullCast, because shipping all of it here added ~50KB to a payload whose
+  // page renders twelve names.
+  const aggregateCast = sortedAggregateCast(detail).slice(0, TITLE_PAGE_CAST);
+
   return {
     ...base,
-    cast: buildCast(detail.credits),
+    // Falls back to the regulars if aggregate_credits is missing, which happens
+    // on shows TMDB has barely any data for.
+    cast: aggregateCast.length > 0 ? aggregateCast : buildCast(detail.credits).slice(0, TITLE_PAGE_CAST),
     trailers: parseTrailers(detail.videos?.results ?? []),
     images: parseImages(detail.images?.backdrops ?? []),
     reviews: parseReviews(detail.reviews?.results ?? []),
@@ -921,4 +997,22 @@ export async function getWatchProviders(
     // Never let this break a title page — it is an extra, not the point.
     return null;
   }
+}
+
+// ─── Full cast (the Cast & Crew page only) ───────────────────────────────────
+// Split out from the title payload deliberately. A long-running series carries
+// hundreds of credited actors — King of the Hill has 384 — and sending them with
+// every title view cost ~50KB to render twelve names. This is opened rarely, so
+// the weight sits where it is actually used.
+
+export async function getFullCast(tmdbId: number, isShow: boolean): Promise<Actor[]> {
+  if (isShow) {
+    const detail = await tmdbFetch<TmdbShowFull>(`/tv/${tmdbId}`, { append_to_response: 'aggregate_credits,credits' });
+    const aggregate = sortedAggregateCast(detail);
+    // 500 is a sanity bound against a soap opera with a four-figure cast, not a
+    // display decision. Falls back to the regulars when TMDB has no aggregate.
+    return aggregate.length > 0 ? aggregate.slice(0, 500) : buildCast(detail.credits);
+  }
+  const detail = await tmdbFetch<{ credits?: TmdbCredits }>(`/movie/${tmdbId}`, { append_to_response: 'credits' });
+  return buildCast(detail.credits);
 }
