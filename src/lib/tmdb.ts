@@ -52,6 +52,9 @@ interface TmdbVideoResult {
   site: string;
   type: string;
   official: boolean;
+  /** Vertical resolution — 360, 720, 1080, 2160. */
+  size?: number;
+  published_at?: string;
 }
 
 interface TmdbReview {
@@ -215,9 +218,33 @@ function parseReviews(results: TmdbReview[]): Review[] {
   });
 }
 
+/**
+ * TMDB lists videos in no useful order, and we were taking the first six as they
+ * came. For Dune: Part Two that meant six teasers — "Vision ASMR", "#1 Movie in
+ * the World" — while the actual trailer sat in the data unseen. Oppenheimer led
+ * with two TV spots. Inception led with an unofficial upload followed by six
+ * thirty-second spots. The Dark Knight led with its 360p copy while the 1080p
+ * ones waited below.
+ *
+ * TMDB does not report a video's duration, so "full trailer" has to be inferred
+ * from what it does tell us: a Trailer outranks a Teaser, an official upload
+ * outranks a fan copy, and a sharper file outranks a soft one.
+ */
 function parseTrailers(results: TmdbVideoResult[]): Trailer[] {
+  const rank = (v: TmdbVideoResult) =>
+    (v.type === 'Trailer' ? 1000 : 0) +
+    (v.official ? 500 : 0) +
+    (v.size ?? 0) / 10;
+
   return results
     .filter(v => v.site === 'YouTube' && (v.type === 'Trailer' || v.type === 'Teaser'))
+    .slice()
+    .sort((a, b) => {
+      const diff = rank(b) - rank(a);
+      if (diff !== 0) return diff;
+      // Same standing — show the newer cut, which is usually the one people mean.
+      return (b.published_at ?? '').localeCompare(a.published_at ?? '');
+    })
     .slice(0, 6)
     .map(v => ({ key: v.key, name: v.name, site: v.site, type: v.type }));
 }

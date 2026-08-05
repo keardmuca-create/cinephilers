@@ -2,7 +2,7 @@
 
 import React from 'react';
 import Link from 'next/link';
-import { Dialog, DialogContent } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Film } from 'lucide-react';
 
@@ -21,7 +21,9 @@ export function AuthGateModal({ open, onClose, action }: AuthGateModalProps) {
             <Film className="h-8 w-8 text-primary" />
           </div>
           <div className="space-y-1.5">
-            <h2 className="text-xl font-headline font-bold">Join Cinephilers</h2>
+            {/* The dialog's heading proper, not a loose h2 — it already read as
+                the title on screen, but nothing told a screen reader that. */}
+            <DialogTitle className="text-xl font-headline font-bold">Join Cinephilers</DialogTitle>
             <p className="text-sm text-muted-foreground leading-relaxed">
               {action
                 ? `Create a free account to ${action} — and track every film and show you watch.`

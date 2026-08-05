@@ -1656,6 +1656,10 @@ function MovieDetailInner() {
               </div>
             </DialogTrigger>
             <DialogContent className="max-w-3xl rounded-3xl p-2 border-white/10 bg-black">
+              {/* Named for screen readers only. The dialog is a video and nothing
+                  else, so a visible heading would just push the player down — but
+                  without a title it announces as an unlabelled dialog. */}
+              <DialogTitle className="sr-only">{movie.title} — trailer</DialogTitle>
               <div className="aspect-video w-full">
                 <iframe
                   src={`https://www.youtube.com/embed/${firstTrailer.key}?autoplay=1&rel=0`}
