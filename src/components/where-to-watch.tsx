@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import Image from 'next/image';
-import { Tv } from 'lucide-react';
+import { Tv, ExternalLink } from 'lucide-react';
 import type { WatchProviders, WatchProvider } from '@/lib/tmdb';
 
 // The region TMDB is asked about. There is no country on the account, so this
@@ -64,7 +64,18 @@ export function WhereToWatch({ tmdbId, title }: { tmdbId: string; title: string 
 
   const count = data.streaming.length + data.rent.length + data.buy.length + data.free.length;
   const where = regionName(data.region);
-  const search = `https://www.justwatch.com/${data.region.toLowerCase()}/search?q=${encodeURIComponent(title)}`;
+
+  // The logos cannot be individual links: TMDB gives a name, a logo and a sort
+  // order per provider and no URL at all. There is exactly one link in the whole
+  // response and it belongs to the region, not to any service — Letterboxd can
+  // link each row because they use JustWatch's own API, which returns a deeplink
+  // per offer. So the whole block is one link rather than pretending each logo
+  // goes somewhere different.
+  //
+  // That link is TMDB's page for this exact title, which beats a JustWatch search
+  // on precision — searching "Dune" finds three films, this finds the one you are
+  // looking at. The search URL is only the fallback for a title with no link.
+  const href = data.link ?? `https://www.justwatch.com/${data.region.toLowerCase()}/search?q=${encodeURIComponent(title)}`;
 
   return (
     <section className="space-y-3">
@@ -72,7 +83,12 @@ export function WhereToWatch({ tmdbId, title }: { tmdbId: string; title: string 
         <Tv className="h-5 w-5 text-primary" /> Where to watch
       </h3>
 
-      <div className="space-y-2.5 bg-muted/40 border border-border rounded-2xl p-4">
+      <a
+        href={href}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="block space-y-2.5 bg-muted/40 hover:bg-muted/70 transition-colors border border-border rounded-2xl p-4"
+      >
         {count > 0 ? (
           <>
             <ProviderRow label="Free" providers={data.free} />
@@ -87,26 +103,17 @@ export function WhereToWatch({ tmdbId, title }: { tmdbId: string; title: string 
           // day-old cache, and the region is inferred from the browser's locale
           // rather than known. Three ways to be confidently wrong about someone
           // else's country is enough to describe the lookup instead of the world.
-          // The link then sends them to the source, which is a better answer than
-          // a verdict either way.
-          <p className="text-sm text-muted-foreground">
-            No streaming options found for {where}.{' '}
-            <a href={search} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">
-              Check JustWatch
-            </a>
-          </p>
+          <p className="text-sm text-muted-foreground">No streaming options found for {where}.</p>
         )}
 
         {/* JustWatch supply this data through TMDB and their terms require the
             credit, so it is not optional decoration. */}
-        <p className="text-[11px] text-muted-foreground pt-1">
-          Availability in {data.region} ·{' '}
-          {data.link
-            ? <a href={data.link} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">Powered by JustWatch</a>
-            : <span>Powered by JustWatch</span>
-          }
+        <p className="text-[11px] text-muted-foreground pt-1 flex items-center gap-1.5">
+          <ExternalLink className="h-3 w-3 shrink-0" />
+          {count > 0 ? `See all ways to watch in ${where}` : `Check ${where} on JustWatch`}
+          <span className="opacity-70">· Powered by JustWatch</span>
         </p>
-      </div>
+      </a>
     </section>
   );
 }
