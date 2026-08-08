@@ -44,7 +44,7 @@ export function BadgeRow({ badge, onOpen }: { badge: EarnedBadge; onOpen: (b: Ea
     <button
       type="button"
       onClick={() => onOpen(badge)}
-      className="w-full flex items-center gap-4 py-3.5 border-b border-border last:border-0 text-left hover:opacity-70 transition-opacity"
+      className="w-full flex items-center gap-3 py-2 border-b border-border last:border-0 text-left hover:opacity-70 transition-opacity"
     >
       <BadgeMedal tier={badge.tier} progress={progressOf(badge)} size={56} />
       <div className="flex-1 min-w-0">
