@@ -71,7 +71,15 @@ export default function LoginPage() {
     // Persist basic user info so profile shows immediately even after cold starts
     try { localStorage.setItem('cinephilers_user', JSON.stringify(data.data)); } catch { /* ignore */ }
 
-    router.push('/profile');
+    // Someone who has never picked any genres has never been asked — the field
+    // has existed and fed Top Picks for a long time with nothing populating it.
+    // They get the welcome screen once. Skipping is remembered per device, so
+    // "not now" is not asked again here.
+    let skipped = false;
+    try { skipped = localStorage.getItem('onboarding-genres-skipped') === 'true'; } catch { /* ignore */ }
+    const noGenres = Array.isArray(data.data?.favoriteGenres) && data.data.favoriteGenres.length === 0;
+
+    router.push(noGenres && !skipped ? '/welcome' : '/profile');
     router.refresh();
   };
 

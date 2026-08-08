@@ -64,5 +64,8 @@ export async function POST(req: NextRequest) {
     avatarUrl: user.avatarUrl,
     isVerified: user.isVerified,
     role: user.role,
+    // Returned so the login page can decide where to land without a second round
+    // trip: an account that has never chosen any goes to the welcome screen once.
+    favoriteGenres: user.favoriteGenres,
   });
 }

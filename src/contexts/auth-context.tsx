@@ -23,6 +23,8 @@ export interface AuthUser {
   reviewsCount: number;
   followersCount: number;
   followingCount: number;
+  /** Chosen on the welcome screen; feeds the Top Picks backfill. */
+  favoriteGenres?: string[];
 }
 
 function saveUserToStorage(user: AuthUser | null) {

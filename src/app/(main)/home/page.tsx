@@ -9,6 +9,7 @@ import { Movie } from '@/lib/types';
 import { MovieCard } from '@/components/movie-card';
 import { AIRecommendations } from '@/components/ai-recommendations';
 import { InstallPrompt } from '@/components/install-prompt';
+import { GetStarted } from '@/components/get-started';
 import { RecentlyViewed } from '@/components/recently-viewed';
 import { TodaysPick } from '@/components/todays-pick';
 import { Button } from '@/components/ui/button';
@@ -165,6 +166,10 @@ export default function HomePage() {
       {/* Install-app banner: native install dialog on Chromium, Share-sheet
           guide on iOS; hides itself when installed or dismissed */}
       <InstallPrompt />
+
+      {/* The rest of onboarding — genres, a history, a watchlist. Hides itself
+          once the three are done, and can be dismissed before then. */}
+      <GetStarted />
 
       {/* Guest signup banner */}
       {!authLoading && !user && (
