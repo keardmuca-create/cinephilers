@@ -4,10 +4,19 @@ import { ok, err } from '@/lib/api-response';
 import { getCurrentUser } from '@/lib/auth-utils';
 import { rateLimit } from '@/lib/rate-limit';
 import { canonicalId, isValidMediaId } from '@/lib/media-id';
+import { localDay } from '@/lib/local-day';
 import { MediaType } from '@/generated/prisma/client';
 
-function today(): string {
-  return new Date().toISOString().slice(0, 10); // UTC YYYY-MM-DD
+// The caller's own calendar day, from the IANA zone stored on their account.
+// Was UTC for everybody, which meant the pick reset at 2am in Albania and at 5pm
+// in California — where someone could then generate a second pick in the same
+// evening. Falls back to UTC until a device has reported a zone.
+async function todayFor(userId: string): Promise<string> {
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { timezone: true },
+  });
+  return localDay(user?.timezone);
 }
 
 // How many days a title stays out of the running after being picked, so the
@@ -22,8 +31,9 @@ export async function GET(req: NextRequest) {
   if (!auth) return err('Unauthorized', 401);
 
   const since = new Date(Date.now() - NO_REPEAT_DAYS * 24 * 60 * 60 * 1000);
+  const day = await todayFor(auth.sub);
   const [pick, recent] = await Promise.all([
-    prisma.dailyPick.findUnique({ where: { userId_day: { userId: auth.sub, day: today() } } }),
+    prisma.dailyPick.findUnique({ where: { userId_day: { userId: auth.sub, day } } }),
     prisma.dailyPick.findMany({
       where: { userId: auth.sub, createdAt: { gte: since } },
       select: { tmdbId: true },
@@ -55,7 +65,7 @@ export async function POST(req: NextRequest) {
   const tmdbId = canonicalId(String(rawId));
   if (!isValidMediaId(tmdbId)) return err('Invalid tmdbId');
 
-  const day = today();
+  const day = await todayFor(auth.sub);
 
   const existing = await prisma.dailyPick.findUnique({
     where: { userId_day: { userId: auth.sub, day } },

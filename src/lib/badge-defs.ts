@@ -104,6 +104,33 @@ export const BADGES: BadgeDef[] = [
     icon: 'globe',
     tiers: { bronze: 10, silver: 20, gold: 50 },
   },
+  // ── The two Today's Pick badges ─────────────────────────────────────────────
+  // The only badges in the set that cannot be imported. Every other one counts
+  // rows that a Letterboxd export can create in bulk — which is why Daily
+  // Marathon and Weekly Watcher were dropped, since an import lands hundreds of
+  // watches on dates we have no way to distrust. A pick only exists because
+  // somebody pressed Generate in this app, and the watch has to come after it.
+  // Nothing here can be earned by arriving with a history.
+  {
+    id: 'daily-pick',
+    name: 'Daily Pick',
+    description: "Watch the film Today's Pick chooses for you, the day it chooses it.",
+    unit: 'picks',
+    icon: 'sparkles',
+    tiers: { bronze: 10, silver: 50, gold: 100 },
+  },
+  {
+    id: 'pick-streak',
+    // Counts the BEST run ever, not the current one. A medal that falls off the
+    // first time life gets in the way punishes people for having one — and the
+    // same principle was already agreed for the seasonal badges: the metal
+    // records your best, never your most recent.
+    name: 'Pick Streak',
+    description: 'Watch your pick every day, day after day. Your best run is kept forever.',
+    unit: 'days',
+    icon: 'flame',
+    tiers: { bronze: 5, silver: 15, gold: 50 },
+  },
   {
     id: 'founder',
     name: 'Founder',

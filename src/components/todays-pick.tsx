@@ -127,17 +127,15 @@ function HelpButton({ onOpen }: { onOpen: () => void }) {
 
 // Time left until the pick rolls over, in the same words a person would use.
 //
-// Counted to the NEXT UTC MIDNIGHT, because that is when the pick actually
-// changes: the server keys a pick to `new Date().toISOString().slice(0,10)`, a
-// UTC day. This counted to the device's local midnight, so anyone east of
-// Greenwich watched it reach zero and then got the same film back for hours.
-// If the reset is ever moved to the user's own day, this has to move with it.
+// Local midnight, and now that is also when the pick actually changes: the server
+// works the day out from the IANA zone stored on the account, so this device's
+// own midnight and the server's idea of "tomorrow" are the same moment. This
+// briefly counted to UTC midnight, which was correct while the server keyed picks
+// to a UTC day and wrong the instant that changed.
 function untilTomorrow(): string {
   const now = new Date();
-  const nextUtcMidnight = Date.UTC(
-    now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 1,
-  );
-  const mins = Math.max(0, Math.round((nextUtcMidnight - now.getTime()) / 60000));
+  const midnight = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1).getTime();
+  const mins = Math.max(0, Math.round((midnight - now.getTime()) / 60000));
   const h = Math.floor(mins / 60);
   const m = mins % 60;
   if (h === 0) return `${m}m`;

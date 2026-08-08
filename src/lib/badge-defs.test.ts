@@ -54,9 +54,10 @@ describe('progressTo', () => {
 });
 
 describe('the badge set', () => {
-  it('has nine badges with unique ids', () => {
-    expect(BADGES).toHaveLength(9);
-    expect(BADGE_BY_ID.size).toBe(9);
+  it('has eleven badges with unique ids', () => {
+    // Nine, plus the two Today's Pick badges added 2026-08-08.
+    expect(BADGES).toHaveLength(11);
+    expect(BADGE_BY_ID.size).toBe(11);
   });
 
   it('gives every badge but Founder a rising set of tiers', () => {

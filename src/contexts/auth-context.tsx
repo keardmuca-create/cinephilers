@@ -380,6 +380,38 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => { refetch(); }, [refetch]);
 
+  // Tell the server which time zone this person is in, so it knows where their
+  // day starts. Today's Pick resets on that boundary and the streak badge counts
+  // consecutive days — and badges are recomputed on a background refresh with no
+  // browser attached, so the answer has to be stored rather than sent per request.
+  //
+  // Only sent when it CHANGES. The last value reported is remembered locally, so
+  // this is silent on every load after the first and after someone flies
+  // somewhere. Failures are ignored: the server falls back to UTC, which is
+  // exactly what it did before any of this existed.
+  useEffect(() => {
+    if (!user) return;
+    let tz: string;
+    try {
+      tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    } catch { return; }
+    if (!tz) return;
+    try {
+      if (localStorage.getItem('reported-timezone') === tz) return;
+    } catch { /* private mode — just send it */ }
+    fetchWithAuth('/api/users/me/timezone', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ timezone: tz }),
+    })
+      .then(res => {
+        if (res.ok) {
+          try { localStorage.setItem('reported-timezone', tz); } catch { /* ignore */ }
+        }
+      })
+      .catch(() => {});
+  }, [user]);
+
   // If any fetchWithAuth call fails to refresh, the session is dead — log out
   useEffect(() => {
     const handle = () => {

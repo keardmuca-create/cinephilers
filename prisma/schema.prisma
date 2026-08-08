@@ -28,6 +28,13 @@ model User {
   bio            String?  @db.VarChar(300)
   favoriteGenres String[]
   country        String?
+  // IANA zone name reported by the browser ("Europe/Tirane"), so the SERVER can
+  // work out what day it is for this person. Today's Pick and the streak badge
+  // both turn on "their day", and badges are computed on a background refresh
+  // with no browser present — so the answer has to live here rather than being
+  // sent up with each request. Null until a device reports one; everything falls
+  // back to UTC in the meantime, which is the behaviour that existed before.
+  timezone       String?
   role           Role     @default(USER)
   isVerified     Boolean  @default(false)
   isPrivate      Boolean  @default(false)

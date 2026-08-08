@@ -12,6 +12,7 @@
 
 import { prisma } from '@/lib/db';
 import { snapshotFrom, type EarnedBadge, type BadgeSnapshot } from '@/lib/badge-defs';
+import { localDay, daysBetween } from '@/lib/local-day';
 
 export type { EarnedBadge, BadgeSnapshot };
 
@@ -19,7 +20,7 @@ const isEpisodeId = (id: string) => /-S\d+E\d+$/.test(id);
 
 /** Every badge count for one user, straight from the database. */
 export async function computeBadgeCounts(userId: string): Promise<Record<string, number>> {
-  const [films, episodeGroups, ratings, reviews] = await Promise.all([
+  const [films, episodeGroups, ratings, reviews, picks, pickWatches, user] = await Promise.all([
     prisma.watchedItem.findMany({ where: { userId, mediaType: 'MOVIE' }, select: { tmdbId: true } }),
     prisma.watchedEpisode.groupBy({
       by: ['showTmdbId'],
@@ -28,6 +29,17 @@ export async function computeBadgeCounts(userId: string): Promise<Record<string,
     }),
     prisma.rating.findMany({ where: { userId }, select: { tmdbId: true, mediaType: true } }),
     prisma.review.count({ where: { userId, hidden: false } }),
+    // Films only — a series keeps no watched record of its own, and the pick card
+    // only offers Mark as watched for films.
+    prisma.dailyPick.findMany({
+      where: { userId, mediaType: 'MOVIE' },
+      select: { tmdbId: true, day: true, createdAt: true },
+    }),
+    prisma.watchEvent.findMany({
+      where: { userId, mediaType: 'MOVIE' },
+      select: { tmdbId: true, watchedAt: true },
+    }),
+    prisma.user.findUnique({ where: { id: userId }, select: { timezone: true } }),
   ]);
 
   // One meta lookup covers both the languages for World cinema and the episode
@@ -65,7 +77,49 @@ export async function computeBadgeCounts(userId: string): Promise<Record<string,
     else filmsRated++;
   }
 
+  // ── Today's Pick ────────────────────────────────────────────────────────────
+  // A pick counts only when the film was watched AFTER the pick was made and
+  // inside the same day — the day being the user's own, from the zone stored on
+  // their account. Same day, no grace: Keard's call, and the point of the badge
+  // is watching it tonight rather than eventually.
+  //
+  // The "after the pick was made" half is what makes these two badges
+  // unforgeable. An import can create any number of watch events on any dates it
+  // likes, but it cannot create a DailyPick row, and it cannot land a watch after
+  // a pick that had not happened yet.
+  const watchesByTitle = new Map<string, Date[]>();
+  for (const w of pickWatches) {
+    const list = watchesByTitle.get(w.tmdbId);
+    if (list) list.push(w.watchedAt);
+    else watchesByTitle.set(w.tmdbId, [w.watchedAt]);
+  }
+
+  const completedDays: string[] = [];
+  for (const pick of picks) {
+    const watches = watchesByTitle.get(pick.tmdbId);
+    if (!watches) continue;
+    const done = watches.some(at =>
+      at.getTime() >= pick.createdAt.getTime() &&
+      localDay(user?.timezone, at) === pick.day,
+    );
+    if (done) completedDays.push(pick.day);
+  }
+
+  // Longest run ever, not the current one — see the badge definition.
+  completedDays.sort();
+  let bestStreak = 0;
+  let run = 0;
+  let prev: string | null = null;
+  for (const day of completedDays) {
+    if (prev !== null && daysBetween(prev, day) === 1) run++;
+    else run = 1;
+    if (run > bestStreak) bestStreak = run;
+    prev = day;
+  }
+
   return {
+    'daily-pick': completedDays.length,
+    'pick-streak': bestStreak,
     'movie-watcher': films.length,
     'movie-rater': filmsRated,
     'show-watcher': showsCompleted,
