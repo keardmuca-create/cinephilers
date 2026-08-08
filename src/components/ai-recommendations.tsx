@@ -6,32 +6,25 @@ import { Movie } from '@/lib/types';
 import { MovieCard } from './movie-card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Sparkles, ChevronRight } from 'lucide-react';
-import { MediaToggle } from './media-toggle';
-import type { MediaSide } from '@/lib/media-type';
 
-type Tab = MediaSide;
-
+// Films only, deliberately — the Movies/Shows toggle is gone from this row. A bad
+// film suggestion costs two hours; a bad series costs a dozen, and a season is
+// too big an ask to hang on a guess. Everywhere else in the app still splits.
 export const AIRecommendations = () => {
   const [movies, setMovies] = useState<Movie[]>([]);
-  const [shows, setShows] = useState<Movie[]>([]);
   const [loading, setLoading] = useState(true);
-  const [tab, setTab] = useState<Tab>('movies');
 
   useEffect(() => {
     fetch('/api/recommendations')
       .then(r => r.json())
-      .then((data: { topMovies?: Movie[]; topShows?: Movie[] }) => {
+      .then((data: { topMovies?: Movie[] }) => {
         setMovies(data.topMovies ?? []);
-        setShows(data.topShows ?? []);
       })
       .catch(() => {})
       .finally(() => setLoading(false));
   }, []);
 
-  if (!loading && movies.length === 0 && shows.length === 0) return null;
-
-  const displayed = tab === 'movies' ? movies : shows;
-  const seeAllHref = tab === 'movies' ? '/see-all/top-picks-movies' : '/see-all/top-picks-shows';
+  if (!loading && movies.length === 0) return null;
 
   return (
     <section className="space-y-4">
@@ -45,16 +38,11 @@ export const AIRecommendations = () => {
           </h2>
         </div>
         <Link
-          href={seeAllHref}
+          href="/see-all/top-picks-movies"
           className="text-xs text-primary border border-primary/30 rounded-full px-3 py-1 hover:bg-primary/10 transition-colors font-semibold flex items-center gap-1 shrink-0"
         >
           See All <ChevronRight className="h-3 w-3" />
         </Link>
-      </div>
-
-      {/* Movies / Shows toggle — the shared pill every list now uses. */}
-      <div className="px-6">
-        <MediaToggle value={tab} onChange={setTab} />
       </div>
 
       {/* Card row */}
@@ -67,7 +55,7 @@ export const AIRecommendations = () => {
                 <Skeleton className="h-3 w-20" />
               </div>
             ))
-          : displayed.map(movie => <MovieCard key={movie.id} movie={movie} />)
+          : movies.map(movie => <MovieCard key={movie.id} movie={movie} />)
         }
       </div>
     </section>

@@ -19,7 +19,12 @@ import { useAuth } from '@/contexts/auth-context';
 
 const EMPTY = { movies: [] as Movie[], shows: [] as Movie[], trending: [] as Movie[] };
 
-function Top10Card({ movie, index }: { movie: Movie; index: number }) {
+interface ChartEntry extends Movie {
+  /** How many different people watched it this week — the thing being ranked. */
+  watchers: number;
+}
+
+function Top10Card({ movie, index }: { movie: ChartEntry; index: number }) {
   const [watched, setWatched] = useState(false);
   const [userRating, setUserRating] = useState<number | undefined>(undefined);
 
@@ -58,10 +63,12 @@ function Top10Card({ movie, index }: { movie: Movie; index: number }) {
             {movie.title}
           </h3>
           <div className="flex flex-col items-end gap-0.5 shrink-0">
-            <div className="flex items-center gap-0.5">
-              <Star className="h-3 w-3 fill-yellow-400 text-yellow-400" />
-              <span className="text-xs font-bold text-foreground">{movie.rating.toFixed(1)}</span>
-            </div>
+            {movie.rating > 0 && (
+              <div className="flex items-center gap-0.5">
+                <Star className="h-3 w-3 fill-yellow-400 text-yellow-400" />
+                <span className="text-xs font-bold text-foreground">{movie.rating.toFixed(1)}</span>
+              </div>
+            )}
             {userRating !== undefined && (
               <div className="flex items-center gap-0.5">
                 <Star className="h-3 w-3 fill-blue-400 text-blue-400" />
@@ -73,21 +80,13 @@ function Top10Card({ movie, index }: { movie: Movie; index: number }) {
             )}
           </div>
         </div>
-        <p className="text-xs text-muted-foreground">{movie.year}</p>
+        {/* The rank is earned by this number, so the number is on the card. */}
+        <p className="text-xs text-muted-foreground">
+          {movie.watchers} {movie.watchers === 1 ? 'watcher' : 'watchers'} · {movie.year}
+        </p>
       </div>
     </Link>
   );
-}
-
-// IMDb-style weighted rating so "Top 10" needs both a high score AND enough
-// votes — a 9.0 with 12 votes won't outrank an 8.2 with 50k.
-const WEIGHTED_MIN_VOTES = 100;
-const GLOBAL_MEAN_RATING = 6.5;
-function weightedScore(m: Movie): number {
-  const v = m.votes ?? 0;
-  const r = m.rating ?? 0;
-  return (v / (v + WEIGHTED_MIN_VOTES)) * r
-    + (WEIGHTED_MIN_VOTES / (v + WEIGHTED_MIN_VOTES)) * GLOBAL_MEAN_RATING;
 }
 
 const SectionHeader = ({ title, seeAllSection }: { title: string; seeAllSection?: string }) => (
@@ -136,21 +135,25 @@ export default function HomePage() {
       .catch(() => {});
   }, []);
 
-  const { featured, top10 } = useMemo(() => {
-    if (!stablePool.daily.length) return { featured: [] as Movie[], top10: [] as Movie[] };
+  // Most Watched This Week — real Cinephilers activity, ranked by how many
+  // different people watched each title. The endpoint decides whether there is
+  // enough of it to be worth showing; an empty list means "not yet" and the row
+  // simply isn't drawn.
+  const [chart, setChart] = useState<ChartEntry[]>([]);
+  useEffect(() => {
+    fetch('/api/top-watched')
+      .then(r => r.json())
+      .then((res: { ready?: boolean; items?: ChartEntry[] }) => {
+        if (res?.ready && Array.isArray(res.items)) setChart(res.items);
+      })
+      .catch(() => {});
+  }, []);
 
+  const featured = useMemo(() => {
+    if (!stablePool.daily.length) return [] as Movie[];
     const now = new Date();
     const daySeed = now.getFullYear() * 10000 + (now.getMonth() + 1) * 100 + now.getDate();
-    const dailyPool = seededShuffle(stablePool.daily, daySeed);
-
-    const feat = dailyPool.slice(1, 16);
-    // Genuine top 10 by weighted rating (not a random slice). The weekly pool
-    // changes each week, so the ranking still rotates over time.
-    const t10 = [...stablePool.weekly]
-      .sort((a, b) => weightedScore(b) - weightedScore(a))
-      .slice(0, 10);
-
-    return { featured: feat, top10: t10 };
+    return seededShuffle(stablePool.daily, daySeed).slice(1, 16);
   }, [stablePool]);
 
   // Popular sections: all 25 items each
@@ -194,12 +197,13 @@ export default function HomePage() {
         ) : null}
       </section>
 
-      {/* Top 10 on Cinephilers */}
-      {top10.length > 0 && (
+      {/* Most Watched This Week — hidden until there's enough real activity to
+          rank, so it never publishes one person's diary as a chart. */}
+      {chart.length > 0 && (
         <section className="space-y-4">
-          <SectionHeader title="Top 10 on Cinephilers This Week" />
+          <SectionHeader title="Most Watched This Week" />
           <div className="flex overflow-x-auto gap-4 px-6 pb-6 no-scrollbar">
-            {top10.map((movie, index) => (
+            {chart.map((movie, index) => (
               <Top10Card key={movie.id} movie={movie} index={index} />
             ))}
           </div>

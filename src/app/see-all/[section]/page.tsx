@@ -11,15 +11,14 @@ import { Skeleton } from '@/components/ui/skeleton';
 
 const SECTION_TITLES: Record<string, string> = {
   featured: 'Featured Today',
-  'top-10-week': 'Top 10 on Cinephilers This Week',
+  'top-10-week': 'Most Watched This Week',
   'popular-movies': 'Popular Movies',
   'popular-shows': 'Popular TV Shows',
   'top-rated-movies': 'Top 100 Movies',
   'top-rated-shows': 'Top 100 TV Shows',
   'coming-soon': 'Coming Soon — Movies',
   'coming-soon-shows': 'Coming Soon — Shows',
-  'top-picks-movies': 'Top Picks For You — Movies',
-  'top-picks-shows': 'Top Picks For You — Shows',
+  'top-picks-movies': 'Top Picks For You',
 };
 
 function getSectionTitle(section: string, titleParam: string | null): string {

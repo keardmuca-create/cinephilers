@@ -94,14 +94,11 @@ export async function GET(
       case 'coming-soon-shows':
         items = await getUpcomingShows(100);
         break;
+      // No `top-picks-shows` — Top Picks is films only, and the row that linked
+      // here is gone.
       case 'top-picks-movies': {
         const recs = await getRecommendations(req, 100);
         items = recs.topMovies;
-        break;
-      }
-      case 'top-picks-shows': {
-        const recs = await getRecommendations(req, 100);
-        items = recs.topShows;
         break;
       }
       default:

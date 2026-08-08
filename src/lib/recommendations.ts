@@ -32,10 +32,10 @@ export interface Recommendations {
   personalized: boolean;
 }
 
-async function topRatedFallback(limit: number): Promise<Recommendations> {
+async function topRatedFallback(limit: number, includeShows: boolean): Promise<Recommendations> {
   const [topMovies, topShows] = await Promise.all([
     getTopRatedMovies(limit),
-    getTopRatedShows(limit),
+    includeShows ? getTopRatedShows(limit) : Promise.resolve([] as Movie[]),
   ]);
   return { topMovies, topShows, personalized: false };
 }
@@ -81,9 +81,19 @@ async function backfillType(
 
 // Builds personalized Top Picks for the authed user, falling back to generic
 // top-rated when there's no usable history. `limit` caps each list.
-export async function getRecommendations(req: NextRequest, limit = 20): Promise<Recommendations> {
+//
+// Shows are off by default. Top Picks is a movies-only row now — a show is a
+// dozen hours before you know whether the suggestion was any good, which is a far
+// worse thing to be wrong about than a film. Backfilling the show side meant up
+// to four extra TMDB round trips per request for a list nobody was going to see,
+// so the caller has to ask for it.
+export async function getRecommendations(
+  req: NextRequest,
+  limit = 20,
+  includeShows = false,
+): Promise<Recommendations> {
   const auth = await getCurrentUser(req);
-  if (!auth) return topRatedFallback(limit);
+  if (!auth) return topRatedFallback(limit, includeShows);
   const userId = auth.sub;
 
   const [ratings, watched, watchlist, favorites, user] = await Promise.all([
@@ -122,16 +132,18 @@ export async function getRecommendations(req: NextRequest, limit = 20): Promise<
   const recs = [...byId.values()];
 
   // No usable history at all → generic top-rated.
-  if (recs.length === 0) return topRatedFallback(limit);
+  if (recs.length === 0) return topRatedFallback(limit, includeShows);
 
   recs.sort((a, b) => weightedScore(b) - weightedScore(a));
   const movieRecs = recs.filter(m => m.type === 'movie');
   const showRecs = recs.filter(m => m.type === 'show');
 
-  // Backfill each type independently so neither tab is ever empty.
+  // Backfill each type independently so neither list is ever short.
   const [topMovies, topShows] = await Promise.all([
     backfillType(movieRecs, 'movie', limit, seen, user?.favoriteGenres),
-    backfillType(showRecs, 'show', limit, seen, user?.favoriteGenres),
+    includeShows
+      ? backfillType(showRecs, 'show', limit, seen, user?.favoriteGenres)
+      : Promise.resolve([] as Movie[]),
   ]);
 
   return { topMovies, topShows, personalized: true };
