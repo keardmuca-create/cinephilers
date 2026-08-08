@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from 'next/server';
 import {
   getPopularMoviesPaged,
   getPopularShowsEnriched,
-  getTrendingPaged,
   getTopRatedMovies,
   getTopRatedShows,
   getUpcomingMovies,
@@ -11,7 +10,7 @@ import {
   getShowsByGenre,
 } from '@/lib/tmdb';
 import type { Movie } from '@/lib/types';
-import { seededShuffle, dedup, WEEK_MS } from '@/lib/seed-shuffle';
+import { seededShuffle } from '@/lib/seed-shuffle';
 import { getDailyPool } from '@/lib/home-pool';
 import { getRecommendations } from '@/lib/recommendations';
 import { rateLimit, getIp } from '@/lib/rate-limit';
@@ -65,17 +64,12 @@ export async function GET(
         items = seededShuffle(pool, daySeed).slice(1, 101);
         break;
       }
-      case 'top-10-week': {
-        const [trending, movies, shows] = await Promise.all([
-          getTrendingPaged(40),
-          getPopularMoviesPaged(40),
-          getPopularShowsEnriched(40),
-        ]);
-        const pool = dedup([...trending, ...movies, ...shows]);
-        const weekSeed = Math.floor(Date.now() / WEEK_MS) + 99_999;
-        items = seededShuffle(pool, weekSeed).slice(0, 100);
-        break;
-      }
+      // No 'top-10-week'. It belonged to the old Top 10 row and served a seeded
+      // shuffle of trending and popular titles — nothing to do with what anyone
+      // had watched. Nothing linked to it, and after the row became Most Watched
+      // This Week the page would have claimed to rank real activity over a random
+      // list. Most Watched is ten titles by design and needs no See All; this
+      // comes back when there are enough daily users to rank a hundred.
       case 'popular-movies':
         items = await getPopularMoviesPaged(100);
         break;

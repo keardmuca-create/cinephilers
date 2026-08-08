@@ -11,7 +11,6 @@ import { Skeleton } from '@/components/ui/skeleton';
 
 const SECTION_TITLES: Record<string, string> = {
   featured: 'Featured Today',
-  'top-10-week': 'Most Watched This Week',
   'popular-movies': 'Popular Movies',
   'popular-shows': 'Popular TV Shows',
   'top-rated-movies': 'Top 100 Movies',

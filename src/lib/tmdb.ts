@@ -320,7 +320,10 @@ const EXCLUDED_ORIGINAL_LANGUAGES = new Set([
   'hi', 'ta', 'te', 'ml', 'kn', 'bn', 'mr', 'pa', 'gu',
 ]);
 
-export function isExcludedLanguage(m: { original_language?: string }): boolean {
+// Not exported: callers outside this file go through passesDiscoveryFilters, which
+// is the whole point — a second entry point is how the home pool ended up with its
+// own drifting copy of these rules.
+function isExcludedLanguage(m: { original_language?: string }): boolean {
   return !!m.original_language && EXCLUDED_ORIGINAL_LANGUAGES.has(m.original_language);
 }
 
@@ -341,10 +344,10 @@ const DAILY_TV_GENRE_IDS = new Set([
   10767, // Talk
 ]);
 
-// Exported because the home pool builds its own list against TMDB directly and
-// has to apply the same rule. It only needs the genre ids, so it takes the
-// narrowest shape that answers the question rather than a whole TmdbMovie.
-export function isDailyTelevision(m: { genre_ids?: number[] }): boolean {
+// Takes the narrowest shape that answers the question rather than a whole
+// TmdbMovie, so the home pool's raw TMDB JSON can reach it through
+// passesDiscoveryFilters.
+function isDailyTelevision(m: { genre_ids?: number[] }): boolean {
   return (m.genre_ids ?? []).some(g => DAILY_TV_GENRE_IDS.has(g));
 }
 
