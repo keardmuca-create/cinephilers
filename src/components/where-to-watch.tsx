@@ -74,8 +74,47 @@ export function WhereToWatch({ tmdbId, title }: { tmdbId: string; title: string 
   //
   // That link is TMDB's page for this exact title, which beats a JustWatch search
   // on precision — searching "Dune" finds three films, this finds the one you are
-  // looking at. The search URL is only the fallback for a title with no link.
-  const href = data.link ?? `https://www.justwatch.com/${data.region.toLowerCase()}/search?q=${encodeURIComponent(title)}`;
+  // looking at.
+  //
+  // There used to be a hand-built JustWatch search URL for titles with no link.
+  // It was guesswork twice over: JustWatch does not have a locale for every
+  // country, and the region here is inferred from the browser rather than known —
+  // so a viewer outside the covered set was sent to justwatch.com/<region>/…,
+  // which resolves to nothing. A dead page is worse than no page, so the block is
+  // now only a link when TMDB actually handed us a destination.
+  const href = data.link ?? null;
+
+  const body = (
+    <>
+      {count > 0 ? (
+        <>
+          <ProviderRow label="Free" providers={data.free} />
+          <ProviderRow label="Stream" providers={data.streaming} />
+          <ProviderRow label="Rent" providers={data.rent} />
+          <ProviderRow label="Buy" providers={data.buy} />
+        </>
+      ) : (
+        // Deliberately "found nothing", not "is not streaming". Letterboxd does
+        // say "Not streaming." and on spot checks our data agrees with theirs —
+        // but availability is per-country and moves weekly, this answer is a
+        // day-old cache, and the region is inferred from the browser's locale
+        // rather than known. Three ways to be confidently wrong about someone
+        // else's country is enough to describe the lookup instead of the world.
+        <p className="text-sm text-muted-foreground">No streaming options found for {where}.</p>
+      )}
+
+      {/* JustWatch supply this data through TMDB and their terms require the
+          credit, so it is not optional decoration — it stays whether or not the
+          block leads anywhere. */}
+      <p className="text-[11px] text-muted-foreground pt-1 flex items-center gap-1.5">
+        {href && <ExternalLink className="h-3 w-3 shrink-0" />}
+        {href ? `See all ways to watch in ${where}` : `Powered by JustWatch`}
+        {href && <span className="opacity-70">· Powered by JustWatch</span>}
+      </p>
+    </>
+  );
+
+  const shell = "block space-y-2.5 bg-muted/40 border border-border rounded-2xl p-4";
 
   return (
     <section className="space-y-3">
@@ -83,37 +122,13 @@ export function WhereToWatch({ tmdbId, title }: { tmdbId: string; title: string 
         <Tv className="h-5 w-5 text-primary" /> Where to watch
       </h3>
 
-      <a
-        href={href}
-        target="_blank"
-        rel="noopener noreferrer"
-        className="block space-y-2.5 bg-muted/40 hover:bg-muted/70 transition-colors border border-border rounded-2xl p-4"
-      >
-        {count > 0 ? (
-          <>
-            <ProviderRow label="Free" providers={data.free} />
-            <ProviderRow label="Stream" providers={data.streaming} />
-            <ProviderRow label="Rent" providers={data.rent} />
-            <ProviderRow label="Buy" providers={data.buy} />
-          </>
-        ) : (
-          // Deliberately "found nothing", not "is not streaming". Letterboxd does
-          // say "Not streaming." and on spot checks our data agrees with theirs —
-          // but availability is per-country and moves weekly, this answer is a
-          // day-old cache, and the region is inferred from the browser's locale
-          // rather than known. Three ways to be confidently wrong about someone
-          // else's country is enough to describe the lookup instead of the world.
-          <p className="text-sm text-muted-foreground">No streaming options found for {where}.</p>
-        )}
-
-        {/* JustWatch supply this data through TMDB and their terms require the
-            credit, so it is not optional decoration. */}
-        <p className="text-[11px] text-muted-foreground pt-1 flex items-center gap-1.5">
-          <ExternalLink className="h-3 w-3 shrink-0" />
-          {count > 0 ? `See all ways to watch in ${where}` : `Check ${where} on JustWatch`}
-          <span className="opacity-70">· Powered by JustWatch</span>
-        </p>
-      </a>
+      {href ? (
+        <a href={href} target="_blank" rel="noopener noreferrer" className={`${shell} hover:bg-muted/70 transition-colors`}>
+          {body}
+        </a>
+      ) : (
+        <div className={shell}>{body}</div>
+      )}
     </section>
   );
 }
