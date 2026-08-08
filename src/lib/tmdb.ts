@@ -17,9 +17,15 @@ function backdropUrl(path: string | null, size = 'w1280'): string {
   return `${IMAGE_BASE}/${size}${path}`;
 }
 
+// w342, not w185. The cast card on a title page is 144 CSS pixels wide, which is
+// 432 real pixels on a 3× phone — and images are served unoptimised straight from
+// TMDB (see next.config.ts), so the file we name here is the file the browser
+// gets. w185 was being stretched to more than twice its size, which is the whole
+// reason actor photos looked soft. Costs nothing on our side: it is TMDB's CDN
+// either way, and Vercel never touches the bytes.
 function profileUrl(path: string | null): string {
   if (!path) return '';
-  return `${IMAGE_BASE}/w185${path}`;
+  return `${IMAGE_BASE}/w342${path}`;
 }
 
 // ─── Raw TMDB shapes ────────────────────────────────────────────────────────
@@ -43,7 +49,7 @@ interface TmdbMovie {
 
 interface TmdbCredits {
   cast: { id: number; name: string; character: string; profile_path: string | null }[];
-  crew: { id: number; name: string; job: string; department: string }[];
+  crew: { id: number; name: string; job: string; department: string; profile_path: string | null }[];
 }
 
 interface TmdbVideoResult {
@@ -318,6 +324,27 @@ export function isExcludedLanguage(m: { original_language?: string }): boolean {
   return !!m.original_language && EXCLUDED_ORIGINAL_LANGUAGES.has(m.original_language);
 }
 
+// The daily-television genres. Soaps, talk shows, reality and news run five
+// episodes a week forever, so they climb TMDB's popularity charts on volume alone
+// and crowd out the thing someone actually opened the app to find. They are not
+// what Cinephilers is for — but they are still real titles, so this only applies
+// to browse/discovery rows. Search deliberately skips these filters, so anyone
+// looking for a soap by name still finds it.
+//
+// Documentaries and music are NOT here on purpose: they belong on a home screen.
+// (The person-credits list uses its own wider set — a filmography is a different
+// question from a recommendation.)
+const DAILY_TV_GENRE_IDS = new Set([
+  10763, // News
+  10764, // Reality
+  10766, // Soap
+  10767, // Talk
+]);
+
+function isDailyTelevision(m: TmdbMovie): boolean {
+  return (m.genre_ids ?? []).some(g => DAILY_TV_GENRE_IDS.has(g));
+}
+
 // Drops the zero/low-signal titles that look broken on the home screen
 // (e.g. a "Top 10" entry with 0.0 and no votes).
 function passesQualityFloor(m: TmdbMovie): boolean {
@@ -326,13 +353,13 @@ function passesQualityFloor(m: TmdbMovie): boolean {
 
 // Full filter for rated discovery rows: language exclusion + quality floor.
 function ratedFeedFilter(m: TmdbMovie): boolean {
-  return !isExcludedLanguage(m) && passesQualityFloor(m);
+  return !isExcludedLanguage(m) && !isDailyTelevision(m) && passesQualityFloor(m);
 }
 
 // Language-only filter — for feeds where a quality floor doesn't apply
 // (e.g. unreleased/upcoming titles legitimately have 0 votes).
 function languageOnlyFilter(m: TmdbMovie): boolean {
-  return !isExcludedLanguage(m);
+  return !isExcludedLanguage(m) && !isDailyTelevision(m);
 }
 
 // ─── Multi-page helper ────────────────────────────────────────────────────────
@@ -571,7 +598,10 @@ export async function getMovieDetail(tmdbId: number): Promise<Movie> {
   const keyCrew = ['Director', 'Screenplay', 'Writer', 'Story', 'Director of Photography', 'Original Music Composer'];
   const crew = (detail.credits?.crew ?? [])
     .filter(c => keyCrew.includes(c.job))
-    .map(c => ({ id: String(c.id), name: c.name, job: c.job }));
+    // TMDB has always sent a portrait for crew alongside the cast's; it just was
+    // not being read, which is why the Cast & Crew page drew a film icon for
+    // people who have a photograph.
+    .map(c => ({ id: String(c.id), name: c.name, job: c.job, profileImage: profileUrl(c.profile_path) }));
 
   const collection = detail.belongs_to_collection
     ? await getMovieCollection(detail.belongs_to_collection.id, tmdbId)
@@ -609,7 +639,7 @@ export async function getShowDetail(tmdbId: number): Promise<Movie> {
   const crew = (detail.credits?.crew ?? [])
     .filter(c => keyCrew.includes(c.job))
     .slice(0, 6)
-    .map(c => ({ id: String(c.id), name: c.name, job: c.job }));
+    .map(c => ({ id: String(c.id), name: c.name, job: c.job, profileImage: profileUrl(c.profile_path) }));
 
   const seasons: TvSeason[] = (detail.seasons ?? [])
     .filter(s => s.season_number > 0)
@@ -852,7 +882,7 @@ export interface PersonCreditSection {
   credits: PersonCreditItem[];
 }
 
-const EXCLUDED_GENRE_IDS = new Set([10767, 10764, 10763, 99, 10402]); // talk, reality, news, documentary, music
+const EXCLUDED_GENRE_IDS = new Set([10767, 10764, 10763, 10766, 99, 10402]); // talk, reality, news, soap, documentary, music
 
 const SECTION_ORDER = ['Actor', 'Director', 'Producer', 'Writer', 'Composer', 'Cinematographer', 'Editor'];
 

@@ -8,7 +8,42 @@ import { Movie, Actor } from '@/lib/types';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import { Skeleton } from '@/components/ui/skeleton';
-import { ChevronLeft, ChevronRight, Film, User } from 'lucide-react';
+import { ChevronLeft, ChevronRight, User } from 'lucide-react';
+
+// The same 144×216 portrait the title page uses for its cast row, in a list. Big
+// enough to actually recognise a face — the old 40px square was a favicon.
+function CreditRow({ href, photo, name, detail }: {
+  href: string;
+  photo?: string;
+  name: string;
+  detail: string;
+}) {
+  return (
+    <Link
+      href={href}
+      className="w-full flex items-center gap-4 px-2 py-2 rounded-2xl hover:bg-muted/40 transition-colors"
+    >
+      <div className="relative w-24 aspect-[2/3] rounded-xl overflow-hidden shrink-0 bg-muted flex items-center justify-center">
+        {photo ? (
+          <Image src={photo} alt={name} fill className="object-cover" sizes="96px" />
+        ) : (
+          <User className="h-8 w-8 text-muted-foreground/40" />
+        )}
+      </div>
+      <div className="flex-1 min-w-0">
+        <p className="text-base font-semibold font-headline leading-snug line-clamp-2">{name}</p>
+        <p className="text-sm text-muted-foreground line-clamp-2 mt-0.5">{detail}</p>
+      </div>
+      <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
+    </Link>
+  );
+}
+
+// Rows are tall now, so a long-running series (King of the Hill lists 384 people)
+// would otherwise render as an unbroken half-mile of page. Batching keeps the
+// first screen instant and lets someone stop whenever they have found who they
+// came for.
+const CAST_BATCH = 30;
 
 export default function CastCrewPage() {
   const params = useParams();
@@ -18,6 +53,7 @@ export default function CastCrewPage() {
   const [movie, setMovie] = useState<Movie | null>(null);
   const [fullCast, setFullCast] = useState<Actor[] | null>(null);
   const [loading, setLoading] = useState(true);
+  const [shown, setShown] = useState(CAST_BATCH);
 
   // Two requests on purpose. The title payload carries the twenty names its own
   // page draws; the complete list — every guest star across a series, hundreds of
@@ -57,12 +93,12 @@ export default function CastCrewPage() {
 
       {loading && (
         <div className="space-y-3">
-          {Array.from({ length: 8 }).map((_, i) => (
-            <div key={i} className="flex items-center gap-3 px-2">
-              <Skeleton className="h-10 w-10 rounded-xl shrink-0" />
-              <div className="flex-1 space-y-1.5">
-                <Skeleton className="h-3.5 w-40" />
-                <Skeleton className="h-3 w-24" />
+          {Array.from({ length: 6 }).map((_, i) => (
+            <div key={i} className="flex items-center gap-4 px-2">
+              <Skeleton className="w-24 aspect-[2/3] rounded-xl shrink-0" />
+              <div className="flex-1 space-y-2">
+                <Skeleton className="h-4 w-40" />
+                <Skeleton className="h-3.5 w-24" />
               </div>
             </div>
           ))}
@@ -73,51 +109,44 @@ export default function CastCrewPage() {
         <div>
           {cast.length > 0 && (
             <>
-              <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground px-2 mb-2">Cast</p>
-              <div className="space-y-0.5">
-                {cast.map(actor => (
-                  <Link
+              <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground px-2 mb-2">
+                Cast <span className="opacity-60">{cast.length}</span>
+              </p>
+              <div className="space-y-1">
+                {cast.slice(0, shown).map(actor => (
+                  <CreditRow
                     key={actor.id}
                     href={`/person/${actor.id}`}
-                    className="w-full flex items-center gap-3 px-2 py-2.5 rounded-xl hover:bg-muted/40 transition-colors"
-                  >
-                    <div className="relative h-10 w-10 rounded-xl overflow-hidden shrink-0 bg-muted flex items-center justify-center">
-                      {actor.profileImage ? (
-                        <Image src={actor.profileImage} alt={actor.name} fill className="object-cover" />
-                      ) : (
-                        <User className="h-5 w-5 text-muted-foreground/50" />
-                      )}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-semibold truncate">{actor.name}</p>
-                      <p className="text-xs text-muted-foreground truncate">{actor.role}</p>
-                    </div>
-                    <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
-                  </Link>
+                    photo={actor.profileImage}
+                    name={actor.name}
+                    detail={actor.role}
+                  />
                 ))}
               </div>
+              {cast.length > shown && (
+                <Button
+                  variant="outline"
+                  className="w-full rounded-xl mt-3 font-bold border-border"
+                  onClick={() => setShown(n => n + CAST_BATCH)}
+                >
+                  Show {Math.min(CAST_BATCH, cast.length - shown)} more
+                </Button>
+              )}
             </>
           )}
           {crew.length > 0 && (
-            <div className="mt-4">
+            <div className="mt-6">
               <Separator className="mb-4" />
               <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground px-2 mb-2">Crew</p>
-              <div className="space-y-0.5">
+              <div className="space-y-1">
                 {crew.map(member => (
-                  <Link
+                  <CreditRow
                     key={`${member.id}-${member.job}`}
                     href={`/person/${member.id}`}
-                    className="w-full flex items-center gap-3 px-2 py-2.5 rounded-xl hover:bg-muted/40 transition-colors"
-                  >
-                    <div className="h-10 w-10 rounded-xl bg-muted/50 flex items-center justify-center shrink-0">
-                      <Film className="h-4 w-4 text-muted-foreground" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-semibold truncate">{member.name}</p>
-                      <p className="text-xs text-muted-foreground truncate">{member.job}</p>
-                    </div>
-                    <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
-                  </Link>
+                    photo={member.profileImage}
+                    name={member.name}
+                    detail={member.job}
+                  />
                 ))}
               </div>
             </div>
