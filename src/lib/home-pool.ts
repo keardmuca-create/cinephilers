@@ -1,7 +1,7 @@
 import { Redis } from '@upstash/redis';
 import type { Movie } from '@/lib/types';
 import { WEEK_MS } from '@/lib/seed-shuffle';
-import { isExcludedLanguage } from '@/lib/tmdb';
+import { passesDiscoveryFilters } from '@/lib/tmdb';
 
 const redisUrl = process.env.UPSTASH_REDIS_REST_URL ?? process.env.KV_REST_API_URL;
 const redisToken = process.env.UPSTASH_REDIS_REST_TOKEN ?? process.env.KV_REST_API_TOKEN;
@@ -30,7 +30,11 @@ function toMovie(m: Record<string, unknown>, forceType?: 'movie' | 'show'): Movi
 }
 
 async function fetchPage(path: string, page: number, key: string): Promise<Record<string, unknown>[]> {
-  const url = `${BASE}${path}?api_key=${key}&language=en-US&page=${page}`;
+  // include_adult=false to match every other discovery call in lib/tmdb — this
+  // one was the only list asking TMDB without it. It is not the whole answer on
+  // its own (TMDB does not flag every adult title, which is what the vote floor
+  // is really for), but the inconsistency was a bug.
+  const url = `${BASE}${path}?api_key=${key}&language=en-US&include_adult=false&page=${page}`;
   const res = await fetch(url, { next: { revalidate: DAY } });
   if (!res.ok) return [];
   const d = await res.json() as { results?: Record<string, unknown>[] };
@@ -41,26 +45,36 @@ export async function buildHomePool(): Promise<Movie[]> {
   const key = process.env.TMDB_API_KEY ?? '';
   if (!key) return [];
 
-  const [mp1, mp2, sp1, sp2, mp3, sp3] = await Promise.all([
-    fetchPage('/movie/popular', 1, key),
-    fetchPage('/movie/popular', 2, key),
-    fetchPage('/tv/popular',    1, key),
-    fetchPage('/tv/popular',    2, key),
-    fetchPage('/movie/popular', 3, key),
-    fetchPage('/tv/popular',    3, key),
+  // Five pages per type, up from three. The 500-vote floor removes roughly a
+  // fifth of what TMDB returns, and the pool has to stay comfortably bigger than
+  // what the home screen draws from it — Featured alone takes fifteen. Each page
+  // is cached for a day, so this is ten fetches once, not per visitor.
+  const PAGES = [1, 2, 3, 4, 5];
+  const [moviePages, showPages] = await Promise.all([
+    Promise.all(PAGES.map(p => fetchPage('/movie/popular', p, key))),
+    Promise.all(PAGES.map(p => fetchPage('/tv/popular', p, key))),
   ]);
 
-  // Keep the home screen clean: drop zero/low-signal titles (a "Top 10" entry
-  // with 0.0 and no votes looks broken) and excluded-language titles. The extra
-  // page per type backfills the slots these filters remove. Search is unaffected.
+  // This pool builds its own list straight from TMDB rather than going through
+  // lib/tmdb's list helpers, so it does NOT inherit their filters. It used to
+  // carry its own copy of the rules, and that copy fell behind — which is how The
+  // Late Show was still reaching Featured Today after talk shows had been
+  // filtered everywhere else. It now calls the shared gate, so the vote floor and
+  // the genre and language rules can only ever be changed in one place.
+  //
+  // Search is unaffected and must stay that way: anything held back from here is
+  // still findable by name.
   const keep = (m: Record<string, unknown>) =>
-    Number(m.vote_count ?? 0) >= 50 &&
-    Number(m.vote_average ?? 0) > 0 &&
-    !!m.poster_path &&
-    !isExcludedLanguage({ original_language: m.original_language as string | undefined });
+    passesDiscoveryFilters({
+      vote_count: Number(m.vote_count ?? 0),
+      vote_average: Number(m.vote_average ?? 0),
+      poster_path: m.poster_path as string | null | undefined,
+      original_language: m.original_language as string | undefined,
+      genre_ids: m.genre_ids as number[] | undefined,
+    });
 
-  const movies: Movie[] = [...mp1, ...mp2, ...mp3].filter(keep).map(m => toMovie(m, 'movie'));
-  const shows:  Movie[] = [...sp1, ...sp2, ...sp3].filter(keep).map(m => toMovie(m, 'show'));
+  const movies: Movie[] = moviePages.flat().filter(keep).map(m => toMovie(m, 'movie'));
+  const shows:  Movie[] = showPages.flat().filter(keep).map(m => toMovie(m, 'show'));
 
   const seen = new Set<string>();
   const pool: Movie[] = [];
@@ -98,7 +112,7 @@ async function frozenPool(key: string, ttlSeconds: number): Promise<Movie[]> {
 
 // Bump the version suffix whenever the pool's contents/filters change so stale
 // frozen pools are abandoned and a fresh one is built immediately.
-const POOL_VERSION = 'v2';
+const POOL_VERSION = 'v4';   // v4: shared discovery gate — 500-vote floor, daily TV out, include_adult
 
 export async function getDailyPool(): Promise<Movie[]> {
   const day = new Date().toISOString().slice(0, 10);

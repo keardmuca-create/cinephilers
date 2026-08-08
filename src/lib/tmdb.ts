@@ -341,19 +341,55 @@ const DAILY_TV_GENRE_IDS = new Set([
   10767, // Talk
 ]);
 
-function isDailyTelevision(m: TmdbMovie): boolean {
+// Exported because the home pool builds its own list against TMDB directly and
+// has to apply the same rule. It only needs the genre ids, so it takes the
+// narrowest shape that answers the question rather than a whole TmdbMovie.
+export function isDailyTelevision(m: { genre_ids?: number[] }): boolean {
   return (m.genre_ids ?? []).some(g => DAILY_TV_GENRE_IDS.has(g));
 }
 
-// Drops the zero/low-signal titles that look broken on the home screen
-// (e.g. a "Top 10" entry with 0.0 and no votes).
-function passesQualityFloor(m: TmdbMovie): boolean {
-  return m.vote_count >= 50 && m.vote_average > 0 && !!m.poster_path;
+// How many votes a title needs before it can appear on a browse or discovery row.
+//
+// Was 50, which was only ever meant to drop titles showing "0.0" with nothing
+// behind them. 50 turned out to be almost no bar at all: the home pool's MEDIAN
+// is around 2,600 votes, so everything under a few hundred was the junk tail —
+// obscure straight-to-nothing thrillers, a wrestling show TMDB has mislabelled as
+// scripted drama, and an adult anime with 90 votes that TMDB does not flag as
+// adult at all. Anything genuinely worth a home screen clears this easily.
+//
+// The cost, stated plainly: a real new release starts at zero votes and stays off
+// these rows for a few days until it earns 500. Coming Soon is where new titles
+// live and it has no vote floor by design, so nothing unreleased is affected.
+const MIN_DISCOVERY_VOTES = 500;
+
+/** The fields any discovery filter needs. Narrow on purpose — the home pool
+ *  builds its own list straight from TMDB and has only raw JSON to offer. */
+export interface DiscoveryCandidate {
+  vote_count?: number;
+  vote_average?: number;
+  poster_path?: string | null;
+  original_language?: string;
+  genre_ids?: number[];
 }
 
-// Full filter for rated discovery rows: language exclusion + quality floor.
+// The one gate every rated browse/discovery row passes through. Exported so the
+// home pool uses THIS rather than its own copy — a duplicated version of these
+// rules is exactly why talk shows were still reaching Featured Today after they
+// had been filtered everywhere else.
+//
+// Search deliberately does not call this, and must not. Adult titles, soaps and
+// obscure films all stay findable by name; the filter decides what we put in
+// front of people, never what they are allowed to look up.
+export function passesDiscoveryFilters(m: DiscoveryCandidate): boolean {
+  return (m.vote_count ?? 0) >= MIN_DISCOVERY_VOTES
+    && (m.vote_average ?? 0) > 0
+    && !!m.poster_path
+    && !isExcludedLanguage(m)
+    && !isDailyTelevision(m);
+}
+
 function ratedFeedFilter(m: TmdbMovie): boolean {
-  return !isExcludedLanguage(m) && !isDailyTelevision(m) && passesQualityFloor(m);
+  return passesDiscoveryFilters(m);
 }
 
 // Language-only filter — for feeds where a quality floor doesn't apply
@@ -776,10 +812,14 @@ export async function getTopRatedMovies(count = 25): Promise<Movie[]> {
   return results.map(m => tmdbToMovie(m));
 }
 
+// 1000, matching Top 100 Movies. It was 200, which put a lower bar on "the best
+// television ever made" than an ordinary Popular row — a 9.4 from 200 people is
+// not a chart position, and sorting by vote_average descending is exactly where a
+// thin vote count does the most damage.
 export async function getTopRatedShows(count = 25): Promise<Movie[]> {
   const results = await fetchManyPages('/discover/tv', count, {
     sort_by: 'vote_average.desc',
-    'vote_count.gte': '200',
+    'vote_count.gte': '1000',
     include_adult: 'false',
   }, languageOnlyFilter);
   return results.map(m => tmdbToMovie({ ...m, media_type: 'tv' }));
