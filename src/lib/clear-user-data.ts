@@ -23,6 +23,7 @@ export function clearUserData() {
         k === 'media-id-normalized-v1' ||
         k === 'added-at-index' ||
         k === 'watched-at-index' ||
+        k === 'rated-at-index' ||
         k === 'manual-watched-index' ||
         k === 'user-favorites' ||
         k === 'user-lists' ||

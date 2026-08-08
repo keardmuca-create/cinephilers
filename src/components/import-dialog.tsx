@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { fetchWithAuth } from '@/lib/fetch-with-auth';
 import type { WatchEntry } from '@/lib/watch-log';
 import type { Movie } from '@/lib/types';
-import { recordAddedAt, recordWatchedAt } from '@/lib/media-id';
+import { recordAddedAt, recordWatchedAt, recordRatedAt } from '@/lib/media-id';
 
 type Platform = 'letterboxd' | 'imdb';
 type Step = 'pick' | 'upload' | 'matching' | 'confirm' | 'importing' | 'done';
@@ -414,6 +414,11 @@ export function ImportDialog({ onClose }: { onClose: () => void }) {
           if (item.inWatchlist) localStorage.setItem(`watchlist-${item.tmdbId}`, JSON.stringify({ id: item.tmdbId, title: item.matchedTitle, poster: item.poster ?? '', year: item.year, type: meta.type }));
           if (item.rating) localStorage.setItem(`movie-rating-${item.tmdbId}`, String(item.rating));
           if (item.inWatchlist || item.rating) recordAddedAt(item.tmdbId, item.watchedAt || undefined);
+          // An imported rating's date is the log date the export carried. Not
+          // exact — Letterboxd records when a film was watched, not when it was
+          // scored — but far closer than the add index, and it keeps years of
+          // imported ratings in a sensible order instead of one flat block.
+          if (item.rating) recordRatedAt(item.tmdbId, item.watchedAt || undefined);
         }
 
         // Append watched movies to the badge watch-log so badges like World Cinema count them.

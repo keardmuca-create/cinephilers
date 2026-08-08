@@ -190,6 +190,69 @@ export function getWatchedAtISO(id: string): string | null {
   return readWatchedAtMap()[canonicalId(id)] ?? null;
 }
 
+// ─── "Rated at" index ─────────────────────────────────────────────────────────
+// When a score was given, which is NOT when the title arrived.
+//
+// The ratings list used to read the add index for this, and printed it under the
+// words "Rated on". Those are different questions and the add index cannot answer
+// the second one: it keeps the EARLIEST date on purpose, so for anything
+// watchlisted before it was rated — the normal path through the app — the add date
+// always wins and the rating date is discarded. A film saved in July and scored in
+// August read "Rated on 17 July" and sorted three weeks out of place.
+//
+// Latest wins here, like the watched index: re-scoring something is a fresh
+// opinion and belongs at the top of "Date rated".
+const RATED_AT_KEY = 'rated-at-index';
+
+function readRatedAtMap(): Record<string, string> {
+  try {
+    const raw = localStorage.getItem(RATED_AT_KEY);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === 'object' ? parsed : {};
+  } catch { return {}; }
+}
+
+/** Record when a score was given. ISO string for a known DB timestamp, or omit
+ *  for "now". */
+export function recordRatedAt(id: string, iso?: string): void {
+  try {
+    let next = iso ?? new Date().toISOString();
+    if (Number.isNaN(new Date(next).getTime())) next = new Date().toISOString();
+    const map = readRatedAtMap();
+    const cid = canonicalId(id);
+    const existing = map[cid];
+    if (!existing || new Date(next).getTime() > new Date(existing).getTime()) {
+      map[cid] = next;
+      localStorage.setItem(RATED_AT_KEY, JSON.stringify(map));
+    }
+  } catch { /* ignore */ }
+}
+
+export function removeRatedAt(id: string): void {
+  try {
+    const map = readRatedAtMap();
+    delete map[canonicalId(id)];
+    localStorage.setItem(RATED_AT_KEY, JSON.stringify(map));
+  } catch { /* ignore */ }
+}
+
+/**
+ * Epoch millis for when a score was given.
+ *
+ * Falls back to the add date for ratings made before this index existed — an
+ * imperfect date beats sorting years of history to 1970. Every new rating, and
+ * every rating that syncs down from the database, writes a real one.
+ */
+export function getRatedAt(id: string): number {
+  const iso = readRatedAtMap()[canonicalId(id)];
+  if (iso) {
+    const t = new Date(iso).getTime();
+    if (!Number.isNaN(t)) return t;
+  }
+  return getAddedAt(id);
+}
+
 // ─── "Manual watch" index ────────────────────────────────────────────────────
 // Records titles the user marked watched IN THE APP (not via bulk import). A
 // Letterboxd import dates films by their log-date, which can be "today" and

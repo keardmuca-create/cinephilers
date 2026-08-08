@@ -17,7 +17,7 @@ function installLocalStorageStub() {
   return ls;
 }
 
-import { canonicalId, legacyTwin, recordAddedAt, getAddedAt, recordWatchedAt, getWatchedAtISO } from './media-id';
+import { canonicalId, legacyTwin, recordAddedAt, getAddedAt, recordWatchedAt, getWatchedAtISO, recordRatedAt, getRatedAt, removeRatedAt } from './media-id';
 
 describe('canonicalId', () => {
   it('folds a bare numeric id into the tmdb- form', () => {
@@ -106,5 +106,59 @@ describe('watched-at index (latest wins)', () => {
 
   it('returns null for an unknown id', () => {
     expect(getWatchedAtISO('tmdb-999')).toBeNull();
+  });
+});
+
+describe('the rated-at index', () => {
+  beforeEach(() => {
+    installLocalStorageStub();
+  });
+
+  // The Get Out bug, exactly as reported: a film saved to the watchlist on 17
+  // July and rated on 8 August. The add index keeps the EARLIEST date by design,
+  // so before this index existed the ratings list showed 17 July under the words
+  // "Rated on" and sorted it three weeks out of place.
+  it('keeps the rating date separate from the add date', () => {
+    recordAddedAt('tmdb-419430', '2026-07-17T10:00:00.000Z');   // watchlisted
+    recordRatedAt('tmdb-419430', '2026-08-08T20:00:00.000Z');   // rated later
+
+    expect(new Date(getAddedAt('tmdb-419430')).toISOString()).toBe('2026-07-17T10:00:00.000Z');
+    expect(new Date(getRatedAt('tmdb-419430')).toISOString()).toBe('2026-08-08T20:00:00.000Z');
+  });
+
+  it('sorts a later rating above an earlier one regardless of when each was added', () => {
+    recordAddedAt('tmdb-old', '2026-07-17T10:00:00.000Z');
+    recordRatedAt('tmdb-old', '2026-08-08T20:00:00.000Z');      // added first, rated LAST
+    recordAddedAt('tmdb-new', '2026-08-01T10:00:00.000Z');
+    recordRatedAt('tmdb-new', '2026-08-02T10:00:00.000Z');      // added last, rated FIRST
+
+    // Newest rating first — which is what "Date rated, descending" promises.
+    expect(getRatedAt('tmdb-old')).toBeGreaterThan(getRatedAt('tmdb-new'));
+    // And the add index still answers its own question the other way round.
+    expect(getAddedAt('tmdb-old')).toBeLessThan(getAddedAt('tmdb-new'));
+  });
+
+  it('keeps the LATER timestamp when re-rated', () => {
+    recordRatedAt('tmdb-1', '2026-01-01T00:00:00.000Z');
+    recordRatedAt('tmdb-1', '2026-09-01T00:00:00.000Z');
+    expect(new Date(getRatedAt('tmdb-1')).toISOString()).toBe('2026-09-01T00:00:00.000Z');
+  });
+
+  // Ratings made before this index existed have no entry. Falling back to the
+  // add date is wrong-but-close; sorting years of history to 1970 is just wrong.
+  it('falls back to the add date when no rating date was ever recorded', () => {
+    recordAddedAt('tmdb-legacy', '2026-03-03T00:00:00.000Z');
+    expect(new Date(getRatedAt('tmdb-legacy')).toISOString()).toBe('2026-03-03T00:00:00.000Z');
+  });
+
+  it('is cleared when a rating is removed, and falls back again', () => {
+    recordAddedAt('tmdb-2', '2026-05-05T00:00:00.000Z');
+    recordRatedAt('tmdb-2', '2026-06-06T00:00:00.000Z');
+    removeRatedAt('tmdb-2');
+    expect(new Date(getRatedAt('tmdb-2')).toISOString()).toBe('2026-05-05T00:00:00.000Z');
+  });
+
+  it('returns 0 for an id with no dates at all, so it sorts last', () => {
+    expect(getRatedAt('tmdb-999')).toBe(0);
   });
 });

@@ -104,10 +104,13 @@ function watchlistFilmIds(): string[] {
   return ids;
 }
 
-// How many poster columns fill the banner background. Ten is enough to cover a
-// desktop card edge to edge without any one of them being wide enough to read as
-// a poster you could tap.
-const WALL_TILES = 10;
+// A dense mosaic rather than a row of large posters: many small tiles read as
+// "cinema", a handful of big ones read as "some posters someone left here". Six
+// across is small enough on a phone that no single tile invites a tap, and four
+// rows covers the card at any height.
+const WALL_COLS = 6;
+const WALL_ROWS = 4;
+const WALL_TILES = WALL_COLS * WALL_ROWS;
 
 // The corner button that opens the explainer. Sits on both faces of the section —
 // the banner and the revealed card — because either one can be somebody's first
@@ -461,28 +464,49 @@ export function TodaysPick() {
 
   return (
     <section className="px-6 pt-6">
-      <div className="relative overflow-hidden rounded-[2.5rem] border border-primary/20 bg-gradient-to-br from-primary/10 to-accent/5 p-8 flex flex-col items-center text-center gap-4">
-        <HelpButton onOpen={() => setHelpOpen(true)} />
+      <div className="relative overflow-hidden rounded-[2.5rem] border border-primary/20 bg-gradient-to-br from-primary/10 to-accent/5">
         <TodaysPickHelp open={helpOpen} onClose={() => setHelpOpen(false)} />
-        {/* A wall of poster artwork behind the button, instead of an empty
-            gradient. Ten different titles, edge to edge and each column flexing,
-            so it is full and varied at any width — an earlier version tiled the
-            user's own watchlist and a short list read as one poster repeated.
-            Blurred and washed back so it stays atmosphere rather than a row
-            someone might try to tap. A flat wash, not a vertical gradient, so
-            the bottom corners aren't darker than the top. */}
+        {/* A wall of poster artwork behind the card, instead of an empty gradient.
+            Twenty-four different titles in a dense grid — an earlier version used
+            ten large blurred columns, which read as "some posters" rather than
+            "cinema", and the one before that tiled the user's own watchlist, so a
+            short list looked like the same poster repeated.
+            Small tiles mean w185 thumbnails are enough, so this is LESS data than
+            the ten large ones it replaces. */}
         {showWall && (
           <div aria-hidden className="absolute inset-0 pointer-events-none select-none">
-            <div className="absolute inset-0 flex blur-[7px] opacity-45 scale-105">
+            <div
+              className="absolute inset-0 grid"
+              style={{ gridTemplateColumns: `repeat(${WALL_COLS}, 1fr)`, gridTemplateRows: `repeat(${WALL_ROWS}, 1fr)` }}
+            >
               {wallPosters.map((p, i) => (
-                <div key={`${p}-${i}`} className="relative h-full flex-1 min-w-0">
-                  <Image src={p} alt="" fill className="object-cover" sizes="20vw" />
+                <div key={`${p}-${i}`} className="relative overflow-hidden">
+                  {/* Downgraded to a w185 thumbnail: each tile is a fraction of
+                      the card and images are served unoptimised, so the size in
+                      the URL is the size downloaded. Twenty-four of these is less
+                      data than the ten large posters this replaced. */}
+                  <Image src={p.replace(/\/w\d+\//, '/w185/')} alt="" fill className="object-cover" sizes="17vw" />
                 </div>
               ))}
             </div>
-            <div className="absolute inset-0 bg-background/70" />
+            {/* Tinted to one colour so twenty-four unrelated palettes read as one
+                surface rather than a jumble, and so no single poster competes with
+                the card. mix-blend-color keeps the artwork's own light and shade —
+                a flat colour on top would have flattened it to a rectangle. */}
+            <div className="absolute inset-0 bg-primary/80 mix-blend-color" />
+            <div className="absolute inset-0 bg-background/20" />
           </div>
         )}
+
+        {/* Everything readable sits on its own panel above the mosaic. This is
+            the part that makes the poster wall work: text laid straight onto
+            twenty-four posters is legible over some tiles and not others, and
+            which ones changes daily. The panel is opaque enough to be certain
+            rather than lucky. */}
+        <div className="relative m-5 sm:m-8 rounded-[1.85rem] bg-card border border-border/60 shadow-2xl p-6 sm:p-8 flex flex-col items-center text-center gap-4">
+        {/* On the card, not the mosaic — a grey glyph over twenty-four posters is
+            invisible at some scroll positions and merely hard to see at the rest. */}
+        <HelpButton onOpen={() => setHelpOpen(true)} />
 
         {/* While the roll is in flight this window flicks through those same
             posters, so the wait shows what it is doing instead of spinning. */}
@@ -545,6 +569,7 @@ export function TodaysPick() {
             </Button>
           </>
         )}
+        </div>
       </div>
     </section>
   );

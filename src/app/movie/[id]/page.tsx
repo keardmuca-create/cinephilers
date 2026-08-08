@@ -24,7 +24,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Badge } from '@/components/ui/badge';
 import { toast } from '@/hooks/use-toast';
 import { appendWatchLog, removeFromWatchLog, saveMovieRating } from '@/lib/watch-log';
-import { recordAddedAt, recordWatchedAt, recordManualWatch, removeManualWatch, legacyTwin, parseEpisodeId } from '@/lib/media-id';
+import { recordAddedAt, recordWatchedAt, recordManualWatch, removeManualWatch, recordRatedAt, removeRatedAt, legacyTwin, parseEpisodeId } from '@/lib/media-id';
 import { EpisodePage } from '@/components/episode-page';
 import { RatingSheet } from '@/components/rating-sheet';
 import { logActivity, removeActivity, relativeTime } from '@/lib/activity';
@@ -1078,6 +1078,11 @@ function MovieDetailInner() {
   const applyRating = (i: number) => {
     setUserRating(i);
     saveMovieRating(id, i);
+    // Stamped now, so "Date rated" is right before the server has said anything.
+    // Kept apart from the add index deliberately: that one keeps the earliest
+    // date, so a film watchlisted in July and rated in August would otherwise
+    // report July as the day it was scored.
+    recordRatedAt(id);
     syncDb('POST', '/api/ratings', { tmdbId: id, mediaType: movie?.type === 'show' ? 'SHOW' : 'MOVIE', score: i });
     if (movie) logActivity({ action: 'rated', contentId: id, contentTitle: movie.title, contentPoster: movie.poster, contentYear: movie.year, rating: i });
     toast({ title: `You rated it ${i}/10!` });
@@ -1113,6 +1118,7 @@ function MovieDetailInner() {
     }
     setUserRating(0);
     try { localStorage.removeItem(`movie-rating-${id}`); } catch { /* ignore */ }
+    removeRatedAt(id);
     removeActivity('rated', id);
     toast({ title: 'Rating removed' });
     window.dispatchEvent(new CustomEvent('cinephilers-rating-changed', { detail: { id, rating: null } }));

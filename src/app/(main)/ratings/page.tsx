@@ -4,7 +4,7 @@ import React, { useState, useEffect, useRef, useMemo, useCallback, Suspense } fr
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Star, ChevronLeft, Search, SlidersHorizontal, X, Film, Eye } from 'lucide-react';
-import { normalizeLocalMediaIds, getAddedAt } from '@/lib/media-id';
+import { normalizeLocalMediaIds, getRatedAt } from '@/lib/media-id';
 import { persistRefine } from '@/lib/refine-sort';
 import { batchFetchMeta } from '@/lib/meta-batch';
 import { getItemType, sideOf, SIDE_TYPES, TYPE_LABELS, type TypeFilter, type MediaSide } from '@/lib/media-type';
@@ -100,9 +100,11 @@ function ItemCard({ item }: { item: RatedItem }) {
         {episodeLine && (
           <p className="text-[11px] text-muted-foreground/70 mt-1">{episodeLine}</p>
         )}
-        {/* Same timestamp the "Date rated" sort uses, so the order is legible */}
+        {/* Same timestamp the "Date rated" sort uses, so the order is legible.
+            getRatedAt, not getAddedAt: this line says "Rated on", and the add
+            index answers a different question — when the title first arrived. */}
         {(() => {
-          const t = getAddedAt(item.id);
+          const t = getRatedAt(item.id);
           return t > 0 ? (
             <p className="text-xs text-muted-foreground mt-1.5">
               Rated on {new Date(t).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
@@ -369,7 +371,7 @@ function RatingsPageInner() {
       });
     } else {
       // Date rated — title tie-break keeps bulk-imported same-date items stable
-      result.sort((a, b) => (getAddedAt(b.id) - getAddedAt(a.id)) || a.title.localeCompare(b.title));
+      result.sort((a, b) => (getRatedAt(b.id) - getRatedAt(a.id)) || a.title.localeCompare(b.title));
       if (refine.sortDir === 'asc') result.reverse();
     }
     return result;

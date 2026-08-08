@@ -2,7 +2,7 @@
 
 import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
 import { fetchWithAuth } from '@/lib/fetch-with-auth';
-import { canonicalId, normalizeLocalMediaIds, recordAddedAt, recordWatchedAt } from '@/lib/media-id';
+import { canonicalId, normalizeLocalMediaIds, recordAddedAt, recordWatchedAt, recordRatedAt } from '@/lib/media-id';
 import { batchFetchMeta } from '@/lib/meta-batch';
 import { clearUserData } from '@/lib/clear-user-data';
 import { applyServerRefinePrefs } from '@/lib/refine-sort';
@@ -108,6 +108,11 @@ async function restoreFromDb(me?: { createdAt?: string; followingCount?: number;
     for (const r of ratings) {
       try { localStorage.setItem(`movie-rating-${r.tmdbId}`, String(r.score)); } catch { /* ignore */ }
       recordAddedAt(r.tmdbId, r.createdAt);
+      // The rating's OWN date, kept apart from the add date. recordAddedAt keeps
+      // the earliest timestamp by design, so anything watchlisted before it was
+      // rated could never record when it was scored — which is why the ratings
+      // list showed the day a film was saved under the words "Rated on".
+      recordRatedAt(r.tmdbId, r.createdAt);
     }
 
     // ── Watchlist: DB → local only (same one-way rule as ratings/watched, so a
