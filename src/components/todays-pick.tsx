@@ -3,7 +3,7 @@
 import React, { useEffect, useState } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
-import { Info, Star, Bookmark, Sparkles, Loader2, Film, Check, Lock } from 'lucide-react';
+import { Info, Star, Bookmark, Sparkles, Loader2, Film, Check, Lock, MoreHorizontal } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Movie } from '@/lib/types';
 import { useAuth } from '@/contexts/auth-context';
@@ -13,6 +13,7 @@ import { batchFetchMeta } from '@/lib/meta-batch';
 import { isEpisodeId, getAddedAt } from '@/lib/media-id';
 import { appendWatchLog } from '@/lib/watch-log';
 import { toast } from '@/hooks/use-toast';
+import { TodaysPickHelp } from '@/components/todays-pick-help';
 
 // Stable per-day seed so the pick can't be rerolled — same movie all day,
 // a new one tomorrow.
@@ -103,27 +104,40 @@ function watchlistFilmIds(): string[] {
   return ids;
 }
 
-// How long the oldest thing on the list has been waiting. Said before the roll,
-// it's a true fact about the deck rather than a tease about the card — and it is
-// usually the sentence that makes someone press the button.
-function longestWaitingLabel(ids: string[]): string | null {
-  let oldest = 0;
-  for (const id of ids) {
-    const t = getAddedAt(id);
-    if (t && (oldest === 0 || t < oldest)) oldest = t;
-  }
-  if (!oldest) return null;
-  const days = Math.floor((Date.now() - oldest) / DAY_MS);
-  if (days < 30) return null;   // not yet long enough to be a reproach
-  if (days < 365) return `one has been waiting ${Math.floor(days / 30)} months`;
-  return 'one has been waiting over a year';
+// How many poster columns fill the banner background. Ten is enough to cover a
+// desktop card edge to edge without any one of them being wide enough to read as
+// a poster you could tap.
+const WALL_TILES = 10;
+
+// The corner button that opens the explainer. Sits on both faces of the section —
+// the banner and the revealed card — because either one can be somebody's first
+// sight of the feature.
+function HelpButton({ onOpen }: { onOpen: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onOpen}
+      aria-label="How Today's Pick works"
+      className="absolute top-3 right-3 z-10 h-9 w-9 rounded-full flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted/60 transition-colors"
+    >
+      <MoreHorizontal className="h-5 w-5" />
+    </button>
+  );
 }
 
 // Time left until the pick rolls over, in the same words a person would use.
+//
+// Counted to the NEXT UTC MIDNIGHT, because that is when the pick actually
+// changes: the server keys a pick to `new Date().toISOString().slice(0,10)`, a
+// UTC day. This counted to the device's local midnight, so anyone east of
+// Greenwich watched it reach zero and then got the same film back for hours.
+// If the reset is ever moved to the user's own day, this has to move with it.
 function untilTomorrow(): string {
   const now = new Date();
-  const midnight = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
-  const mins = Math.max(0, Math.round((midnight.getTime() - now.getTime()) / 60000));
+  const nextUtcMidnight = Date.UTC(
+    now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 1,
+  );
+  const mins = Math.max(0, Math.round((nextUtcMidnight - now.getTime()) / 60000));
   const h = Math.floor(mins / 60);
   const m = mins % 60;
   if (h === 0) return `${m}m`;
@@ -175,11 +189,40 @@ export function TodaysPick() {
   const [pickFact, setPickFact] = useState<string | null>(null);
   useEffect(() => { setTagline(taglineOfDay()); }, []);
 
-  // The deck: how many films are on the watchlist, how long the oldest has sat
-  // there, and a handful of their posters to put behind the banner.
-  const [deckCount, setDeckCount] = useState(0);
-  const [deckWait, setDeckWait] = useState<string | null>(null);
+  // Two different sets of posters, on purpose.
+  //
+  // `deckPosters` is a sample of the user's own watchlist and feeds the shuffle
+  // window during a roll — flicking through the actual candidates is the part
+  // that means something.
+  //
+  // `wallPosters` is the background, and it is deliberately NOT the watchlist. A
+  // watchlist of two tiled across a wide card just reads as the same poster
+  // repeated, which is wallpaper rather than atmosphere. This comes from the
+  // shared home pool instead: many different popular titles, so the backdrop is
+  // a wall of varied artwork.
   const [deckPosters, setDeckPosters] = useState<string[]>([]);
+  const [wallPosters, setWallPosters] = useState<string[]>([]);
+  const [helpOpen, setHelpOpen] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    // Already fetched by the home screen and cached for an hour, so this is not a
+    // new round trip in practice.
+    fetch('/api/home-pool')
+      .then(r => r.ok ? r.json() : null)
+      .then((pool: { daily?: Movie[]; weekly?: Movie[] } | null) => {
+        if (cancelled || !pool) return;
+        const posters = [...(pool.daily ?? []), ...(pool.weekly ?? [])]
+          .map(m => m.poster)
+          .filter((p): p is string => !!p);
+        const unique = [...new Set(posters)];
+        // Shuffled by the day so the wall is a different set each morning but
+        // holds still while someone is looking at it.
+        setWallPosters(seededShuffle(unique, daySeed()).slice(0, WALL_TILES));
+      })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, []);
   // Which poster the shuffle is currently on. -1 means the shuffle isn't running.
   const [shuffleAt, setShuffleAt] = useState(-1);
   const [marking, setMarking] = useState(false);
@@ -189,8 +232,6 @@ export function TodaysPick() {
   useEffect(() => {
     if (!user) return;
     const ids = watchlistFilmIds();
-    setDeckCount(ids.length);
-    setDeckWait(longestWaitingLabel(ids));
     if (ids.length === 0) return;
     // A sample, not the whole list — this is a backdrop, and the ids are already
     // in the shared meta batch, so it costs nothing beyond what the page fetches.
@@ -356,6 +397,8 @@ export function TodaysPick() {
       <section className="px-6 pt-6">
         <div className="relative rounded-[2.5rem] overflow-hidden shadow-2xl border border-border">
           {movie.backdrop && <Image src={movie.backdrop} alt="" fill className="object-cover opacity-25" />}
+          <HelpButton onOpen={() => setHelpOpen(true)} />
+          <TodaysPickHelp open={helpOpen} onClose={() => setHelpOpen(false)} />
           <div className="relative bg-gradient-to-t from-background via-background/85 to-background/60 p-5 flex gap-5">
             <Link href={`/movie/${movie.id}`} className="w-28 shrink-0 aspect-[2/3] rounded-2xl overflow-hidden shadow-xl bg-muted">
               {movie.poster
@@ -416,25 +459,30 @@ export function TodaysPick() {
   }
 
   // ── Compact banner (default / guest prompt / empty watchlist / initializing) ──
-  const showDeck = deckPosters.length > 0;
+  const showWall = wallPosters.length > 0;
 
   return (
     <section className="px-6 pt-6">
       <div className="relative overflow-hidden rounded-[2.5rem] border border-primary/20 bg-gradient-to-br from-primary/10 to-accent/5 p-8 flex flex-col items-center text-center gap-4">
-        {/* The watchlist itself, behind the button. Blurred and dimmed so it
-            reads as texture rather than a row you're meant to tap, but they are
-            the real posters — the banner is showing you your own deck instead of
-            an empty gradient. */}
-        {showDeck && (
+        <HelpButton onOpen={() => setHelpOpen(true)} />
+        <TodaysPickHelp open={helpOpen} onClose={() => setHelpOpen(false)} />
+        {/* A wall of poster artwork behind the button, instead of an empty
+            gradient. Ten different titles, edge to edge and each column flexing,
+            so it is full and varied at any width — an earlier version tiled the
+            user's own watchlist and a short list read as one poster repeated.
+            Blurred and washed back so it stays atmosphere rather than a row
+            someone might try to tap. A flat wash, not a vertical gradient, so
+            the bottom corners aren't darker than the top. */}
+        {showWall && (
           <div aria-hidden className="absolute inset-0 pointer-events-none select-none">
-            <div className="flex h-full w-full items-center justify-center gap-2 blur-[6px] opacity-[0.18] scale-110">
-              {deckPosters.map(p => (
-                <div key={p} className="relative h-full w-24 shrink-0">
-                  <Image src={p} alt="" fill className="object-cover" sizes="96px" />
+            <div className="absolute inset-0 flex blur-[7px] opacity-45 scale-105">
+              {wallPosters.map((p, i) => (
+                <div key={`${p}-${i}`} className="relative h-full flex-1 min-w-0">
+                  <Image src={p} alt="" fill className="object-cover" sizes="20vw" />
                 </div>
               ))}
             </div>
-            <div className="absolute inset-0 bg-gradient-to-t from-background via-background/70 to-background/40" />
+            <div className="absolute inset-0 bg-background/70" />
           </div>
         )}
 
@@ -488,16 +536,11 @@ export function TodaysPick() {
             <div className="space-y-1 relative">
               <h2 className="text-xl font-headline font-bold">Today&apos;s Pick</h2>
               <p className="text-sm text-muted-foreground max-w-md">{tagline}</p>
-              {/* What's actually at stake. A bare Generate button asks you to
-                  trust it; "one of 47, and one has been waiting 8 months" tells
-                  you what it is about to reach into. Both halves are true facts
-                  about the list, so it stays quiet when there is nothing to say. */}
-              {deckCount > 0 && (
-                <p className="text-xs text-primary font-semibold pt-1">
-                  One film from your {deckCount}
-                  {deckWait ? ` · ${deckWait}` : ''}
-                </p>
-              )}
+              {/* The line that said "one film from your 21 · one has been waiting
+                  1 months" is gone. Keard's read: it gives the game away before
+                  the reveal, and the reveal is the point. The poster wall behind
+                  the button already says the deck is yours without counting it
+                  out loud. */}
             </div>
             <Button onClick={generate} disabled={generating || initializing} className="relative rounded-full h-12 px-8 font-bold text-base">
               {generating || initializing ? <Loader2 className="h-5 w-5 animate-spin" /> : <><Sparkles className="h-5 w-5 mr-2" /> Generate</>}
