@@ -66,8 +66,9 @@ export function RecentlyViewed() {
     return () => window.removeEventListener('cinephilers-rating-changed', handler);
   }, []);
 
-  if (items.length === 0) return null;
-
+  // The section stays put even with nothing in it. A row that appears out of
+  // nowhere after the first tap makes the home screen jump; and an empty section
+  // that explains itself teaches what the row is for, which a missing one cannot.
   return (
     <section className="space-y-4">
       <div className="flex items-center justify-between px-6">
@@ -81,6 +82,12 @@ export function RecentlyViewed() {
           See All <ChevronRight className="h-3 w-3" />
         </Link>
       </div>
+
+      {items.length === 0 ? (
+        <p className="px-6 text-sm text-muted-foreground">
+          Nothing yet — films and shows you open will show up here.
+        </p>
+      ) : (
       <div className="flex overflow-x-auto gap-4 px-6 pb-4 no-scrollbar">
         {items.map(item => {
           const userRating = userRatings[item.id];
@@ -102,7 +109,10 @@ export function RecentlyViewed() {
                       {item.title}
                     </h3>
                     <div className="flex flex-col items-end gap-0.5 shrink-0">
-                      {item.rating && (
+                      {/* `> 0`, not just truthiness: a rating of 0 makes
+                          `item.rating && …` evaluate to the number 0, which React
+                          renders as a literal "0" beside the title. */}
+                      {item.rating != null && item.rating > 0 && (
                         <div className="flex items-center gap-0.5">
                           <Star className="h-3 w-3 fill-yellow-400 text-yellow-400" />
                           <span className="text-xs font-bold text-foreground">{item.rating.toFixed(1)}</span>
@@ -126,6 +136,7 @@ export function RecentlyViewed() {
           );
         })}
       </div>
+      )}
     </section>
   );
 }

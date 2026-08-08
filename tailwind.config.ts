@@ -3,6 +3,12 @@ import type {Config} from 'tailwindcss';
 
 export default {
   darkMode: ['class'],
+  // On a touchscreen there is no pointer to leave, so a `hover:` style latches on
+  // after a tap and stays until something else is tapped — which is why a pressed
+  // poster kept its red title and an actor photo kept a red ring. This makes every
+  // `hover:` in the app compile to `@media (hover: hover)`, so those styles only
+  // exist on devices that can actually un-hover.
+  future: { hoverOnlyWhenSupported: true },
   content: [
     './src/pages/**/*.{js,ts,jsx,tsx,mdx}',
     './src/components/**/*.{js,ts,jsx,tsx,mdx}',

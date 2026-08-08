@@ -58,7 +58,9 @@ function DetailSkeleton() {
 function PersonCard({ actor }: { actor: Actor }) {
   return (
     <Link href={`/person/${actor.id}`} className="shrink-0 w-36 group cursor-pointer block">
-      <div className="relative aspect-[2/3] rounded-2xl overflow-hidden mb-2 group-hover:ring-2 ring-primary ring-offset-2 ring-offset-background transition-all bg-muted flex items-center justify-center">
+      {/* No ring at all — not even on hover. It read as an error state around a
+          face, and the photo is already the thing being pointed at. */}
+      <div className="relative aspect-[2/3] rounded-2xl overflow-hidden mb-2 bg-muted flex items-center justify-center">
         {actor.profileImage ? (
           <Image src={actor.profileImage} alt={actor.name} fill className="object-cover" sizes="144px" />
         ) : (
@@ -86,7 +88,9 @@ function CollectionCard({ part }: { part: CollectionItem }) {
 
   const inner = (
     <>
-      <div className={`relative w-full h-[165px] overflow-hidden rounded-xl bg-muted shadow-md ${part.isCurrent ? 'ring-2 ring-primary' : 'border border-border'}`}>
+      {/* No ring on the current entry — the "You're here" label already says it,
+          and the red outline read as an error state next to its neighbours. */}
+      <div className="relative w-full h-[165px] overflow-hidden rounded-xl bg-muted shadow-md border border-border">
         {part.poster ? (
           <img src={part.poster} alt={part.title} className="w-full h-full object-cover" loading="lazy" />
         ) : (
