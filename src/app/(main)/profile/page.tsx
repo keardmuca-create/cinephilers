@@ -10,7 +10,7 @@ import { BadgeList, FounderChip, type EarnedBadge } from '@/components/badge-row
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import Link from 'next/link';
-import { Settings, Star, Film, List, MessageSquare, ChevronRight, Award, History, Bookmark, User, Eye, Plus, Heart, TrendingUp, Download, Upload, Trash2, Share2, Repeat } from 'lucide-react';
+import { Settings, Star, Film, List, MessageSquare, ChevronRight, Award, History, Bookmark, User, Eye, Plus, Heart, TrendingUp, Download, Upload, Trash2, Share2, Repeat, Loader2 } from 'lucide-react';
 import { ImportDialog } from '@/components/import-dialog';
 import { FavoritesSection } from '@/components/favorites-section';
 import { BarChart, Bar, XAxis, ResponsiveContainer, Cell, YAxis, Tooltip as ChartTooltip } from 'recharts';
@@ -391,6 +391,49 @@ export default function ProfilePage() {
   const [deleteConfirmText, setDeleteConfirmText] = useState('');
   const [deleting, setDeleting] = useState(false);
   const [showImport, setShowImport] = useState(false);
+  const [exporting, setExporting] = useState(false);
+
+  // Navigating to the export URL used to be a plain <a download>. iOS ignores the
+  // download attribute, and inside an installed PWA there is no browser chrome —
+  // so the raw JSON took over the whole screen with no back button and no way out
+  // but force-quitting the app. Fetching it here and handing the browser a blob
+  // keeps the download in the background: the file saves, the settings sheet stays
+  // put. Going through fetchWithAuth also means an expired access token refreshes
+  // and retries instead of silently returning a 401 page as the "export".
+  const downloadData = async () => {
+    if (exporting) return;
+    setExporting(true);
+    try {
+      const res = await fetchWithAuth('/api/users/me/export');
+      if (!res.ok) {
+        toast({
+          title: res.status === 429
+            ? 'Too many exports. Try again a bit later.'
+            : 'Could not prepare your data. Please try again.',
+          variant: 'destructive',
+        });
+        return;
+      }
+      const blob = await res.blob();
+      // Prefer the filename the server already chose, so the date stamp matches
+      // the data rather than the moment the phone happened to save it.
+      const disposition = res.headers.get('Content-Disposition') ?? '';
+      const named = /filename="([^"]+)"/.exec(disposition)?.[1];
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = named ?? `cinephilers-${authUser?.username ?? 'data'}.json`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+      toast({ title: 'Your data has been downloaded' });
+    } catch {
+      toast({ title: 'Could not prepare your data. Please try again.', variant: 'destructive' });
+    } finally {
+      setExporting(false);
+    }
+  };
 
   // Captured before hooks — rendered after all hooks to respect Rules of Hooks
   const guestView = !authLoading && !authUser ? (
@@ -1172,18 +1215,27 @@ export default function ProfilePage() {
                   </div>
                   <div className="space-y-2">
                     <h4 className="text-sm font-bold">Data</h4>
+                    {/* Arrows point the way the data actually travels: coming in
+                        is an upload, leaving with it is a download. They were the
+                        wrong way round. */}
                     <Button variant="ghost" className="w-full justify-start text-sm h-12 rounded-xl" onClick={() => { setShowSettings(false); setShowImport(true); }}>
-                      <Download className="h-4 w-4 mr-2 text-muted-foreground" />
+                      <Upload className="h-4 w-4 mr-2 text-muted-foreground" />
                       Import from Letterboxd / IMDb <ChevronRight className="h-4 w-4 ml-auto" />
                     </Button>
                     {/* The other direction. We already told people they could take
                         their history out of Letterboxd; leaving with it from here
                         should be no harder. */}
-                    <Button variant="ghost" className="w-full justify-start text-sm h-12 rounded-xl" asChild>
-                      <a href="/api/users/me/export" download onClick={() => setShowSettings(false)}>
-                        <Upload className="h-4 w-4 mr-2 text-muted-foreground" />
-                        Download your data <ChevronRight className="h-4 w-4 ml-auto" />
-                      </a>
+                    <Button
+                      variant="ghost"
+                      className="w-full justify-start text-sm h-12 rounded-xl"
+                      onClick={downloadData}
+                      disabled={exporting}
+                    >
+                      {exporting
+                        ? <Loader2 className="h-4 w-4 mr-2 text-muted-foreground animate-spin" />
+                        : <Download className="h-4 w-4 mr-2 text-muted-foreground" />}
+                      {exporting ? 'Preparing your data…' : 'Download your data'}
+                      <ChevronRight className="h-4 w-4 ml-auto" />
                     </Button>
                   </div>
                   <div className="space-y-2">
