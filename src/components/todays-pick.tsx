@@ -3,7 +3,7 @@
 import React, { useEffect, useState } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
-import { Info, Star, Bookmark, Sparkles, Loader2, Film, Check, Lock, MoreHorizontal } from 'lucide-react';
+import { Star, Sparkles, Loader2, Film, Check, Lock, MoreHorizontal } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Movie } from '@/lib/types';
 import { useAuth } from '@/contexts/auth-context';
@@ -76,15 +76,33 @@ function waitingFact(addedAt: number, v: number): string | null {
   return [`On your watchlist for ${span}`, `You saved this ${span} ago — still waiting`, `${span} on your list. Tonight?`][v];
 }
 
+// Nobody is named, however few of them there are.
+//
+// The single-friend case used to print a display name. Keard's call to drop it:
+// "1 friend rated it 10" makes you want to open the title and find out who, and
+// the name is waiting for you there. It also removes the only unbounded string on
+// the card — a display name can be fifty characters, which was enough to push the
+// sentence past two lines and cut the rating off the end of it — and it collapses
+// what were two branches with six phrasings into one with three.
+// No average, and never more than one score.
+//
+// People rate in whole numbers, so the mean of several ratings is a score nobody
+// could have given — "5 friends rated this 8.2" reads as a bug, not a fact. With
+// more than one friend the count is the interesting part anyway; the scores
+// themselves are on the film's page. A single friend's rating IS a real number
+// someone chose, so that one is still worth printing.
 function friendsFact(friends: { name: string; rating: number }[], v: number): string | null {
-  if (friends.length === 0) return null;
-  if (friends.length === 1) {
-    const f = friends[0];
-    return [`${f.name} rated this ${f.rating}`, `${f.name} gave this a ${f.rating}`, `Your friend ${f.name} liked it — ${f.rating}/10`][v];
-  }
-  const avg = friends.reduce((s, f) => s + f.rating, 0) / friends.length;
   const n = friends.length;
-  return [`${n} friends rated this ${avg.toFixed(1)}`, `${n} of your friends have seen this`, `Your friends gave this ${avg.toFixed(1)}`][v];
+  if (n === 0) return null;
+  if (n === 1) {
+    const score = String(friends[0].rating);
+    return [`1 friend rated this ${score}`, '1 of your friends has seen this', `A friend gave this ${score}`][v];
+  }
+  return [
+    `${n} of your friends rated this`,
+    `${n} of your friends have seen this`,
+    `${n} friends have rated this`,
+  ][v];
 }
 
 // Every unwatched film sitting on the watchlist. Read straight from local state,
@@ -105,12 +123,82 @@ function watchlistFilmIds(): string[] {
 }
 
 // A dense mosaic rather than a row of large posters: many small tiles read as
-// "cinema", a handful of big ones read as "some posters someone left here". Six
-// across is small enough on a phone that no single tile invites a tap, and four
-// rows covers the card at any height.
-const WALL_COLS = 6;
-const WALL_ROWS = 4;
+// "cinema", a handful of big ones read as "some posters someone left here".
+//
+// Eight across, four down. Denser than the twenty-four it replaces, so the wall
+// looks full, and cheaper with it — each tile is about a twelfth of the card's
+// width, so w92 thumbnails are plenty and thirty-two of those weigh less than
+// twenty-four w185s did. Finer than this and faces stop being recognisable,
+// which is where a poster wall becomes confetti.
+//
+// Six rows. Tiles keep a poster's 2:3 shape, so the grid's height follows the
+// section's WIDTH, not its height — eight columns on a phone makes each tile
+// about 61px tall, and four rows of that left a bare strip of gradient across the
+// bottom of a section half as tall again. Better to overshoot and let the last
+// row clip: a wall that runs off the edge reads as a wall, and one that stops
+// short reads as a mistake.
+const WALL_COLS = 8;
+const WALL_ROWS = 6;
 const WALL_TILES = WALL_COLS * WALL_ROWS;
+
+// Films Keard picked by name for the wall, plus the two series. Verified against
+// TMDB rather than typed from memory — every id below resolved to the intended
+// title with artwork present.
+//
+// He asked for IMDb's Top 250. There is no IMDb in this app and no free API for
+// that list, so the rest of the wall is filled from TMDB's top-rated films
+// instead: same idea, films huge numbers of people rated highly, and it overlaps
+// heavily with the Top 250. The alternative — hardcoding 250 ids to mirror the
+// list — would be wrong in places and would need hand-maintaining forever.
+const PINNED_WALL_IDS = [
+  'tmdb-2668',      // Sleepy Hollow (1999)
+  'tmdb-22',        // Pirates of the Caribbean: The Curse of the Black Pearl
+  'tmdb-297',       // Meet Joe Black
+  'tmdb-438631',    // Dune
+  'tmdb-693134',    // Dune: Part Two
+  'tmdb-238',       // The Godfather
+  'tmdb-278',       // The Shawshank Redemption
+  'tmdb-tv-1396',   // Breaking Bad
+  'tmdb-tv-1399',   // Game of Thrones
+  'tmdb-11324',     // Shutter Island
+  'tmdb-597',       // Titanic
+  'tmdb-2832',      // Identity
+];
+
+// The wall itself, shared by both faces of the section. It used to live only on
+// the pre-Generate banner, which meant the one state most people look at — the
+// pick, already generated and locked for the day — never had it. Keard could not
+// see the thing he had asked for because his pick was locked in.
+function PosterWall({ posters }: { posters: string[] }) {
+  if (posters.length === 0) return null;
+  return (
+    <div aria-hidden className="absolute inset-0 pointer-events-none select-none">
+      {/* Each tile is 2:3 — a poster's own shape — so every poster is shown WHOLE.
+          Stretching tiles to fill the box made them squares and cropped every
+          poster to a slice of itself, and the point of using posters is that you
+          can tell what they are. The grid runs past the bottom and is clipped
+          there, which reads as a wall continuing behind the card. */}
+      <div
+        className="absolute inset-x-0 top-0 grid"
+        style={{ gridTemplateColumns: `repeat(${WALL_COLS}, 1fr)` }}
+      >
+        {posters.map((p, i) => (
+          <div key={`${p}-${i}`} className="relative aspect-[2/3]">
+            {/* w92, TMDB's smallest. Each tile is about a twelfth of the card's
+                width and images are served unoptimised, so the size named in the
+                URL is the size downloaded. */}
+            <Image src={p.replace(/\/w\d+\//, '/w92/')} alt="" fill className="object-cover" sizes="13vw" />
+          </div>
+        ))}
+      </div>
+      {/* Barely tinted. Earlier passes ran this at 80% and 45% and Keard's verdict
+          both times was that you could hardly see the posters — which defeats the
+          point of using them. The job is only to stop unrelated palettes clashing,
+          not to turn them into a coloured rectangle. */}
+      <div className="absolute inset-0 bg-primary/20 mix-blend-color" />
+    </div>
+  );
+}
 
 // The corner button that opens the explainer. Sits on both faces of the section —
 // the banner and the revealed card — because either one can be somebody's first
@@ -121,7 +209,7 @@ function HelpButton({ onOpen }: { onOpen: () => void }) {
       type="button"
       onClick={onOpen}
       aria-label="How Today's Pick works"
-      className="absolute top-3 right-3 z-10 h-9 w-9 rounded-full flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted/60 transition-colors"
+      className="absolute top-1 right-1 z-10 h-8 w-8 rounded-full flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted/60 transition-colors"
     >
       <MoreHorizontal className="h-5 w-5" />
     </button>
@@ -207,19 +295,33 @@ export function TodaysPick() {
 
   useEffect(() => {
     let cancelled = false;
-    // Already fetched by the home screen and cached for an hour, so this is not a
-    // new round trip in practice.
-    fetch('/api/home-pool')
-      .then(r => r.ok ? r.json() : null)
-      .then((pool: { daily?: Movie[]; weekly?: Movie[] } | null) => {
-        if (cancelled || !pool) return;
-        const posters = [...(pool.daily ?? []), ...(pool.weekly ?? [])]
+    // Keard's picks always appear; the rest of the wall is top-rated films, so
+    // every tile is something a viewer is likely to recognise. This used to draw
+    // from the home pool, which is "popular THIS WEEK" — hence Chicago Fire and
+    // NCIS turning up on a wall meant to say "cinema".
+    //
+    // Both sources are cached (meta for a day, top-rated on the CDN for an hour),
+    // so in practice this is not two fresh round trips.
+    Promise.all([
+      batchFetchMeta(PINNED_WALL_IDS),
+      fetch('/api/see-all/top-rated-movies')
+        .then(r => (r.ok ? r.json() : null))
+        .catch(() => null),
+    ])
+      .then(([metaMap, topRated]: [Record<string, { poster?: string } | null>, { items?: Movie[] } | null]) => {
+        if (cancelled) return;
+        const pinned = PINNED_WALL_IDS
+          .map(id => metaMap[id]?.poster)
+          .filter((p): p is string => !!p);
+        const filler = (topRated?.items ?? [])
           .map(m => m.poster)
           .filter((p): p is string => !!p);
-        const unique = [...new Set(posters)];
-        // Shuffled by the day so the wall is a different set each morning but
-        // holds still while someone is looking at it.
-        setWallPosters(seededShuffle(unique, daySeed()).slice(0, WALL_TILES));
+
+        // Pinned first so they survive the slice, then top-rated shuffled by the
+        // day — a different wall each morning that holds still while you look at
+        // it. Deduped in case a pinned film is also top-rated (Shawshank is).
+        const unique = [...new Set([...pinned, ...seededShuffle(filler, daySeed())])];
+        setWallPosters(unique.slice(0, WALL_TILES));
       })
       .catch(() => {});
     return () => { cancelled = true; };
@@ -391,68 +493,124 @@ export function TodaysPick() {
     setGenerating(false);
   };
 
-  // ── Revealed movie: poster-forward card (backdrop as a soft backing when it
-  //    exists; the poster always shows, so unreleased films aren't a grey box) ──
+  // ── Revealed movie: the same section as the banner, so the poster wall stays
+  //    put when you press Generate. It used to swap in a different layout backed
+  //    by the film's own backdrop, which meant the wall vanished at the exact
+  //    moment most people are looking — and since a pick is locked for the day,
+  //    that state is the one you see nearly all the time. ──
   if (movie) {
     return (
       <section className="px-6 pt-6">
-        <div className="relative rounded-[2.5rem] overflow-hidden shadow-2xl border border-border">
-          {movie.backdrop && <Image src={movie.backdrop} alt="" fill className="object-cover opacity-25" />}
-          <HelpButton onOpen={() => setHelpOpen(true)} />
+        {/* Identical shell to the banner — same padding, same card width — so the
+            wall shows exactly as much of itself before and after Generate. When
+            this had its own tighter padding the card swelled to fill the section
+            and the wall shrank to a hairline. */}
+        {/* p-8, not px-8 py-9 — the extra vertical padding made the band of wall
+            above and below four pixels thicker than the sides, which is small
+            enough to look like a mistake rather than a choice. */}
+        <div className="relative overflow-hidden rounded-[2.5rem] border border-primary/20 bg-gradient-to-br from-primary/10 to-accent/5 p-8 sm:p-12">
           <TodaysPickHelp open={helpOpen} onClose={() => setHelpOpen(false)} />
-          <div className="relative bg-gradient-to-t from-background via-background/85 to-background/60 p-5 flex gap-5">
-            <Link href={`/movie/${movie.id}`} className="w-28 shrink-0 aspect-[2/3] rounded-2xl overflow-hidden shadow-xl bg-muted">
-              {movie.poster
-                ? <Image src={movie.poster} alt={movie.title} width={112} height={168} className="w-full h-full object-cover" />
-                : <div className="w-full h-full flex items-center justify-center"><Film className="h-8 w-8 text-primary/60" /></div>}
-            </Link>
-            <div className="flex-1 min-w-0 flex flex-col justify-center gap-2.5">
-              <div className="flex items-center gap-2 flex-wrap">
-                <span className="bg-primary text-primary-foreground px-2.5 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-widest">Today&apos;s Pick</span>
-                <span className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-widest text-muted-foreground border border-border px-2 py-0.5 rounded-full">
-                  <Bookmark className="h-3 w-3" /> Watchlist
-                </span>
-              </div>
-              <h1 className="text-2xl font-headline font-bold leading-tight line-clamp-2">{movie.title}</h1>
-              <div className="flex items-center gap-3 text-sm text-muted-foreground font-bold">
-                {movie.year && <span>{movie.year}</span>}
-                {movie.rating > 0 && <span className="flex items-center gap-1 text-accent"><Star className="h-4 w-4 fill-current" />{movie.rating.toFixed(1)}</span>}
-              </div>
-              {pickFact && (
-                <p className="flex items-center gap-1.5 text-xs text-primary font-semibold">
-                  <Sparkles className="h-3.5 w-3.5 shrink-0" />{pickFact}
-                </p>
-              )}
-              {/* Says out loud that the pick is settled — it can't be rerolled,
-                  and a card that doesn't say so just looks like a button that
-                  stopped working. */}
-              {rollover && (
-                <p className="flex items-center gap-1.5 text-[11px] text-muted-foreground font-semibold">
-                  <Lock className="h-3 w-3 shrink-0" />
-                  Locked in for today · new pick in {rollover}
-                </p>
-              )}
-              <div className="flex flex-wrap gap-2 pt-1">
-                {/* Films only. A series keeps no watched record of its own — its
-                    episodes are the record — so offering one button that means
-                    two different things would put them back out of step. */}
-                {movie.type !== 'show' && (
-                  <Button
-                    onClick={markWatched}
-                    disabled={marking || markedWatched}
-                    className="rounded-full h-10 px-5 bg-accent hover:bg-accent/90 text-white font-bold disabled:opacity-100"
-                  >
-                    {marking
-                      ? <Loader2 className="h-4 w-4 mr-1.5 animate-spin" />
-                      : <Check className="h-4 w-4 mr-1.5" />}
-                    {markedWatched ? 'Watched' : 'Mark as watched'}
-                  </Button>
+          <PosterWall posters={wallPosters} />
+          {/* Label, then the poster with the day's two facts beside it, then the
+              title beneath, then one action. No "Watchlist" chip — where the pick
+              comes from is the whole premise, so saying it on every card is
+              telling people something they already know. And no Details button:
+              the poster goes to the film's page, which is what a poster is for,
+              and two buttons where one will do was the old card's problem. */}
+          {/* w-full, not just max-w-sm. Without it the card sizes to its content
+              and grows past the section, so the countdown and the button were
+              sliced off at the right edge. */}
+          {/* Tight on purpose. Keard's layout stacks the title, rating and button
+              BELOW the poster where they used to sit beside it, which adds their
+              height rather than hiding it alongside — the first pass came out 80px
+              taller than the section had ever been. The poster, type sizes, gaps
+              and button all give a little back so the section stays the size it
+              was and only its contents changed. */}
+          <div className="relative w-full mx-auto max-w-xs rounded-[1.6rem] bg-card border border-border/60 shadow-2xl p-3.5 flex flex-col gap-2">
+            <HelpButton onOpen={() => setHelpOpen(true)} />
+
+            <span className="self-start bg-primary text-primary-foreground px-2.5 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-widest">
+              Today&apos;s Pick
+            </span>
+
+            {/* Height pinned to the poster's, so the card is the same height
+                whatever the pick's sentence says. Without this the sentence sets
+                the card's height, and its longest form — a friend's rating, which
+                carries a display name up to fifty characters — wraps to five or
+                six lines and drags the whole section down with it. */}
+            <div className="flex gap-4 h-[7.5rem]">
+              {/* self-start is load-bearing. As a flex item this stretches to the
+                  row's full height by default, which overrides aspect-[2/3] — so
+                  object-cover cropped the poster into a tall strip. Aligning to
+                  the top lets the aspect ratio decide the height again. */}
+              <Link href={`/movie/${movie.id}`} className="w-20 shrink-0 self-start aspect-[2/3] rounded-xl overflow-hidden shadow-lg bg-muted">
+                {movie.poster
+                  ? <Image src={movie.poster} alt={movie.title} width={80} height={120} className="w-full h-full object-cover" />
+                  : <div className="w-full h-full flex items-center justify-center"><Film className="h-6 w-6 text-primary/60" /></div>}
+              </Link>
+
+              <div className="flex-1 min-w-0 h-full flex flex-col gap-1.5 overflow-hidden">
+                {/* Says out loud that the pick is settled — it can't be rerolled,
+                    and a card that doesn't say so just looks like a button that
+                    stopped working. */}
+                {rollover && (
+                  <p className="flex items-start gap-1.5 text-[11px] text-muted-foreground font-semibold">
+                    <Lock className="h-3 w-3 shrink-0 mt-0.5" />
+                    <span>New pick in {rollover}</span>
+                  </p>
                 )}
-                <Button asChild variant="outline" className="rounded-full h-10 px-5 border-border font-bold">
-                  <Link href={`/movie/${movie.id}`}><Info className="h-4 w-4 mr-1.5" /> Details</Link>
-                </Button>
+                {/* Order down this column: when the pick changes, then the film,
+                    then why it was chosen. Title and score live here rather than
+                    under the poster — two short lines beside a tall poster left an
+                    obvious hole in the middle of the card, and this fills it while
+                    making the card shorter. */}
+                <div>
+                  {/* Two lines at 16px, not one at 18px. A single line cut "The
+                      Lord of the Rings: The Fellowship of the Ring" down to "The
+                      Lord of t…", and long titles are not rare — franchises are
+                      full of them. Still reads as the headline because it is bold
+                      and dark above lighter grey. */}
+                  <h1 className="text-base font-headline font-bold leading-tight line-clamp-2">{movie.title}</h1>
+                  {/* Back on one line. Stacked, they used up the room a long
+                      sentence needs — and side by side there is no star to knock
+                      the year and the score out of line with each other. */}
+                  <div className="flex items-center gap-3 text-base text-muted-foreground font-bold leading-snug">
+                    {movie.year && <span>{movie.year}</span>}
+                    {movie.rating > 0 && (
+                      <span className="flex items-center gap-1 text-accent">
+                        <Star className="h-4 w-4 fill-current" />{movie.rating.toFixed(1)}
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                {/* Takes whatever room is left and stops there. Two lines is what
+                    the freed space holds; a longer sentence is cut rather than
+                    allowed to grow the card. */}
+                {pickFact && (
+                  <p className="flex items-start gap-1.5 text-xs text-primary font-semibold min-h-0">
+                    <Sparkles className="h-3.5 w-3.5 shrink-0 mt-0.5" />
+                    <span className="line-clamp-2">{pickFact}</span>
+                  </p>
+                )}
               </div>
             </div>
+
+            {/* Films only. A series keeps no watched record of its own — its
+                episodes are the record — so offering one button that means two
+                different things would put them back out of step. */}
+            {movie.type !== 'show' && (
+              <Button
+                onClick={markWatched}
+                disabled={marking || markedWatched}
+                className="w-full rounded-full h-10 text-sm bg-accent hover:bg-accent/90 text-white font-bold disabled:opacity-100"
+              >
+                {marking
+                  ? <Loader2 className="h-4 w-4 mr-1.5 animate-spin" />
+                  : <Check className="h-4 w-4 mr-1.5" />}
+                {markedWatched ? 'Watched' : 'Mark as watched'}
+              </Button>
+            )}
           </div>
         </div>
       </section>
@@ -460,57 +618,31 @@ export function TodaysPick() {
   }
 
   // ── Compact banner (default / guest prompt / empty watchlist / initializing) ──
-  const showWall = wallPosters.length > 0;
-
   return (
     <section className="px-6 pt-6">
-      <div className="relative overflow-hidden rounded-[2.5rem] border border-primary/20 bg-gradient-to-br from-primary/10 to-accent/5">
+      {/* The section keeps its height. What changed is the split: the card gives
+          up padding and width, and the wall gets it — so more posters show
+          without the banner taking more of the screen. */}
+      <div className="relative overflow-hidden rounded-[2.5rem] border border-primary/20 bg-gradient-to-br from-primary/10 to-accent/5 px-8 py-9 sm:px-12 sm:py-10">
         <TodaysPickHelp open={helpOpen} onClose={() => setHelpOpen(false)} />
-        {/* A wall of poster artwork behind the card, instead of an empty gradient.
-            Twenty-four different titles in a dense grid — an earlier version used
-            ten large blurred columns, which read as "some posters" rather than
-            "cinema", and the one before that tiled the user's own watchlist, so a
-            short list looked like the same poster repeated.
-            Small tiles mean w185 thumbnails are enough, so this is LESS data than
-            the ten large ones it replaces. */}
-        {showWall && (
-          <div aria-hidden className="absolute inset-0 pointer-events-none select-none">
-            <div
-              className="absolute inset-0 grid"
-              style={{ gridTemplateColumns: `repeat(${WALL_COLS}, 1fr)`, gridTemplateRows: `repeat(${WALL_ROWS}, 1fr)` }}
-            >
-              {wallPosters.map((p, i) => (
-                <div key={`${p}-${i}`} className="relative overflow-hidden">
-                  {/* Downgraded to a w185 thumbnail: each tile is a fraction of
-                      the card and images are served unoptimised, so the size in
-                      the URL is the size downloaded. Twenty-four of these is less
-                      data than the ten large posters this replaced. */}
-                  <Image src={p.replace(/\/w\d+\//, '/w185/')} alt="" fill className="object-cover" sizes="17vw" />
-                </div>
-              ))}
-            </div>
-            {/* Tinted to one colour so twenty-four unrelated palettes read as one
-                surface rather than a jumble, and so no single poster competes with
-                the card. mix-blend-color keeps the artwork's own light and shade —
-                a flat colour on top would have flattened it to a rectangle. */}
-            <div className="absolute inset-0 bg-primary/80 mix-blend-color" />
-            <div className="absolute inset-0 bg-background/20" />
-          </div>
-        )}
+        <PosterWall posters={wallPosters} />
 
         {/* Everything readable sits on its own panel above the mosaic. This is
             the part that makes the poster wall work: text laid straight onto
             twenty-four posters is legible over some tiles and not others, and
             which ones changes daily. The panel is opaque enough to be certain
             rather than lucky. */}
-        <div className="relative m-5 sm:m-8 rounded-[1.85rem] bg-card border border-border/60 shadow-2xl p-6 sm:p-8 flex flex-col items-center text-center gap-4">
+        <div className="relative mx-auto max-w-xs rounded-[1.6rem] bg-card border border-border/60 shadow-2xl p-5 flex flex-col items-center text-center gap-3">
         {/* On the card, not the mosaic — a grey glyph over twenty-four posters is
             invisible at some scroll positions and merely hard to see at the rest. */}
         <HelpButton onOpen={() => setHelpOpen(true)} />
 
-        {/* While the roll is in flight this window flicks through those same
-            posters, so the wait shows what it is doing instead of spinning. */}
-        <div className="relative h-16 w-16 rounded-2xl bg-primary/15 border border-primary/25 flex items-center justify-center overflow-hidden shrink-0">
+        {/* While the roll is in flight this window flicks through the watchlist's
+            own posters, so the wait shows what it is doing instead of spinning.
+            Shaped 2:3, because that is what goes in it — as a square it cropped
+            every poster to a fragment, and the slot read as an icon badge rather
+            than a place a film is about to appear. */}
+        <div className="relative w-20 aspect-[2/3] rounded-xl bg-primary/15 border border-primary/25 flex items-center justify-center overflow-hidden shrink-0">
           {shuffleAt >= 0 && deckPosters[shuffleAt] ? (
             <Image src={deckPosters[shuffleAt]} alt="" fill className="object-cover" sizes="64px" />
           ) : (
