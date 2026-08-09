@@ -5,7 +5,8 @@ import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Movie, CollectionItem } from '@/lib/types';
 import { Button } from '@/components/ui/button';
-import { ChevronLeft, Eye, Film } from 'lucide-react';
+import { ChevronLeft, Film } from 'lucide-react';
+import { WatchedEye } from '@/components/watched-eye';
 
 function CollectionRow({ part }: { part: CollectionItem }) {
   const isWatched = typeof window !== 'undefined' && localStorage.getItem(`watched-${part.id}`) === 'true';
@@ -51,7 +52,7 @@ function CollectionRow({ part }: { part: CollectionItem }) {
             <span className="text-xs font-semibold text-amber-500">Coming {comingLabel}</span>
           ) : isWatched ? (
             <div className="flex items-center gap-1 text-blue-400">
-              <Eye className="h-3.5 w-3.5" />
+              <WatchedEye state="complete" className="h-3.5 w-3.5" />
               <span className="text-xs font-semibold">Watched</span>
             </div>
           ) : null}

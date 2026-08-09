@@ -13,9 +13,10 @@ import { Button } from '@/components/ui/button';
 import {
   Play, Check, Plus, Star, ChevronLeft, Share2, ListPlus, Quote,
   Info, Film, Calendar, Clock, Globe, Building2, Tv, ChevronDown, ChevronUp,
-  DollarSign, Images, Clapperboard, PenLine, Eye, ChevronRight, User, Users, MessageSquare, Trash2,
+  DollarSign, Images, Clapperboard, PenLine, ChevronRight, User, Users, MessageSquare, Trash2,
   Repeat, CheckCircle2,
 } from 'lucide-react';
+import { WatchedEye } from '@/components/watched-eye';
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
@@ -115,7 +116,7 @@ function CollectionCard({ part }: { part: CollectionItem }) {
                 <span className="text-xs font-bold text-foreground">{part.tmdbRating.toFixed(1)}</span>
               </div>
             )}
-            {isWatched && <Eye className="h-3.5 w-3.5 text-blue-400" />}
+            {isWatched && <WatchedEye state="complete" className="h-3.5 w-3.5" />}
             {userRating !== undefined && (
               <div className="flex items-center gap-0.5">
                 <span className="text-xs text-blue-400 font-bold">★</span>

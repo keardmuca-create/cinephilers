@@ -3,7 +3,8 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { ChevronLeft, Eye, MessageSquare, Star, Users, Loader2, Search, X, Bookmark } from 'lucide-react';
+import { ChevronLeft, MessageSquare, Star, Users, Loader2, Search, X, Bookmark } from 'lucide-react';
+import { WatchedEye } from '@/components/watched-eye';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/contexts/auth-context';
 import { fetchWithAuth } from '@/lib/fetch-with-auth';
@@ -159,9 +160,12 @@ export default function MovieFriendsPage() {
                   eye shows even if the watched flag never got set. */}
               <div className="flex items-center gap-3 shrink-0">
                 <span className="w-5 flex justify-center">
-                  {(e.watched || e.rating !== null || e.reviewed || e.progress)
-                    ? <Eye className="h-4 w-4 text-blue-400" />
-                    : <span className="text-sm text-muted-foreground/50">—</span>}
+                  {(e.watched || e.rating !== null || e.reviewed)
+                    ? <WatchedEye state="complete" className="h-4 w-4" />
+                    : e.progress
+                      // Part-way through a show — the hollow eye, same as everywhere.
+                      ? <WatchedEye state="partial" className="h-4 w-4" />
+                      : <span className="text-sm text-muted-foreground/50">—</span>}
                 </span>
                 <span className="w-10 flex items-center justify-center gap-1">
                   {e.rating !== null ? (

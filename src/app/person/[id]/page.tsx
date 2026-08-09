@@ -4,7 +4,9 @@ import React, { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Image from 'next/image';
 import Link from 'next/link';
-import { ChevronLeft, Eye, Star, Film, User } from 'lucide-react';
+import { ChevronLeft, Star, Film, User } from 'lucide-react';
+import { WatchedEye } from '@/components/watched-eye';
+import { readWatchedState, readEpisodeProgress, loadEpisodeProgress, type WatchedState } from '@/lib/watched-state';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 
@@ -46,9 +48,20 @@ function CreditSkeleton() {
 
 function CreditRow({ credit, watched, userRating }: {
   credit: PersonCreditItem;
-  watched: boolean;
+  watched: WatchedState;
   userRating?: number;
 }) {
+  const [progress, setProgress] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (watched !== 'partial') { setProgress(null); return; }
+    const known = readEpisodeProgress(credit.id);
+    if (known) { setProgress(known); return; }
+    let alive = true;
+    loadEpisodeProgress(credit.id).then(p => { if (alive) setProgress(p); }).catch(() => { /* ignore */ });
+    return () => { alive = false; };
+  }, [credit.id, watched]);
+
   return (
     <Link
       href={`/movie/${credit.id}`}
@@ -81,10 +94,14 @@ function CreditRow({ credit, watched, userRating }: {
               <span className="text-xs font-bold text-blue-400">{userRating}</span>
             </div>
           )}
-          {watched && (
+          {watched !== 'none' && (
             <div className="flex items-center gap-1 text-blue-400">
-              <Eye className="h-3 w-3" />
-              <span className="text-xs font-semibold">Watched</span>
+              <WatchedEye state={watched} className="h-3 w-3" />
+              {(watched === 'complete' || progress) && (
+                <span className="text-xs font-semibold">
+                  {watched === 'partial' ? progress : 'Watched'}
+                </span>
+              )}
             </div>
           )}
         </div>
@@ -99,7 +116,7 @@ function CreditRow({ credit, watched, userRating }: {
 function SectionBlock({ section, upcomingSection, watchedMap, ratingsMap, tab, headerTop }: {
   section: PersonCreditSection;
   upcomingSection?: PersonCreditSection;
-  watchedMap: Record<string, boolean>;
+  watchedMap: Record<string, WatchedState>;
   ratingsMap: Record<string, number>;
   tab: 'released' | 'upcoming';
   headerTop: string;
@@ -116,7 +133,9 @@ function SectionBlock({ section, upcomingSection, watchedMap, ratingsMap, tab, h
 
   const isUpcomingView = showUpcoming;
 
-  const watchedCount = section.credits.filter(c => watchedMap[c.id]).length;
+  // Only finished credits count toward the percentage. One episode of a show
+  // for a guest spot isn't "seen it", and shouldn't move a completion figure.
+  const watchedCount = section.credits.filter(c => watchedMap[c.id] === 'complete').length;
   const pct = section.credits.length > 0 ? Math.round((watchedCount / section.credits.length) * 100) : 0;
 
   return (
@@ -129,7 +148,7 @@ function SectionBlock({ section, upcomingSection, watchedMap, ratingsMap, tab, h
         </div>
         {!isUpcomingView && section.credits.length > 0 && (
           <div className="flex items-center gap-1">
-            <Eye className="h-3 w-3 text-blue-400" />
+            <WatchedEye state="complete" className="h-3 w-3" />
             <span className="text-xs font-bold text-blue-400">{pct}%</span>
           </div>
         )}
@@ -138,7 +157,7 @@ function SectionBlock({ section, upcomingSection, watchedMap, ratingsMap, tab, h
         <CreditRow
           key={`${section.label}-${tab}-${credit.id}`}
           credit={credit}
-          watched={!!watchedMap[credit.id]}
+          watched={watchedMap[credit.id] ?? 'none'}
           userRating={ratingsMap[credit.id]}
         />
       ))}
@@ -151,7 +170,7 @@ export default function PersonPage() {
   const router = useRouter();
   const [data, setData] = useState<PersonData | null>(null);
   const [loading, setLoading] = useState(true);
-  const [watchedMap, setWatchedMap] = useState<Record<string, boolean>>({});
+  const [watchedMap, setWatchedMap] = useState<Record<string, WatchedState>>({});
   const [ratingsMap, setRatingsMap] = useState<Record<string, number>>({});
   const [tab, setTab] = useState<'released' | 'upcoming'>('released');
 
@@ -168,12 +187,13 @@ export default function PersonPage() {
             const entry = { id: String(id), title: json.name, poster: json.profileImage, year: '', type: 'person' };
             localStorage.setItem('recently-viewed', JSON.stringify([entry, ...viewed.filter(v => v.id !== String(id))].slice(0, 100)));
           } catch { /* ignore */ }
-          const watched: Record<string, boolean> = {};
+          const watched: Record<string, WatchedState> = {};
           const ratings: Record<string, number> = {};
           try {
             const all = [...json.sections, ...(json.upcoming ?? [])].flatMap(s => s.credits);
             for (const c of all) {
-              if (localStorage.getItem(`watched-${c.id}`) === 'true') watched[c.id] = true;
+              const state = readWatchedState(c.id);
+              if (state !== 'none') watched[c.id] = state;
               const r = localStorage.getItem(`movie-rating-${c.id}`);
               if (r) ratings[c.id] = parseInt(r, 10);
             }

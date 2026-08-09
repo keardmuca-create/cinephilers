@@ -4,8 +4,10 @@
 import React, { useState, useEffect } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
-import { Star, Eye, Film } from 'lucide-react';
+import { Star, Film } from 'lucide-react';
 import { Movie } from '@/lib/types';
+import { WatchedEye } from '@/components/watched-eye';
+import { readWatchedState, type WatchedState } from '@/lib/watched-state';
 import { cn } from '@/lib/utils';
 
 interface MovieCardProps {
@@ -15,12 +17,12 @@ interface MovieCardProps {
 }
 
 export const MovieCard = React.memo(function MovieCard({ movie, className, horizontal = false }: MovieCardProps) {
-  const [watched, setWatched] = useState(false);
+  const [watched, setWatched] = useState<WatchedState>('none');
   const [userRating, setUserRating] = useState<number | undefined>(undefined);
 
   useEffect(() => {
     try {
-      if (localStorage.getItem(`watched-${movie.id}`) === 'true') setWatched(true);
+      setWatched(readWatchedState(movie.id));
       const r = localStorage.getItem(`movie-rating-${movie.id}`);
       if (r) setUserRating(parseInt(r, 10));
     } catch { /* ignore */ }
@@ -83,8 +85,8 @@ export const MovieCard = React.memo(function MovieCard({ movie, className, horiz
                 <span className="text-[10px] font-bold text-blue-400">{userRating}</span>
               </div>
             )}
-            {watched && (
-              <Eye className="h-4 w-4 text-blue-400" />
+            {watched !== 'none' && (
+              <WatchedEye state={watched} className="h-4 w-4" />
             )}
           </div>
         </div>

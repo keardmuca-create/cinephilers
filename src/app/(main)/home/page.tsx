@@ -4,9 +4,11 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
-import { Star, ChevronRight, Eye } from 'lucide-react';
+import { Star, ChevronRight } from 'lucide-react';
 import { Movie } from '@/lib/types';
 import { MovieCard } from '@/components/movie-card';
+import { WatchedEye } from '@/components/watched-eye';
+import { readWatchedState, type WatchedState } from '@/lib/watched-state';
 import { AIRecommendations } from '@/components/ai-recommendations';
 import { InstallPrompt } from '@/components/install-prompt';
 import { GetStarted } from '@/components/get-started';
@@ -26,12 +28,12 @@ interface ChartEntry extends Movie {
 }
 
 function Top10Card({ movie, index }: { movie: ChartEntry; index: number }) {
-  const [watched, setWatched] = useState(false);
+  const [watched, setWatched] = useState<WatchedState>('none');
   const [userRating, setUserRating] = useState<number | undefined>(undefined);
 
   useEffect(() => {
     try {
-      if (localStorage.getItem(`watched-${movie.id}`) === 'true') setWatched(true);
+      setWatched(readWatchedState(movie.id));
       const r = localStorage.getItem(`movie-rating-${movie.id}`);
       if (r) setUserRating(parseInt(r, 10));
     } catch { /* ignore */ }
@@ -76,8 +78,10 @@ function Top10Card({ movie, index }: { movie: ChartEntry; index: number }) {
                 <span className="text-[10px] font-bold text-blue-400">{userRating}</span>
               </div>
             )}
-            {(watched || userRating !== undefined) && (
-              <Eye className="h-4 w-4 text-blue-400" />
+            {(watched !== 'none' || userRating !== undefined) && (
+              // A rating implies you've seen it — but only enough to fill the eye
+              // when the episodes don't already say you're partway through.
+              <WatchedEye state={watched === 'partial' ? 'partial' : 'complete'} className="h-4 w-4" />
             )}
           </div>
         </div>

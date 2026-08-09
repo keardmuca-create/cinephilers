@@ -3,7 +3,9 @@
 import React, { useEffect, useState } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
-import { Clock, Star, Eye, ChevronRight } from 'lucide-react';
+import { Clock, Star, ChevronRight } from 'lucide-react';
+import { WatchedEye } from '@/components/watched-eye';
+import { readWatchedState, type WatchedState } from '@/lib/watched-state';
 
 interface RecentItem {
   id: string;
@@ -12,7 +14,7 @@ interface RecentItem {
   year: string;
   type: string;
   rating?: number;
-  watched?: boolean;
+  watched?: WatchedState;
 }
 
 export function RecentlyViewed() {
@@ -26,7 +28,7 @@ export function RecentlyViewed() {
         const parsed: RecentItem[] = JSON.parse(stored);
         const slice = parsed.slice(0, 25).map(item => ({
           ...item,
-          watched: localStorage.getItem(`watched-${item.id}`) === 'true',
+          watched: readWatchedState(item.id),
         }));
         setItems(slice);
         const ratings: Record<string, number> = {};
@@ -41,7 +43,10 @@ export function RecentlyViewed() {
     const onStorage = (e: StorageEvent) => {
       if (e.key === 'recently-viewed' && e.newValue) {
         try {
-          const slice = (JSON.parse(e.newValue) as RecentItem[]).slice(0, 25);
+          // Recompute the eye here too — the stored list doesn't carry it, so
+          // reusing the raw entries dropped every eye when another tab wrote.
+          const slice = (JSON.parse(e.newValue) as RecentItem[]).slice(0, 25)
+            .map(item => ({ ...item, watched: readWatchedState(item.id) }));
           setItems(slice);
         } catch { /* ignore */ }
       }
@@ -124,8 +129,8 @@ export function RecentlyViewed() {
                           <span className="text-[10px] font-bold text-blue-400">{userRating}</span>
                         </div>
                       )}
-                      {item.watched && (
-                        <Eye className="h-3.5 w-3.5 text-blue-400" />
+                      {item.watched && item.watched !== 'none' && (
+                        <WatchedEye state={item.watched} className="h-3.5 w-3.5" />
                       )}
                     </div>
                   </div>

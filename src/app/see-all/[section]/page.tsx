@@ -5,7 +5,9 @@ import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import Image from 'next/image';
 import Link from 'next/link';
 import { Movie } from '@/lib/types';
-import { Star, ChevronLeft, Eye } from 'lucide-react';
+import { Star, ChevronLeft } from 'lucide-react';
+import { WatchedEye } from '@/components/watched-eye';
+import { readWatchedState, readEpisodeProgress, loadEpisodeProgress, type WatchedState } from '@/lib/watched-state';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 
@@ -42,14 +44,24 @@ function ListItemSkeleton() {
 
 function MovieListItem({ movie }: { movie: Movie }) {
   const [userRating, setUserRating] = React.useState<number | undefined>();
-  const [watched, setWatched] = React.useState(false);
+  const [watched, setWatched] = React.useState<WatchedState>('none');
+  const [progress, setProgress] = React.useState<string | null>(null);
 
   React.useEffect(() => {
     try {
-      if (localStorage.getItem(`watched-${movie.id}`) === 'true') setWatched(true);
+      setWatched(readWatchedState(movie.id));
+      const known = readEpisodeProgress(movie.id);
+      setProgress(known);
       const r = localStorage.getItem(`movie-rating-${movie.id}`);
       if (r) setUserRating(Number(r));
+      if (known) return;
     } catch { /* ignore */ }
+
+    // Episode total wasn't cached — go and get it rather than fall back to a
+    // bare count, which reads as a different kind of fact beside the fractions.
+    let alive = true;
+    loadEpisodeProgress(movie.id).then(p => { if (alive) setProgress(p); }).catch(() => { /* ignore */ });
+    return () => { alive = false; };
   }, [movie.id]);
 
   return (
@@ -78,10 +90,19 @@ function MovieListItem({ movie }: { movie: Movie }) {
               <span className="text-xs font-bold text-blue-400">{userRating}</span>
             </div>
           )}
-          {watched && (
+          {watched !== 'none' && (
+            // A row has room for the words a card can't spare. A part-watched
+            // show gets the count, not "Watching" — someone who saw one episode
+            // for a guest star isn't watching it, and the number says so.
             <div className="flex items-center gap-1 text-blue-400">
-              <Eye className="h-3.5 w-3.5" />
-              <span className="text-xs font-semibold">Watched</span>
+              <WatchedEye state={watched} className="h-3.5 w-3.5" />
+              {/* The eye is right immediately; the fraction waits for the total
+                  rather than showing a placeholder it will have to replace. */}
+              {(watched === 'complete' || progress) && (
+                <span className="text-xs font-semibold">
+                  {watched === 'partial' ? progress : 'Watched'}
+                </span>
+              )}
             </div>
           )}
         </div>
