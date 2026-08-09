@@ -3,6 +3,7 @@ import { prisma } from '@/lib/db';
 import { ok, err } from '@/lib/api-response';
 import { getCurrentUser } from '@/lib/auth-utils';
 import { MediaType } from '@/generated/prisma/client';
+import { canonicalId, legacyTwin } from '@/lib/media-id';
 
 export async function DELETE(
   req: NextRequest,
@@ -11,7 +12,7 @@ export async function DELETE(
   const auth = await getCurrentUser(req);
   if (!auth) return err('Unauthorized', 401);
 
-  const { id: listId, tmdbId } = await params;
+  const { id: listId, tmdbId: rawId } = await params;
   const mediaType = new URL(req.url).searchParams.get('mediaType') as MediaType | null;
   if (!mediaType || !['MOVIE', 'SHOW'].includes(mediaType)) return err('mediaType query param required');
 
@@ -19,8 +20,14 @@ export async function DELETE(
   if (!list) return err('List not found', 404);
   if (list.userId !== auth.sub) return err('Forbidden', 403);
 
+  // Both id forms — see the favorites route for why.
+  const tmdbId = canonicalId(rawId);
+  const ids = [tmdbId];
+  const twin = legacyTwin(tmdbId);
+  if (twin) ids.push(twin);
+
   const deleted = await prisma.customListItem.deleteMany({
-    where: { listId, tmdbId, mediaType },
+    where: { listId, tmdbId: { in: ids }, mediaType },
   });
 
   if (deleted.count > 0) {

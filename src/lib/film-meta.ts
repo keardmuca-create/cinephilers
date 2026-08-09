@@ -1,5 +1,6 @@
 import { prisma } from './db';
 import { MediaType } from '@/generated/prisma/client';
+import { canonicalId } from './media-id';
 import type { ItemMeta } from '@/app/api/meta/[id]/route';
 
 // Persist what a title IS, so the server can answer questions the database
@@ -28,9 +29,16 @@ export async function saveFilmMeta(meta: ItemMeta): Promise<void> {
     seasonCounts: meta.seasonCounts ?? undefined,
   };
 
+  // Keyed by the canonical id, never the id the caller happened to ask with.
+  // The meta endpoints answer to a bare numeric id too (they parse it fine), so
+  // without this a request for "1170608" wrote a second row for a title that
+  // already had one under "tmdb-1170608" — invisible to every lookup, and how
+  // 14 duplicate rows accumulated.
+  const tmdbId = canonicalId(meta.id);
+
   await prisma.filmMeta.upsert({
-    where: { tmdbId: meta.id },
-    create: { tmdbId: meta.id, ...data },
+    where: { tmdbId },
+    create: { tmdbId, ...data },
     update: data,
   });
 }

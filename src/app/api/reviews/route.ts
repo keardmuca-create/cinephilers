@@ -5,6 +5,7 @@ import { getCurrentUser } from '@/lib/auth-utils';
 import { MediaType } from '@/generated/prisma/client';
 import { sanitizeText } from '@/lib/sanitize';
 import { rateLimit } from '@/lib/rate-limit';
+import { canonicalId, isRateableMediaId, legacyTwin } from '@/lib/media-id';
 
 export async function POST(req: NextRequest) {
   const auth = await getCurrentUser(req);
@@ -16,11 +17,16 @@ export async function POST(req: NextRequest) {
   const body = await req.json().catch(() => null);
   if (!body) return err('Invalid JSON');
 
-  const { tmdbId, mediaType, body: reviewBody, containsSpoiler } = body as {
+  const { tmdbId: rawId, mediaType, body: reviewBody, containsSpoiler } = body as {
     tmdbId: string; mediaType: string; body: string; containsSpoiler?: boolean;
   };
-  if (!tmdbId || !mediaType || !reviewBody) return err('tmdbId, mediaType, and body are required');
+  if (!rawId || !mediaType || !reviewBody) return err('tmdbId, mediaType, and body are required');
   if (!['MOVIE', 'SHOW'].includes(mediaType)) return err('mediaType must be MOVIE or SHOW');
+  // Fold a bare numeric id into `tmdb-{n}` before it reaches the database. A row
+  // written under the other form is invisible to every page that looks the title
+  // up by its canonical id, which is how 14 watchlist rows went missing.
+  const tmdbId = canonicalId(String(rawId));
+  if (!isRateableMediaId(tmdbId)) return err('Invalid tmdbId');
   const cleanBody = sanitizeText(reviewBody);
   if (cleanBody.length < 10) return err('Review must be at least 10 characters');
   if (cleanBody.length > 5000) return err('Review must be under 5000 characters');
@@ -57,13 +63,19 @@ export async function DELETE(req: NextRequest) {
   if (!auth) return err('Unauthorized', 401);
 
   const url = new URL(req.url);
-  const tmdbId = url.searchParams.get('tmdbId');
+  const rawId = url.searchParams.get('tmdbId');
   const mediaType = url.searchParams.get('mediaType');
-  if (!tmdbId || !mediaType) return err('tmdbId and mediaType are required');
+  if (!rawId || !mediaType) return err('tmdbId and mediaType are required');
   if (!['MOVIE', 'SHOW'].includes(mediaType)) return err('mediaType must be MOVIE or SHOW');
 
+  // Both forms, so a delete can still reach a row written before ids were folded.
+  const tmdbId = canonicalId(rawId);
+  const ids = [tmdbId];
+  const twin = legacyTwin(tmdbId);
+  if (twin) ids.push(twin);
+
   const { count } = await prisma.review.deleteMany({
-    where: { userId: auth.sub, tmdbId, mediaType: mediaType as MediaType },
+    where: { userId: auth.sub, tmdbId: { in: ids }, mediaType: mediaType as MediaType },
   });
   if (count > 0) {
     await prisma.user.update({
