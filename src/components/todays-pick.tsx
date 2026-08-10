@@ -1,6 +1,6 @@
 "use client"
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { Star, Sparkles, Loader2, Film, Check, Lock, MoreHorizontal } from 'lucide-react';
@@ -14,6 +14,30 @@ import { isEpisodeId, getAddedAt } from '@/lib/media-id';
 import { appendWatchLog } from '@/lib/watch-log';
 import { toast } from '@/hooks/use-toast';
 import { TodaysPickHelp } from '@/components/todays-pick-help';
+
+const sleep = (ms: number) => new Promise<void>(r => setTimeout(r, ms));
+
+// The reel's timing, in one place so the shape of it is readable.
+//
+// Fast enough at the start that no individual poster registers, then five steps
+// of easing where they begin to resolve, then a pause and one last move. Roughly
+// 2.1s in total — long enough to be an event, short enough that a daily ritual
+// doesn't become a toll. The floor matters more than the number: the reel plays
+// out even when the answer came back in 200ms, so the moment is the same length
+// on every connection.
+const ROLL_FAST_MS = 70;
+const ROLL_FAST_MIN_MS = 770;
+const ROLL_EASE_MS = [95, 125, 165, 215, 280];
+const NUDGE_PAUSE_MS = 200;
+const NUDGE_HOLD_MS = 260;
+// A request that never answers still has to end in a landing rather than a reel
+// that spins for the rest of the session.
+const ROLL_SPIN_CAP_MS = 6000;
+// What the wait costs when there are no posters to flick through.
+const ROLL_TOTAL_MS =
+  ROLL_FAST_MIN_MS +
+  ROLL_EASE_MS.reduce((a, b) => a + b, 0) +
+  NUDGE_PAUSE_MS + NUDGE_HOLD_MS;
 
 // Stable per-day seed so the pick can't be rerolled — same movie all day,
 // a new one tomorrow.
@@ -359,13 +383,66 @@ export function TodaysPick() {
   // The roll should look like a roll. Flicking through real posters from the
   // user's own watchlist while the request is in flight turns a spinner into the
   // thing it is actually doing — and they are already loaded, so it costs nothing.
-  useEffect(() => {
-    if (!generating || deckPosters.length === 0) { setShuffleAt(-1); return; }
+  //
+  // It used to run at a flat 110ms for exactly as long as the network took, then
+  // stop dead the instant the answer arrived. That reads as a cut, not a result.
+  // A reel holds you with the SLOWDOWN — the moment you start being able to read
+  // the posters — so the schedule below is fast, then eases out, then appears to
+  // stop and moves one more time. That last nudge is the whole trick.
+  const deckRef = useRef<string[]>([]);
+  useEffect(() => { deckRef.current = deckPosters; }, [deckPosters]);
+  // The poster the reel should come to rest on: the film you actually got. Set
+  // by the fetch, read by the reel's final frame — whichever finishes first.
+  const landingRef = useRef<string | null>(null);
+  const [landed, setLanded] = useState<string | null>(null);
+
+  // `ready` resolves when the pick is in hand. The reel spins until then — it is
+  // the deceleration that has to be uninterrupted, not the whole animation, and a
+  // reel that stops on time and then sits frozen waiting for the network is worse
+  // than one that never stopped. So the fast phase is a floor AND a wait, and the
+  // ease-out only begins once there is something to land on.
+  const runRoll = async (ready: Promise<unknown>) => {
+    let done = false;
+    ready.then(() => { done = true; }, () => { done = true; });
+    const deck = deckRef.current;
+    // A tap per frame as it slows. Only on the easing steps: seventeen buzzes is
+    // a phone malfunctioning, six is a reel ticking down. No-ops where the API
+    // isn't supported, which includes iOS.
+    const tick = () => { try { navigator.vibrate?.(8); } catch { /* ignore */ } };
+
+    if (deck.length === 0) {
+      const t0 = Date.now();
+      while (!done && Date.now() - t0 < ROLL_SPIN_CAP_MS) await sleep(60);
+      await sleep(Math.max(0, ROLL_TOTAL_MS - (Date.now() - t0)));
+      return;
+    }
+
     let i = 0;
+    setLanded(null);
     setShuffleAt(0);
-    const t = setInterval(() => { i = (i + 1) % deckPosters.length; setShuffleAt(i); }, 110);
-    return () => clearInterval(t);
-  }, [generating, deckPosters]);
+    const step = async (ms: number, buzz = false) => {
+      i = (i + 1) % deck.length;
+      setShuffleAt(i);
+      if (buzz) tick();
+      await sleep(ms);
+    };
+
+    // Fast for at least ROLL_FAST_MIN_MS, and beyond that for as long as the
+    // request takes — capped, so a request that never answers still resolves into
+    // a landing rather than spinning forever.
+    const t0 = Date.now();
+    do { await step(ROLL_FAST_MS); }
+    while ((Date.now() - t0 < ROLL_FAST_MIN_MS || !done) && Date.now() - t0 < ROLL_SPIN_CAP_MS);
+
+    for (const ms of ROLL_EASE_MS) await step(ms, true);
+
+    // Looks stopped…
+    await sleep(NUDGE_PAUSE_MS);
+    // …and isn't. Land on the film itself if we already know it.
+    if (landingRef.current) { setLanded(landingRef.current); tick(); }
+    else await step(0, true);
+    await sleep(NUDGE_HOLD_MS);
+  };
 
   // Lead with a different KIND of fact each day, but only ever show one that's
   // actually true for this film — falling through to the next kind otherwise.
@@ -399,6 +476,9 @@ export function TodaysPick() {
     setPickFact(null);
   };
 
+  // Restoring today's already-locked pick on load, which appears immediately —
+  // there is no roll to wait for, and animating a decision made hours ago would
+  // be a lie. The reel's own path through this lives in generate().
   const showPick = async (tmdbId: string) => {
     try {
       const r = await fetch(`/api/movies/${tmdbId}`);
@@ -472,25 +552,53 @@ export function TodaysPick() {
     setEmptyWatchlist(false);
     setNoReleased(false);
     setAllRecent(false);
+    // Decide first, roll second. Rolling for two seconds and then saying "nothing
+    // to pick" would spend the best moment in the app on a dead end.
     const result = await pickWatchlistId(recentIds);
     if (result === 'empty-list') { setEmptyWatchlist(true); setGenerating(false); return; }
     if (result === 'none-released') { setNoReleased(true); setGenerating(false); return; }
     if (result === 'all-recent') { setAllRecent(true); setGenerating(false); return; }
-    try {
-      // Record my roll — the server returns the AUTHORITATIVE pick (mine, or the
-      // one already locked in today on another device), and I show that.
-      const res = await fetchWithAuth('/api/daily-pick', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ tmdbId: result.id, mediaType: result.id.startsWith('tmdb-tv-') ? 'SHOW' : 'MOVIE' }),
-      });
-      const json = res.ok ? await res.json() : null;
-      const authoritativeId = (json?.data as { tmdbId: string } | null)?.tmdbId ?? result.id;
-      await showPick(authoritativeId);
-    } catch {
-      await showPick(result.id);
+
+    // The reel and the request run together, and the reveal waits for whichever
+    // takes longer. On a fast connection that is always the reel, which is the
+    // point — the moment lasts the same on every device.
+    landingRef.current = null;
+
+    // Everything the reveal needs, as one promise the reel can watch.
+    const pick = (async () => {
+      let id = result.id;
+      try {
+        // Record my roll — the server returns the AUTHORITATIVE pick (mine, or the
+        // one already locked in today on another device), and I show that.
+        const res = await fetchWithAuth('/api/daily-pick', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ tmdbId: result.id, mediaType: result.id.startsWith('tmdb-tv-') ? 'SHOW' : 'MOVIE' }),
+        });
+        const json = res.ok ? await res.json() : null;
+        id = (json?.data as { tmdbId: string } | null)?.tmdbId ?? result.id;
+      } catch { /* fall back to my own roll */ }
+
+      const r = await fetch(`/api/movies/${id}`);
+      const m = await r.json();
+      const movie = m && !m.error ? (m as Movie) : null;
+      // Told to the reel before it lands, so it comes to rest on the poster of the
+      // film you actually got rather than whichever one it was showing.
+      landingRef.current = movie?.poster ?? null;
+      return { id, movie };
+    })();
+
+    const roll = runRoll(pick);
+    const { id, movie: picked } = await pick.catch(() => ({ id: result.id, movie: null as Movie | null }));
+    await roll;
+
+    if (picked) {
+      setMovie(picked);
+      try { setMarkedWatched(localStorage.getItem(`watched-${id}`) === 'true'); } catch { /* ignore */ }
+      loadFact(id, picked);
     }
     setGenerating(false);
+    setLanded(null);
   };
 
   // ── Revealed movie: the same section as the banner, so the poster wall stays
@@ -526,7 +634,10 @@ export function TodaysPick() {
               taller than the section had ever been. The poster, type sizes, gaps
               and button all give a little back so the section stays the size it
               was and only its contents changed. */}
-          <div className="relative w-full mx-auto max-w-xs rounded-[1.6rem] bg-card border border-border/60 shadow-2xl p-3.5 flex flex-col gap-2">
+          {/* The reveal gets a beat of its own. The reel lands, then the card
+              arrives — without it the whole thing changes in one frame and the
+              landing has nothing to land INTO. */}
+          <div className="relative w-full mx-auto max-w-xs rounded-[1.6rem] bg-card border border-border/60 shadow-2xl p-3.5 flex flex-col gap-2 animate-in fade-in zoom-in-95 duration-300">
             <HelpButton onOpen={() => setHelpOpen(true)} />
 
             <span className="self-start bg-primary text-primary-foreground px-2.5 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-widest">
@@ -642,8 +753,12 @@ export function TodaysPick() {
             Shaped 2:3, because that is what goes in it — as a square it cropped
             every poster to a fragment, and the slot read as an icon badge rather
             than a place a film is about to appear. */}
-        <div className="relative w-20 aspect-[2/3] rounded-xl bg-primary/15 border border-primary/25 flex items-center justify-center overflow-hidden shrink-0">
-          {shuffleAt >= 0 && deckPosters[shuffleAt] ? (
+        {/* The window grows a fraction on the last frame, so the reel doesn't
+            just stop — it arrives. */}
+        <div className={`relative w-20 aspect-[2/3] rounded-xl bg-primary/15 border flex items-center justify-center overflow-hidden shrink-0 transition-all duration-300 ${landed ? 'border-primary scale-105' : 'border-primary/25'}`}>
+          {landed ? (
+            <Image src={landed} alt="" fill className="object-cover" sizes="64px" />
+          ) : shuffleAt >= 0 && deckPosters[shuffleAt] ? (
             <Image src={deckPosters[shuffleAt]} alt="" fill className="object-cover" sizes="64px" />
           ) : (
             <Sparkles className="h-8 w-8 text-primary" />
