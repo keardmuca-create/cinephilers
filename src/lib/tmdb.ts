@@ -927,7 +927,7 @@ export interface PersonCreditSection {
 
 const EXCLUDED_GENRE_IDS = new Set([10767, 10764, 10763, 10766, 99, 10402]); // talk, reality, news, soap, documentary, music
 
-const SECTION_ORDER = ['Actor', 'Director', 'Producer', 'Writer', 'Composer', 'Cinematographer', 'Editor'];
+const SECTION_ORDER = ['Actor', 'Director', 'Producer', 'Executive Producer', 'Writer', 'Composer', 'Cinematographer', 'Editor'];
 
 function isValidCredit(item: TmdbMovie & { job?: string; department?: string }): boolean {
   if (item.media_type !== 'movie' && item.media_type !== 'tv') return false;
@@ -944,12 +944,20 @@ function isValidCredit(item: TmdbMovie & { job?: string; department?: string }):
 function crewSectionLabel(job: string, department: string): string {
   const j = job.toLowerCase();
   if (j.includes('director') && !j.includes('photography') && !j.includes('casting')) return 'Director';
+  // Executive Producer stands apart, which is how Letterboxd files it too — for a
+  // working producer the two mean different jobs, and folding six exec credits
+  // into twenty-one producing ones loses the distinction entirely.
+  if (j.includes('executive producer')) return 'Executive Producer';
   if (j.includes('producer')) return 'Producer';
   if (['writer', 'screenplay', 'story', 'novel', 'characters', 'comic book', 'book', 'script'].some(k => j.includes(k))) return 'Writer';
   if (j.includes('composer') || j.includes('music composer') || j === 'original music') return 'Composer';
   if (j.includes('photography') || j.includes('cinematograph')) return 'Cinematographer';
   if (j === 'editor' || j === 'film editor' || j === 'editing') return 'Editor';
-  return department || 'Other';
+  // Everything else lands in one place rather than becoming a section of its own.
+  // Falling back to the raw department name spawned "Art 1", "Sound 1", "Crew 3"
+  // and a "Writing 1" sitting next to "Writer 17" — sections that exist to hold a
+  // single credit, which is the opposite of what sections are for.
+  return 'Other';
 }
 
 function buildCredit(item: TmdbMovie & { character?: string; job?: string }, role?: string): PersonCreditItem {
@@ -968,29 +976,108 @@ function buildCredit(item: TmdbMovie & { character?: string; job?: string }, rol
   };
 }
 
-// Upcoming = a confirmed future release date. No date = treat as released to avoid
-// misclassifying old films where TMDB omits the date in combined_credits.
-function isUpcoming(item: { release_date?: string; first_air_date?: string }): boolean {
+// TMDB statuses that mean "not out yet", for both films and shows.
+const UNRELEASED_STATUS = new Set([
+  'Planned', 'In Production', 'Post Production', 'Rumored',
+]);
+
+// Upcoming = a confirmed future release date, or — when there is no date at all —
+// a production status that says it hasn't happened yet.
+//
+// The no-date case used to read as RELEASED, on the reasoning that old films
+// sometimes lose their date in combined_credits. But an undated credit is far
+// more often the opposite: TMDB leaves the date empty for announced films that
+// aren't scheduled, so Barbie 2, Wonka 2 and Untitled Top Gun 3 all sat in their
+// stars' Released sections. Thirteen such credits on Margot Robbie alone.
+//
+// A missing date can't tell the two apart, so it isn't asked to. combined_credits
+// omits `status`, but the film and show endpoints carry it, and the undated set is
+// small — a dozen at worst on a heavily-booked star — so those get looked up and
+// the answer comes from TMDB rather than from a guess. Old films with a lost date
+// come back "Released" and correctly stay put.
+function isUpcoming(
+  item: { id: number; media_type?: string; release_date?: string; first_air_date?: string },
+  statusById: Map<string, string>,
+): boolean {
   const date = item.release_date ?? item.first_air_date ?? '';
-  if (!date) return false;
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  return new Date(date) > today;
+  if (date) {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    return new Date(date) > today;
+  }
+  const status = statusById.get(`${item.media_type}:${item.id}`);
+  return status ? UNRELEASED_STATUS.has(status) : false;
 }
+
+// Never more than this many status lookups for one person, so a pathological
+// filmography can't turn one page into a hundred TMDB calls.
+const MAX_STATUS_LOOKUPS = 24;
+
+async function fetchStatuses(
+  items: { id: number; media_type?: string; release_date?: string; first_air_date?: string }[],
+): Promise<Map<string, string>> {
+  const undated = new Map<string, { id: number; type: string }>();
+  for (const it of items) {
+    if (it.release_date || it.first_air_date) continue;
+    if (it.media_type !== 'movie' && it.media_type !== 'tv') continue;
+    undated.set(`${it.media_type}:${it.id}`, { id: it.id, type: it.media_type });
+  }
+
+  const keys = [...undated.keys()].slice(0, MAX_STATUS_LOOKUPS);
+  const out = new Map<string, string>();
+  await Promise.all(
+    keys.map(async key => {
+      const { id, type } = undated.get(key)!;
+      try {
+        const detail = await tmdbFetch<{ status?: string }>(`/${type}/${id}`);
+        if (detail.status) out.set(key, detail.status);
+      } catch { /* leave it unknown — it stays in Released, as before */ }
+    }),
+  );
+  return out;
+}
+
+// TMDB's department names, in the vocabulary this page uses for its sections.
+const DEPARTMENT_SECTION: Record<string, string> = {
+  Acting: 'Actor',
+  Directing: 'Director',
+  Production: 'Producer',
+  Writing: 'Writer',
+  Sound: 'Composer',
+  Camera: 'Cinematographer',
+  Editing: 'Editor',
+};
 
 export async function getPersonCredits(personId: number): Promise<{
   name: string;
   profileImage: string;
+  /** Everything below comes from the same /person call the page already made. */
+  biography: string;
+  birthday: string;
+  deathday: string;
+  placeOfBirth: string;
+  knownFor: string;
   sections: PersonCreditSection[];
   upcoming: PersonCreditSection[];
 }> {
   const [person, raw] = await Promise.all([
-    tmdbFetch<{ name: string; profile_path: string | null }>(`/person/${personId}`),
+    tmdbFetch<{
+      name: string;
+      profile_path: string | null;
+      biography?: string;
+      birthday?: string | null;
+      deathday?: string | null;
+      place_of_birth?: string | null;
+      known_for_department?: string;
+    }>(`/person/${personId}`),
     tmdbFetch<{
       cast: Array<TmdbMovie & { character?: string; media_type: string; department?: string }>;
       crew: Array<TmdbMovie & { job?: string; department?: string; media_type: string }>;
     }>(`/person/${personId}/combined_credits`),
   ]);
+
+  // One extra round of lookups, only for credits TMDB gave no date at all.
+  const statusById = await fetchStatuses([...(raw.cast ?? []), ...(raw.crew ?? [])]);
 
   const bySection: Record<string, Map<string, PersonCreditItem>> = {};
   const byUpcoming: Record<string, Map<string, PersonCreditItem>> = {};
@@ -1005,7 +1092,7 @@ export async function getPersonCredits(personId: number): Promise<{
     const title = item.title ?? item.name ?? '';
     if (!title) continue;
     const credit = buildCredit(item as TmdbMovie & { character?: string; job?: string });
-    const dest = isUpcoming(item) ? byUpcoming : bySection;
+    const dest = isUpcoming(item, statusById) ? byUpcoming : bySection;
     add(dest, 'Actor', credit.id, credit);
   }
 
@@ -1015,21 +1102,34 @@ export async function getPersonCredits(personId: number): Promise<{
     if (!title) continue;
     const label = crewSectionLabel(item.job ?? '', item.department ?? '');
     const credit = buildCredit(item as TmdbMovie & { character?: string; job?: string }, item.job);
-    const dest = isUpcoming(item) ? byUpcoming : bySection;
+    const dest = isUpcoming(item, statusById) ? byUpcoming : bySection;
     add(dest, label, credit.id, credit);
   }
 
   const sortByYear = (credits: PersonCreditItem[]) =>
     credits.sort((a, b) => (b.year || '0').localeCompare(a.year || '0'));
 
+  // What this person is known for goes first. The order was hardcoded with Actor
+  // at the top, so Christopher Nolan's page opened on his handful of cameos and
+  // you had to scroll past them to reach the films he directed.
+  const known = DEPARTMENT_SECTION[person.known_for_department ?? ''] ?? '';
+  const order = known
+    ? [known, ...SECTION_ORDER.filter(l => l !== known)]
+    : SECTION_ORDER;
+
   const toSections = (map: Record<string, Map<string, PersonCreditItem>>): PersonCreditSection[] => [
-    ...SECTION_ORDER.filter(l => map[l]).map(l => ({ label: l, credits: sortByYear([...map[l].values()]) })),
-    ...Object.keys(map).filter(l => !SECTION_ORDER.includes(l)).sort().map(l => ({ label: l, credits: sortByYear([...map[l].values()]) })),
+    ...order.filter(l => map[l]).map(l => ({ label: l, credits: sortByYear([...map[l].values()]) })),
+    ...Object.keys(map).filter(l => !order.includes(l)).sort().map(l => ({ label: l, credits: sortByYear([...map[l].values()]) })),
   ];
 
   return {
     name: person.name,
     profileImage: profileUrl(person.profile_path),
+    biography: person.biography ?? '',
+    birthday: person.birthday ?? '',
+    deathday: person.deathday ?? '',
+    placeOfBirth: person.place_of_birth ?? '',
+    knownFor: person.known_for_department ?? '',
     sections: toSections(bySection),
     upcoming: toSections(byUpcoming),
   };
