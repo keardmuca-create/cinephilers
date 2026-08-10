@@ -10,6 +10,8 @@ import { persistRefine } from '@/lib/refine-sort';
 import { toast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/auth-context';
 import { RefineSheet, type RefineValue, type SortOption, type CountOption } from '@/components/refine-sheet';
+import { WatchedEye } from '@/components/watched-eye';
+import { readWatchedState } from '@/lib/watched-state';
 
 interface ListItem {
   movieId: string;
@@ -110,6 +112,38 @@ export default function ListDetailPage() {
   }, [id]);
 
   const isOwner = !!user && !!ownerId && user.id === ownerId;
+
+  // How much of this list YOU have seen — on your own lists and, more usefully,
+  // on somebody else's, where "how much of this have I got through" is the
+  // question you actually opened it with. Read from your own watched state, so
+  // it means the same thing whoever built the list.
+  //
+  // A show counts only once finished, the same rule the person page uses: three
+  // episodes in isn't "seen it", and shouldn't move a completion figure.
+  //
+  // Computed after mount rather than during render — localStorage doesn't exist
+  // on the server, and reading it while rendering would break hydration.
+  const [watchedPct, setWatchedPct] = useState<{ done: number; total: number } | null>(null);
+  useEffect(() => {
+    if (!list || list.items.length === 0) { setWatchedPct(null); return; }
+    let done = 0;
+    for (const it of list.items) {
+      if (readWatchedState(it.movieId) === 'complete') done++;
+    }
+    setWatchedPct({ done, total: list.items.length });
+    // Re-count when a watch is marked elsewhere in the app.
+    const recount = () => {
+      let n = 0;
+      for (const it of list.items) if (readWatchedState(it.movieId) === 'complete') n++;
+      setWatchedPct({ done: n, total: list.items.length });
+    };
+    window.addEventListener('cinephilers-watched-changed', recount);
+    window.addEventListener('cinephilers-db-restored', recount);
+    return () => {
+      window.removeEventListener('cinephilers-watched-changed', recount);
+      window.removeEventListener('cinephilers-db-restored', recount);
+    };
+  }, [list]);
 
   // Delete the ENTIRE list (not the films inside — those have their own remove
   // buttons and stay in the library). Confirmed, then server-first, then drop
@@ -263,6 +297,18 @@ export default function ListDetailPage() {
               )}
               <span>·</span>
               <span>{list.items.length} title{list.items.length !== 1 ? 's' : ''}</span>
+              {/* Same badge the person page uses for the same question, so it
+                  needs no explaining. Hidden at zero: "0%" on a list you have
+                  just opened is a scold, not information. */}
+              {watchedPct && watchedPct.done > 0 && (
+                <>
+                  <span>·</span>
+                  <span className="flex items-center gap-1 text-blue-400 font-bold">
+                    <WatchedEye state="complete" className="h-3 w-3" />
+                    {Math.round((watchedPct.done / watchedPct.total) * 100)}%
+                  </span>
+                </>
+              )}
             </div>
           )}
         </div>

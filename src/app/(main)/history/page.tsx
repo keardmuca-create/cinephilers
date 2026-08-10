@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { History, Search, SlidersHorizontal, X, Trash2, Film, ChevronLeft, Check } from 'lucide-react';
+import { History, Search, SlidersHorizontal, X, Trash2, Film, ChevronLeft } from 'lucide-react';
 import type { ItemMeta } from '@/app/api/meta/[id]/route';
 import { fetchWithAuth } from '@/lib/fetch-with-auth';
 import { persistRefine } from '@/lib/refine-sort';
@@ -153,6 +153,10 @@ function HistoryCard({ row, meta, userRating, onRemove }: {
     : row.status === 'up-to-date' ? 'Up to date'
     : null;
 
+  // No release date at all means an older title whose date TMDB never carried —
+  // treat that as out, since the alternative is hiding scores on old films.
+  const isReleased = !meta.releaseDate || new Date(meta.releaseDate).getTime() <= Date.now();
+
   const removeShow = async (ensureOk: (res: Response) => Promise<void>) => {
     // Every episode this row folds in, plus the show's own watched record when
     // one exists (whole-show marks still write it). One bulk request, not one
@@ -247,7 +251,13 @@ function HistoryCard({ row, meta, userRating, onRemove }: {
         )}
         <p className="text-xs text-muted-foreground mb-1.5">{meta.year}</p>
         <div className="flex items-center gap-2.5 flex-wrap">
-          {meta.tmdbRating !== undefined && (
+          {/* 0.0 is kept for anything that's OUT: an obscure 1985 series really
+              does have no votes, and a missing star there is ambiguous — you
+              can't tell "nobody rated it" from "this is broken". A film that
+              isn't released yet is a different case: it has no score because it
+              cannot have one, and printing 0.0 states a verdict on something
+              nobody has seen. */}
+          {meta.tmdbRating !== undefined && isReleased && (
             <div className="flex items-center gap-0.5">
               <span className="text-xs text-yellow-400 font-bold">★</span>
               <span className="text-xs font-bold text-foreground">{meta.tmdbRating.toFixed(1)}</span>
@@ -259,11 +269,24 @@ function HistoryCard({ row, meta, userRating, onRemove }: {
               <span className="text-xs font-bold text-blue-400">{userRating}</span>
             </div>
           )}
-          {statusLabel ? (
-            <div className="flex items-center gap-1 text-primary">
-              <Check className="h-3.5 w-3.5" />
-              <span className="text-xs font-semibold">{statusLabel}</span>
-            </div>
+          {/* This was inverted: a show you'd finished got a tick and no eye,
+              while one you were a single episode into got the solid eye and the
+              word "Watched". The eye follows the same rule as everywhere else —
+              filled only when it's finished — and a show you're partway through
+              says nothing here, because the "1 / 14 episodes" line above it has
+              already said the only true thing there is to say. */}
+          {row.isShow ? (
+            row.status === 'completed' ? (
+              <div className="flex items-center gap-1 text-blue-400">
+                <WatchedEye state="complete" className="h-3.5 w-3.5" />
+                <span className="text-xs font-semibold">Completed</span>
+              </div>
+            ) : (
+              <div className="flex items-center gap-1 text-blue-400">
+                <WatchedEye state="partial" className="h-3.5 w-3.5" />
+                {statusLabel && <span className="text-xs font-semibold">{statusLabel}</span>}
+              </div>
+            )
           ) : (
             <div className="flex items-center gap-1 text-blue-400">
               <WatchedEye state="complete" className="h-3.5 w-3.5" />
