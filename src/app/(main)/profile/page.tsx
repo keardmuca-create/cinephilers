@@ -10,7 +10,7 @@ import { BadgeList, FounderChip, type EarnedBadge } from '@/components/badge-row
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import Link from 'next/link';
-import { Settings, Star, Film, List, MessageSquare, ChevronRight, Award, History, Bookmark, User, Eye, Plus, Heart, TrendingUp, Download, Upload, Trash2, Share2, Repeat, Loader2 } from 'lucide-react';
+import { Settings, Star, Film, List, MessageSquare, ChevronRight, Award, History, Bookmark, User, Plus, Heart, TrendingUp, Download, Upload, Trash2, Share2, Repeat, Loader2 } from 'lucide-react';
 import { ImportDialog } from '@/components/import-dialog';
 import { FavoritesSection } from '@/components/favorites-section';
 import { BarChart, Bar, XAxis, ResponsiveContainer, Cell, YAxis, Tooltip as ChartTooltip } from 'recharts';
@@ -24,6 +24,7 @@ import { collapseShows, statusFor, type CollapsedRow, type ShowProgressStatus } 
 import { useAuth } from '@/contexts/auth-context';
 import { readSavedRefine, applyRefineSort } from '@/lib/refine-sort';
 import type { RefineValue } from '@/components/refine-sheet';
+import { WatchedEye } from '@/components/watched-eye';
 
 // How long a rebuild trigger waits for its siblings before the profile rebuilds.
 // Long enough to swallow the focus/visibilitychange/db-restored burst of a PWA open,
@@ -128,7 +129,7 @@ function DiarySection() {
                   <span className="text-xs font-bold text-blue-400">{item.userRating}</span>
                 </div>
               )}
-              <Eye className="h-3.5 w-3.5 text-blue-400" />
+              <WatchedEye state="complete" className="h-3.5 w-3.5" />
             </div>
             <p className="text-xs font-semibold font-headline line-clamp-2 group-hover:text-primary transition-colors leading-snug">
               {item.title} {item.year ? `(${item.year})` : ''}
@@ -1460,7 +1461,12 @@ export default function ProfilePage() {
                       <span className="text-xs font-bold text-blue-400">{item.rating}</span>
                     </div>
                   )}
-                  <Eye className="h-3.5 w-3.5 text-blue-400" />
+                  {/* A show you're partway through gets the hollow eye, the same
+                      as everywhere else — the episode count below says how far. */}
+                  <WatchedEye
+                    state={item.isShow && item.status !== 'completed' ? 'partial' : 'complete'}
+                    className="h-3.5 w-3.5"
+                  />
                 </div>
                 <p className="text-xs font-semibold font-headline line-clamp-2 group-hover:text-primary transition-colors leading-snug">
                   {item.title} {item.year ? `(${item.year})` : ''}
@@ -1523,7 +1529,7 @@ export default function ProfilePage() {
                     <span className="text-xs text-blue-400 font-bold">★</span>
                     <span className="text-xs font-bold text-blue-400">{item.userRating}</span>
                   </div>
-                  <Eye className="h-3.5 w-3.5 text-blue-400" />
+                  <WatchedEye state="complete" className="h-3.5 w-3.5" />
                 </div>
                 <p className="text-xs font-semibold font-headline line-clamp-2 group-hover:text-primary transition-colors leading-snug">
                   {item.title} {item.year ? `(${item.year})` : ''}

@@ -10,6 +10,7 @@ import { fetchWithAuth } from '@/lib/fetch-with-auth';
 import { batchFetchMeta } from '@/lib/meta-batch';
 import { Button } from '@/components/ui/button';
 import { SpoilerWrap } from '@/components/spoiler-wrap';
+import { WatchedEye } from '@/components/watched-eye';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -190,7 +191,7 @@ function ActivityCard({ item, onToggleLike, onRemove }: {
           <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
             {item.type === 'activity' && (
               <>
-                {item.watched && <Eye className="h-3.5 w-3.5 text-blue-400" />}
+                {item.watched && <WatchedEye state="complete" className="h-3.5 w-3.5" />}
                 {item.rating !== undefined && <Star className="h-3.5 w-3.5 text-yellow-400 fill-current" />}
                 {item.reviewBody && <MessageSquare className="h-3.5 w-3.5 text-green-400" />}
                 <span>{[item.watched ? 'Watched' : null, item.rating !== undefined ? `Rated ${item.rating}/10` : null, item.reviewBody ? 'Reviewed' : null].filter(Boolean).join(' · ')}</span>
@@ -295,7 +296,7 @@ function EpisodeBatchCard({ item }: { item: UnifiedItem }) {
             {item.user.displayName ?? item.user.username}
           </Link>
           <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-            <Eye className="h-3.5 w-3.5 text-blue-400" />
+            <WatchedEye state="complete" className="h-3.5 w-3.5" />
             {rated > 0 && <Star className="h-3.5 w-3.5 text-yellow-400 fill-current" />}
             <span className="truncate">{label}</span>
             <span>·</span>

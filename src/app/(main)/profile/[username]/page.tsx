@@ -13,6 +13,7 @@ import { relativeTime } from '@/lib/activity';
 import { fetchWithAuth } from '@/lib/fetch-with-auth';
 import { batchFetchMeta } from '@/lib/meta-batch';
 import { BadgeList, FounderChip, type EarnedBadge } from '@/components/badge-row';
+import { WatchedEye } from '@/components/watched-eye';
 
 interface ProfileUser {
   id: string;
@@ -209,7 +210,7 @@ function RecentCard({ item }: { item: RecentItem }) {
       <div className="flex-1 min-w-0">
         {meta ? <p className="text-sm font-bold group-hover:text-primary transition-colors line-clamp-1">{meta.title}</p> : <div className="h-3 bg-muted rounded-full w-3/4 animate-pulse" />}
         <div className="flex items-center gap-1.5 mt-1 text-xs">
-          {item.watched && <Eye className="h-3 w-3 text-blue-400 shrink-0" />}
+          {item.watched && <WatchedEye state="complete" className="h-3 w-3" />}
           {item.rating != null && <Star className="h-3 w-3 text-yellow-400 fill-current shrink-0" />}
           {item.reviewBody && <MessageSquare className="h-3 w-3 text-green-400 shrink-0" />}
           <span className="text-muted-foreground truncate">{label}</span>
@@ -363,9 +364,13 @@ function SectionRow({ item, section }: { item: SectionItem; section: SectionKey 
   const progress = episodes > 0
     ? (item.totalEpisodes ? `${episodes} / ${item.totalEpisodes} episodes` : `${episodes} episodes`)
     : null;
+  // A show you're partway through says nothing here — the "1 / 14 episodes" line
+  // above already said it, and "Watched" beside a hollow eye contradicts both.
+  const partWatched = section === 'watched' && episodes > 0 && item.status !== 'completed';
   const label = section === 'rewatched' && item.rewatchCount ? `Rewatched ×${item.rewatchCount}`
     : item.status === 'completed' ? 'Completed'
     : item.status === 'up-to-date' ? 'Up to date'
+    : partWatched ? ''
     : cfg.label;
   const dateLabel = item.date ? new Date(item.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : null;
   return (
@@ -385,7 +390,15 @@ function SectionRow({ item, section }: { item: SectionItem; section: SectionKey 
             <span className="flex items-center gap-1 text-sm font-bold text-blue-400"><Star className="h-3.5 w-3.5 fill-current" />{item.score}</span>
           )}
           {showLabel && (
-            <span className="flex items-center gap-1 text-xs font-semibold text-blue-400"><StatusIcon className="h-3.5 w-3.5" />{label}</span>
+            <span className="flex items-center gap-1 text-xs font-semibold text-blue-400">
+              {/* Someone else's watch history reads by the same rule as your own:
+                  filled means they finished it, hollow means they're partway in.
+                  Rewatched and the rest keep their own icons. */}
+              {section === 'watched'
+                ? <WatchedEye state={episodes > 0 && item.status !== 'completed' ? 'partial' : 'complete'} className="h-3.5 w-3.5" />
+                : <StatusIcon className="h-3.5 w-3.5" />}
+              {label}
+            </span>
           )}
         </div>
         {dateLabel && <p className="text-xs text-muted-foreground">Added on {dateLabel}</p>}

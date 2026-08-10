@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback, Suspense } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Star, ChevronLeft, Search, SlidersHorizontal, X, Film, Eye } from 'lucide-react';
+import { Star, ChevronLeft, Search, SlidersHorizontal, X, Film } from 'lucide-react';
 import { normalizeLocalMediaIds, getRatedAt } from '@/lib/media-id';
 import { persistRefine } from '@/lib/refine-sort';
 import { batchFetchMeta } from '@/lib/meta-batch';
@@ -11,6 +11,7 @@ import { getItemType, sideOf, SIDE_TYPES, TYPE_LABELS, type TypeFilter, type Med
 import { collapseRatings, type CollapsedRating } from '@/lib/collapse-ratings';
 import { MediaToggle } from '@/components/media-toggle';
 import { RefineSheet, type RefineValue, type SortOption, type CountOption } from '@/components/refine-sheet';
+import { WatchedEye } from '@/components/watched-eye';
 
 const SORT_OPTIONS: SortOption[] = [
   { value: 'rating',  label: 'Your rating' },
@@ -93,7 +94,7 @@ function ItemCard({ item }: { item: RatedItem }) {
             </div>
           )}
           <div className="flex items-center gap-1 text-blue-400">
-            <Eye className="h-3.5 w-3.5" />
+            <WatchedEye state="complete" className="h-3.5 w-3.5" />
             <span className="text-xs font-semibold">Watched</span>
           </div>
         </div>

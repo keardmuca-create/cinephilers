@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { ChevronLeft, Repeat, Film, Search, X, ChevronDown, ChevronUp, Trash2, SlidersHorizontal, Eye } from 'lucide-react';
+import { ChevronLeft, Repeat, Film, Search, X, ChevronDown, ChevronUp, Trash2, SlidersHorizontal } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { toast } from '@/hooks/use-toast';
 import { fetchWithAuth } from '@/lib/fetch-with-auth';
@@ -13,6 +13,7 @@ import { removeManualWatch } from '@/lib/media-id';
 import { readSavedRefine, persistRefine } from '@/lib/refine-sort';
 import { RefineSheet, type RefineValue } from '@/components/refine-sheet';
 import { useAuth } from '@/contexts/auth-context';
+import { WatchedEye } from '@/components/watched-eye';
 
 interface DiaryTitle {
   tmdbId: string;
@@ -251,7 +252,7 @@ export default function DiaryPage() {
                             <span className="text-xs font-bold text-blue-400">{item.userRating}</span>
                           </div>
                         )}
-                        <Eye className="h-3.5 w-3.5 text-blue-400" />
+                        <WatchedEye state="complete" className="h-3.5 w-3.5" />
                         {item.lastWatchedAt && (
                           <span className="text-xs text-muted-foreground">
                             {item.count > 1 ? 'Last on' : 'Watched'} {fmtDate(item.lastWatchedAt)}

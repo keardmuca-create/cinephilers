@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { History, Eye, Search, SlidersHorizontal, X, Trash2, Film, ChevronLeft, Check } from 'lucide-react';
+import { History, Search, SlidersHorizontal, X, Trash2, Film, ChevronLeft, Check } from 'lucide-react';
 import type { ItemMeta } from '@/app/api/meta/[id]/route';
 import { fetchWithAuth } from '@/lib/fetch-with-auth';
 import { persistRefine } from '@/lib/refine-sort';
@@ -14,6 +14,7 @@ import { getItemType, sideOf, SIDE_TYPES, TYPE_LABELS, type TypeFilter, type Med
 import { collapseShows, type CollapsedRow } from '@/lib/collapse-shows';
 import { MediaToggle } from '@/components/media-toggle';
 import { RefineSheet, type RefineValue, type SortOption, type CountOption } from '@/components/refine-sheet';
+import { WatchedEye } from '@/components/watched-eye';
 
 // ─── Refine config ──────────────────────────────────────────────────────────
 
@@ -265,7 +266,7 @@ function HistoryCard({ row, meta, userRating, onRemove }: {
             </div>
           ) : (
             <div className="flex items-center gap-1 text-blue-400">
-              <Eye className="h-3.5 w-3.5" />
+              <WatchedEye state="complete" className="h-3.5 w-3.5" />
               <span className="text-xs font-semibold">Watched</span>
             </div>
           )}
