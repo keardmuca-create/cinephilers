@@ -3,7 +3,8 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
-import { Heart, Star, Eye, Bookmark, Film, MoreHorizontal, Share2, Trash2, Users, MessageSquare, Loader2, UserPlus, Bell, User, Repeat, Sparkles } from 'lucide-react';
+import { Heart, Star, Eye, Bookmark, Film, MoreHorizontal, Share2, Trash2, Users, MessageSquare, Loader2, UserPlus, Bell, User, Repeat, Sparkles, SlidersHorizontal } from 'lucide-react';
+import { RefineSheet, type RefineValue } from '@/components/refine-sheet';
 import { dismissActivity, getDismissed, relativeTime } from '@/lib/activity';
 import { useAuth } from '@/contexts/auth-context';
 import { fetchWithAuth } from '@/lib/fetch-with-auth';
@@ -513,11 +514,28 @@ function NotificationCard({ notif, onFollowBack, onRequestHandled }: {
 
 type Tab = 'activity' | 'notifications';
 
+// Who the feed is showing. Deliberately not "Friends": following is one-way —
+// you can follow someone who has never heard of you — and calling that a
+// friendship is the app telling you something untrue. It also keeps the word
+// free for what it will have to mean once DMs land, which is people who follow
+// you back.
+//
+// A fourth "Friends" chip for mutuals was considered and held: with six people
+// followed and five following back, it would show almost the same feed as
+// Following, and two chips producing one list reads as a bug rather than a
+// distinction. It earns its place when following and mutuals actually diverge.
+type Who = 'all' | 'following' | 'me';
+
+const WHO_LABEL: Record<Who, string> = { all: 'All', following: 'Following', me: 'You' };
+
 const FEED_CACHE_KEY = 'friend-feed-cache';
 
 export default function SocialPage() {
   const { user, loading: authLoading } = useAuth();
   const [tab, setTab] = useState<Tab>('activity');
+  // 'all' is what the feed has always shown, so nobody's screen changes on deploy.
+  const [who, setWho] = useState<Who>('all');
+  const [refineOpen, setRefineOpen] = useState(false);
 
   // Activity feed (server-fed: my activity + the people I follow)
   const [friendFeed, setFriendFeed] = useState<FeedItem[]>([]);
@@ -639,6 +657,14 @@ export default function SocialPage() {
       .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
   }, [friendFeed, user]);
 
+  // The chips narrow what's already loaded — every item arrived tagged with
+  // isMe, so switching is instant and costs no request.
+  const shownActivity = React.useMemo(() => {
+    if (who === 'all') return mergedActivity;
+    if (who === 'me') return mergedActivity.filter(i => i.isMe);
+    return mergedActivity.filter(i => !i.isMe);
+  }, [mergedActivity, who]);
+
   // Toggle a like; the server returns the new state + count, written back into
   // friendFeed (the single source of truth) so every view re-renders.
   const likeBusy = useRef(new Set<string>());
@@ -745,6 +771,25 @@ export default function SocialPage() {
       {/* Activity tab */}
       {tab === 'activity' && (
         <>
+          {/* Same Refine control as the four list pages, rather than a row of
+              chips of its own — one vocabulary for "narrow what I'm looking at",
+              and a place for an activity-type filter to live later. Only offered
+              once the feed holds more than one kind of person. */}
+          {mergedActivity.length > 0 && mergedActivity.some(i => !i.isMe) && (
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-semibold text-muted-foreground">
+                {who === 'all' ? 'Everyone' : WHO_LABEL[who]}
+              </span>
+              <button
+                onClick={() => setRefineOpen(true)}
+                className="flex items-center gap-1.5 text-xs font-semibold text-primary hover:opacity-80 transition-opacity shrink-0"
+              >
+                <SlidersHorizontal className="h-3.5 w-3.5" />
+                Refine
+              </button>
+            </div>
+          )}
+
           {activityLoading && friendFeed.length === 0 && (
             <div className="space-y-3">
               {[1, 2, 3].map(i => (
@@ -783,9 +828,30 @@ export default function SocialPage() {
             </div>
           )}
 
-          {mergedActivity.length > 0 && (
+          {/* A filter that empties the screen has to say so, or it reads as the
+              feed having broken. */}
+          {!activityLoading && mergedActivity.length > 0 && shownActivity.length === 0 && (
+            <div className="flex flex-col items-center justify-center py-16 gap-3 text-center">
+              <p className="text-sm text-muted-foreground max-w-xs">
+                {who === 'me'
+                  ? "You haven't watched, rated or reviewed anything in the last 30 days."
+                  : 'Nobody you follow has been active in the last 30 days.'}
+              </p>
+              {who === 'following' ? (
+                <Button asChild size="sm" variant="outline" className="rounded-xl font-bold gap-2">
+                  <Link href="/friends"><UserPlus className="h-4 w-4" />Find People to Follow</Link>
+                </Button>
+              ) : (
+                <Button size="sm" variant="outline" className="rounded-xl font-bold" onClick={() => setWho('all')}>
+                  Show everything
+                </Button>
+              )}
+            </div>
+          )}
+
+          {shownActivity.length > 0 && (
             <div className="space-y-3">
-              {mergedActivity.map(item => (
+              {shownActivity.map(item => (
                 item.type === 'watchlist_batch'
                   ? <WatchlistBatchCard key={item.id} item={item} />
                   : item.type === 'episode_batch'
@@ -830,6 +896,27 @@ export default function SocialPage() {
           )}
         </>
       )}
+
+      {/* The feed loads one 30-day window and nothing more, so these counts
+          describe the whole thing rather than a page of it. */}
+      <RefineSheet
+        open={refineOpen}
+        onClose={() => setRefineOpen(false)}
+        total={shownActivity.length}
+        unit="update"
+        typeLabel="Show"
+        sortOptions={[]}
+        typeOptions={[
+          { value: 'all', label: 'Everyone', count: mergedActivity.length },
+          { value: 'following', label: 'Following', count: mergedActivity.filter(i => !i.isMe).length },
+          { value: 'me', label: 'You', count: mergedActivity.filter(i => i.isMe).length },
+        ]}
+        genreOptions={[]}
+        value={{ sortField: '', sortDir: 'desc', type: who, genre: 'any' }}
+        // Clear resets type to 'any', which isn't one of the three — anything
+        // unrecognised means everyone, which is what Clear should do anyway.
+        onApply={(v: RefineValue) => setWho(v.type === 'following' || v.type === 'me' ? v.type : 'all')}
+      />
     </main>
   );
 }

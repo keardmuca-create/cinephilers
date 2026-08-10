@@ -24,6 +24,10 @@ interface RefineSheetProps {
   genreOptions: CountOption[];  // first entry is the 'any' option
   value: RefineValue;
   onApply: (v: RefineValue) => void;
+  /** What the count at the top is counting. "title" everywhere but the feed. */
+  unit?: string;
+  /** Heading over the type list. "Type" on lists, "Show" on the feed. */
+  typeLabel?: string;
 }
 
 type Section = 'sort' | 'type' | 'genre' | null;
@@ -32,7 +36,7 @@ type Section = 'sort' | 'type' | 'genre' | null;
 // Ratings). Each list passes its own sort options and the per-type / per-genre
 // counts; the sheet only handles the UI + pending state and reports the chosen
 // filters back through onApply.
-export function RefineSheet({ open, onClose, total, sortOptions, typeOptions, genreOptions, value, onApply }: RefineSheetProps) {
+export function RefineSheet({ open, onClose, total, sortOptions, typeOptions, genreOptions, value, onApply, unit = 'title', typeLabel: typeHeading = 'Type' }: RefineSheetProps) {
   const defaults: RefineValue = {
     sortField: sortOptions[0]?.value ?? '',
     sortDir: 'desc',
@@ -45,7 +49,9 @@ export function RefineSheet({ open, onClose, total, sortOptions, typeOptions, ge
 
   // Re-seed the pending state from the applied value each time the sheet opens.
   useEffect(() => {
-    if (open) { setPending(value); setExpanded('sort'); }
+    // Open on the first section that exists, so a sheet without a sort question
+    // doesn't open showing nothing.
+    if (open) { setPending(value); setExpanded(sortOptions.length > 1 ? 'sort' : 'type'); }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
@@ -64,18 +70,28 @@ export function RefineSheet({ open, onClose, total, sortOptions, typeOptions, ge
         {/* Header: Cancel · Clear · Refine */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 shrink-0">
           <button onClick={onClose} className="text-sm text-gray-500 hover:text-gray-800 transition-colors">Cancel</button>
-          <button onClick={() => setPending(defaults)} className="text-sm text-gray-500 hover:text-gray-800 transition-colors">Clear</button>
+          {/* Clear earns its place only when there are several things to clear.
+              With one list of options it does exactly what picking the first
+              option does, which is a third button for a choice already on
+              screen. */}
+          {(sortOptions.length > 1 || genreOptions.length > 1) ? (
+            <button onClick={() => setPending(defaults)} className="text-sm text-gray-500 hover:text-gray-800 transition-colors">Clear</button>
+          ) : <span />}
           <button onClick={() => { onApply(pending); onClose(); }} className="text-sm font-bold text-primary hover:opacity-80 transition-opacity">Refine</button>
         </div>
 
         <div className="overflow-y-auto overscroll-contain flex-1">
           <div className="px-5 py-3 border-b border-gray-100 text-sm font-bold text-gray-900">
-            {total} title{total !== 1 ? 's' : ''}
+            {total} {unit}{total !== 1 ? 's' : ''}
           </div>
 
-          {/* Sort by */}
+          {/* Sort by — hidden when there is nothing to choose between. The feed
+              has one meaningful order (newest first), so it opens straight on the
+              question that does have an answer. */}
+          {sortOptions.length > 1 && (
           <SectionHeader label="Sort by" value={sortLabel} open={expanded === 'sort'} onClick={() => toggle('sort')} />
-          {expanded === 'sort' && (
+          )}
+          {sortOptions.length > 1 && expanded === 'sort' && (
             <div className="bg-gray-50 border-b border-gray-100">
               {sortOptions.map(o => {
                 const sel = pending.sortField === o.value;
@@ -104,7 +120,7 @@ export function RefineSheet({ open, onClose, total, sortOptions, typeOptions, ge
           {/* Type — only when the list actually has more than just "Any" */}
           {typeOptions.length > 1 && (
             <>
-              <SectionHeader label="Type" value={typeLabel} open={expanded === 'type'} onClick={() => toggle('type')} />
+              <SectionHeader label={typeHeading} value={typeLabel} open={expanded === 'type'} onClick={() => toggle('type')} />
               {expanded === 'type' && (
                 <CountList options={typeOptions} selected={pending.type} onPick={v => setPending(p => ({ ...p, type: v }))} />
               )}
