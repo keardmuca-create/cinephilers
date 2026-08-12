@@ -3,7 +3,7 @@
 import React, { useEffect, useState } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
-import { Clock, Star, ChevronRight } from 'lucide-react';
+import { Clock, Star, ChevronRight, Film, User } from 'lucide-react';
 import { WatchedEye } from '@/components/watched-eye';
 import { readWatchedState, type WatchedState } from '@/lib/watched-state';
 
@@ -97,16 +97,30 @@ export function RecentlyViewed() {
         {items.map(item => {
           const userRating = userRatings[item.id];
           return (
-            <Link key={item.id} href={`/movie/${item.id}`} className="block shrink-0 group">
+            // People are stored here too — the person page adds itself with
+            // type 'person' and a BARE tmdb id. Sending those to /movie/{id}
+            // canonicalised them into `tmdb-{id}` and opened whichever film owns
+            // that number: tapping Johnny Depp (85) opened Raiders of the Lost
+            // Ark. Same id space, different thing.
+            <Link key={item.id} href={item.type === 'person' ? `/person/${item.id}` : `/movie/${item.id}`} className="block shrink-0 group">
               <div className="w-36 flex flex-col">
-                <div className="relative aspect-[2/3] overflow-hidden rounded-xl bg-muted shadow-lg movie-card-hover mb-2.5">
-                  <Image
-                    src={item.poster}
-                    alt={item.title}
-                    fill
-                    className="object-cover"
-                    sizes="176px"
-                  />
+                {/* Guarded: a person with no photo on TMDB stores an empty
+                    string, and Next's Image treats that as a request to
+                    re-download the whole page. */}
+                <div className="relative aspect-[2/3] overflow-hidden rounded-xl bg-muted shadow-lg movie-card-hover mb-2.5 flex items-center justify-center">
+                  {item.poster ? (
+                    <Image
+                      src={item.poster}
+                      alt={item.title}
+                      fill
+                      className="object-cover"
+                      sizes="176px"
+                    />
+                  ) : item.type === 'person' ? (
+                    <User className="h-9 w-9 text-muted-foreground/50" />
+                  ) : (
+                    <Film className="h-9 w-9 text-primary/60" />
+                  )}
                 </div>
                 <div className="space-y-0.5 px-0.5">
                   <div className="flex items-start justify-between gap-1">

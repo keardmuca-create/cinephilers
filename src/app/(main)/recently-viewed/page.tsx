@@ -4,7 +4,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
-import { ChevronLeft, Clock, Star, Search, X } from 'lucide-react';
+import { ChevronLeft, Clock, Star, Search, X, Film, User } from 'lucide-react';
 
 interface RecentItem {
   id: string;
@@ -17,9 +17,20 @@ interface RecentItem {
 
 function ItemCard({ item, userRating }: { item: RecentItem; userRating?: number }) {
   return (
-    <Link href={`/movie/${item.id}`} className="group flex items-center gap-4 py-3.5">
-      <div className="relative w-16 aspect-[2/3] overflow-hidden rounded-lg bg-muted shadow-md shrink-0">
-        <Image src={item.poster} alt={item.title} fill className="object-cover" sizes="64px" />
+    // See the note in components/recently-viewed.tsx: a person is stored with a
+    // bare tmdb id, and /movie/{id} would open the film that shares that number.
+    <Link href={item.type === 'person' ? `/person/${item.id}` : `/movie/${item.id}`} className="group flex items-center gap-4 py-3.5">
+      {/* Guarded: not everything here has a picture. A person with no photo on
+          TMDB stores an empty string, and Next's Image treats that as a request
+          to re-download the whole page. */}
+      <div className="relative w-[4.5rem] aspect-[2/3] overflow-hidden rounded-lg bg-muted shadow-md shrink-0 flex items-center justify-center">
+        {item.poster ? (
+          <Image src={item.poster} alt={item.title} fill className="object-cover" sizes="72px" />
+        ) : item.type === 'person' ? (
+          <User className="h-6 w-6 text-muted-foreground/50" />
+        ) : (
+          <Film className="h-6 w-6 text-primary/60" />
+        )}
       </div>
       <div className="flex-1 min-w-0">
         <h3 className="text-sm font-semibold font-headline line-clamp-2 group-hover:text-primary transition-colors leading-snug mb-0.5">

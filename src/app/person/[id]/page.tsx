@@ -99,7 +99,7 @@ function factsLine(d: PersonData): string {
 function CreditSkeleton() {
   return (
     <div className="flex gap-4 px-6 py-3.5 border-b border-border">
-      <Skeleton className="w-16 shrink-0 rounded-lg" style={{ aspectRatio: '2/3' }} />
+      <Skeleton className="w-[4.5rem] shrink-0 rounded-lg" style={{ aspectRatio: '2/3' }} />
       <div className="flex-1 space-y-2 py-1">
         <Skeleton className="h-4 w-3/4" />
         <Skeleton className="h-3 w-1/4" />
@@ -130,13 +130,14 @@ function CreditRow({ credit, watched, userRating }: {
       href={`/movie/${credit.id}`}
       className="group flex items-center gap-4 px-6 py-3.5 border-b border-border hover:bg-muted/40 transition-colors"
     >
-      {/* 64px, matching the See All lists. Up from 48px, which was the smallest
-          poster in the app — small enough that you read the titles and never
-          looked at the artwork. Deliberately not History's 80px: this page is a
-          long scroll of dozens of credits, and that size turns it into a wall. */}
-      <div className="relative w-16 shrink-0 rounded-lg overflow-hidden shadow-sm bg-muted/60 border border-border" style={{ aspectRatio: '2/3' }}>
+      {/* 72px. Up from 48, which was the smallest poster in the app — small
+          enough that you read the titles and never looked at the artwork.
+          Deliberately short of History's 80px, which Keard found too big here:
+          this page is a long scroll of dozens of credits, and at that size it
+          becomes a wall. */}
+      <div className="relative w-[4.5rem] shrink-0 rounded-lg overflow-hidden shadow-sm bg-muted/60 border border-border" style={{ aspectRatio: "2/3" }}>
         {credit.poster ? (
-          <Image src={credit.poster} alt={credit.title} fill className="object-cover" sizes="64px" />
+          <Image src={credit.poster} alt={credit.title} fill className="object-cover" sizes="72px" />
         ) : (
           <div className="w-full h-full flex items-center justify-center">
             <Film className="h-5 w-5 text-primary/60" />
