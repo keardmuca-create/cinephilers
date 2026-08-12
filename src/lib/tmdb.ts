@@ -925,9 +925,58 @@ export interface PersonCreditSection {
   credits: PersonCreditItem[];
 }
 
-const EXCLUDED_GENRE_IDS = new Set([10767, 10764, 10763, 10766, 99, 10402]); // talk, reality, news, soap, documentary, music
+// Talk, reality, news, soap, music. Documentary (99) used to be here and no
+// longer is: it took West of Memphis and Lost in La Mancha off Depp's page
+// entirely, and both Letterboxd and IMDb list them. Now that appearing as
+// yourself has a section of its own, a documentary sorts by what the person did
+// in it rather than being binned by genre — and people who love documentaries
+// get them back.
+const EXCLUDED_GENRE_IDS = new Set([10767, 10764, 10763, 10766, 10402]);
 
-const SECTION_ORDER = ['Actor', 'Director', 'Producer', 'Executive Producer', 'Writer', 'Composer', 'Cinematographer', 'Editor'];
+// Self last: it is not a role, and nobody opens a person's page to see the
+// awards ceremonies they attended. Archive footage folds into it rather than
+// splitting further — "Self (archive footage)" is still them as themselves, and
+// two sections for one idea is a distinction without a difference here.
+const SECTION_ORDER = ['Actor', 'Director', 'Producer', 'Executive Producer', 'Writer', 'Composer', 'Cinematographer', 'Editor', 'Self'];
+
+/**
+ * Turning up as yourself is not a role, and a filmography is a list of roles.
+ *
+ * The genre filter already removes most of this — talk shows, reality, news,
+ * documentaries — but it can only judge what TMDB tells it, and combined_credits
+ * returns an EMPTY genre list often enough to matter. That is how Johnny Depp's
+ * page came to list The Oscars, dated 1953, a decade before he was born: an award
+ * ceremony with no genres attached, showing the series' first air date rather
+ * than the year of the four episodes he actually appeared in.
+ *
+ * Judged on the character rather than the genre, because the character is the
+ * thing that is actually true here. Every named part must be an appearance for
+ * the credit to go: "Self / William Blake" stays, because somewhere in there he
+ * played someone. "Self / Presenter" goes, because presenting is not a part
+ * either. Parentheticals — (uncredited), (archive footage), (voice) — are
+ * stripped before the comparison, since they describe the appearance rather than
+ * name a character.
+ */
+const DOCUMENTARY_GENRE_ID = 99;
+
+export function isSelfAppearance(character: string | undefined, genreIds?: number[]): boolean {
+  // A cast credit on a documentary with no character named at all is an
+  // interviewee or a narrator far more often than it is a part. TMDB leaves the
+  // field blank on five of Depp's — Deep Sea 3D, which he narrated, and the
+  // Chaplin documentary he is interviewed in among them — and without this they
+  // sit among the acting roles on the strength of a missing string. A dramatised
+  // documentary whose character TMDB forgot is the cost, and it is one chip away.
+  if (!character?.trim()) {
+    return genreIds?.includes(DOCUMENTARY_GENRE_ID) ?? false;
+  }
+  const parts = character
+    .split('/')
+    .map(p => p.replace(/\([^)]*\)/g, '').trim().toLowerCase())
+    .filter(Boolean);
+  if (parts.length === 0) return false;
+  const notARole = /^(self|himself|herself|themselves|presenter|host|co-host|guest|narrator|interviewee|commentator)\b/;
+  return parts.every(p => notARole.test(p));
+}
 
 function isValidCredit(item: TmdbMovie & { job?: string; department?: string }): boolean {
   if (item.media_type !== 'movie' && item.media_type !== 'tv') return false;
@@ -1093,7 +1142,11 @@ export async function getPersonCredits(personId: number): Promise<{
     if (!title) continue;
     const credit = buildCredit(item as TmdbMovie & { character?: string; job?: string });
     const dest = isUpcoming(item, statusById) ? byUpcoming : bySection;
-    add(dest, 'Actor', credit.id, credit);
+    // Appearing as yourself goes in its own section rather than sitting among the
+    // roles — which is how IMDb files it, and for Depp is the difference between
+    // an Actor list of ~100 and one of ~400. Nothing is thrown away: the chips
+    // put it one tap from the acting credits.
+    add(dest, isSelfAppearance(item.character, item.genre_ids) ? 'Self' : 'Actor', credit.id, credit);
   }
 
   for (const item of raw.crew ?? []) {

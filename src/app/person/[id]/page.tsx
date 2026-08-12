@@ -109,10 +109,12 @@ function CreditSkeleton() {
   );
 }
 
-function CreditRow({ credit, watched, userRating }: {
+function CreditRow({ credit, watched, userRating, upcoming }: {
   credit: PersonCreditItem;
   watched: WatchedState;
   userRating?: number;
+  /** Which tab this row is being shown under — decides what a missing year means. */
+  upcoming: boolean;
 }) {
   const [progress, setProgress] = useState<string | null>(null);
 
@@ -148,7 +150,13 @@ function CreditRow({ credit, watched, userRating }: {
         <h3 className="text-sm font-semibold font-headline line-clamp-2 group-hover:text-primary transition-colors leading-snug mb-0.5">
           {credit.title}
         </h3>
-        <p className="text-xs text-muted-foreground mb-1">{credit.year || 'TBA'}</p>
+        {/* "TBA" only where it can be true. TMDB sometimes marks a title
+            Released while recording no date for it — Baby Puffins & Bunny is one
+            — and "to be announced" on something already out reads as the wrong
+            tab rather than as missing data. Under Upcoming it means what it says. */}
+        {(credit.year || upcoming) && (
+          <p className="text-xs text-muted-foreground mb-1">{credit.year || 'TBA'}</p>
+        )}
         <div className="flex items-center gap-2 flex-wrap">
           {credit.rating > 0 && (
             <div className="flex items-center gap-0.5">
@@ -350,6 +358,7 @@ function SectionBlock({ section, upcomingSection, watchedMap, ratingsMap, tab, h
           credit={credit}
           watched={watchedMap[credit.id] ?? 'none'}
           userRating={ratingsMap[credit.id]}
+          upcoming={isUpcomingView}
         />
       ))}
     </div>
