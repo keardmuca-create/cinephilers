@@ -56,6 +56,35 @@ export async function sendVerificationEmail(to: string, token: string) {
   });
 }
 
+// Answering a support request AS Cinephilers.
+//
+// Replying from Gmail sends as whoever owns the mailbox, so users got a personal
+// name and a personal address back from an app they'd written to. Gmail's
+// "send mail as" is the usual fix and it refused every SMTP relay we tried;
+// this route sends through the same Resend API the app already uses for every
+// other email, which needs no relay and no third party.
+//
+// From support@, not noreply@: the whole point is that the person can write back,
+// and that address forwards to the support inbox.
+export async function sendSupportReply(opts: { to: string; subject: string; message: string }) {
+  const supportAddress = process.env.SUPPORT_FROM ?? 'Cinephilers <support@cinephilers.app>';
+  const message = escapeHtml(opts.message);
+
+  await getResend().emails.send({
+    from: supportAddress,
+    to: opts.to,
+    replyTo: supportAddress.replace(/^.*<|>$/g, ''),
+    subject: opts.subject,
+    html: `
+      <div style="font-family:sans-serif;max-width:480px;margin:0 auto;padding:32px 24px;background:#0a0a0a;color:#f5f5f5;border-radius:16px;">
+        <p style="margin:0;white-space:pre-wrap;line-height:1.6;">${message}</p>
+        <hr style="border:none;border-top:1px solid #222;margin:24px 0;" />
+        <p style="color:#444;font-size:12px;margin:0;">Cinephilers · <a href="${BASE_URL}" style="color:#666;">${BASE_URL}</a><br />You can reply to this email.</p>
+      </div>
+    `,
+  });
+}
+
 export async function sendSupportEmail(opts: { name: string; email: string; subject: string; message: string }) {
   const supportInbox = process.env.SUPPORT_EMAIL ?? 'onboarding@resend.dev';
   const name = escapeHtml(opts.name);

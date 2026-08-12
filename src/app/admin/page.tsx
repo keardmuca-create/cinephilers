@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
-import { Flag, Trash2, Check, X, Loader2, ShieldAlert, Users, Search, Ban, ShieldCheck, ChevronUp, ChevronDown, Database, RotateCcw } from 'lucide-react';
+import { Flag, Trash2, Check, X, Loader2, ShieldAlert, Users, Search, Ban, ShieldCheck, ChevronUp, ChevronDown, Database, RotateCcw, Mail } from 'lucide-react';
 import { useAuth } from '@/contexts/auth-context';
 import { fetchWithAuth } from '@/lib/fetch-with-auth';
 import { relativeTime } from '@/lib/activity';
@@ -52,10 +52,105 @@ const STATUS_COLOURS: Record<string, string> = {
   dismissed: 'bg-muted text-muted-foreground',
 };
 
+// Answering a support request as Cinephilers.
+//
+// Gmail sends as whoever owns the mailbox, so replying there gave users a
+// personal name and address back from an app they'd written to. Its "send mail
+// as" feature is the usual fix and it rejected every SMTP relay we tried. This
+// sends through the same Resend API the app already uses for every other email —
+// no relay, no third-party signup.
+//
+// Paste-in rather than an inbox on purpose: the notification email already has
+// the sender's address in it, and a stored-and-threaded support system is a day's
+// work for something that might see three messages a month. If it ever gets busy,
+// that's the moment to build the inbox.
+function SupportReply() {
+  const [to, setTo] = useState('');
+  const [subject, setSubject] = useState('');
+  const [message, setMessage] = useState('');
+  const [sending, setSending] = useState(false);
+  const [result, setResult] = useState<{ ok: boolean; text: string } | null>(null);
+
+  const send = async () => {
+    if (sending || !to.trim() || !subject.trim() || !message.trim()) return;
+    setSending(true);
+    setResult(null);
+    try {
+      const res = await fetchWithAuth('/api/admin/support-reply', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ to: to.trim(), subject: subject.trim(), message: message.trim() }),
+      });
+      const json = await res.json().catch(() => null);
+      if (!res.ok) {
+        setResult({ ok: false, text: json?.error ?? "Couldn't send the reply." });
+      } else {
+        setResult({ ok: true, text: `Sent to ${to.trim()}` });
+        setSubject('');
+        setMessage('');
+        setTo('');
+      }
+    } catch {
+      setResult({ ok: false, text: 'Network error. Check your connection.' });
+    } finally {
+      setSending(false);
+    }
+  };
+
+  return (
+    <div className="space-y-4 max-w-xl">
+      <p className="text-sm text-muted-foreground">
+        Goes out as <span className="font-semibold text-foreground">Cinephilers &lt;support@cinephilers.app&gt;</span>.
+        Replies come back to that address and forward to your inbox.
+      </p>
+
+      <div className="space-y-3">
+        <input
+          type="email"
+          value={to}
+          onChange={e => setTo(e.target.value)}
+          placeholder="Their email address"
+          className="w-full rounded-xl border border-border bg-background px-4 py-2.5 text-sm outline-none focus:border-primary"
+        />
+        <input
+          type="text"
+          value={subject}
+          onChange={e => setSubject(e.target.value)}
+          placeholder="Subject — e.g. Re: actors profiles"
+          className="w-full rounded-xl border border-border bg-background px-4 py-2.5 text-sm outline-none focus:border-primary"
+        />
+        <textarea
+          value={message}
+          onChange={e => setMessage(e.target.value)}
+          placeholder="Your reply"
+          rows={8}
+          className="w-full rounded-xl border border-border bg-background px-4 py-2.5 text-sm outline-none focus:border-primary resize-y"
+        />
+      </div>
+
+      <div className="flex items-center gap-3">
+        <button
+          onClick={send}
+          disabled={sending || !to.trim() || !subject.trim() || !message.trim()}
+          className="flex items-center gap-2 rounded-full bg-primary text-white px-5 py-2.5 text-sm font-bold disabled:opacity-40 transition-opacity"
+        >
+          {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Mail className="h-4 w-4" />}
+          {sending ? 'Sending…' : 'Send reply'}
+        </button>
+        {result && (
+          <span className={`text-sm font-semibold ${result.ok ? 'text-green-500' : 'text-destructive'}`}>
+            {result.text}
+          </span>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export default function AdminPage() {
   const { user, loading: authLoading } = useAuth();
   const router = useRouter();
-  const [tab, setTab] = useState<'reports' | 'users'>('reports');
+  const [tab, setTab] = useState<'reports' | 'users' | 'support'>('reports');
 
   // Reports state
   const [reports, setReports] = useState<Report[]>([]);
@@ -287,7 +382,15 @@ export default function AdminPage() {
         >
           <Users className="h-4 w-4" /> Users
         </button>
+        <button
+          onClick={() => setTab('support')}
+          className={`flex items-center gap-2 px-4 py-2 rounded-full text-sm font-semibold transition-colors ${tab === 'support' ? 'bg-primary text-white' : 'bg-muted text-muted-foreground hover:bg-muted/80'}`}
+        >
+          <Mail className="h-4 w-4" /> Support
+        </button>
       </div>
+
+      {tab === 'support' && <SupportReply />}
 
       {/* Reports tab */}
       {tab === 'reports' && (
