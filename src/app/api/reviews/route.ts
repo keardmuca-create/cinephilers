@@ -53,6 +53,54 @@ export async function POST(req: NextRequest) {
     });
   }
 
+  // Writing a review says you saw it — you cannot review what you have not
+  // watched, which is how IMDb reads it too. Until now a review on its own
+  // marked nothing, so anyone who wrote one without also touching the stars
+  // ended up with a review of a film missing from their own history. This is
+  // the same auto-mark a rating performs, by the same rules, and one-way in the
+  // same way: deleting the review afterwards does not unwatch the title, just
+  // as removing a rating does not.
+  const epMatch = /^(tmdb-tv-\d+)-S(\d+)E(\d+)$/.exec(tmdbId);
+  if (epMatch) {
+    const [, showTmdbId, season, episode] = epMatch;
+    await prisma.watchedEpisode.upsert({
+      where: {
+        userId_showTmdbId_season_episode: {
+          userId: auth.sub, showTmdbId, season: parseInt(season, 10), episode: parseInt(episode, 10),
+        },
+      },
+      create: { userId: auth.sub, showTmdbId, season: parseInt(season, 10), episode: parseInt(episode, 10) },
+      update: {},
+    });
+  } else if (mediaType === 'MOVIE') {
+    // upsert isn't atomic, so a double submit can have both calls try to INSERT
+    // and the loser hit the unique constraint. That only means it is already
+    // watched, so the P2002 conflict is success rather than a 500.
+    try {
+      await prisma.watchedItem.upsert({
+        where: { userId_tmdbId_mediaType: { userId: auth.sub, tmdbId, mediaType: mediaType as MediaType } },
+        create: { userId: auth.sub, tmdbId, mediaType: mediaType as MediaType },
+        update: {},
+      });
+      // Seed the diary too when this review created the first watch.
+      const hasEvent = await prisma.watchEvent.count({
+        where: { userId: auth.sub, tmdbId, mediaType: mediaType as MediaType },
+      });
+      if (hasEvent === 0) {
+        await prisma.watchEvent.create({
+          data: { userId: auth.sub, tmdbId, mediaType: mediaType as MediaType },
+        });
+      }
+    } catch (e) {
+      if (!(e && typeof e === 'object' && (e as { code?: string }).code === 'P2002')) throw e;
+    }
+  }
+  // Reviewing a SERIES deliberately falls through marking nothing. A show has no
+  // watched state of its own — it is the sum of its episodes, which is what the
+  // eye and the "3 / 73" are reading — so there is nothing here to write to, and
+  // marking all sixty-two episodes off one review would invent far more than it
+  // recorded. Rating a series declines for the same reason.
+
   return ok(review, 'Review saved', { status: 201 });
 }
 
