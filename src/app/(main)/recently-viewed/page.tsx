@@ -23,9 +23,9 @@ function ItemCard({ item, userRating }: { item: RecentItem; userRating?: number 
       {/* Guarded: not everything here has a picture. A person with no photo on
           TMDB stores an empty string, and Next's Image treats that as a request
           to re-download the whole page. */}
-      <div className="relative w-[4.5rem] aspect-[2/3] overflow-hidden rounded-lg bg-muted shadow-md shrink-0 flex items-center justify-center">
+      <div className="relative w-20 aspect-[2/3] overflow-hidden rounded-lg bg-muted shadow-md shrink-0 flex items-center justify-center">
         {item.poster ? (
-          <Image src={item.poster} alt={item.title} fill className="object-cover" sizes="72px" />
+          <Image src={item.poster} alt={item.title} fill className="object-cover" sizes="80px" />
         ) : item.type === 'person' ? (
           <User className="h-6 w-6 text-muted-foreground/50" />
         ) : (

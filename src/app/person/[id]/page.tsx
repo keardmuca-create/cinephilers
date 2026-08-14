@@ -132,14 +132,14 @@ function CreditRow({ credit, watched, userRating, upcoming }: {
       href={`/movie/${credit.id}`}
       className="group flex items-center gap-4 px-6 py-3.5 border-b border-border hover:bg-muted/40 transition-colors"
     >
-      {/* 72px. Up from 48, which was the smallest poster in the app — small
-          enough that you read the titles and never looked at the artwork.
-          Deliberately short of History's 80px, which Keard found too big here:
-          this page is a long scroll of dozens of credits, and at that size it
-          becomes a wall. */}
-      <div className="relative w-[4.5rem] shrink-0 rounded-lg overflow-hidden shadow-sm bg-muted/60 border border-border" style={{ aspectRatio: "2/3" }}>
+      {/* 80px, the size every list of titles in the app now uses. This page went
+          48 -> 72 and stopped short of 80 on the grounds that a person's page is
+          a long scroll and would become a wall; Keard's later call was that one
+          size everywhere beats a size tuned per page, and that a wall of posters
+          is what the artwork is for. */}
+      <div className="relative w-20 shrink-0 rounded-lg overflow-hidden shadow-sm bg-muted/60 border border-border" style={{ aspectRatio: "2/3" }}>
         {credit.poster ? (
-          <Image src={credit.poster} alt={credit.title} fill className="object-cover" sizes="72px" />
+          <Image src={credit.poster} alt={credit.title} fill className="object-cover" sizes="80px" />
         ) : (
           <div className="w-full h-full flex items-center justify-center">
             <Film className="h-5 w-5 text-primary/60" />

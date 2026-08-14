@@ -226,7 +226,7 @@ export default function DiaryPage() {
               <div key={item.tmdbId} className="py-3.5">
                 <div className="flex items-center gap-4">
                   <Link href={`/movie/${item.tmdbId}`} className="group flex items-center gap-4 flex-1 min-w-0">
-                    <div className="relative w-16 aspect-[2/3] overflow-hidden rounded-lg bg-muted shadow-md shrink-0">
+                    <div className="relative w-20 aspect-[2/3] overflow-hidden rounded-lg bg-muted shadow-md shrink-0">
                       {item.poster ? (
                         // eslint-disable-next-line @next/next/no-img-element
                         <img src={item.poster} alt={item.title} className="w-full h-full object-cover" />

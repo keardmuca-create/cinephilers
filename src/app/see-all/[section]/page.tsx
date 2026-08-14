@@ -32,7 +32,7 @@ function getSectionTitle(section: string, titleParam: string | null): string {
 function ListItemSkeleton() {
   return (
     <div className="flex gap-4 px-6 py-4 border-b border-border">
-      <Skeleton className="w-[4.5rem] rounded-xl shrink-0" style={{ aspectRatio: '2/3' }} />
+      <Skeleton className="w-20 rounded-xl shrink-0" style={{ aspectRatio: '2/3' }} />
       <div className="flex-1 space-y-2 py-1">
         <Skeleton className="h-4 w-3/4" />
         <Skeleton className="h-3 w-1/2" />
@@ -69,11 +69,13 @@ function MovieListItem({ movie }: { movie: Movie }) {
       href={`/movie/${movie.id}`}
       className="group flex items-center gap-4 px-6 py-3.5 border-b border-border hover:bg-muted/40 transition-colors"
     >
-      {/* 72px, matching the person page and Recently Viewed. These are the long
-          scrolling lists; Watch History and Ratings sit at 80 because they run to
-          a handful of rows rather than dozens. This was the last 64 left. */}
-      <div className="relative w-[4.5rem] shrink-0 rounded-lg overflow-hidden shadow-sm bg-muted" style={{ aspectRatio: '2/3' }}>
-        <Image src={movie.poster} alt={movie.title} fill className="object-cover" sizes="72px" />
+      {/* 80px — the size Watch History uses, and now the one every full list in
+          the app uses. See-all/{section}/page.tsx, this page, Recently Viewed,
+          Rewatched and My Reviews had drifted to 72, 72, 64 and 56 respectively;
+          a list is a list, and which one you happen to be looking at is not a
+          reason for the artwork to change size. */}
+      <div className="relative w-20 shrink-0 rounded-lg overflow-hidden shadow-sm bg-muted" style={{ aspectRatio: '2/3' }}>
+        <Image src={movie.poster} alt={movie.title} fill className="object-cover" sizes="80px" />
       </div>
       <div className="flex-1 min-w-0">
         <h3 className="text-sm font-semibold font-headline line-clamp-2 group-hover:text-primary transition-colors leading-snug mb-0.5">

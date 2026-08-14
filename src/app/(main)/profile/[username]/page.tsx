@@ -609,7 +609,7 @@ export default function PublicProfilePage() {
       <div className="bg-card rounded-2xl border border-border px-4">
         {Array.from({ length: 6 }).map((_, i) => (
           <div key={i} className="flex gap-4 py-3 border-b border-border last:border-0">
-            <div className="w-14 aspect-[2/3] rounded-lg bg-muted animate-pulse shrink-0" />
+            <div className="w-20 aspect-[2/3] rounded-lg bg-muted animate-pulse shrink-0" />
             <div className="flex-1 space-y-2 py-1">
               <div className="h-4 bg-muted rounded-full w-2/3 animate-pulse" />
               <div className="h-3 bg-muted rounded-full w-1/4 animate-pulse" />

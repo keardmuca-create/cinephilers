@@ -77,7 +77,7 @@ export default function ReviewsPage() {
       <div className="space-y-3">
         {reviews.map(r => (
           <Link key={r.movieId} href={`/movie/${r.movieId}`} className="group flex gap-4 p-4 rounded-2xl border border-border hover:bg-muted/40 transition-colors">
-            <div className="w-14 shrink-0 aspect-[2/3] rounded-lg overflow-hidden bg-muted">
+            <div className="w-20 shrink-0 aspect-[2/3] rounded-lg overflow-hidden bg-muted">
               {r.moviePoster ? (
                 <img src={r.moviePoster} alt={r.movieTitle} className="w-full h-full object-cover" />
               ) : (
