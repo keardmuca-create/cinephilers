@@ -41,6 +41,36 @@ const ROLL_TOTAL_MS =
 
 // Stable per-day seed so the pick can't be rerolled — same movie all day,
 // a new one tomorrow.
+// The banner and the revealed pick are two different JSX trees, and every time
+// one of them was tuned the other drifted — which is how pressing Generate came
+// to shrink the section by about ninety pixels. Shared here so the shell and the
+// card cannot disagree again: whatever changes, both states change with it.
+const PICK_SHELL =
+  'relative overflow-hidden rounded-[2.5rem] border border-primary/20 bg-gradient-to-br from-primary/10 to-accent/5 px-8 py-9 sm:px-12 sm:py-10';
+// One layout, two sets of contents. Both states are the same three slots in the
+// same order — a 2:3 window, a fixed text box, one button — so nothing about the
+// card can change when you press Generate: not its height, not the poster's
+// position, not where the button sits.
+//
+// Every previous attempt at this pinned a height instead, and a pinned height
+// only moves the problem: whichever state had less to say gained slack, the
+// slack got centred, and the poster shifted anyway. Matching the STRUCTURE means
+// there is no slack in either state to distribute.
+const PICK_CARD_BASE = 'relative mx-auto max-w-xs rounded-[1.6rem] bg-card border border-border/60 shadow-2xl';
+// Slot one. The reel spins here, and the poster lands here.
+const PICK_SLOT = 'relative w-20 shrink-0 aspect-[2/3] rounded-xl overflow-hidden shadow-lg bg-muted flex items-center justify-center';
+// Slot two. Fixed height, contents centred, sized for the busiest thing it ever
+// holds — a two-line title with a countdown, a year, a score and a reason under
+// it. A two-line title, a long fact or a missing year all change what this says
+// without changing what it measures.
+//
+// The banner has less to put in it and is centred in the same box, so it carries
+// a little air above and below its tagline. That air is in BOTH states, which is
+// the point: an identical gap before and after is not something moving.
+const PICK_TEXT = 'w-full h-[7.5rem] flex flex-col items-center justify-center gap-1 overflow-hidden';
+// Slot three. Same height in both states — only the label and colour differ.
+const PICK_BUTTON = 'w-full rounded-full h-12 font-bold text-base';
+
 function daySeed(): number {
   const n = new Date();
   return n.getFullYear() * 10000 + (n.getMonth() + 1) * 100 + n.getDate();
@@ -155,14 +185,19 @@ function watchlistFilmIds(): string[] {
 // twenty-four w185s did. Finer than this and faces stop being recognisable,
 // which is where a poster wall becomes confetti.
 //
-// Six rows. Tiles keep a poster's 2:3 shape, so the grid's height follows the
+// Eight rows. Tiles keep a poster's 2:3 shape, so the grid's height follows the
 // section's WIDTH, not its height — eight columns on a phone makes each tile
-// about 61px tall, and four rows of that left a bare strip of gradient across the
-// bottom of a section half as tall again. Better to overshoot and let the last
-// row clip: a wall that runs off the edge reads as a wall, and one that stops
-// short reads as a mistake.
+// about 61px tall, and the grid is anchored to the top, so any height the rows
+// do not reach is left as bare gradient. Four rows did that once and six did it
+// again the moment the card grew: 51px of empty pink under the wall.
+//
+// Eight covers the section with about seventy pixels to spare on a phone, so the
+// card can grow a line without stranding a strip again. Overshooting is the safe
+// direction — the last row simply clips, and a wall that runs off the edge reads
+// as a wall continuing behind the card, while one that stops short reads as a
+// mistake. Sixteen more w92 thumbnails is a few kilobytes.
 const WALL_COLS = 8;
-const WALL_ROWS = 6;
+const WALL_ROWS = 8;
 const WALL_TILES = WALL_COLS * WALL_ROWS;
 
 // Films Keard picked by name for the wall, plus the two series. Verified against
@@ -609,14 +644,11 @@ export function TodaysPick() {
   if (movie) {
     return (
       <section className="px-6 pt-6">
-        {/* Identical shell to the banner — same padding, same card width — so the
-            wall shows exactly as much of itself before and after Generate. When
-            this had its own tighter padding the card swelled to fill the section
-            and the wall shrank to a hairline. */}
-        {/* p-8, not px-8 py-9 — the extra vertical padding made the band of wall
-            above and below four pixels thicker than the sides, which is small
-            enough to look like a mistake rather than a choice. */}
-        <div className="relative overflow-hidden rounded-[2.5rem] border border-primary/20 bg-gradient-to-br from-primary/10 to-accent/5 p-8 sm:p-12">
+        {/* Literally the same shell as the banner now, not a copy of it that has
+            to be kept in step by hand. It had drifted to its own p-8 against the
+            banner's px-8 py-9, which cost eight more pixels on top of the card's
+            own shortfall. */}
+        <div className={PICK_SHELL}>
           <TodaysPickHelp open={helpOpen} onClose={() => setHelpOpen(false)} />
           <PosterWall posters={wallPosters} />
           {/* Label, then the poster with the day's two facts beside it, then the
@@ -637,74 +669,46 @@ export function TodaysPick() {
           {/* The reveal gets a beat of its own. The reel lands, then the card
               arrives — without it the whole thing changes in one frame and the
               landing has nothing to land INTO. */}
-          <div className="relative w-full mx-auto max-w-xs rounded-[1.6rem] bg-card border border-border/60 shadow-2xl p-3.5 flex flex-col gap-2 animate-in fade-in zoom-in-95 duration-300">
+          <div className={`${PICK_CARD_BASE} w-full p-5 flex flex-col items-center justify-center text-center gap-3 animate-in fade-in zoom-in-95 duration-300`}>
             <HelpButton onOpen={() => setHelpOpen(true)} />
 
-            <span className="self-start bg-primary text-primary-foreground px-2.5 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-widest">
-              Today&apos;s Pick
-            </span>
+            {/* Slot one of three, and the same element the reel was spinning in:
+                same width, same shape, same position. */}
+            <Link href={`/movie/${movie.id}`} className={PICK_SLOT}>
+              {movie.poster
+                ? <Image src={movie.poster} alt={movie.title} width={80} height={120} className="w-full h-full object-cover" />
+                : <div className="w-full h-full flex items-center justify-center"><Film className="h-6 w-6 text-primary/60" /></div>}
+            </Link>
 
-            {/* Height pinned to the poster's, so the card is the same height
-                whatever the pick's sentence says. Without this the sentence sets
-                the card's height, and its longest form — a friend's rating, which
-                carries a display name up to fifty characters — wraps to five or
-                six lines and drags the whole section down with it. */}
-            <div className="flex gap-4 h-[7.5rem]">
-              {/* self-start is load-bearing. As a flex item this stretches to the
-                  row's full height by default, which overrides aspect-[2/3] — so
-                  object-cover cropped the poster into a tall strip. Aligning to
-                  the top lets the aspect ratio decide the height again. */}
-              <Link href={`/movie/${movie.id}`} className="w-20 shrink-0 self-start aspect-[2/3] rounded-xl overflow-hidden shadow-lg bg-muted">
-                {movie.poster
-                  ? <Image src={movie.poster} alt={movie.title} width={80} height={120} className="w-full h-full object-cover" />
-                  : <div className="w-full h-full flex items-center justify-center"><Film className="h-6 w-6 text-primary/60" /></div>}
-              </Link>
-
-              <div className="flex-1 min-w-0 h-full flex flex-col gap-1.5 overflow-hidden">
-                {/* Says out loud that the pick is settled — it can't be rerolled,
-                    and a card that doesn't say so just looks like a button that
-                    stopped working. */}
-                {rollover && (
-                  <p className="flex items-start gap-1.5 text-[11px] text-muted-foreground font-semibold">
-                    <Lock className="h-3 w-3 shrink-0 mt-0.5" />
-                    <span>New pick in {rollover}</span>
-                  </p>
+            {/* Slot two, the same fixed box the banner puts its heading and
+                tagline in. Fixed, and centred inside, because that is what stops
+                the card resizing: a two-line title, a long fact, a missing year —
+                none of them can move the button or the poster. */}
+            <div className={PICK_TEXT}>
+              {/* Says out loud that the pick is settled — it can't be rerolled,
+                  and a card that doesn't say so just looks like a button that
+                  stopped working. */}
+              {rollover && (
+                <p className="flex items-center gap-1.5 text-[11px] text-muted-foreground font-semibold">
+                  <Lock className="h-3 w-3 shrink-0" />
+                  <span>New pick in {rollover}</span>
+                </p>
+              )}
+              <h2 className="text-xl font-headline font-bold leading-tight line-clamp-2">{movie.title}</h2>
+              <p className="flex items-center justify-center gap-3 text-sm text-muted-foreground font-bold">
+                {movie.year && <span>{movie.year}</span>}
+                {movie.rating > 0 && (
+                  <span className="flex items-center gap-1 text-accent">
+                    <Star className="h-3.5 w-3.5 fill-current" />{movie.rating.toFixed(1)}
+                  </span>
                 )}
-                {/* Order down this column: when the pick changes, then the film,
-                    then why it was chosen. Title and score live here rather than
-                    under the poster — two short lines beside a tall poster left an
-                    obvious hole in the middle of the card, and this fills it while
-                    making the card shorter. */}
-                <div>
-                  {/* Two lines at 16px, not one at 18px. A single line cut "The
-                      Lord of the Rings: The Fellowship of the Ring" down to "The
-                      Lord of t…", and long titles are not rare — franchises are
-                      full of them. Still reads as the headline because it is bold
-                      and dark above lighter grey. */}
-                  <h1 className="text-base font-headline font-bold leading-tight line-clamp-2">{movie.title}</h1>
-                  {/* Back on one line. Stacked, they used up the room a long
-                      sentence needs — and side by side there is no star to knock
-                      the year and the score out of line with each other. */}
-                  <div className="flex items-center gap-3 text-base text-muted-foreground font-bold leading-snug">
-                    {movie.year && <span>{movie.year}</span>}
-                    {movie.rating > 0 && (
-                      <span className="flex items-center gap-1 text-accent">
-                        <Star className="h-4 w-4 fill-current" />{movie.rating.toFixed(1)}
-                      </span>
-                    )}
-                  </div>
-                </div>
-
-                {/* Takes whatever room is left and stops there. Two lines is what
-                    the freed space holds; a longer sentence is cut rather than
-                    allowed to grow the card. */}
-                {pickFact && (
-                  <p className="flex items-start gap-1.5 text-xs text-primary font-semibold min-h-0">
-                    <Sparkles className="h-3.5 w-3.5 shrink-0 mt-0.5" />
-                    <span className="line-clamp-2">{pickFact}</span>
-                  </p>
-                )}
-              </div>
+              </p>
+              {pickFact && (
+                <p className="flex items-start justify-center gap-1.5 text-xs text-primary font-semibold">
+                  <Sparkles className="h-3.5 w-3.5 shrink-0 mt-0.5" />
+                  <span className="line-clamp-1">{pickFact}</span>
+                </p>
+              )}
             </div>
 
             {/* Films only. A series keeps no watched record of its own — its
@@ -714,7 +718,7 @@ export function TodaysPick() {
               <Button
                 onClick={markWatched}
                 disabled={marking || markedWatched}
-                className="w-full rounded-full h-10 text-sm bg-accent hover:bg-accent/90 text-white font-bold disabled:opacity-100"
+                className={`${PICK_BUTTON} bg-accent hover:bg-accent/90 text-white disabled:opacity-100`}
               >
                 {marking
                   ? <Loader2 className="h-4 w-4 mr-1.5 animate-spin" />
@@ -734,7 +738,7 @@ export function TodaysPick() {
       {/* The section keeps its height. What changed is the split: the card gives
           up padding and width, and the wall gets it — so more posters show
           without the banner taking more of the screen. */}
-      <div className="relative overflow-hidden rounded-[2.5rem] border border-primary/20 bg-gradient-to-br from-primary/10 to-accent/5 px-8 py-9 sm:px-12 sm:py-10">
+      <div className={PICK_SHELL}>
         <TodaysPickHelp open={helpOpen} onClose={() => setHelpOpen(false)} />
         <PosterWall posters={wallPosters} />
 
@@ -743,7 +747,7 @@ export function TodaysPick() {
             twenty-four posters is legible over some tiles and not others, and
             which ones changes daily. The panel is opaque enough to be certain
             rather than lucky. */}
-        <div className="relative mx-auto max-w-xs rounded-[1.6rem] bg-card border border-border/60 shadow-2xl p-5 flex flex-col items-center text-center gap-3">
+        <div className={`${PICK_CARD_BASE} p-5 flex flex-col items-center justify-center text-center gap-3`}>
         {/* On the card, not the mosaic — a grey glyph over twenty-four posters is
             invisible at some scroll positions and merely hard to see at the rest. */}
         <HelpButton onOpen={() => setHelpOpen(true)} />
@@ -755,7 +759,7 @@ export function TodaysPick() {
             than a place a film is about to appear. */}
         {/* The window grows a fraction on the last frame, so the reel doesn't
             just stop — it arrives. */}
-        <div className={`relative w-20 aspect-[2/3] rounded-xl bg-primary/15 border flex items-center justify-center overflow-hidden shrink-0 transition-all duration-300 ${landed ? 'border-primary scale-105' : 'border-primary/25'}`}>
+        <div className={`${PICK_SLOT} bg-primary/15 border transition-all duration-300 ${landed ? 'border-primary scale-105' : 'border-primary/25'}`}>
           {landed ? (
             <Image src={landed} alt="" fill className="object-cover" sizes="64px" />
           ) : shuffleAt >= 0 && deckPosters[shuffleAt] ? (
@@ -802,16 +806,19 @@ export function TodaysPick() {
           </>
         ) : (
           <>
-            <div className="space-y-1 relative">
-              <h2 className="text-xl font-headline font-bold">Today&apos;s Pick</h2>
-              <p className="text-sm text-muted-foreground max-w-md">{tagline}</p>
+            {/* Slot two, the same box the revealed card puts the film in — the
+                heading becomes the title and the tagline becomes the year, score
+                and reason, and nothing moves because the box does not. */}
+            <div className={PICK_TEXT}>
+              <h2 className="text-xl font-headline font-bold leading-tight">Today&apos;s Pick</h2>
               {/* The line that said "one film from your 21 · one has been waiting
                   1 months" is gone. Keard's read: it gives the game away before
                   the reveal, and the reveal is the point. The poster wall behind
                   the button already says the deck is yours without counting it
                   out loud. */}
+              <p className="text-sm text-muted-foreground line-clamp-2">{tagline}</p>
             </div>
-            <Button onClick={generate} disabled={generating || initializing} className="relative rounded-full h-12 px-8 font-bold text-base">
+            <Button onClick={generate} disabled={generating || initializing} className={`${PICK_BUTTON} relative`}>
               {generating || initializing ? <Loader2 className="h-5 w-5 animate-spin" /> : <><Sparkles className="h-5 w-5 mr-2" /> Generate</>}
             </Button>
           </>
