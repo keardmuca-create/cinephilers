@@ -361,16 +361,19 @@ function SectionRow({ item, section }: { item: SectionItem; section: SectionKey 
   // once episodes are actually ticked — a show marked whole before episodes were
   // tracked has none, and "0 / 62" reads as a bug rather than as a whole-show mark.
   const episodes = item.watchedEpisodes ?? 0;
+  // Compact, because it sits beside the eye rather than on its own line.
   const progress = episodes > 0
-    ? (item.totalEpisodes ? `${episodes} / ${item.totalEpisodes} episodes` : `${episodes} episodes`)
+    ? (item.totalEpisodes ? `${episodes} / ${item.totalEpisodes}` : `${episodes} episodes`)
     : null;
-  // A show you're partway through says nothing here — the "1 / 14 episodes" line
-  // above already said it, and "Watched" beside a hollow eye contradicts both.
+  // Someone else's page reads the same as your own: the hollow eye carries the
+  // count, where the solid one says "Completed". It used to say nothing at all
+  // beside a hollow eye, which left the icon unlabelled and the reader guessing
+  // how far in they were.
   const partWatched = section === 'watched' && episodes > 0 && item.status !== 'completed';
   const label = section === 'rewatched' && item.rewatchCount ? `Rewatched ×${item.rewatchCount}`
     : item.status === 'completed' ? 'Completed'
-    : item.status === 'up-to-date' ? 'Up to date'
-    : partWatched ? ''
+    : item.status === 'up-to-date' ? [progress, 'Up to date'].filter(Boolean).join(' · ')
+    : partWatched ? (progress ?? '')
     : cfg.label;
   const dateLabel = item.date ? new Date(item.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : null;
   return (
@@ -381,7 +384,6 @@ function SectionRow({ item, section }: { item: SectionItem; section: SectionKey 
       <div className="flex-1 min-w-0 space-y-1 py-0.5">
         {meta ? <p className="text-sm font-bold group-hover:text-primary transition-colors line-clamp-1">{meta.title}</p> : <div className="h-4 bg-muted rounded-full w-2/3 animate-pulse" />}
         {meta?.year && <p className="text-xs text-muted-foreground">{meta.year}</p>}
-        {progress && <p className="text-xs font-medium text-muted-foreground/90">{progress}</p>}
         <div className="flex items-center gap-3 flex-wrap pt-0.5">
           {meta?.tmdbRating != null && meta.tmdbRating > 0 && (
             <span className="flex items-center gap-1 text-sm font-bold"><Star className="h-3.5 w-3.5 fill-yellow-400 text-yellow-400" />{meta.tmdbRating.toFixed(1)}</span>

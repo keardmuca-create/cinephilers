@@ -144,9 +144,12 @@ function HistoryCard({ row, meta, userRating, onRemove }: {
   // Progress only once episodes have actually been ticked — a show record from
   // before Step 2 has none, and "0 / 62 episodes" reads as a bug rather than as
   // a whole-show mark.
+  // Compact, because it now sits beside the eye rather than on a line of its
+  // own: the eye already says these are episodes watched, so repeating the word
+  // there would only push the row wider.
   const progress = row.isShow && row.watchedEpisodes > 0
     ? (row.totalEpisodes > 0
-        ? `${row.watchedEpisodes} / ${row.totalEpisodes} episodes`
+        ? `${row.watchedEpisodes} / ${row.totalEpisodes}`
         : `${row.watchedEpisodes} episode${row.watchedEpisodes === 1 ? '' : 's'}`)
     : null;
   const statusLabel = row.status === 'completed' ? 'Completed'
@@ -246,9 +249,6 @@ function HistoryCard({ row, meta, userRating, onRemove }: {
         <h3 className="text-sm font-semibold font-headline line-clamp-2 group-hover:text-primary transition-colors leading-snug mb-0.5">
           {displayTitle}
         </h3>
-        {progress && (
-          <p className="text-xs font-medium text-muted-foreground/90 mb-0.5">{progress}</p>
-        )}
         <p className="text-xs text-muted-foreground mb-1.5">{meta.year}</p>
         <div className="flex items-center gap-2.5 flex-wrap">
           {/* 0.0 is kept for anything that's OUT: an obscure 1985 series really
@@ -272,9 +272,13 @@ function HistoryCard({ row, meta, userRating, onRemove }: {
           {/* This was inverted: a show you'd finished got a tick and no eye,
               while one you were a single episode into got the solid eye and the
               word "Watched". The eye follows the same rule as everywhere else —
-              filled only when it's finished — and a show you're partway through
-              says nothing here, because the "1 / 14 episodes" line above it has
-              already said the only true thing there is to say. */}
+              filled only when it's finished.
+              The hollow eye carries the count, in the place the solid one says
+              "Completed" or "Watched". It used to sit on a line of its own above
+              the year, which left the hollow eye standing there labelled with
+              nothing at all — an icon whose whole job is "partway through" and no
+              word for how far. Up to date rides along with it, since a show you
+              are caught up on is still not a show you have finished. */}
           {row.isShow ? (
             row.status === 'completed' ? (
               <div className="flex items-center gap-1 text-blue-400">
@@ -284,7 +288,11 @@ function HistoryCard({ row, meta, userRating, onRemove }: {
             ) : (
               <div className="flex items-center gap-1 text-blue-400">
                 <WatchedEye state="partial" className="h-3.5 w-3.5" />
-                {statusLabel && <span className="text-xs font-semibold">{statusLabel}</span>}
+                {(progress || statusLabel) && (
+                  <span className="text-xs font-semibold">
+                    {[progress, statusLabel].filter(Boolean).join(' · ')}
+                  </span>
+                )}
               </div>
             )
           ) : (
