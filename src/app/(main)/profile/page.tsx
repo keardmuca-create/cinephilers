@@ -10,7 +10,7 @@ import { BadgeList, FounderChip, type EarnedBadge } from '@/components/badge-row
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import Link from 'next/link';
-import { Settings, Star, Film, List, MessageSquare, ChevronRight, Award, History, Bookmark, User, Plus, Heart, TrendingUp, Download, Upload, Trash2, Share2, Repeat, Loader2 } from 'lucide-react';
+import { Settings, Star, Film, List, MessageSquare, ChevronRight, Award, History, Bookmark, Plus, Heart, TrendingUp, Download, Upload, Trash2, Share2, Repeat, Loader2 } from 'lucide-react';
 import { ImportDialog } from '@/components/import-dialog';
 import { FavoritesSection } from '@/components/favorites-section';
 import { BarChart, Bar, XAxis, ResponsiveContainer, Cell, YAxis, Tooltip as ChartTooltip } from 'recharts';
@@ -386,7 +386,7 @@ export default function ProfilePage() {
   const { user: authUser, loading: authLoading, logout, refetch, updateUserLocally } = useAuth();
   const [showSettings, setShowSettings] = useState(false);
   const [settingsView, setSettingsView] = useState<SettingsView>('main');
-  const [editForm, setEditForm] = useState({ displayName: '', bio: '', avatarUrl: '' });
+  const [editForm, setEditForm] = useState({ displayName: '', bio: '' });
   const [saving, setSaving] = useState(false);
   const [localIsPrivate, setLocalIsPrivate] = useState(authUser?.isPrivate ?? false);
   const [deleteConfirmText, setDeleteConfirmText] = useState('');
@@ -627,6 +627,28 @@ export default function ProfilePage() {
     reader.readAsDataURL(file);
   }, [updateUserLocally]);
 
+  // Going back to no photo at all, which the app already has a look for: the two
+  // initials every other list falls back to. This replaces the Avatar URL box
+  // that used to live in Edit Profile — clearing that box was the only way to
+  // drop a photo, and it was a strange way to offer it. The server deletes the
+  // stored blob when the URL changes, so removing here reclaims the storage
+  // rather than just forgetting the address.
+  const removeAvatar = useCallback(async () => {
+    updateUserLocally({ avatarUrl: null });
+    try {
+      const res = await fetch('/api/users/me', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ avatarUrl: null }),
+      });
+      if (!res.ok) throw new Error();
+      toast({ title: 'Profile photo removed' });
+    } catch {
+      toast({ title: "Couldn't remove your photo. Check your connection.", variant: 'destructive' });
+    }
+  }, [updateUserLocally]);
+
 
   // The nine server-computed badges. Kept separate from the local set above,
   // which now only survives to name the Founder flair chip.
@@ -672,7 +694,6 @@ export default function ProfilePage() {
     setEditForm({
       displayName: authUser?.displayName ?? '',
       bio: authUser?.bio ?? '',
-      avatarUrl: authUser?.avatarUrl ?? '',
     });
     setSettingsView('main');
     setShowSettings(true);
@@ -680,10 +701,14 @@ export default function ProfilePage() {
 
   async function saveProfile() {
     setSaving(true);
+    // No avatarUrl here, deliberately. The photo is set by the picker and
+    // cleared by Remove, both of which write it on their own; sending it from
+    // this form as well would mean every Save of a display name or a bio also
+    // rewrote the photo from whatever the form last held — which, now that the
+    // form has no photo field, would be nothing at all.
     const patch = {
       displayName: editForm.displayName.trim() || null,
       bio: editForm.bio.trim() || null,
-      avatarUrl: editForm.avatarUrl.trim() || null,
     };
     // Update locally first so the UI reflects changes immediately
     updateUserLocally(patch);
@@ -1150,8 +1175,12 @@ export default function ProfilePage() {
             <button onClick={() => avatarInputRef.current?.click()} className="rounded-full focus:outline-none">
               <Avatar className="h-28 w-28 sm:h-32 sm:w-32 ring-4 ring-primary/20 ring-offset-4 ring-offset-background shadow-2xl">
                 {authUser?.avatarUrl && <AvatarImage src={authUser.avatarUrl} alt={authUser.username ?? 'avatar'} />}
-                <AvatarFallback className="bg-primary/20">
-                  <User className="h-14 w-14 text-primary" />
+                {/* Initials, the same two the follower lists, the feed, friends
+                    and every other row fall back to — this page was the only one
+                    showing a grey person glyph instead, which read as a missing
+                    image rather than as somebody who has not set a photo. */}
+                <AvatarFallback className="bg-primary/20 text-primary font-bold text-3xl">
+                  {(authUser?.displayName ?? authUser?.username ?? '').slice(0, 2).toUpperCase()}
                 </AvatarFallback>
               </Avatar>
             </button>
@@ -1297,15 +1326,27 @@ export default function ProfilePage() {
                     />
                     <p className="text-xs text-muted-foreground text-right">{editForm.bio.length}/300</p>
                   </div>
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Avatar URL</label>
-                    <input
-                      value={editForm.avatarUrl}
-                      onChange={e => setEditForm(f => ({ ...f, avatarUrl: e.target.value }))}
-                      placeholder="https://…"
-                      className="w-full px-4 py-3 rounded-xl border border-border bg-muted/30 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/40"
-                    />
-                  </div>
+                  {/* Was an "Avatar URL" box. It only ever accepted four outside
+                      hosts — TMDB, Unsplash, picsum, placehold — because the CSP
+                      blocks the rest, so as a way to set a photo it was a
+                      developer's affordance in a consumer app; the picker on the
+                      avatar does that job and uploads properly. The one thing it
+                      alone could do was REMOVE a photo, by being saved empty,
+                      which is not a thing anybody would guess. So that is all
+                      that is left, said out loud. */}
+                  {authUser?.avatarUrl && (
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Profile photo</label>
+                      <Button
+                        variant="outline"
+                        className="w-full rounded-xl justify-center font-semibold text-destructive hover:text-destructive"
+                        onClick={removeAvatar}
+                      >
+                        Remove profile photo
+                      </Button>
+                      <p className="text-xs text-muted-foreground">Your initials will be shown instead.</p>
+                    </div>
+                  )}
                   <div className="flex gap-3 pt-2">
                     <Button variant="outline" className="flex-1 rounded-xl" onClick={() => setSettingsView('main')}>Cancel</Button>
                     <Button className="flex-1 rounded-xl" disabled={saving} onClick={saveProfile}>
