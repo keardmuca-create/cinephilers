@@ -65,10 +65,17 @@ function FollowRow({ u, canRemove, onRemove, canUnfollow, onUnfollow }: {
       href={`/profile/${u.username}`}
       className="flex items-center gap-3 px-2 py-4 hover:bg-muted/50 transition-colors rounded-xl"
     >
-      <div className="h-10 w-10 rounded-2xl bg-primary/20 flex items-center justify-center shrink-0 overflow-hidden">
+      {/* 56px, up from 40. On a list of films the poster is the content; on a
+          list of people the face is, and this was half the size of the posters
+          it sits alongside — small enough that you read the names and never
+          looked at anyone. The row is two lines, name over handle, and at 40 the
+          avatar did not even fill it.
+          The initials grow with the circle: left at text-sm they read as marooned
+          in it, which is worse than the small version was. */}
+      <div className="h-14 w-14 rounded-2xl bg-primary/20 flex items-center justify-center shrink-0 overflow-hidden">
         {u.avatarUrl
           ? <img src={u.avatarUrl} alt={u.username} className="w-full h-full object-cover" />
-          : <span className="text-primary font-bold text-sm">{(u.displayName ?? u.username).slice(0, 2).toUpperCase()}</span>
+          : <span className="text-primary font-bold text-lg">{(u.displayName ?? u.username).slice(0, 2).toUpperCase()}</span>
         }
       </div>
       <div className="min-w-0 flex-1">
