@@ -236,32 +236,40 @@ function ListsSection() {
   const createList = async () => {
     if (!newTitle.trim()) return;
     setCreateOpen(false);
+    const previousLists = lists;
     const optimistic: UserList = { id: Date.now().toString(), title: newTitle.trim(), isPrivate: newPrivate, createdAt: new Date().toISOString(), items: [] };
     const updated = [...lists, optimistic];
     saveLists(updated);
     setLists(updated);
     setNewTitle('');
     setNewPrivate(false);
-    // Persist to DB and update ID with the real UUID
+    // A refused create used to leave the list sitting here wearing a placeholder
+    // id — it looked real, it was in no database, and the next login sync removed
+    // it without a word. It now either receives its real id or it goes back.
     try {
-      const res = await fetch('/api/lists', {
+      const res = await fetchWithAuth('/api/lists', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
         body: JSON.stringify({ name: optimistic.title, isPublic: !optimistic.isPrivate }),
       });
-      if (res.ok) {
-        const json = await res.json();
-        const realId: string = json.data?.id;
-        if (realId) {
-          setLists(prev => {
-            const next = prev.map(l => l.id === optimistic.id ? { ...l, id: realId } : l);
-            saveLists(next);
-            return next;
-          });
-        }
-      }
-    } catch { /* ignore */ }
+      if (!res.ok) throw new Error('list create rejected');
+      const json = await res.json();
+      const realId: string | undefined = json.data?.id;
+      if (!realId) throw new Error('list create returned no id');
+      setLists(prev => {
+        const next = prev.map(l => l.id === optimistic.id ? { ...l, id: realId } : l);
+        saveLists(next);
+        return next;
+      });
+    } catch {
+      saveLists(previousLists);
+      setLists(previousLists);
+      toast({
+        title: 'Could not create that list',
+        description: 'Nothing was saved. Check your connection and try again.',
+        variant: 'destructive',
+      });
+    }
   };
 
   return (
@@ -723,16 +731,30 @@ export default function ProfilePage() {
       displayName: editForm.displayName.trim() || null,
       bio: editForm.bio.trim() || null,
     };
-    // Update locally first so the UI reflects changes immediately
+    // Shown at once, confirmed after. The old values are kept so a refusal can
+    // put the previous name and bio back, rather than leaving this browser the
+    // only place the new ones exist — which the next login sync would undo
+    // silently.
+    const previous = {
+      displayName: authUser?.displayName ?? null,
+      bio: authUser?.bio ?? null,
+    };
     updateUserLocally(patch);
     setSettingsView('main');
-    toast({ title: 'Profile updated' });
     try {
-      await fetch('/api/users/me', {
+      const res = await fetchWithAuth('/api/users/me', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
         body: JSON.stringify(patch),
+      });
+      if (!res.ok) throw new Error('profile update rejected');
+      toast({ title: 'Profile updated' });
+    } catch {
+      updateUserLocally(previous);
+      toast({
+        title: 'Could not save your profile',
+        description: 'Your previous details are still in place. Check your connection and try again.',
+        variant: 'destructive',
       });
     } finally {
       setSaving(false);
