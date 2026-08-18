@@ -30,8 +30,12 @@ export async function DELETE(
     where: { listId, tmdbId: { in: ids }, mediaType },
   });
 
+  // Decrement by what actually went, not by one. Both id forms are matched
+  // above, so a title stored under the canonical id AND its legacy twin removes
+  // two rows — and subtracting one left the list claiming a title it no longer
+  // held.
   if (deleted.count > 0) {
-    await prisma.customList.update({ where: { id: listId }, data: { itemsCount: { decrement: 1 } } });
+    await prisma.customList.update({ where: { id: listId }, data: { itemsCount: { decrement: deleted.count } } });
   }
 
   return ok(null, 'Item removed');
