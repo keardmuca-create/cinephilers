@@ -726,17 +726,37 @@ export default function ProfilePage() {
     }
   }
 
+  // A privacy switch is not allowed to lie. The toggle still moves the moment it
+  // is pressed — animating a switch behind a network round trip reads as broken —
+  // but the CONFIRMATION waits for the server, and a refusal puts the switch back
+  // where it was.
+  //
+  // This was fire-and-forget, and the failure it hid is not hypothetical: an
+  // access token lives 15 minutes, and the refresh timer deliberately skips hidden
+  // tabs, so a tab left in the background and come back to can flip this against a
+  // dead token. The PUT 401s, the screen says "Account set to private", and the
+  // account is still PUBLIC. fetchWithAuth refreshes and retries rather than
+  // dropping it, and anything it still cannot land is now said out loud.
   async function savePrivacy(newValue: boolean) {
-    // Update toggle immediately — no waiting for the API
+    const previous = localIsPrivate;
     setLocalIsPrivate(newValue);
-    updateUserLocally({ isPrivate: newValue });
-    toast({ title: newValue ? 'Account set to private' : 'Account set to public' });
-    fetch('/api/users/me', {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      credentials: 'include',
-      body: JSON.stringify({ isPrivate: newValue }),
-    }).catch(() => { /* fire-and-forget */ });
+    try {
+      const res = await fetchWithAuth('/api/users/me', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ isPrivate: newValue }),
+      });
+      if (!res.ok) throw new Error('privacy update rejected');
+      updateUserLocally({ isPrivate: newValue });
+      toast({ title: newValue ? 'Account set to private' : 'Account set to public' });
+    } catch {
+      setLocalIsPrivate(previous);
+      toast({
+        title: 'Could not change your privacy setting',
+        description: 'Your account is unchanged. Check your connection and try again.',
+        variant: 'destructive',
+      });
+    }
   }
 
   async function deleteAccount() {
