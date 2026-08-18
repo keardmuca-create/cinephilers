@@ -66,6 +66,9 @@ export default function ListDetailPage() {
   const [search, setSearch] = useState('');
   const [removingId, setRemovingId] = useState<string | null>(null);
   const [privacyBusy, setPrivacyBusy] = useState(false);
+  // The server refused this list because its owner's account is private and this
+  // viewer does not follow them. Distinct from "not loaded": it has an answer.
+  const [refused, setRefused] = useState(false);
 
   // Refine state — shares the accordion RefineSheet with Watchlist / History / Ratings.
   const [refine, setRefine] = useState<RefineValue>(DEFAULT_REFINE);
@@ -88,7 +91,12 @@ export default function ListDetailPage() {
     } catch { /* ignore */ }
 
     fetchWithAuth(`/api/lists/${id}`)
-      .then(r => r.ok ? r.json() : null)
+      .then(r => {
+        // A private owner's list. Drop anything localStorage put on screen a
+        // moment ago rather than leaving a half-rendered list behind the notice.
+        if (r.status === 403) { setRefused(true); setList(null); return null; }
+        return r.ok ? r.json() : null;
+      })
       .then(json => {
         if (!json?.data) return;
         const d = json.data;
@@ -379,6 +387,17 @@ export default function ListDetailPage() {
                 </div>
               </div>
             ))}
+          </div>
+        )}
+
+        {/* Refused — the owner's account is private and this viewer isn't a follower */}
+        {!loading && refused && (
+          <div className="flex flex-col items-center justify-center py-20 gap-3 text-center">
+            <Lock className="h-12 w-12 text-muted-foreground/20" />
+            <p className="text-sm font-semibold">This account is private</p>
+            <p className="text-sm text-muted-foreground max-w-xs">
+              Follow them to see their lists.
+            </p>
           </div>
         )}
 

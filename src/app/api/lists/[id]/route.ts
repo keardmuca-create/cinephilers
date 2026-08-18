@@ -3,6 +3,7 @@ import { prisma } from '@/lib/db';
 import { ok, err } from '@/lib/api-response';
 import { getCurrentUser } from '@/lib/auth-utils';
 import { sanitizeText } from '@/lib/sanitize';
+import { canViewUserContent } from '@/lib/privacy';
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -13,7 +14,19 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     include: { items: { orderBy: { addedAt: 'desc' } } },
   });
   if (!list) return err('List not found', 404);
-  if (!list.isPublic && list.userId !== auth?.sub) return err('Forbidden', 403);
+
+  // Two questions, not one. Is the list public, and may this viewer see this
+  // AUTHOR's content at all? Only the first was being asked, so a public list
+  // belonging to a private account was readable by anyone holding its id — a
+  // shared link, or a follower who has since been removed.
+  // /api/users/[username]/lists has enforced the second since June; this is the
+  // same list by a different door and it was left open.
+  const isOwner = auth?.sub === list.userId;
+  if (!isOwner) {
+    if (!list.isPublic) return err('Forbidden', 403);
+    const allowed = await canViewUserContent(auth?.sub ?? null, list.userId);
+    if (!allowed) return err('This account is private', 403);
+  }
 
   return ok(list);
 }
