@@ -538,7 +538,12 @@ function AddToListButton({ movie, onRequireAuth }: { movie: Movie; onRequireAuth
       .catch(() => { /* ignore */ });
   }, [open]);
 
-  const addToList = (listId: string) => {
+  // Optimistic, then confirmed. The local write is what makes this feel instant;
+  // awaiting the server is what stops it being a lie. Dropped silently, the film
+  // lived in this browser and nowhere else, and the next login sync — which runs
+  // database-to-local — took it away again with no explanation.
+  const addToList = async (listId: string) => {
+    const previous = lists;
     const updated = lists.map(l => {
       if (l.id !== listId) return l;
       if (l.items.some(i => i.movieId === movie.id)) return l;
@@ -546,18 +551,28 @@ function AddToListButton({ movie, onRequireAuth }: { movie: Movie; onRequireAuth
     });
     saveLists(updated);
     setLists(updated);
-    toast({ title: 'Added to list' });
-    // Sync to DB in background
-    fetch(`/api/lists/${listId}/items`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      credentials: 'include',
-      body: JSON.stringify({ tmdbId: movie.id, mediaType: movie.type === 'show' ? 'SHOW' : 'MOVIE', title: movie.title, poster: movie.poster, year: movie.year }),
-    }).catch(() => { /* ignore */ });
+    try {
+      const res = await fetchWithAuth(`/api/lists/${listId}/items`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tmdbId: movie.id, mediaType: movie.type === 'show' ? 'SHOW' : 'MOVIE', title: movie.title, poster: movie.poster, year: movie.year }),
+      });
+      if (!res.ok) throw new Error('add to list rejected');
+      toast({ title: 'Added to list' });
+    } catch {
+      saveLists(previous);
+      setLists(previous);
+      toast({
+        title: 'Could not add to that list',
+        description: 'Nothing was saved. Check your connection and try again.',
+        variant: 'destructive',
+      });
+    }
   };
 
   const createAndAdd = async () => {
     if (!newTitle.trim()) return;
+    const previousLists = lists;
     const optimistic: UserList = { id: Date.now().toString(), title: newTitle.trim(), isPrivate: newPrivate, createdAt: new Date().toISOString(), items: [{ movieId: movie.id, title: movie.title, poster: movie.poster, year: movie.year, type: movie.type }] };
     const updated = [...lists, optimistic];
     saveLists(updated);
@@ -565,34 +580,64 @@ function AddToListButton({ movie, onRequireAuth }: { movie: Movie; onRequireAuth
     setCreateOpen(false);
     setNewTitle('');
     setNewPrivate(false);
-    toast({ title: `Added to "${optimistic.title}"` });
-    // Persist to DB
+    // Two writes have to land here, not one: the list, and then the film inside
+    // it. Announcing success after the first would promise a list that exists and
+    // is empty, so the toast waits for both — and the two failures are reported
+    // apart, because "nothing was saved" and "the list is there but empty" ask
+    // the user to do different things.
+    let createdListId: string | null = null;
     try {
-      const res = await fetch('/api/lists', {
+      const res = await fetchWithAuth('/api/lists', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
         body: JSON.stringify({ name: optimistic.title, isPublic: !optimistic.isPrivate }),
       });
-      if (res.ok) {
-        const json = await res.json();
-        const realId: string = json.data?.id;
-        if (realId) {
-          // Update localStorage and state with real DB id, then add the item
-          setLists(prev => {
-            const next = prev.map(l => l.id === optimistic.id ? { ...l, id: realId } : l);
-            saveLists(next);
-            return next;
-          });
-          fetch(`/api/lists/${realId}/items`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            credentials: 'include',
-            body: JSON.stringify({ tmdbId: movie.id, mediaType: movie.type === 'show' ? 'SHOW' : 'MOVIE', title: movie.title, poster: movie.poster, year: movie.year }),
-          }).catch(() => { /* ignore */ });
-        }
+      if (!res.ok) throw new Error('list create rejected');
+      const json = await res.json();
+      const realId: string | undefined = json.data?.id;
+      if (!realId) throw new Error('list create returned no id');
+      createdListId = realId;
+
+      // Swap the placeholder id for the real one before anything else refers to it.
+      setLists(prev => {
+        const next = prev.map(l => l.id === optimistic.id ? { ...l, id: realId } : l);
+        saveLists(next);
+        return next;
+      });
+
+      const addRes = await fetchWithAuth(`/api/lists/${realId}/items`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tmdbId: movie.id, mediaType: movie.type === 'show' ? 'SHOW' : 'MOVIE', title: movie.title, poster: movie.poster, year: movie.year }),
+      });
+      if (!addRes.ok) throw new Error('add to new list rejected');
+
+      toast({ title: `Added to "${optimistic.title}"` });
+    } catch {
+      if (createdListId) {
+        // The list is real; only the film missed. Leave the list and empty it,
+        // so what is on screen matches what the server actually holds.
+        const id = createdListId;
+        setLists(prev => {
+          const next = prev.map(l => l.id === id ? { ...l, items: l.items.filter(i => i.movieId !== movie.id) } : l);
+          saveLists(next);
+          return next;
+        });
+        toast({
+          title: `Created "${optimistic.title}", but the film was not added`,
+          description: 'Open the list and add it again.',
+          variant: 'destructive',
+        });
+      } else {
+        saveLists(previousLists);
+        setLists(previousLists);
+        toast({
+          title: 'Could not create that list',
+          description: 'Nothing was saved. Check your connection and try again.',
+          variant: 'destructive',
+        });
       }
-    } catch { /* ignore */ }
+    }
   };
 
   const isInList = (listId: string) => lists.find(l => l.id === listId)?.items.some(i => i.movieId === movie.id) ?? false;
@@ -707,7 +752,13 @@ function ReviewsSection({ movie, writeOpen, setWriteOpen, myReview, setMyReview,
     }
   }, [writeOpen, myReview, currentRating]);
 
-  const submitReview = () => {
+  // A review is the one thing on this page the user actually WROTE, and until the
+  // server has it localStorage is its only copy. So this deliberately does not roll
+  // back on failure: throwing their text away to keep state tidy would be the worse
+  // bug. It keeps the draft and stops pretending the account has it. Silence was
+  // the real fault — the next login sync runs database-to-local and would drop an
+  // unsent review without a word.
+  const submitReview = async () => {
     if (!draftContent.trim()) return;
     const review: UserReview = {
       movieId: movie.id,
@@ -720,30 +771,62 @@ function ReviewsSection({ movie, writeOpen, setWriteOpen, myReview, setMyReview,
       containsSpoiler: draftSpoiler,
     };
     try { localStorage.setItem(`review-${movie.id}`, JSON.stringify(review)); } catch { /* ignore */ }
-    fetch('/api/reviews', {
-      method: 'POST',
-      credentials: 'include',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ tmdbId: movie.id, mediaType: movie.type === 'show' ? 'SHOW' : 'MOVIE', body: review.content, containsSpoiler: draftSpoiler }),
-    }).catch(() => { /* background sync */ });
-    // Persist the rating too (rate + review in one go) when it was set/changed.
-    if (draftRating > 0 && draftRating !== currentRating) onRate(draftRating);
     setMyReview(review);
     setWriteOpen(false);
-    logActivity({ action: 'reviewed', contentId: movie.id, contentTitle: movie.title, contentPoster: movie.poster, contentYear: movie.year });
-    toast({ title: 'Review saved' });
+    try {
+      const res = await fetchWithAuth('/api/reviews', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tmdbId: movie.id, mediaType: movie.type === 'show' ? 'SHOW' : 'MOVIE', body: review.content, containsSpoiler: draftSpoiler }),
+      });
+      if (!res.ok) throw new Error('review rejected');
+      // Only once the review is really stored: the rating that came with it, the
+      // activity entry, and the confirmation.
+      if (draftRating > 0 && draftRating !== currentRating) onRate(draftRating);
+      logActivity({ action: 'reviewed', contentId: movie.id, contentTitle: movie.title, contentPoster: movie.poster, contentYear: movie.year });
+      toast({ title: 'Review saved' });
+    } catch {
+      toast({
+        title: 'Saved on this device only',
+        description: 'We could not reach your account. Your review is still here — open it and press Save again to retry.',
+        variant: 'destructive',
+      });
+    }
   };
 
-  const deleteReview = () => {
+  // The mirror of saving, and its silent failure is one this app has already lived
+  // through with watch history: the row leaves the screen, the row stays in the
+  // database, and the next sync puts it back. Restoring on failure is safe here —
+  // nothing the user wrote is lost by returning it.
+  const deleteReview = async () => {
     if (!window.confirm('Delete your review? This cannot be undone.')) return;
-    try { localStorage.removeItem(`review-${movie.id}`); } catch { /* ignore */ }
+    const previousReview = myReview;
+    const previousList = cinephilersReviews;
     const own = cinephilersReviews.find(r => r.isOwn);
-    if (own) {
-      fetch(`/api/reviews/${own.id}`, { method: 'DELETE', credentials: 'include' }).catch(() => { /* background sync */ });
-      setCinephilersReviews(prev => prev.filter(r => !r.isOwn));
-    }
+
+    try { localStorage.removeItem(`review-${movie.id}`); } catch { /* ignore */ }
     setMyReview(null);
-    toast({ title: 'Review deleted' });
+    if (own) setCinephilersReviews(prev => prev.filter(r => !r.isOwn));
+
+    // A draft that never reached the server has nothing to delete there.
+    if (!own) { toast({ title: 'Review deleted' }); return; }
+
+    try {
+      const res = await fetchWithAuth(`/api/reviews/${own.id}`, { method: 'DELETE' });
+      if (!res.ok) throw new Error('review delete rejected');
+      toast({ title: 'Review deleted' });
+    } catch {
+      try {
+        if (previousReview) localStorage.setItem(`review-${movie.id}`, JSON.stringify(previousReview));
+      } catch { /* ignore */ }
+      setMyReview(previousReview);
+      setCinephilersReviews(previousList);
+      toast({
+        title: 'Could not delete your review',
+        description: 'It is still there. Check your connection and try again.',
+        variant: 'destructive',
+      });
+    }
   };
 
   const allReviews = movie.reviews ?? [];

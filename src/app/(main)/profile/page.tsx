@@ -602,7 +602,7 @@ export default function ProfilePage() {
     const reader = new FileReader();
     reader.onload = (e) => {
       const img = new window.Image();
-      img.onload = () => {
+      img.onload = async () => {
         const size = 400;
         const canvas = document.createElement('canvas');
         canvas.width = size;
@@ -613,19 +613,32 @@ export default function ProfilePage() {
         const sy = (img.height - min) / 2;
         ctx.drawImage(img, sx, sy, min, min, 0, 0, size, size);
         const dataUrl = canvas.toDataURL('image/jpeg', 0.82);
+        // The photo shows at once, but the confirmation waits for the upload. A
+        // dropped request left the new face in this browser and the old one on
+        // every other device, with nothing said either way.
+        const previousAvatar = authUser?.avatarUrl ?? null;
         updateUserLocally({ avatarUrl: dataUrl });
-        fetch('/api/users/me', {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          credentials: 'include',
-          body: JSON.stringify({ avatarUrl: dataUrl }),
-        }).catch(() => {});
-        toast({ title: 'Profile photo updated' });
+        try {
+          const res = await fetchWithAuth('/api/users/me', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ avatarUrl: dataUrl }),
+          });
+          if (!res.ok) throw new Error('avatar upload rejected');
+          toast({ title: 'Profile photo updated' });
+        } catch {
+          updateUserLocally({ avatarUrl: previousAvatar });
+          toast({
+            title: 'Could not save your photo',
+            description: 'Your old picture is still in place. Check your connection and try again.',
+            variant: 'destructive',
+          });
+        }
       };
       img.src = e.target!.result as string;
     };
     reader.readAsDataURL(file);
-  }, [updateUserLocally]);
+  }, [updateUserLocally, authUser?.avatarUrl]);
 
   // Going back to no photo at all, which the app already has a look for: the two
   // initials every other list falls back to. This replaces the Avatar URL box
@@ -775,20 +788,45 @@ export default function ProfilePage() {
     }
   }
 
-  const deleteReview = (movieId: string) => {
+  // Same rule as the movie page: the row may not leave the screen for good until
+  // the server says it has gone. Fire-and-forget here meant a failed delete looked
+  // done and came back on the next sync — the exact shape of the bug that made
+  // hundreds of imported films reappear in June.
+  const deleteReview = async (movieId: string) => {
     if (!window.confirm('Delete this review? This cannot be undone.')) return;
     // Clear the legacy bare-numeric twin too. The list now folds both ids into
     // one row, so leaving the other key behind would bring the review straight
-    // back on the next load.
+    // back on the next load. Both keys are kept so a failure can put them back.
+    const twin = legacyTwin(movieId);
+    let savedReview: string | null = null;
+    let savedTwin: string | null = null;
     try {
+      savedReview = localStorage.getItem(`review-${movieId}`);
+      if (twin) savedTwin = localStorage.getItem(`review-${twin}`);
       localStorage.removeItem(`review-${movieId}`);
-      const twin = legacyTwin(movieId);
       if (twin) localStorage.removeItem(`review-${twin}`);
     } catch { /* ignore */ }
+
+    const previousReviews = userReviews;
     setUserReviews(prev => prev.filter(r => r.movieId !== movieId));
+
     const mediaType = movieId.startsWith('tmdb-tv-') ? 'SHOW' : 'MOVIE';
-    fetchWithAuth(`/api/reviews?tmdbId=${encodeURIComponent(movieId)}&mediaType=${mediaType}`, { method: 'DELETE' }).catch(() => {});
-    toast({ title: 'Review deleted' });
+    try {
+      const res = await fetchWithAuth(`/api/reviews?tmdbId=${encodeURIComponent(movieId)}&mediaType=${mediaType}`, { method: 'DELETE' });
+      if (!res.ok) throw new Error('review delete rejected');
+      toast({ title: 'Review deleted' });
+    } catch {
+      try {
+        if (savedReview !== null) localStorage.setItem(`review-${movieId}`, savedReview);
+        if (twin && savedTwin !== null) localStorage.setItem(`review-${twin}`, savedTwin);
+      } catch { /* ignore */ }
+      setUserReviews(previousReviews);
+      toast({
+        title: 'Could not delete your review',
+        description: 'It is still there. Check your connection and try again.',
+        variant: 'destructive',
+      });
+    }
   };
 
   // Every section of this page is rebuilt by one pass of loadFromStorage, and each
