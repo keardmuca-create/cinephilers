@@ -61,8 +61,23 @@ export async function POST(req: NextRequest) {
     select: { watchedAt: true },
   });
   if (!existing) {
+    // Dated to the EARLIEST watch, not to this one. The row is a summary of "when
+    // did this enter your history", and Watch history is ordered by that — so
+    // stamping it with today would park a film you first saw in 2004 at the top
+    // of the shelf the moment you logged a rewatch.
+    //
+    // This fires whenever no summary row exists, which is not only a genuine
+    // first watch: deleting a title from Watch history removes the summary row
+    // and deliberately keeps the diary, so the next log lands here with a pile of
+    // earlier events already behind it. The new event is included in the query,
+    // so a real first watch still resolves to its own date.
+    const earliest = await prisma.watchEvent.findFirst({
+      where: { userId: auth.sub, tmdbId, mediaType: mediaType as MediaType },
+      orderBy: { watchedAt: 'asc' },
+      select: { watchedAt: true },
+    });
     await prisma.watchedItem.create({
-      data: { userId: auth.sub, tmdbId, mediaType: mediaType as MediaType, watchedAt },
+      data: { userId: auth.sub, tmdbId, mediaType: mediaType as MediaType, watchedAt: earliest?.watchedAt ?? watchedAt },
     }).catch(e => {
       if ((e as { code?: string })?.code !== 'P2002') throw e;
     });
