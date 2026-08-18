@@ -10,7 +10,7 @@ import { useAuth } from '@/contexts/auth-context';
 import { fetchWithAuth } from '@/lib/fetch-with-auth';
 import { seededShuffle, DAY_MS } from '@/lib/seed-shuffle';
 import { batchFetchMeta } from '@/lib/meta-batch';
-import { isEpisodeId, getAddedAt } from '@/lib/media-id';
+import { isEpisodeId, isShowId, getAddedAt } from '@/lib/media-id';
 import { appendWatchLog } from '@/lib/watch-log';
 import { toast } from '@/hooks/use-toast';
 import { TodaysPickHelp } from '@/components/todays-pick-help';
@@ -159,8 +159,14 @@ function friendsFact(friends: { name: string; rating: number }[], v: number): st
   ][v];
 }
 
-// Every unwatched film sitting on the watchlist. Read straight from local state,
+// Every unwatched FILM sitting on the watchlist. Read straight from local state,
 // so the banner can say how big the deck is without waiting on a round trip.
+//
+// Films only, which is what this feature has always said it was — "every day
+// we'll pick one film for you to actually watch". Episodes were already dropped;
+// whole series were not, so a three-part documentary could win the day and be
+// offered as tonight's film. A series is a different commitment from a film and
+// picking one is not the promise being made.
 function watchlistFilmIds(): string[] {
   const ids: string[] = [];
   try {
@@ -169,7 +175,7 @@ function watchlistFilmIds(): string[] {
       if (!k?.startsWith('watchlist-')) continue;
       const id = k.slice('watchlist-'.length);
       if (localStorage.getItem(`watched-${id}`) === 'true') continue;
-      if (isEpisodeId(id)) continue;
+      if (isEpisodeId(id) || isShowId(id)) continue;
       ids.push(id);
     }
   } catch { /* ignore */ }
@@ -541,7 +547,12 @@ export function TodaysPick() {
       const res = await fetchWithAuth('/api/watched', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ tmdbId: movie.id, mediaType: 'MOVIE' }),
+        // Derived, not assumed. The pool is films only, so this should always
+        // say MOVIE — but it used to say MOVIE unconditionally, and while shows
+        // could still be picked that wrote a series into the watched table
+        // labelled as a film, which groups wrongly everywhere media type is read.
+        // The daily-pick call below has always derived it; these now agree.
+        body: JSON.stringify({ tmdbId: movie.id, mediaType: movie.id.startsWith('tmdb-tv-') ? 'SHOW' : 'MOVIE' }),
       });
       if (!res.ok) throw new Error(String(res.status));
       try { localStorage.setItem(`watched-${movie.id}`, 'true'); } catch { /* ignore */ }

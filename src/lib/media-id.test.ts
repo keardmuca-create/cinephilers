@@ -17,7 +17,7 @@ function installLocalStorageStub() {
   return ls;
 }
 
-import { canonicalId, legacyTwin, recordAddedAt, getAddedAt, recordWatchedAt, getWatchedAtISO, recordRatedAt, getRatedAt, removeRatedAt } from './media-id';
+import { canonicalId, legacyTwin, isShowId, isEpisodeId, recordAddedAt, getAddedAt, recordWatchedAt, getWatchedAtISO, recordRatedAt, getRatedAt, removeRatedAt } from './media-id';
 
 describe('canonicalId', () => {
   it('folds a bare numeric id into the tmdb- form', () => {
@@ -160,5 +160,32 @@ describe('the rated-at index', () => {
 
   it('returns 0 for an id with no dates at all, so it sorts last', () => {
     expect(getRatedAt('tmdb-999')).toBe(0);
+  });
+});
+
+describe('isShowId', () => {
+  it('accepts a whole show', () => {
+    expect(isShowId('tmdb-tv-1396')).toBe(true);
+  });
+
+  it('rejects an episode of that show', () => {
+    expect(isShowId('tmdb-tv-1396-S1E2')).toBe(false);
+    expect(isEpisodeId('tmdb-tv-1396-S1E2')).toBe(true);
+  });
+
+  it('rejects a film', () => {
+    expect(isShowId('tmdb-262504')).toBe(false);
+  });
+
+  it('rejects a bare numeric id', () => {
+    expect(isShowId('262504')).toBe(false);
+  });
+
+  // Today's Pick keeps films only by dropping both of these from the pool, so
+  // "is it a show" and "is it an episode" have to disagree on every input.
+  it('never agrees with isEpisodeId', () => {
+    for (const id of ['tmdb-tv-1396', 'tmdb-tv-1396-S1E2', 'tmdb-262504', '262504', 'nonsense']) {
+      expect(isShowId(id) && isEpisodeId(id)).toBe(false);
+    }
   });
 });

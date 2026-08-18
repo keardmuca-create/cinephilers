@@ -17,6 +17,12 @@ export function isValidMediaId(id: string): boolean {
   return /^tmdb-(?:tv-)?\d{1,10}$/.test(id);
 }
 
+// A whole show: `tmdb-tv-{n}`, with no season/episode suffix. Distinct from
+// isEpisodeId — one names a series, the other one instalment of it.
+export function isShowId(id: string): boolean {
+  return /^tmdb-tv-\d{1,10}$/.test(id);
+}
+
 // An individual episode id: `tmdb-tv-{n}-S{s}E{e}`.
 export function isEpisodeId(id: string): boolean {
   return /^tmdb-tv-\d{1,10}-S\d{1,3}E\d{1,4}$/.test(id);
