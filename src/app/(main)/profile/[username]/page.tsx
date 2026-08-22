@@ -366,12 +366,12 @@ function SectionRow({ item, section }: { item: SectionItem; section: SectionKey 
     ? (item.totalEpisodes ? `${episodes} / ${item.totalEpisodes}` : `${episodes} episodes`)
     : null;
   // Someone else's page reads the same as your own: the hollow eye carries the
-  // count, where the solid one says "Completed". It used to say nothing at all
-  // beside a hollow eye, which left the icon unlabelled and the reader guessing
-  // how far in they were.
+  // count, and so does the solid one — "62 / 62" rather than the word. It used
+  // to say nothing at all beside a hollow eye, which left the icon unlabelled
+  // and the reader guessing how far in they were.
   const partWatched = section === 'watched' && episodes > 0 && item.status !== 'completed';
   const label = section === 'rewatched' && item.rewatchCount ? `Rewatched ×${item.rewatchCount}`
-    : item.status === 'completed' ? 'Completed'
+    : item.status === 'completed' ? (progress ?? 'Completed')
     : item.status === 'up-to-date' ? [progress, 'Up to date'].filter(Boolean).join(' · ')
     : partWatched ? (progress ?? '')
     : cfg.label;

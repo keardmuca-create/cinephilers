@@ -77,10 +77,19 @@ export function statusFor(watched: number, total: number, showStatus?: string): 
 export function collapseShows(entries: CollapseInput[]): CollapsedRow[] {
   const rows = new Map<string, CollapsedRow>();
 
+  // A note on the episode total, since two kinds of entry carry one. The show's
+  // own entry and each of its episodes both know how many episodes the show has,
+  // but only the show's is kept up to date: episode entries never expire, because
+  // re-checking one costs the server a lookup of the parent show anyway, and a
+  // library holds far more episodes than shows. So the show's number wins wherever
+  // both exist — otherwise a show whose episodes were cached a year ago would go
+  // on insisting it has 63 episodes long after the 64th aired.
   for (const entry of entries) {
     const showId = parentShowId(entry);
     const key = showId ?? entry.id;
     const isShowRow = showId !== null || entry.totalEpisodes !== undefined;
+    // The show's own entry: not an episode of something, but carrying a total.
+    const isShowsOwnEntry = showId === null && entry.totalEpisodes !== undefined;
 
     const existing = rows.get(key);
     if (!existing) {
@@ -98,11 +107,19 @@ export function collapseShows(entries: CollapseInput[]): CollapsedRow[] {
     }
 
     // Merge: a show can arrive as its own entry AND as episodes. Count episodes
-    // only, keep the newest date, and take a total from whichever entry has one.
+    // only, keep the newest date, and settle the total as described above.
     existing.memberIds.push(entry.id);
     if (showId) existing.watchedEpisodes += 1;
     if (isShowRow) existing.isShow = true;
-    if (!existing.totalEpisodes && entry.totalEpisodes) existing.totalEpisodes = entry.totalEpisodes;
+    if (entry.totalEpisodes) {
+      if (isShowsOwnEntry) {
+        // The show's own number, and it overwrites whatever an episode said.
+        existing.totalEpisodes = entry.totalEpisodes;
+      } else if (!existing.totalEpisodes) {
+        // An episode's number only fills a gap — the show may not be cached yet.
+        existing.totalEpisodes = entry.totalEpisodes;
+      }
+    }
     // Only one entry of a show usually carries these, and it isn't always the
     // first one seen — so take whichever turns up rather than overwriting.
     if (!existing.showStatus && entry.showStatus) existing.showStatus = entry.showStatus;

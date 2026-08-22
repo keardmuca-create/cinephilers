@@ -9,7 +9,7 @@ import { fetchWithAuth } from '@/lib/fetch-with-auth';
 import { persistRefine } from '@/lib/refine-sort';
 import { removeFromWatchLog } from '@/lib/watch-log';
 import { legacyTwin, normalizeLocalMediaIds, getWatchedAtISO, getManualWatchISO } from '@/lib/media-id';
-import { batchFetchMeta } from '@/lib/meta-batch';
+import { batchFetchMeta, isStaleMeta, type CachedMeta } from '@/lib/meta-batch';
 import { getItemType, sideOf, SIDE_TYPES, TYPE_LABELS, type TypeFilter, type MediaSide } from '@/lib/media-type';
 import { collapseShows, type CollapsedRow } from '@/lib/collapse-shows';
 import { MediaToggle } from '@/components/media-toggle';
@@ -70,12 +70,14 @@ function rowRecencyCompare(a: CollapsedRow, b: CollapsedRow, manualFor: (r: Coll
   return (new Date(b.watchedAt).getTime() - new Date(a.watchedAt).getTime()) || a.id.localeCompare(b.id);
 }
 
-function readMetaCache(id: string): ItemMeta | null {
+// CachedMeta, not ItemMeta: entries carry the stamp that says how old they are,
+// and it has to survive being read here and written back below.
+function readMetaCache(id: string): CachedMeta | null {
   try { return JSON.parse(localStorage.getItem(`meta-${id}`) ?? 'null'); }
   catch { return null; }
 }
 
-function writeMetaCache(id: string, m: ItemMeta) {
+function writeMetaCache(id: string, m: CachedMeta) {
   try { localStorage.setItem(`meta-${id}`, JSON.stringify(m)); } catch { /* ignore */ }
 }
 
@@ -152,9 +154,9 @@ function HistoryCard({ row, meta, userRating, onRemove }: {
         ? `${row.watchedEpisodes} / ${row.totalEpisodes}`
         : `${row.watchedEpisodes} episode${row.watchedEpisodes === 1 ? '' : 's'}`)
     : null;
-  const statusLabel = row.status === 'completed' ? 'Completed'
-    : row.status === 'up-to-date' ? 'Up to date'
-    : null;
+  // Only "Up to date" is left to say: a finished show is the count and a filled
+  // eye, which needs no word.
+  const statusLabel = row.status === 'up-to-date' ? 'Up to date' : null;
 
   // No release date at all means an older title whose date TMDB never carried —
   // treat that as out, since the alternative is hiding scores on old films.
@@ -273,8 +275,9 @@ function HistoryCard({ row, meta, userRating, onRemove }: {
               while one you were a single episode into got the solid eye and the
               word "Watched". The eye follows the same rule as everywhere else —
               filled only when it's finished.
-              The hollow eye carries the count, in the place the solid one says
-              "Completed" or "Watched". It used to sit on a line of its own above
+              Both eyes carry the count now, filled or hollow —
+              "45 / 62" partway, "62 / 62" finished. A filled eye already says finished,
+              so the word would only repeat it. The count used to sit above
               the year, which left the hollow eye standing there labelled with
               nothing at all — an icon whose whole job is "partway through" and no
               word for how far. Up to date rides along with it, since a show you
@@ -283,7 +286,7 @@ function HistoryCard({ row, meta, userRating, onRemove }: {
             row.status === 'completed' ? (
               <div className="flex items-center gap-1 text-blue-400">
                 <WatchedEye state="complete" className="h-3.5 w-3.5" />
-                <span className="text-xs font-semibold">Completed</span>
+                {progress && <span className="text-xs font-semibold">{progress}</span>}
               </div>
             ) : (
               <div className="flex items-center gap-1 text-blue-400">
@@ -410,11 +413,14 @@ export default function HistoryPage() {
             // fetch refreshes it (movie shorts by runtime, mini-series by showType)
             // instead of staying stuck as plain "movie"/"tv-series". Episodes cached
             // before totalEps rode along have no episode total, which is what a
-            // collapsed show row counts against — refresh those too.
+            // collapsed show row counts against — refresh those too. And a show
+            // whose entry is simply old: its total moves when a new episode airs,
+            // so a day-old one is refetched rather than trusted.
             const needsRefresh =
               (m.type === 'movie' && !m.isEpisode && m.runtime === undefined) ||
               (m.type === 'show'  && !m.isEpisode && m.showType === undefined) ||
-              (m.isEpisode === true && m.totalEps === undefined);
+              (m.isEpisode === true && m.totalEps === undefined) ||
+              isStaleMeta(m);
             if (m.tmdbRating !== undefined && !needsRefresh) fetchingRef.current.add(id);
           }
         }

@@ -10,7 +10,13 @@ const localStorageStub = {
   removeItem: (k: string) => { store.delete(k); },
 };
 
-const meta = (id: string) => ({ id, title: `Title ${id}`, year: '2024', poster: '', type: 'movie', runtime: 120 });
+// Ids carrying "tv" come back as shows, which is what the server does too — the
+// staleness rule only applies to shows, so the tests need both kinds.
+const meta = (id: string) => id.includes('tv')
+  ? { id, title: `Title ${id}`, year: '2024', poster: '', type: 'show', showType: 'Scripted', totalEps: 64 }
+  : { id, title: `Title ${id}`, year: '2024', poster: '', type: 'movie', runtime: 120 };
+
+const DAY = 24 * 60 * 60 * 1000;
 
 let calls: string[][] = [];
 
@@ -87,6 +93,52 @@ describe('batchFetchMeta', () => {
     vi.stubGlobal('fetch', vi.fn(async () => ({ ok: false }) as unknown as Response));
     const got = await batchFetchMeta(['tmdb-6']);
     expect(got).toEqual({});
+  });
+
+  // The bug this rule exists for: a show you had finished gets a new episode, and
+  // the device that cached it keeps saying 63 / 63 with a filled eye for good.
+  it('refetches a show cached more than a day ago', async () => {
+    store.set('meta-tmdb-tv-1', JSON.stringify({ ...meta('tmdb-tv-1'), totalEps: 63, _fetchedAt: Date.now() - DAY - 1000 }));
+    const got = await batchFetchMeta(['tmdb-tv-1']);
+    expect(calls).toHaveLength(1);
+    expect(got['tmdb-tv-1'].totalEps).toBe(64);
+  });
+
+  it('trusts a show cached an hour ago', async () => {
+    store.set('meta-tmdb-tv-2', JSON.stringify({ ...meta('tmdb-tv-2'), _fetchedAt: Date.now() - 60 * 60 * 1000 }));
+    await batchFetchMeta(['tmdb-tv-2']);
+    expect(calls).toHaveLength(0);
+  });
+
+  // Entries written before stamping existed, and by the pages that write this
+  // cache directly, have no stamp at all. One refetch, then they carry one.
+  it('refetches a show with no stamp, once', async () => {
+    store.set('meta-tmdb-tv-3', JSON.stringify(meta('tmdb-tv-3')));
+    await batchFetchMeta(['tmdb-tv-3']);
+    expect(calls).toHaveLength(1);
+    calls = [];
+    await batchFetchMeta(['tmdb-tv-3']);
+    expect(calls).toHaveLength(0);
+  });
+
+  // A film is finished the day it comes out. Expiring films would refetch a whole
+  // library every day for nothing.
+  it('never expires a film, however old the entry', async () => {
+    store.set('meta-tmdb-4', JSON.stringify({ ...meta('tmdb-4'), _fetchedAt: Date.now() - 400 * DAY }));
+    await batchFetchMeta(['tmdb-4']);
+    expect(calls).toHaveLength(0);
+  });
+
+  // The history page keeps its own copy and writes it back. If what it got had no
+  // stamp, writing it back would strip one — and every load would refetch.
+  it('hands back a stamped copy, so a caller writing it back keeps the stamp', async () => {
+    const got = await batchFetchMeta(['tmdb-tv-5']);
+    const returned = got['tmdb-tv-5'] as (typeof got)['tmdb-tv-5'] & { _fetchedAt?: number };
+    expect(typeof returned._fetchedAt).toBe('number');
+    store.set('meta-tmdb-tv-5', JSON.stringify(returned));
+    calls = [];
+    await batchFetchMeta(['tmdb-tv-5']);
+    expect(calls).toHaveLength(0);
   });
 
   it('refetches an episode cached before it carried its show total', async () => {

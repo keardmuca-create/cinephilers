@@ -19,7 +19,7 @@ import { Separator } from '@/components/ui/separator';
 import { Progress } from '@/components/ui/progress';
 import { toast } from '@/hooks/use-toast';
 import { fetchWithAuth } from '@/lib/fetch-with-auth';
-import { batchFetchMeta } from '@/lib/meta-batch';
+import { batchFetchMeta, isStaleMeta, type CachedMeta } from '@/lib/meta-batch';
 import { collapseShows, statusFor, type CollapsedRow, type ShowProgressStatus } from '@/lib/collapse-shows';
 import { useAuth } from '@/contexts/auth-context';
 import { readSavedRefine, applyRefineSort } from '@/lib/refine-sort';
@@ -885,7 +885,7 @@ export default function ProfilePage() {
     // the count that means something is the per-side one on /history.
 
     // Build recent watch preview — movies as individual cards, episodes grouped by show
-    const buildWatchHistory = async () => {
+    const buildWatchHistory = async (refreshStale = true) => {
       try {
         const rvMap = new Map<string, { title: string; poster: string; year: string; type: string; tmdbRating?: number }>();
         try {
@@ -923,8 +923,20 @@ export default function ProfilePage() {
         // matches the history page: hand-marked titles first (newest), then the
         // rest by watch date.
         const PREVIEW = 50;
+        // A stale entry is still shown — the poster, title and year in it are as
+        // right as they ever were, and only the episode total has moved. So the
+        // shelf paints from it at once and the refresh happens after, exactly as
+        // Watch History does. Making stale count as missing would have held the
+        // whole strip back on one network round trip, once a day, for a number
+        // that changes about as often as a season airs.
         const readMeta = (id: string): Record<string, unknown> | null => {
           try { const r = localStorage.getItem(`meta-${id}`); return r ? JSON.parse(r) : null; } catch { return null; }
+        };
+        const isStale = (id: string): boolean => {
+          try {
+            const r = localStorage.getItem(`meta-${id}`);
+            return r ? isStaleMeta(JSON.parse(r) as CachedMeta) : false;
+          } catch { return false; }
         };
         const dateOf = (id: string) => logMap.get(id) ?? getWatchedAtISO(id) ?? new Date(0).toISOString();
 
@@ -984,7 +996,10 @@ export default function ProfilePage() {
           // A whole-show mark with nothing cached looks like a film until its meta
           // lands, so settle showness here, once the fetch has actually happened.
           const isShow = r.isShow || (data?.type === 'show' && data?.isEpisode !== true);
-          const total = r.totalEpisodes || (data?.totalEps as number | undefined) || 0;
+          // The show's own entry first, the one its episodes carry second — same
+          // order as collapseShows, and for the same reason: only the show's is
+          // refreshed, so an episode's number can be a season out of date.
+          const total = (data?.totalEps as number | undefined) || r.totalEpisodes || 0;
           items.push({
             id: r.id,
             title: title.replace(/^S\d+E\d+\s·\s/, ''),
@@ -1005,6 +1020,21 @@ export default function ProfilePage() {
         // A newer rebuild started while this one was fetching — discard this result.
         if (!isCurrent()) return;
         setRecentWatched(items);
+
+        // Painted. Now refresh any show whose entry is a day old and run through
+        // once more, so a total that moved corrects itself a moment later instead
+        // of holding the shelf back. Only shows reach here — episodes never go
+        // stale — so this is a handful of ids, not the whole library.
+        if (refreshStale) {
+          const stale = preview.map(r => r.id).filter(isStale);
+          if (stale.length > 0) {
+            await batchFetchMeta(stale);
+            if (!isCurrent()) return;
+            // false: the entries are fresh now, and a failed fetch leaves them
+            // stale, which would otherwise loop for as long as the network is out.
+            await buildWatchHistory(false);
+          }
+        }
       } catch { /* ignore */ }
     };
     buildWatchHistory();
@@ -1597,7 +1627,6 @@ export default function ProfilePage() {
                 {item.isShow && (item.watchedEpisodes ?? 0) > 0 && (
                   <p className="text-[11px] text-muted-foreground line-clamp-1 mt-0.5">
                     {item.totalEpisodes ? `${item.watchedEpisodes} / ${item.totalEpisodes} episodes` : `${item.watchedEpisodes} episodes`}
-                    {item.status === 'completed' && ' · Completed'}
                     {item.status === 'up-to-date' && ' · Up to date'}
                   </p>
                 )}

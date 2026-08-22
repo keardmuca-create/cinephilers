@@ -93,6 +93,35 @@ describe('collapseShows', () => {
     expect(rows[0].memberIds).toEqual(['tmdb-550']);
   });
 
+  // Episode entries never expire, so their total is the one that goes stale. When
+  // the show's own entry is there, its number is the one that counts — and it has
+  // to win whichever order the entries arrive in.
+  it('prefers the show own total over the one its episodes carry', () => {
+    const rows = collapseShows([
+      ep('tmdb-tv-1396', 1, 1, '2026-01-05', { totalEpisodes: 62 }),
+      { id: 'tmdb-tv-1396', totalEpisodes: 63, watchedAt: '2026-01-01' },
+    ]);
+    expect(rows[0].totalEpisodes).toBe(63);
+  });
+
+  it('prefers it when the show entry comes first too', () => {
+    const rows = collapseShows([
+      { id: 'tmdb-tv-1396', totalEpisodes: 63, watchedAt: '2026-01-01' },
+      ep('tmdb-tv-1396', 1, 1, '2026-01-05', { totalEpisodes: 62 }),
+    ]);
+    expect(rows[0].totalEpisodes).toBe(63);
+  });
+
+  // A show you're partway through was never marked at show level, so there is no
+  // show entry to take a number from — the episodes are all there is.
+  it('falls back to an episode total when the show itself is not cached', () => {
+    const rows = collapseShows([
+      ep('tmdb-tv-1396', 1, 1, '2026-01-05', { totalEpisodes: 62 }),
+      ep('tmdb-tv-1396', 1, 2, '2026-01-06', { totalEpisodes: 62 }),
+    ]);
+    expect(rows[0].totalEpisodes).toBe(62);
+  });
+
   it('is Watching while episodes remain', () => {
     const rows = collapseShows([
       ep('tmdb-tv-1396', 1, 1, '2026-01-01', { totalEpisodes: 62, showStatus: 'Ended' }),

@@ -8,7 +8,7 @@
 // to name and the count is the honest answer.
 
 export interface ShowProgress {
-  /** What to show next to the eye: "Completed", "Season 1", "13 / 62", "1 episode". */
+  /** What to show next to the eye: "62 / 62", "Season 1", "13 / 62", "1 episode". */
   label: string;
   watchedEpisodes: number;
   totalEpisodes: number;
@@ -50,7 +50,7 @@ export function describeShowProgress(
 
   const complete = totalEpisodes > 0 && watchedEpisodes >= totalEpisodes;
   if (complete) {
-    return { label: 'Completed', watchedEpisodes, totalEpisodes, complete: true };
+    return { label: `${watchedEpisodes} / ${totalEpisodes}`, watchedEpisodes, totalEpisodes, complete: true };
   }
 
   // Name the seasons only when every one they've touched is finished. A season

@@ -15,7 +15,7 @@ interface FriendRatingEntry {
   watched: boolean;
   reviewed: boolean;
   inWatchlist: boolean;
-  /** Shows only: "Completed", "Season 1", "13 / 62", "1 episode". */
+  /** Shows only: "62 / 62", "Season 1", "13 / 62", "1 episode". */
   progress?: string;
 }
 

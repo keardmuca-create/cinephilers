@@ -6,9 +6,9 @@ const BB: SeasonCounts = { '1': 7, '2': 13, '3': 13, '4': 13, '5': 16 };
 const by = (entries: [number, number][]) => new Map(entries);
 
 describe('describeShowProgress', () => {
-  it('says Completed when every episode is watched', () => {
+  it('says 62 / 62 when every episode is watched', () => {
     const p = describeShowProgress(by([[1, 7], [2, 13], [3, 13], [4, 13], [5, 16]]), BB, 62);
-    expect(p.label).toBe('Completed');
+    expect(p.label).toBe('62 / 62');
     expect(p.complete).toBe(true);
   });
 
@@ -64,9 +64,9 @@ describe('describeShowProgress', () => {
     expect(describeShowProgress(by([[1, 3]]), undefined, 0).label).toBe('3 episodes');
   });
 
-  it('still says Completed when the total is met, whatever the seasons say', () => {
+  it('still gives the count when the total is met, whatever the seasons say', () => {
     // A show whose season counts are stale but whose total is right.
-    expect(describeShowProgress(by([[1, 62]]), BB, 62).label).toBe('Completed');
+    expect(describeShowProgress(by([[1, 62]]), BB, 62).label).toBe('62 / 62');
   });
 
   it('reports the episode numbers alongside the label', () => {
