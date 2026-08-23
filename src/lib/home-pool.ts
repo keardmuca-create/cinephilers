@@ -7,6 +7,8 @@ const redisUrl = process.env.UPSTASH_REDIS_REST_URL ?? process.env.KV_REST_API_U
 const redisToken = process.env.UPSTASH_REDIS_REST_TOKEN ?? process.env.KV_REST_API_TOKEN;
 const redis = redisUrl && redisToken ? new Redis({ url: redisUrl, token: redisToken }) : null;
 
+import { tmdbRequest } from './tmdb-fetch';
+
 const BASE = 'https://api.themoviedb.org/3';
 const IMG  = 'https://image.tmdb.org/t/p';
 const DAY  = 86_400; // seconds
@@ -35,7 +37,7 @@ async function fetchPage(path: string, page: number, key: string): Promise<Recor
   // its own (TMDB does not flag every adult title, which is what the vote floor
   // is really for), but the inconsistency was a bug.
   const url = `${BASE}${path}?api_key=${key}&language=en-US&include_adult=false&page=${page}`;
-  const res = await fetch(url, { next: { revalidate: DAY } });
+  const res = await tmdbRequest(url, { next: { revalidate: DAY } });
   if (!res.ok) return [];
   const d = await res.json() as { results?: Record<string, unknown>[] };
   return d.results ?? [];

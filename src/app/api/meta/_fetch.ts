@@ -1,4 +1,5 @@
 import type { ItemMeta } from './[id]/route';
+import { tmdbRequest } from '@/lib/tmdb-fetch';
 
 const BASE = 'https://api.themoviedb.org/3';
 const IMG  = 'https://image.tmdb.org/t/p';
@@ -23,8 +24,8 @@ export async function fetchOneMeta(id: string, key: string): Promise<ItemMeta> {
     const season = parseInt(epMatch[3], 10);
     const epNum  = parseInt(epMatch[4], 10);
     const [showRes, epRes] = await Promise.all([
-      fetch(`${BASE}/tv/${tvNum}?api_key=${key}&language=en-US`, { next: { revalidate: 3600 } }),
-      fetch(`${BASE}/tv/${tvNum}/season/${season}/episode/${epNum}?api_key=${key}&language=en-US`, { next: { revalidate: 3600 } }),
+      tmdbRequest(`${BASE}/tv/${tvNum}?api_key=${key}&language=en-US`, { next: { revalidate: 3600 } }),
+      tmdbRequest(`${BASE}/tv/${tvNum}/season/${season}/episode/${epNum}?api_key=${key}&language=en-US`, { next: { revalidate: 3600 } }),
     ]);
     const showData = await showRes.json();
     const epData   = await epRes.json();
@@ -58,7 +59,7 @@ export async function fetchOneMeta(id: string, key: string): Promise<ItemMeta> {
   const path = isShow ? `/tv/${num}` : `/movie/${num}`;
   // append_to_response rides along in the SAME request, so credits cost no
   // extra TMDB call — that's what gives us director and cast for free.
-  const res = await fetch(`${BASE}${path}?api_key=${key}&language=en-US&append_to_response=credits`, { next: { revalidate: 3600 } });
+  const res = await tmdbRequest(`${BASE}${path}?api_key=${key}&language=en-US&append_to_response=credits`, { next: { revalidate: 3600 } });
   if (!res.ok) throw new Error(`TMDB ${res.status}`);
   const d = await res.json();
 

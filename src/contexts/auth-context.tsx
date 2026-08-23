@@ -436,8 +436,27 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   // per backgrounded tab). On return we refresh immediately, so a tab hidden
   // past the 15-min access-token expiry is valid again before the user acts;
   // fetchWithAuth's 401-retry covers any race.
+  //
+  // Only while someone is actually signed in. Without this guard the effect ran
+  // for logged-out visitors too, so every anonymous view of the landing page
+  // posted to /api/auth/refresh and took a 401 straight back — a function
+  // invocation per visitor, for a session that does not exist.
+  //
+  // Keyed on the boolean, not the user object: `user` is replaced by a fresh
+  // object on every refetch, and depending on it directly would tear down and
+  // restart the 10-minute interval each time.
+  const isAuthed = !!user;
   useEffect(() => {
+    if (!isAuthed) return;
+    // A tab switch is not a reason to mint a token. visibilitychange fires on
+    // every alt-tab, so without a floor a few minutes of moving between windows
+    // is a few dozen refreshes. The access token lives 15 minutes and the
+    // interval below is 10, so a one-minute floor costs nothing.
+    let lastRefresh = 0;
     const refresh = () => {
+      const now = Date.now();
+      if (now - lastRefresh < 60_000) return;
+      lastRefresh = now;
       fetch('/api/auth/refresh', { method: 'POST', credentials: 'include' }).catch(() => {});
     };
     const id = setInterval(() => {
@@ -451,7 +470,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       clearInterval(id);
       document.removeEventListener('visibilitychange', onVisible);
     };
-  }, []);
+  }, [isAuthed]);
 
   return (
     <AuthContext.Provider value={{ user, loading, refetch, logout, updateUserLocally }}>

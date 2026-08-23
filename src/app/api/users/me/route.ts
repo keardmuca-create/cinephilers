@@ -3,6 +3,7 @@ import { prisma } from '@/lib/db';
 import { ok, err } from '@/lib/api-response';
 import { getCurrentUser } from '@/lib/auth-utils';
 import { sanitizeText } from '@/lib/sanitize';
+import { recomputeMovieRatings } from '@/lib/movie-rating-sync';
 import { put, del } from '@vercel/blob';
 
 const BLOB_HOST = '.blob.vercel-storage.com';
@@ -131,8 +132,19 @@ export async function DELETE(req: NextRequest) {
   const auth = await getCurrentUser(req);
   if (!auth) return err('Unauthorized', 401);
 
+  // The cascade wipes the user's ratings, but the Cinephilers aggregate is a
+  // standalone counter keyed by (tmdbId, mediaType) with no relation back to
+  // User — nothing cascades into it. Capture which titles they voted on first,
+  // then pull those votes back out, or a deleted account's scores stay in every
+  // title's average forever. Same two steps as the admin delete path.
+  const ratedTitles = await prisma.rating.findMany({
+    where: { userId: auth.sub },
+    select: { tmdbId: true, mediaType: true },
+  });
+
   // Hard delete — cascades to all related data (ratings, reviews, watchlist, etc.)
   await prisma.user.delete({ where: { id: auth.sub } });
+  await recomputeMovieRatings(ratedTitles);
 
   return ok(null, 'Account deleted');
 }

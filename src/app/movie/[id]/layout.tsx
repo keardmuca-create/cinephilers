@@ -1,6 +1,8 @@
 import type { Metadata } from 'next';
 
 const TMDB_API_KEY = process.env.TMDB_API_KEY;
+import { tmdbRequest } from '@/lib/tmdb-fetch';
+
 const BASE = 'https://api.themoviedb.org/3';
 
 async function fetchMovieMeta(id: string) {
@@ -10,7 +12,7 @@ async function fetchMovieMeta(id: string) {
   const endpoints = isShow ? ['tv', 'movie'] : ['movie', 'tv'];
   for (const kind of endpoints) {
     try {
-      const res = await fetch(`${BASE}/${kind}/${numId}?api_key=${TMDB_API_KEY}&language=en-US`, {
+      const res = await tmdbRequest(`${BASE}/${kind}/${numId}?api_key=${TMDB_API_KEY}&language=en-US`, {
         next: { revalidate: 86400 },
       });
       if (res.ok) {

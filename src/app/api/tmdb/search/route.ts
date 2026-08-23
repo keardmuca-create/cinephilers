@@ -4,6 +4,8 @@ import { rateLimit, getIp } from '@/lib/rate-limit';
 
 export const dynamic = 'force-dynamic';
 
+import { tmdbRequest } from '@/lib/tmdb-fetch';
+
 const BASE = 'https://api.themoviedb.org/3';
 
 interface TMDBResult {
@@ -113,13 +115,13 @@ export async function GET(req: NextRequest) {
   try {
     const [movieRes, tvRes] = await Promise.all([
       wantMovie
-        ? fetch(
+        ? tmdbRequest(
             `${BASE}/search/movie?api_key=${key}&query=${encodeURIComponent(q)}${year ? `&year=${year}` : ''}&include_adult=false`,
             { next: { revalidate: 3600 } }
           )
         : Promise.resolve(new Response('{"results":[]}', { status: 200 })),
       wantTV
-        ? fetch(
+        ? tmdbRequest(
             `${BASE}/search/tv?api_key=${key}&query=${encodeURIComponent(q)}${year ? `&first_air_date_year=${year}` : ''}&include_adult=false`,
             { next: { revalidate: 3600 } }
           )

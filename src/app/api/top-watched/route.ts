@@ -20,6 +20,23 @@ const CHART_SIZE = 10;
 const MIN_WATCHERS_PER_TITLE = 3;
 const MIN_TITLES_TO_SHOW = 5;
 
+// Every answer this route gives is cacheable, not just the one with a chart in
+// it. "Not ready" is what the home screen gets on every single load until the
+// community is big enough to fill five slots — so leaving that path bare meant
+// the most-hit route in the app ran the WatchEvent scan below, uncached, to
+// return the same twenty-six bytes each time.
+const CACHE = 'public, s-maxage=900, stale-while-revalidate=3600';
+// A failed query is held for a minute rather than the full window, so a brief
+// database wobble can't pin an empty chart in front of everyone for 15 minutes.
+const ERROR_CACHE = 'public, s-maxage=60';
+
+function notReady(cacheControl: string = CACHE) {
+  return NextResponse.json(
+    { ready: false, items: [] },
+    { headers: { 'Cache-Control': cacheControl } },
+  );
+}
+
 interface Row {
   tmdbId: string;
   watchers: number;
@@ -31,7 +48,7 @@ export async function GET(req: NextRequest) {
   if (!allowed) return NextResponse.json({ error: 'Too many requests' }, { status: 429 });
 
   const key = process.env.TMDB_API_KEY ?? '';
-  if (!key) return NextResponse.json({ ready: false, items: [] });
+  if (!key) return notReady();
 
   const since = new Date(Date.now() - WINDOW_DAYS * 24 * 60 * 60 * 1000);
 
@@ -58,11 +75,11 @@ export async function GET(req: NextRequest) {
     `;
   } catch {
     // A chart is decoration. It must never be the reason the home screen fails.
-    return NextResponse.json({ ready: false, items: [] });
+    return notReady(ERROR_CACHE);
   }
 
   if (rows.length < MIN_TITLES_TO_SHOW) {
-    return NextResponse.json({ ready: false, items: [] });
+    return notReady();
   }
 
   // Hydrate through the same meta path everything else uses, so these titles get
@@ -86,12 +103,12 @@ export async function GET(req: NextRequest) {
     .filter((x): x is NonNullable<typeof x> => x !== null);
 
   if (items.length < MIN_TITLES_TO_SHOW) {
-    return NextResponse.json({ ready: false, items: [] });
+    return notReady();
   }
 
   // Short cache: this is live activity, but it does not need to be to-the-second,
   // and the home screen is the most-hit route in the app.
   return NextResponse.json({ ready: true, items }, {
-    headers: { 'Cache-Control': 'public, s-maxage=900, stale-while-revalidate=3600' },
+    headers: { 'Cache-Control': CACHE },
   });
 }
