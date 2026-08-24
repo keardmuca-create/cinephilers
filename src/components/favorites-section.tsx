@@ -8,6 +8,7 @@ import { batchFetchMeta } from '@/lib/meta-batch';
 import { useAuth } from '@/contexts/auth-context';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
+import { toast } from '@/hooks/use-toast';
 
 interface FavoriteItem {
   id: string;
@@ -121,51 +122,114 @@ export function FavoritesSection() {
     setSearchOpen(true);
   };
 
-  const syncFavoriteDb = (method: string, item: FavoriteItem) => {
+  // The database is the source of truth — /api/sync reloads favourites from it
+  // at every sign-in. So a write that quietly failed is not a cosmetic problem:
+  // it is a change the person made, saw take effect, and then loses without ever
+  // being told. These calls used to be fire-and-forget with the error swallowed,
+  // which is exactly that. Now the caller waits for the answer.
+  const syncFavoriteDb = async (method: 'POST' | 'DELETE', item: FavoriteItem): Promise<boolean> => {
     const mediaType = item.type === 'show' ? 'SHOW' : 'MOVIE';
-    if (method === 'POST') {
-      fetchWithAuth('/api/favorites', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ tmdbId: item.id, mediaType }),
-      }).catch(() => {});
-    } else {
-      fetchWithAuth(`/api/favorites/${item.id}?mediaType=${mediaType}`, { method: 'DELETE' }).catch(() => {});
+    try {
+      const res = method === 'POST'
+        ? await fetchWithAuth('/api/favorites', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ tmdbId: item.id, mediaType }),
+          })
+        : await fetchWithAuth(`/api/favorites/${item.id}?mediaType=${mediaType}`, { method: 'DELETE' });
+      return res.ok;
+    } catch {
+      return false;
     }
   };
 
-  const addFavorite = (item: FavoriteItem) => {
+  // Put the list back and say why. A silent rollback would be its own bug: a
+  // poster reappearing with no explanation reads as the app ignoring the tap.
+  const revertFavorites = (previous: FavoriteItem[], action: string) => {
+    updateFavorites(previous);
+    toast({
+      title: `Couldn't ${action} that favorite`,
+      description: 'Your favorites are unchanged. Check your connection and try again.',
+      variant: 'destructive',
+    });
+  };
+
+  // Persist the ring's order. Without this the arrangement lived only on the
+  // device that made it, and the next page load rebuilt the list from the
+  // database — in the order things were added — throwing it away.
+  const saveFavoriteOrder = async (items: FavoriteItem[]): Promise<boolean> => {
+    try {
+      const res = await fetchWithAuth('/api/favorites', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          items: items.map(f => ({ tmdbId: f.id, mediaType: f.type === 'show' ? 'SHOW' : 'MOVIE' })),
+        }),
+      });
+      return res.ok;
+    } catch {
+      return false;
+    }
+  };
+
+  const addFavorite = async (item: FavoriteItem) => {
     if (favorites.some(f => f.id === item.id)) { setSearchOpen(false); return; }
+    const previous = favorites;
+
+    // Swap: replace one favourite with another. The screen still updates first,
+    // so it feels instant — but a swap only holds if BOTH halves land. Firing
+    // them off and hoping was how a swap could delete the old favourite, fail to
+    // add the new one, and leave an empty slot nobody asked for.
     if (swapIndex !== null && swapIndex < favorites.length) {
       const removed = favorites[swapIndex];
       const updated = [...favorites];
       updated[swapIndex] = item;
       updateFavorites(updated);
-      if (removed) syncFavoriteDb('DELETE', removed);
-      syncFavoriteDb('POST', item);
-    } else {
-      if (favorites.length >= MAX_FAVORITES) return;
-      updateFavorites([...favorites, item]);
-      syncFavoriteDb('POST', item);
+      setSearchOpen(false);
+
+      const removedOk = removed ? await syncFavoriteDb('DELETE', removed) : true;
+      const addedOk = await syncFavoriteDb('POST', item);
+      if (removedOk && addedOk) {
+        // The new favourite was just created, so it carries a fresh timestamp
+        // and would sort to the end — not into the slot it was swapped into.
+        // Rewriting the whole order puts it where the person dropped it.
+        await saveFavoriteOrder(updated);
+        return;
+      }
+
+      // Half-applied. Undo the half that DID land, or reverting the screen would
+      // leave it disagreeing with the server and the next sync would win.
+      if (removedOk && !addedOk && removed) await syncFavoriteDb('POST', removed);
+      if (!removedOk && addedOk) await syncFavoriteDb('DELETE', item);
+      revertFavorites(previous, 'swap');
+      return;
     }
+
+    if (favorites.length >= MAX_FAVORITES) return;
+    updateFavorites([...favorites, item]);
     setSearchOpen(false);
+    if (!(await syncFavoriteDb('POST', item))) revertFavorites(previous, 'add');
   };
 
-  const removeFavorite = (index: number) => {
+  const removeFavorite = async (index: number) => {
     const removed = favorites[index];
+    if (!removed) return;
+    const previous = favorites;
     updateFavorites(favorites.filter((_, i) => i !== index));
     setSelected(null);
-    if (removed) syncFavoriteDb('DELETE', removed);
+    if (!(await syncFavoriteDb('DELETE', removed))) revertFavorites(previous, 'remove');
   };
 
   // Tap a poster in arrange mode: first tap selects, second tap swaps the two.
-  const onArrangeTap = (i: number) => {
+  const onArrangeTap = async (i: number) => {
     if (selected === null) { setSelected(i); return; }
     if (selected === i) { setSelected(null); return; }
+    const previous = favorites;
     const updated = [...favorites];
     [updated[selected], updated[i]] = [updated[i], updated[selected]];
     updateFavorites(updated);
     setSelected(null);
+    if (!(await saveFavoriteOrder(updated))) revertFavorites(previous, 'rearrange');
   };
 
   return (
