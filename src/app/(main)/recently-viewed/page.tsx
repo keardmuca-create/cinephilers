@@ -5,6 +5,8 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import { ChevronLeft, Clock, Star, Search, X, Film, User } from 'lucide-react';
+import { useCommunityRatings } from '@/hooks/use-community-ratings';
+import { resolveDisplayRating } from '@/lib/cinephilers-rating';
 
 interface RecentItem {
   id: string;
@@ -16,6 +18,10 @@ interface RecentItem {
 }
 
 function ItemCard({ item, userRating }: { item: RecentItem; userRating?: number }) {
+  // People are excluded: their bare numeric id would resolve to whichever film
+  // owns that number — the same collision the link below guards against.
+  const cine = useCommunityRatings(item.type === 'person' ? [] : [item.id]);
+  const shown = resolveDisplayRating(item.rating, cine[item.id]);
   return (
     // See the note in components/recently-viewed.tsx: a person is stored with a
     // bare tmdb id, and /movie/{id} would open the film that shares that number.
@@ -38,10 +44,10 @@ function ItemCard({ item, userRating }: { item: RecentItem; userRating?: number 
         </h3>
         <p className="text-xs text-muted-foreground mb-1.5">{item.year}</p>
         <div className="flex items-center gap-2.5 flex-wrap">
-          {item.rating !== undefined && item.rating > 0 && (
+          {shown && (
             <div className="flex items-center gap-0.5">
-              <span className="text-xs text-yellow-400 font-bold">★</span>
-              <span className="text-xs font-bold text-foreground">{item.rating.toFixed(1)}</span>
+              <span className={`text-xs font-bold ${shown.source === 'cinephilers' ? 'text-primary' : 'text-yellow-400'}`}>★</span>
+              <span className="text-xs font-bold text-foreground">{shown.value.toFixed(1)}</span>
             </div>
           )}
           {userRating !== undefined && (

@@ -9,6 +9,8 @@ import { Movie } from '@/lib/types';
 import { MovieCard } from '@/components/movie-card';
 import { WatchedEye } from '@/components/watched-eye';
 import { readWatchedState, type WatchedState } from '@/lib/watched-state';
+import { useCommunityRatings } from '@/hooks/use-community-ratings';
+import { resolveDisplayRating } from '@/lib/cinephilers-rating';
 import { AIRecommendations } from '@/components/ai-recommendations';
 import { InstallPrompt } from '@/components/install-prompt';
 import { GetStarted } from '@/components/get-started';
@@ -30,6 +32,8 @@ interface ChartEntry extends Movie {
 function Top10Card({ movie, index }: { movie: ChartEntry; index: number }) {
   const [watched, setWatched] = useState<WatchedState>('none');
   const [userRating, setUserRating] = useState<number | undefined>(undefined);
+  const cine = useCommunityRatings([movie.id]);
+  const shown = resolveDisplayRating(movie.rating, cine[movie.id]);
 
   useEffect(() => {
     try {
@@ -66,10 +70,12 @@ function Top10Card({ movie, index }: { movie: ChartEntry; index: number }) {
             {movie.title}
           </h3>
           <div className="flex flex-col items-end gap-0.5 shrink-0">
-            {movie.rating > 0 && (
+            {shown && (
               <div className="flex items-center gap-0.5">
-                <Star className="h-3 w-3 fill-yellow-400 text-yellow-400" />
-                <span className="text-xs font-bold text-foreground">{movie.rating.toFixed(1)}</span>
+                <Star className={`h-3 w-3 ${shown.source === 'cinephilers'
+                  ? 'fill-primary text-primary'
+                  : 'fill-yellow-400 text-yellow-400'}`} />
+                <span className="text-xs font-bold text-foreground">{shown.value.toFixed(1)}</span>
               </div>
             )}
             {userRating !== undefined && (

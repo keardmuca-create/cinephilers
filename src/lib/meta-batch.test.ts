@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
-import { batchFetchMeta } from './meta-batch';
+import { batchFetchMeta, isStaleMeta } from './meta-batch';
 
 // Minimal localStorage + fetch stubs — the batcher only needs a cache to read
 // and a network to call.
@@ -38,7 +38,9 @@ afterEach(() => { vi.unstubAllGlobals(); });
 
 describe('batchFetchMeta', () => {
   it('answers from the cache without touching the network', async () => {
-    store.set('meta-tmdb-1', JSON.stringify(meta('tmdb-1')));
+    // Stamped now that films expire too: an unstamped entry counts as stale and
+    // earns one refetch, which is a different test (below).
+    store.set('meta-tmdb-1', JSON.stringify({ ...meta('tmdb-1'), _fetchedAt: Date.now() }));
     const got = await batchFetchMeta(['tmdb-1']);
     expect(got['tmdb-1'].title).toBe('Title tmdb-1');
     expect(calls).toHaveLength(0);
@@ -121,11 +123,20 @@ describe('batchFetchMeta', () => {
     expect(calls).toHaveLength(0);
   });
 
-  // A film is finished the day it comes out. Expiring films would refetch a whole
-  // library every day for nothing.
-  it('never expires a film, however old the entry', async () => {
-    store.set('meta-tmdb-4', JSON.stringify({ ...meta('tmdb-4'), _fetchedAt: Date.now() - 400 * DAY }));
+  // Films used to be exempt entirely, on the grounds that a released film is
+  // finished. Everything a film IS stays fixed — but its rating does not, and a
+  // permanent cache meant a row could show a score from the week it was first
+  // opened. Three days rather than the shows' one: the drift is real but slow.
+  it('expires a film older than three days', async () => {
+    store.set('meta-tmdb-4', JSON.stringify({ ...meta('tmdb-4'), _fetchedAt: Date.now() - 4 * DAY }));
     await batchFetchMeta(['tmdb-4']);
+    expect(calls).toHaveLength(1);
+  });
+
+  it('does not refetch a film on the shows clock', async () => {
+    // Two days old: a show would be refetched here, a film should not be.
+    store.set('meta-tmdb-6', JSON.stringify({ ...meta('tmdb-6'), _fetchedAt: Date.now() - 2 * DAY }));
+    await batchFetchMeta(['tmdb-6']);
     expect(calls).toHaveLength(0);
   });
 
@@ -145,5 +156,49 @@ describe('batchFetchMeta', () => {
     store.set('meta-tmdb-tv-1-S1E1', JSON.stringify({ id: 'tmdb-tv-1-S1E1', title: 'Ep', isEpisode: true, type: 'show' }));
     await batchFetchMeta(['tmdb-tv-1-S1E1']);
     expect(calls).toHaveLength(1);
+  });
+});
+
+describe('isStaleMeta', () => {
+  const DAY = 24 * 60 * 60 * 1000;
+  const ago = (ms: number) => Date.now() - ms;
+
+  it('treats a show older than a day as stale', () => {
+    expect(isStaleMeta({ id: 'x', type: 'show', _fetchedAt: ago(DAY + 1000) } as never)).toBe(true);
+  });
+
+  it('leaves a show fetched within the day alone', () => {
+    expect(isStaleMeta({ id: 'x', type: 'show', _fetchedAt: ago(DAY - 1000) } as never)).toBe(false);
+  });
+
+  // Films used to be exempt entirely, which is how a row kept showing a rating
+  // from the week it was first opened. Everything ELSE about a film really is
+  // fixed, so they expire on a slower clock than shows.
+  it('treats a film older than three days as stale', () => {
+    expect(isStaleMeta({ id: 'x', type: 'movie', _fetchedAt: ago(3 * DAY + 1000) } as never)).toBe(true);
+  });
+
+  it('leaves a film fetched within three days alone', () => {
+    expect(isStaleMeta({ id: 'x', type: 'movie', _fetchedAt: ago(2 * DAY) } as never)).toBe(false);
+  });
+
+  it('does not expire a film on the show clock', () => {
+    // A day and a half old: stale for a show, still fresh for a film.
+    expect(isStaleMeta({ id: 'x', type: 'movie', _fetchedAt: ago(DAY + DAY / 2) } as never)).toBe(false);
+  });
+
+  it('still never expires episodes', () => {
+    // They carry the parent's total and cost two TMDB fetches to check.
+    expect(isStaleMeta({ id: 'x', type: 'show', isEpisode: true, _fetchedAt: 0 } as never)).toBe(false);
+  });
+
+  it('treats an unstamped entry as stale so it gets a stamp', () => {
+    expect(isStaleMeta({ id: 'x', type: 'movie' } as never)).toBe(true);
+    expect(isStaleMeta({ id: 'x', type: 'show' } as never)).toBe(true);
+  });
+
+  it('says nothing about a missing entry', () => {
+    expect(isStaleMeta(null)).toBe(false);
+    expect(isStaleMeta(undefined)).toBe(false);
   });
 });

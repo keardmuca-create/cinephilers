@@ -14,6 +14,8 @@ import { fetchWithAuth } from '@/lib/fetch-with-auth';
 import { batchFetchMeta } from '@/lib/meta-batch';
 import { BadgeList, FounderChip, type EarnedBadge } from '@/components/badge-row';
 import { WatchedEye } from '@/components/watched-eye';
+import { useCommunityRatings } from '@/hooks/use-community-ratings';
+import { resolveDisplayRating } from '@/lib/cinephilers-rating';
 
 interface ProfileUser {
   id: string;
@@ -350,8 +352,12 @@ async function fetchSectionPage(key: SectionKey, uname: string, page: number): P
 }
 
 function SectionRow({ item, section }: { item: SectionItem; section: SectionKey }) {
+  const cine = useCommunityRatings([item.tmdbId]);
   const [meta, setMeta] = useState<Meta | null>(metaCache[item.tmdbId] ?? null);
   useEffect(() => { if (!meta) getMeta(item.tmdbId).then(m => { if (m) setMeta(m); }); }, [item.tmdbId, meta]);
+  // Read from the loaded meta, not the cache directly — this row fetches its own
+  // and the cache may still be empty on first paint.
+  const shown = resolveDisplayRating(meta?.tmdbRating, cine[item.tmdbId]);
   const cfg = SECTION_META[section];
   const StatusIcon = cfg.statusIcon;
   // The label only adds info for watched/rewatched — for ratings the blue score
@@ -385,8 +391,11 @@ function SectionRow({ item, section }: { item: SectionItem; section: SectionKey 
         {meta ? <p className="text-sm font-bold group-hover:text-primary transition-colors line-clamp-1">{meta.title}</p> : <div className="h-4 bg-muted rounded-full w-2/3 animate-pulse" />}
         {meta?.year && <p className="text-xs text-muted-foreground">{meta.year}</p>}
         <div className="flex items-center gap-3 flex-wrap pt-0.5">
-          {meta?.tmdbRating != null && meta.tmdbRating > 0 && (
-            <span className="flex items-center gap-1 text-sm font-bold"><Star className="h-3.5 w-3.5 fill-yellow-400 text-yellow-400" />{meta.tmdbRating.toFixed(1)}</span>
+          {shown && (
+            <span className="flex items-center gap-1 text-sm font-bold">
+              <Star className={`h-3.5 w-3.5 ${shown.source === 'cinephilers' ? 'fill-primary text-primary' : 'fill-yellow-400 text-yellow-400'}`} />
+              {shown.value.toFixed(1)}
+            </span>
           )}
           {item.score != null && (
             <span className="flex items-center gap-1 text-sm font-bold text-blue-400"><Star className="h-3.5 w-3.5 fill-current" />{item.score}</span>

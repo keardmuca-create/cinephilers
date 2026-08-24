@@ -12,6 +12,8 @@ import { batchFetchMeta } from '@/lib/meta-batch';
 import { getItemType, sideOf, SIDE_TYPES, TYPE_LABELS, type TypeFilter, type MediaSide } from '@/lib/media-type';
 import { MediaToggle } from '@/components/media-toggle';
 import { RefineSheet, type RefineValue, type SortOption, type CountOption } from '@/components/refine-sheet';
+import { useCommunityRatings } from '@/hooks/use-community-ratings';
+import { resolveDisplayRating } from '@/lib/cinephilers-rating';
 
 const SORT_OPTIONS: SortOption[] = [
   { value: 'recent',  label: 'Date added' },
@@ -42,6 +44,8 @@ function releaseLabel(item: WatchlistItem): string {
 }
 
 function ItemCard({ item, onRemove, showReleaseDate }: { item: WatchlistItem; onRemove: () => void; showReleaseDate?: boolean }) {
+  const cine = useCommunityRatings([item.id]);
+  const shown = resolveDisplayRating(item.tmdbRating, cine[item.id]);
   // Await the server delete and confirm it before dropping the row locally — a
   // silently-failed delete leaves the DB row alive, which the next DB→local sync
   // resurrects. Also clears the legacy bare-numeric twin key.
@@ -80,10 +84,10 @@ function ItemCard({ item, onRemove, showReleaseDate }: { item: WatchlistItem; on
           {item.title}
         </h3>
         <p className="text-xs text-muted-foreground mb-1.5">{showReleaseDate ? releaseLabel(item) : item.year}</p>
-        {item.tmdbRating !== undefined && item.tmdbRating > 0 && (
+        {shown && (
           <div className="flex items-center gap-0.5">
-            <span className="text-xs text-yellow-400 font-bold">★</span>
-            <span className="text-xs font-bold text-foreground">{item.tmdbRating.toFixed(1)}</span>
+            <span className={`text-xs font-bold ${shown.source === 'cinephilers' ? 'text-primary' : 'text-yellow-400'}`}>★</span>
+            <span className="text-xs font-bold text-foreground">{shown.value.toFixed(1)}</span>
           </div>
         )}
       </div>

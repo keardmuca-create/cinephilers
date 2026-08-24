@@ -15,6 +15,7 @@ import { collapseShows, type CollapsedRow } from '@/lib/collapse-shows';
 import { MediaToggle } from '@/components/media-toggle';
 import { RefineSheet, type RefineValue, type SortOption, type CountOption } from '@/components/refine-sheet';
 import { WatchedEye } from '@/components/watched-eye';
+import { useCommunityRatings } from '@/hooks/use-community-ratings';
 
 // ─── Refine config ──────────────────────────────────────────────────────────
 
@@ -122,6 +123,14 @@ function HistoryCard({ row, meta, userRating, onRemove }: {
   onRemove: (ids: string[]) => void;
 }) {
   const id = row.id;
+  // Above the early return below: hooks cannot be called conditionally.
+  const cine = useCommunityRatings([id]);
+  const community = cine[id];
+  // Not resolveDisplayRating here. This row deliberately prints 0.0 for a
+  // released title with no votes — see the note by the star — and that helper
+  // treats 0 as nothing to show. Same threshold rule, the row's own zero rule.
+  const useCine = !!(community?.hasEnough && typeof community.average === 'number' && community.average > 0);
+  const shownRating = useCine ? community!.average! : meta?.tmdbRating;
 
   if (!meta) {
     return (
@@ -259,10 +268,10 @@ function HistoryCard({ row, meta, userRating, onRemove }: {
               isn't released yet is a different case: it has no score because it
               cannot have one, and printing 0.0 states a verdict on something
               nobody has seen. */}
-          {meta.tmdbRating !== undefined && isReleased && (
+          {shownRating !== undefined && isReleased && (
             <div className="flex items-center gap-0.5">
-              <span className="text-xs text-yellow-400 font-bold">★</span>
-              <span className="text-xs font-bold text-foreground">{meta.tmdbRating.toFixed(1)}</span>
+              <span className={`text-xs font-bold ${useCine ? 'text-primary' : 'text-yellow-400'}`}>★</span>
+              <span className="text-xs font-bold text-foreground">{shownRating.toFixed(1)}</span>
             </div>
           )}
           {userRating !== undefined && (

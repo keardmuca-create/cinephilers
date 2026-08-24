@@ -14,6 +14,7 @@ import { readSavedRefine, persistRefine } from '@/lib/refine-sort';
 import { RefineSheet, type RefineValue } from '@/components/refine-sheet';
 import { useAuth } from '@/contexts/auth-context';
 import { WatchedEye } from '@/components/watched-eye';
+import { CommunityStar } from '@/components/community-star';
 
 interface DiaryTitle {
   tmdbId: string;
@@ -240,12 +241,7 @@ export default function DiaryPage() {
                       </h3>
                       <p className="text-xs text-muted-foreground mb-1.5">{item.year}</p>
                       <div className="flex items-center gap-2.5 flex-wrap">
-                        {item.tmdbRating !== undefined && item.tmdbRating > 0 && (
-                          <div className="flex items-center gap-0.5">
-                            <span className="text-xs text-yellow-400 font-bold">★</span>
-                            <span className="text-xs font-bold text-foreground">{item.tmdbRating.toFixed(1)}</span>
-                          </div>
-                        )}
+                        <CommunityStar id={item.tmdbId} tmdbRating={item.tmdbRating} />
                         {item.userRating !== undefined && (
                           <div className="flex items-center gap-0.5">
                             <span className="text-xs text-blue-400 font-bold">★</span>

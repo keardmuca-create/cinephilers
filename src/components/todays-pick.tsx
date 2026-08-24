@@ -6,6 +6,8 @@ import Link from 'next/link';
 import { Star, Sparkles, Loader2, Film, Check, Lock, MoreHorizontal } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Movie } from '@/lib/types';
+import { useCommunityRatings } from '@/hooks/use-community-ratings';
+import { resolveDisplayRating } from '@/lib/cinephilers-rating';
 import { useAuth } from '@/contexts/auth-context';
 import { fetchWithAuth } from '@/lib/fetch-with-auth';
 import { seededShuffle, DAY_MS } from '@/lib/seed-shuffle';
@@ -330,6 +332,9 @@ async function pickWatchlistId(recentIds: string[] = []): Promise<PickResult> {
 export function TodaysPick() {
   const { user, loading: authLoading } = useAuth();
   const [movie, setMovie] = useState<Movie | null>(null);
+  // Declared up here with the other state so the render below can read it; the
+  // hook needs an id that may not exist yet, which it handles as an empty list.
+  const pickCine = useCommunityRatings([movie?.id]);
   const [generating, setGenerating] = useState(false);
   const [initializing, setInitializing] = useState(true);
   const [emptyWatchlist, setEmptyWatchlist] = useState(false);
@@ -708,11 +713,15 @@ export function TodaysPick() {
               <h2 className="text-xl font-headline font-bold leading-tight line-clamp-2">{movie.title}</h2>
               <p className="flex items-center justify-center gap-3 text-sm text-muted-foreground font-bold">
                 {movie.year && <span>{movie.year}</span>}
-                {movie.rating > 0 && (
-                  <span className="flex items-center gap-1 text-accent">
-                    <Star className="h-3.5 w-3.5 fill-current" />{movie.rating.toFixed(1)}
-                  </span>
-                )}
+                {(() => {
+                  const shown = resolveDisplayRating(movie.rating, pickCine[movie.id]);
+                  if (!shown) return null;
+                  return (
+                    <span className={`flex items-center gap-1 ${shown.source === 'cinephilers' ? 'text-primary' : 'text-accent'}`}>
+                      <Star className="h-3.5 w-3.5 fill-current" />{shown.value.toFixed(1)}
+                    </span>
+                  );
+                })()}
               </p>
               {pickFact && (
                 <p className="flex items-start justify-center gap-1.5 text-xs text-primary font-semibold">

@@ -8,6 +8,8 @@ import { Star, Film } from 'lucide-react';
 import { Movie } from '@/lib/types';
 import { WatchedEye } from '@/components/watched-eye';
 import { readWatchedState, type WatchedState } from '@/lib/watched-state';
+import { useCommunityRatings } from '@/hooks/use-community-ratings';
+import { resolveDisplayRating } from '@/lib/cinephilers-rating';
 import { cn } from '@/lib/utils';
 
 interface MovieCardProps {
@@ -19,6 +21,10 @@ interface MovieCardProps {
 export const MovieCard = React.memo(function MovieCard({ movie, className, horizontal = false }: MovieCardProps) {
   const [watched, setWatched] = useState<WatchedState>('none');
   const [userRating, setUserRating] = useState<number | undefined>(undefined);
+  // Asked per card, answered per screen: the batcher gathers every card
+  // rendering in the same tick into one request.
+  const cine = useCommunityRatings([movie.id]);
+  const shown = resolveDisplayRating(movie.rating, cine[movie.id]);
 
   useEffect(() => {
     try {
@@ -73,10 +79,12 @@ export const MovieCard = React.memo(function MovieCard({ movie, className, horiz
             </p>
           </div>
           <div className="flex flex-col items-end gap-0.5 shrink-0">
-            {movie.rating > 0 && (
+            {shown && (
               <div className="flex items-center gap-0.5">
-                <Star className="h-3 w-3 fill-yellow-400 text-yellow-400" />
-                <span className="text-xs font-bold text-foreground">{movie.rating.toFixed(1)}</span>
+                <Star className={cn('h-3 w-3', shown.source === 'cinephilers'
+                  ? 'fill-primary text-primary'
+                  : 'fill-yellow-400 text-yellow-400')} />
+                <span className="text-xs font-bold text-foreground">{shown.value.toFixed(1)}</span>
               </div>
             )}
             {userRating !== undefined && (

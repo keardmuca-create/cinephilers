@@ -1,11 +1,15 @@
 "use client"
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { Clock, Star, ChevronRight, Film, User } from 'lucide-react';
 import { WatchedEye } from '@/components/watched-eye';
 import { readWatchedState, type WatchedState } from '@/lib/watched-state';
+import { batchFetchMeta } from '@/lib/meta-batch';
+import { batchFetchRatings } from '@/lib/rating-batch';
+import { resolveDisplayRating } from '@/lib/cinephilers-rating';
+import type { BatchRating } from '@/app/api/movies/ratings/route';
 
 interface RecentItem {
   id: string;
@@ -20,6 +24,30 @@ interface RecentItem {
 export function RecentlyViewed() {
   const [items, setItems] = useState<RecentItem[]>([]);
   const [userRatings, setUserRatings] = useState<Record<string, number>>({});
+  // Live scores, fetched behind the stored snapshot. Keyed by id; a value of
+  // null means "asked, and this title has no community score".
+  const [cine, setCine] = useState<Record<string, BatchRating | null>>({});
+
+  // The stored entry carries the rating that was true when the film was last
+  // OPENED, which for a row called "recently viewed" can be weeks ago. Refresh
+  // the number behind the snapshot: the row paints instantly from what it has,
+  // then corrects itself — the same order the rest of the app paints in.
+  const refreshRatings = useCallback((list: RecentItem[]) => {
+    // People live in this row too, stored with a BARE tmdb id. Sending those to
+    // a title endpoint canonicalises them into `tmdb-{id}` and returns whichever
+    // film owns that number — the same collision the link below guards against.
+    const ids = list.filter(i => i.id && i.type !== 'person').map(i => i.id);
+    if (ids.length === 0) return;
+    batchFetchRatings(ids).then(setCine).catch(() => { /* keep the snapshot */ });
+    batchFetchMeta(ids)
+      .then(metaMap => {
+        setItems(prev => prev.map(item => {
+          const m = metaMap[item.id];
+          return m && typeof m.tmdbRating === 'number' ? { ...item, rating: m.tmdbRating } : item;
+        }));
+      })
+      .catch(() => { /* keep the snapshot */ });
+  }, []);
 
   useEffect(() => {
     try {
@@ -31,6 +59,7 @@ export function RecentlyViewed() {
           watched: readWatchedState(item.id),
         }));
         setItems(slice);
+        refreshRatings(slice);
         const ratings: Record<string, number> = {};
         for (const item of slice) {
           const r = localStorage.getItem(`movie-rating-${item.id}`);
@@ -48,12 +77,13 @@ export function RecentlyViewed() {
           const slice = (JSON.parse(e.newValue) as RecentItem[]).slice(0, 25)
             .map(item => ({ ...item, watched: readWatchedState(item.id) }));
           setItems(slice);
+          refreshRatings(slice);
         } catch { /* ignore */ }
       }
     };
     window.addEventListener('storage', onStorage);
     return () => window.removeEventListener('storage', onStorage);
-  }, []);
+  }, [refreshRatings]);
 
   useEffect(() => {
     const handler = (e: Event) => {
@@ -96,6 +126,10 @@ export function RecentlyViewed() {
       <div className="flex overflow-x-auto gap-4 px-6 pb-4 no-scrollbar">
         {items.map(item => {
           const userRating = userRatings[item.id];
+          // One rule for the whole app: past the vote threshold a title shows
+          // what this community made of it, everywhere it appears — not the
+          // community score on its own page and TMDB's everywhere else.
+          const shown = resolveDisplayRating(item.rating, cine[item.id]);
           return (
             // People are stored here too — the person page adds itself with
             // type 'person' and a BARE tmdb id. Sending those to /movie/{id}
@@ -128,13 +162,17 @@ export function RecentlyViewed() {
                       {item.title}
                     </h3>
                     <div className="flex flex-col items-end gap-0.5 shrink-0">
-                      {/* `> 0`, not just truthiness: a rating of 0 makes
-                          `item.rating && …` evaluate to the number 0, which React
-                          renders as a literal "0" beside the title. */}
-                      {item.rating != null && item.rating > 0 && (
+                      {/* resolveDisplayRating returns null rather than 0 when
+                          there is nothing to show, so the star is left off
+                          instead of a literal "0" appearing beside the title. */}
+                      {shown && (
                         <div className="flex items-center gap-0.5">
-                          <Star className="h-3 w-3 fill-yellow-400 text-yellow-400" />
-                          <span className="text-xs font-bold text-foreground">{item.rating.toFixed(1)}</span>
+                          <Star
+                            className={`h-3 w-3 ${shown.source === 'cinephilers'
+                              ? 'fill-primary text-primary'
+                              : 'fill-yellow-400 text-yellow-400'}`}
+                          />
+                          <span className="text-xs font-bold text-foreground">{shown.value.toFixed(1)}</span>
                         </div>
                       )}
                       {userRating !== undefined && (

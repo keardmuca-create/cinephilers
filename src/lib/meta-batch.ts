@@ -36,11 +36,28 @@ const CHUNK = 100;
 // prefers the show's number over the one its episodes are carrying.
 const SHOW_TTL_MS = 24 * 60 * 60 * 1000;
 
+// Films expire too, on a slower clock — and the reason is narrower than the one
+// above. Everything a film is really is fixed: its title, poster, year, runtime
+// and director are the same today as the day it came out, and the paragraph
+// above was right to say refetching them daily buys nothing.
+//
+// Its RATING is not fixed. A new release opens high on a handful of votes from
+// the people who rushed to see it, then settles as everyone else arrives — 9.0
+// across 37 votes becoming 6.8 across 102 inside a week is ordinary, not an
+// anomaly. Because film entries never expired, whatever score a device saw the
+// first time was the score it kept, and a row could sit there for a week
+// insisting on a number the film page had long since moved past.
+//
+// Three days rather than one: the drift is real but it is measured in days, and
+// a third of the refetches covers almost all of it.
+const FILM_TTL_MS = 3 * 24 * 60 * 60 * 1000;
+
 /** A cache entry plus when we wrote it. The stamp is ours, not TMDB's. */
 export type CachedMeta = ItemMeta & { _fetchedAt?: number };
 
 /**
- * True when a cached entry is old enough that its episode total may have moved.
+ * True when a cached entry is old enough that something on it may have moved —
+ * a show's episode total, or a film's rating.
  *
  * Exported because this cache has more readers than this module: the history page
  * and the profile read localStorage straight and decide for themselves what to
@@ -51,8 +68,12 @@ export type CachedMeta = ItemMeta & { _fetchedAt?: number };
  * writes the cache directly — counts as stale once, and carries a stamp after.
  */
 export function isStaleMeta(cached: CachedMeta | null | undefined): boolean {
-  if (!cached || cached.type !== 'show' || cached.isEpisode === true) return false;
+  if (!cached) return false;
+  // Episodes still never expire — see the note on SHOW_TTL_MS. They carry their
+  // parent's total, and checking one costs the server two TMDB fetches.
+  if (cached.isEpisode === true) return false;
   const stamp = typeof cached._fetchedAt === 'number' ? cached._fetchedAt : 0;
+  if (cached.type === 'movie') return Date.now() - stamp > FILM_TTL_MS;
   return Date.now() - stamp > SHOW_TTL_MS;
 }
 

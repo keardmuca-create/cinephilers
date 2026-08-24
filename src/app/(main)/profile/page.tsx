@@ -25,6 +25,7 @@ import { useAuth } from '@/contexts/auth-context';
 import { readSavedRefine, applyRefineSort } from '@/lib/refine-sort';
 import type { RefineValue } from '@/components/refine-sheet';
 import { WatchedEye } from '@/components/watched-eye';
+import { CommunityStar } from '@/components/community-star';
 
 // How long a rebuild trigger waits for its siblings before the profile rebuilds.
 // Long enough to swallow the focus/visibilitychange/db-restored burst of a PWA open,
@@ -117,12 +118,7 @@ function DiarySection() {
               )}
             </div>
             <div className="flex items-center gap-1.5 mb-0.5 flex-wrap">
-              {item.tmdbRating !== undefined && (
-                <div className="flex items-center gap-0.5">
-                  <span className="text-xs text-yellow-400 font-bold">★</span>
-                  <span className="text-xs font-bold text-foreground">{item.tmdbRating.toFixed(1)}</span>
-                </div>
-              )}
+              <CommunityStar id={item.id} tmdbRating={item.tmdbRating} showZero />
               {item.userRating !== undefined && (
                 <div className="flex items-center gap-0.5">
                   <span className="text-xs text-blue-400 font-bold">★</span>
@@ -1600,12 +1596,7 @@ export default function ProfilePage() {
                   )}
                 </div>
                 <div className="flex items-center gap-1.5 mb-0.5 flex-wrap">
-                  {item.tmdbRating !== undefined && (
-                    <div className="flex items-center gap-0.5">
-                      <span className="text-xs text-yellow-400 font-bold">★</span>
-                      <span className="text-xs font-bold text-foreground">{item.tmdbRating.toFixed(1)}</span>
-                    </div>
-                  )}
+                  <CommunityStar id={item.id} tmdbRating={item.tmdbRating} showZero />
                   {item.rating !== undefined && (
                     <div className="flex items-center gap-0.5">
                       <span className="text-xs text-blue-400 font-bold">★</span>
@@ -1669,12 +1660,7 @@ export default function ProfilePage() {
                   )}
                 </div>
                 <div className="flex items-center gap-1.5 mb-0.5 flex-wrap">
-                  {item.tmdbRating !== undefined && (
-                    <div className="flex items-center gap-0.5">
-                      <span className="text-xs text-yellow-400 font-bold">★</span>
-                      <span className="text-xs font-bold text-foreground">{item.tmdbRating.toFixed(1)}</span>
-                    </div>
-                  )}
+                  <CommunityStar id={item.id} tmdbRating={item.tmdbRating} showZero />
                   <div className="flex items-center gap-0.5">
                     <span className="text-xs text-blue-400 font-bold">★</span>
                     <span className="text-xs font-bold text-blue-400">{item.userRating}</span>
@@ -1742,14 +1728,9 @@ export default function ProfilePage() {
                     </div>
                   )}
                 </div>
-                {item.rating > 0 && (
-                  <div className="flex items-center gap-1.5 mb-0.5 flex-wrap">
-                    <div className="flex items-center gap-0.5">
-                      <span className="text-xs text-yellow-400 font-bold">★</span>
-                      <span className="text-xs font-bold text-foreground">{item.rating.toFixed(1)}</span>
-                    </div>
-                  </div>
-                )}
+                <div className="flex items-center gap-1.5 mb-0.5 flex-wrap">
+                  <CommunityStar id={item.id} tmdbRating={item.rating} />
+                </div>
                 <p className="text-xs font-semibold font-headline line-clamp-2 group-hover:text-primary transition-colors leading-snug">
                   {item.title} {item.year ? `(${item.year})` : ''}
                 </p>

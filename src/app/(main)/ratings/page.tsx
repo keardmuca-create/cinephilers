@@ -12,6 +12,8 @@ import { collapseRatings, type CollapsedRating } from '@/lib/collapse-ratings';
 import { MediaToggle } from '@/components/media-toggle';
 import { RefineSheet, type RefineValue, type SortOption, type CountOption } from '@/components/refine-sheet';
 import { WatchedEye } from '@/components/watched-eye';
+import { useCommunityRatings } from '@/hooks/use-community-ratings';
+import { resolveDisplayRating } from '@/lib/cinephilers-rating';
 
 const SORT_OPTIONS: SortOption[] = [
   { value: 'rating',  label: 'Your rating' },
@@ -55,6 +57,8 @@ function readMetaCache(id: string): Meta | null {
 }
 
 function ItemCard({ item }: { item: RatedItem }) {
+  const cine = useCommunityRatings([item.id]);
+  const shown = resolveDisplayRating(item.tmdbRating, cine[item.id]);
   // The episode average is deliberately quieter than the series rating: one is
   // what you said, the other is arithmetic done on your behalf.
   const episodeLine = item.episodeCount
@@ -81,10 +85,10 @@ function ItemCard({ item }: { item: RatedItem }) {
         )}
         <p className="text-xs text-muted-foreground mb-1.5">{item.year}</p>
         <div className="flex items-center gap-2.5 flex-wrap">
-          {item.tmdbRating !== undefined && (
+          {shown && (
             <div className="flex items-center gap-0.5">
-              <span className="text-xs text-yellow-400 font-bold">★</span>
-              <span className="text-xs font-bold text-foreground">{item.tmdbRating.toFixed(1)}</span>
+              <span className={`text-xs font-bold ${shown.source === 'cinephilers' ? 'text-primary' : 'text-yellow-400'}`}>★</span>
+              <span className="text-xs font-bold text-foreground">{shown.value.toFixed(1)}</span>
             </div>
           )}
           {item.userRating !== undefined && (
