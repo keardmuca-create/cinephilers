@@ -8,10 +8,17 @@ import * as Sentry from '@sentry/nextjs';
 //
 // Set SENTRY_DEBUG_LOCAL=1 in .env.local to turn it on locally when testing
 // Sentry itself.
+// Gated on being DEPLOYED, not on being a production build. NODE_ENV is
+// 'production' for any `next build && next start`, which includes running the
+// production build on this machine — so verifying something locally reported
+// into the live project and tripped the production alert rule, which is the
+// exact failure this gate was added to prevent. Vercel sets
+// NEXT_PUBLIC_VERCEL_ENV on real deployments and nowhere else.
 const dsn = process.env.NEXT_PUBLIC_SENTRY_DSN;
 const enabled =
   !!dsn &&
-  (process.env.NODE_ENV === 'production' || process.env.NEXT_PUBLIC_SENTRY_DEBUG_LOCAL === '1');
+  (process.env.NEXT_PUBLIC_VERCEL_ENV === 'production' ||
+    process.env.NEXT_PUBLIC_SENTRY_DEBUG_LOCAL === '1');
 
 if (enabled) {
   Sentry.init({

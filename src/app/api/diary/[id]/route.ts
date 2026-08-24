@@ -1,6 +1,7 @@
 import { NextRequest } from 'next/server';
 import { prisma } from '@/lib/db';
 import { ok, err } from '@/lib/api-response';
+import { writeLimit } from '@/lib/write-limit';
 import { getCurrentUser } from '@/lib/auth-utils';
 
 // Remove one diary entry ("logged by mistake"). Keeps the WatchedItem summary
@@ -10,6 +11,8 @@ import { getCurrentUser } from '@/lib/auth-utils';
 export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const auth = await getCurrentUser(req);
   if (!auth) return err('Unauthorized', 401);
+  const limited = await writeLimit(req, auth.sub);
+  if (limited) return limited;
 
   const { id } = await params;
   const event = await prisma.watchEvent.findUnique({

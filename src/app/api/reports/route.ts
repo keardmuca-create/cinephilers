@@ -1,6 +1,7 @@
 import { NextRequest } from 'next/server';
 import { prisma } from '@/lib/db';
 import { ok, err } from '@/lib/api-response';
+import { writeLimit } from '@/lib/write-limit';
 import { getCurrentUser } from '@/lib/auth-utils';
 
 const VALID_REASONS = ['Spam or advertising', 'Inappropriate or offensive content', 'Spoilers without warning', 'Harassment or bullying'];
@@ -9,6 +10,8 @@ const VALID_TYPES = ['review', 'comment'];
 export async function POST(req: NextRequest) {
   const auth = await getCurrentUser(req);
   if (!auth) return err('Unauthorized', 401);
+  const limited = await writeLimit(req, auth.sub);
+  if (limited) return limited;
 
   const { targetType, targetId, reason } = await req.json().catch(() => ({}));
   if (!VALID_TYPES.includes(targetType)) return err('Invalid target type');

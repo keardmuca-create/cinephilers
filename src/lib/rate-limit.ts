@@ -42,6 +42,25 @@ export async function rateLimit(key: string, limit: number, windowMs: number): P
   return { allowed: true, retryAfter: 0 };
 }
 
+/**
+ * Forget a key's current window.
+ *
+ * For counters that are meant to track FAILURES: the check itself increments, so
+ * a successful attempt has to give its slot back or five ordinary sign-ins in a
+ * row would lock someone out of their own account. Called on success, never on
+ * failure.
+ */
+export async function clearRateLimit(key: string, windowMs: number): Promise<void> {
+  const window = Math.floor(Date.now() / windowMs);
+  if (redis) {
+    // Failing to clear must never fail the request that succeeded — the worst
+    // case is one wasted slot in a window that expires on its own.
+    try { await redis.del(`rl:${key}:${window}`); } catch { /* ignore */ }
+    return;
+  }
+  store.delete(key);
+}
+
 export function getIp(req: Request): string {
   // Prefer x-real-ip: on Vercel it's a single value set by the platform and
   // can't be spoofed by appending to a client-supplied x-forwarded-for chain.

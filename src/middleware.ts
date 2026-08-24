@@ -87,6 +87,11 @@ export const config = {
   matcher: [
     // Run on all page routes so each gets a CSP nonce, but skip API routes and
     // static assets (which don't render scripts and shouldn't pay the cost).
+    //
+    // API stays OUT deliberately. A matcher filters by path, not by method, so
+    // covering writes here would mean running middleware on every read as well —
+    // and reads outnumber writes by a wide margin. The write ceiling lives in the
+    // routes instead, where it costs nothing per request. See lib/write-limit.
     {
       source: '/((?!api|_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico)$).*)',
     },

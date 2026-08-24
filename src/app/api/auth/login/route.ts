@@ -3,13 +3,20 @@ import bcrypt from 'bcryptjs';
 import { prisma } from '@/lib/db';
 import { ok, err } from '@/lib/api-response';
 import { signAccessToken, signRefreshToken, setAuthCookies } from '@/lib/auth-utils';
-import { rateLimit, getIp } from '@/lib/rate-limit';
+import { rateLimit, clearRateLimit, getIp } from '@/lib/rate-limit';
 
 // Email verification is only enforced for accounts created on or after this date.
 // Everyone who signed up before it is grandfathered in (verification was never
 // required, so most existing users have isVerified=false), and we don't flip
 // their flag because isVerified also drives the public ✓ badge.
 const VERIFY_REQUIRED_AFTER = new Date('2026-06-29T00:00:00.000Z');
+
+// Failed attempts allowed against ONE account before it stops answering, and how
+// long the lock lasts. Counted per account rather than per address: an attacker
+// rotating IPs was previously unlimited against a single victim, because the only
+// counter was keyed on where the request came from.
+const ACCOUNT_ATTEMPT_LIMIT = 5;
+const ACCOUNT_LOCK_MS = 15 * 60 * 1000;
 
 export async function POST(req: NextRequest) {
   const { allowed, retryAfter } = await rateLimit(`login:${getIp(req)}`, 10, 60_000);
@@ -20,6 +27,15 @@ export async function POST(req: NextRequest) {
 
   const { identifier, password } = body as { identifier: string; password: string };
   if (!identifier || !password) return err('Email/username and password are required');
+
+  // Keyed on what was typed, lowercased, so "Keard" and "keard" share a counter
+  // and an attacker cannot get a fresh allowance by changing the capitalisation.
+  const accountKey = `login-account:${identifier.toLowerCase().trim()}`;
+  const account = await rateLimit(accountKey, ACCOUNT_ATTEMPT_LIMIT, ACCOUNT_LOCK_MS);
+  if (!account.allowed) {
+    const mins = Math.ceil(account.retryAfter / 60);
+    return err(`Too many failed attempts for this account. Try again in ${mins} minute${mins === 1 ? '' : 's'}.`, 429);
+  }
 
   const isEmail = identifier.includes('@');
   const user = await prisma.user.findFirst({
@@ -32,6 +48,11 @@ export async function POST(req: NextRequest) {
 
   const valid = await bcrypt.compare(password, user.passwordHash);
   if (!valid) return err('Invalid credentials', 401);
+
+  // The password was right, so this attempt was not an attack — hand its slot
+  // back. Without this the counter would treat five ordinary sign-ins the same
+  // as five guesses and lock the owner out of their own account.
+  await clearRateLimit(accountKey, ACCOUNT_LOCK_MS);
 
   if (user.isBanned) return err('This account has been suspended.', 403);
 

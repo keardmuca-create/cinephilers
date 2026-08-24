@@ -1,12 +1,15 @@
 import { NextRequest } from 'next/server';
 import { prisma } from '@/lib/db';
 import { ok, err } from '@/lib/api-response';
+import { writeLimit } from '@/lib/write-limit';
 import { getCurrentUser } from '@/lib/auth-utils';
 import { canViewUserContent } from '@/lib/privacy';
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const auth = await getCurrentUser(req);
   if (!auth) return err('Unauthorized', 401);
+  const limited = await writeLimit(req, auth.sub);
+  if (limited) return limited;
 
   const { id: reviewId } = await params;
   const review = await prisma.review.findUnique({ where: { id: reviewId }, select: { id: true, userId: true, tmdbId: true, hidden: true } });
@@ -42,6 +45,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const auth = await getCurrentUser(req);
   if (!auth) return err('Unauthorized', 401);
+  const limited = await writeLimit(req, auth.sub);
+  if (limited) return limited;
 
   const { id: reviewId } = await params;
 

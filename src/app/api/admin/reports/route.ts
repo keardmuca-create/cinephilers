@@ -1,6 +1,7 @@
 import { NextRequest } from 'next/server';
 import { prisma } from '@/lib/db';
 import { ok, err } from '@/lib/api-response';
+import { writeLimit } from '@/lib/write-limit';
 import { requireAdmin } from '@/lib/admin-auth';
 
 export const dynamic = 'force-dynamic';
@@ -50,6 +51,8 @@ export async function GET(req: NextRequest) {
 
 export async function PATCH(req: NextRequest) {
   const { status: adminStatus } = await requireAdmin(req);
+  const limited = await writeLimit(req);
+  if (limited) return limited;
   if (adminStatus === 'unauthenticated') return err('Unauthorized', 401);
   if (adminStatus === 'forbidden') return err('Forbidden', 403);
 
@@ -62,6 +65,8 @@ export async function PATCH(req: NextRequest) {
 
 export async function DELETE(req: NextRequest) {
   const { status } = await requireAdmin(req);
+  const limited = await writeLimit(req);
+  if (limited) return limited;
   if (status === 'unauthenticated') return err('Unauthorized', 401);
   if (status === 'forbidden') return err('Forbidden', 403);
 
@@ -93,6 +98,8 @@ export async function DELETE(req: NextRequest) {
 // re-increments the author's reviewsCount; the report is marked dismissed.
 export async function POST(req: NextRequest) {
   const { status } = await requireAdmin(req);
+  const limited = await writeLimit(req);
+  if (limited) return limited;
   if (status === 'unauthenticated') return err('Unauthorized', 401);
   if (status === 'forbidden') return err('Forbidden', 403);
 

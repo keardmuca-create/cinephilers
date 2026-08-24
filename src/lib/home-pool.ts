@@ -37,10 +37,20 @@ async function fetchPage(path: string, page: number, key: string): Promise<Recor
   // its own (TMDB does not flag every adult title, which is what the vote floor
   // is really for), but the inconsistency was a bug.
   const url = `${BASE}${path}?api_key=${key}&language=en-US&include_adult=false&page=${page}`;
-  const res = await tmdbRequest(url, { next: { revalidate: DAY } });
-  if (!res.ok) return [];
-  const d = await res.json() as { results?: Record<string, unknown>[] };
-  return d.results ?? [];
+  try {
+    const res = await tmdbRequest(url, { next: { revalidate: DAY } });
+    if (!res.ok) return [];
+    const d = await res.json() as { results?: Record<string, unknown>[] };
+    return d.results ?? [];
+  } catch {
+    // A page that refuses to answer is the same as a page with nothing on it.
+    // This already treated a bad STATUS that way; a timeout or a dead connection
+    // was the one path still allowed to throw, and it threw all the way out
+    // through buildHomePool to the route, turning "TMDB is slow" into a 500 on
+    // the home screen. The pool is built from several pages — losing one of them
+    // costs a few titles, not the whole screen.
+    return [];
+  }
 }
 
 export async function buildHomePool(): Promise<Movie[]> {

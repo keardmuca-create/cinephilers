@@ -6,6 +6,7 @@ import { canonicalId, normalizeLocalMediaIds, recordAddedAt, recordWatchedAt, re
 import { batchFetchMeta } from '@/lib/meta-batch';
 import { clearUserData } from '@/lib/clear-user-data';
 import { applyServerRefinePrefs } from '@/lib/refine-sort';
+import * as Sentry from '@sentry/nextjs';
 
 const STORAGE_KEY = 'cinephilers_user';
 
@@ -445,6 +446,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   // Keyed on the boolean, not the user object: `user` is replaced by a fresh
   // object on every refetch, and depending on it directly would tear down and
   // restart the 10-minute interval each time.
+  // Tell Sentry who this is, so a report says who it happened to rather than
+  // only what broke. Nothing was setting this, which is the difference between
+  // "somebody hit an error" and "this person did, and here is their library".
+  //
+  // Id and username only — never the email. An error report is not a reason to
+  // put an address into a third party's system.
+  useEffect(() => {
+    if (user) Sentry.setUser({ id: user.id, username: user.username });
+    else Sentry.setUser(null);
+  }, [user]);
+
   const isAuthed = !!user;
   useEffect(() => {
     if (!isAuthed) return;

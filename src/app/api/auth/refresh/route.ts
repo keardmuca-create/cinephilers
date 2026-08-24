@@ -2,8 +2,17 @@ import { NextRequest } from 'next/server';
 import { prisma } from '@/lib/db';
 import { ok, err } from '@/lib/api-response';
 import { verifyRefreshToken, signAccessToken, signRefreshToken, setAuthCookies, clearAuthCookies } from '@/lib/auth-utils';
+import { rateLimit, getIp } from '@/lib/rate-limit';
 
 export async function POST(req: NextRequest) {
+  // Every call here is a database lookup and two token signings, and the client
+  // calls it on a timer and on tab focus — so a loop on one device, or a script,
+  // is a real cost. Generous enough that no legitimate session notices: the
+  // interval is ten minutes and the client throttles focus refreshes to one a
+  // minute, so twenty is many times what a busy tab needs.
+  const { allowed, retryAfter } = await rateLimit(`refresh:${getIp(req)}`, 20, 60_000);
+  if (!allowed) return err(`Too many requests. Try again in ${retryAfter}s`, 429);
+
   const refreshToken = req.cookies.get('refresh_token')?.value;
   if (!refreshToken) return err('No refresh token', 401);
 

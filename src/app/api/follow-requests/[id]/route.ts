@@ -1,12 +1,15 @@
 import { NextRequest } from 'next/server';
 import { prisma } from '@/lib/db';
 import { ok, err } from '@/lib/api-response';
+import { writeLimit } from '@/lib/write-limit';
 import { getCurrentUser } from '@/lib/auth-utils';
 
 // POST = accept, DELETE = deny
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const auth = await getCurrentUser(req);
   if (!auth) return err('Unauthorized', 401);
+  const limited = await writeLimit(req, auth.sub);
+  if (limited) return limited;
 
   const { id } = await params;
   const request = await prisma.followRequest.findUnique({ where: { id } });
@@ -35,6 +38,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const auth = await getCurrentUser(req);
   if (!auth) return err('Unauthorized', 401);
+  const limited = await writeLimit(req, auth.sub);
+  if (limited) return limited;
 
   const { id } = await params;
   const request = await prisma.followRequest.findUnique({ where: { id } });
