@@ -2,7 +2,7 @@
 
 import React from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Sparkles, Bookmark, Lock, Check, Award } from 'lucide-react';
+import { Sparkles, Bookmark, Lock, Check } from 'lucide-react';
 
 // What Today's Pick is, said once, properly.
 //
@@ -64,27 +64,10 @@ export function TodaysPickHelp({ open, onClose }: { open: boolean; onClose: () =
             is always something you can actually watch.
           </Rule>
 
-          <div className="border-t border-border pt-5 space-y-3">
-            <p className="text-sm font-bold font-headline flex items-center gap-2">
-              <Award className="h-4 w-4 text-primary" /> About badges
-            </p>
-            <p className="text-sm text-muted-foreground leading-relaxed">
-              Badges come in three tiers — bronze, silver and gold. There is no
-              tier for signing up: an unearned badge shows as an outline with a
-              ring around it, filling as you get closer, so it is always clear
-              what is left rather than what you have been given.
-            </p>
-            <p className="text-sm text-muted-foreground leading-relaxed">
-              They are counted from your library as it is now, not from a total
-              that only ever goes up. Films, shows, episodes, ratings and reviews
-              are counted separately, because finishing a long series and watching
-              a ninety-minute film are not the same act.
-            </p>
-            <p className="text-sm text-muted-foreground leading-relaxed">
-              Press any badge on your profile to see what it counts and how far
-              along you are.
-            </p>
-          </div>
+          {/* "About badges" used to sit here, behind a divider. It has moved to
+              the Badges page, where somebody is already looking at badges and
+              wondering how they work. A sheet titled "How Today's Pick works"
+              should answer that question and stop. */}
         </div>
       </DialogContent>
     </Dialog>
