@@ -166,12 +166,12 @@ function CreditRow({ credit, watched, userRating, upcoming }: {
           )}
           {userRating !== undefined && (
             <div className="flex items-center gap-0.5">
-              <Star className="h-3 w-3 fill-blue-400 text-blue-400" />
-              <span className="text-xs font-bold text-blue-400">{userRating}</span>
+              <Star className="h-3 w-3 text-primary" />
+              <span className="text-xs font-bold text-primary">{userRating}</span>
             </div>
           )}
           {watched !== 'none' && (
-            <div className="flex items-center gap-1 text-blue-400">
+            <div className="flex items-center gap-1 text-primary">
               <WatchedEye state={watched} className="h-3 w-3" />
               {(watched === 'complete' || progress) && (
                 <span className="text-xs font-semibold">
@@ -348,7 +348,7 @@ function SectionBlock({ section, upcomingSection, watchedMap, ratingsMap, tab, h
         {!isUpcomingView && section.credits.length > 0 && (
           <div className="flex items-center gap-1">
             <WatchedEye state="complete" className="h-3 w-3" />
-            <span className="text-xs font-bold text-blue-400">{pct}%</span>
+            <span className="text-xs font-bold text-primary">{pct}%</span>
           </div>
         )}
       </div>

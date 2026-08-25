@@ -718,7 +718,7 @@ export function TodaysPick() {
                   if (!shown) return null;
                   return (
                     <span className={`flex items-center gap-1 ${shown.source === 'cinephilers' ? 'text-primary' : 'text-accent'}`}>
-                      <Star className="h-3.5 w-3.5 fill-current" />{shown.value.toFixed(1)}
+                      <Star className="h-3.5 w-3.5" />{shown.value.toFixed(1)}
                     </span>
                   );
                 })()}

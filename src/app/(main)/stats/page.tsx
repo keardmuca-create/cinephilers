@@ -114,7 +114,7 @@ export default function StatsPage() {
               label="Total watched"
               value={stats.totalWatched}
               sub="movies & shows"
-              color="text-blue-400"
+              color="text-primary"
             />
             <StatCard
               icon={Star}

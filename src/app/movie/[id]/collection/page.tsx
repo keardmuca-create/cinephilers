@@ -44,14 +44,14 @@ function CollectionRow({ part }: { part: CollectionItem }) {
         <div className="flex items-center gap-2.5 flex-wrap">
           {userRating !== undefined && (
             <div className="flex items-center gap-0.5">
-              <span className="text-xs text-blue-400 font-bold">★</span>
-              <span className="text-xs font-bold text-blue-400">{userRating}</span>
+              <span className="text-xs text-primary font-bold">☆</span>
+              <span className="text-xs font-bold text-primary">{userRating}</span>
             </div>
           )}
           {isUpcoming ? (
             <span className="text-xs font-semibold text-amber-500">Coming {comingLabel}</span>
           ) : isWatched ? (
-            <div className="flex items-center gap-1 text-blue-400">
+            <div className="flex items-center gap-1 text-primary">
               <WatchedEye state="complete" className="h-3.5 w-3.5" />
               <span className="text-xs font-semibold">Watched</span>
             </div>

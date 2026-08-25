@@ -276,8 +276,8 @@ function HistoryCard({ row, meta, userRating, onRemove }: {
           )}
           {userRating !== undefined && (
             <div className="flex items-center gap-0.5">
-              <span className="text-xs text-blue-400 font-bold">★</span>
-              <span className="text-xs font-bold text-blue-400">{userRating}</span>
+              <span className="text-xs text-primary font-bold">☆</span>
+              <span className="text-xs font-bold text-primary">{userRating}</span>
             </div>
           )}
           {/* This was inverted: a show you'd finished got a tick and no eye,
@@ -293,12 +293,12 @@ function HistoryCard({ row, meta, userRating, onRemove }: {
               are caught up on is still not a show you have finished. */}
           {row.isShow ? (
             row.status === 'completed' ? (
-              <div className="flex items-center gap-1 text-blue-400">
+              <div className="flex items-center gap-1 text-primary">
                 <WatchedEye state="complete" className="h-3.5 w-3.5" />
                 {progress && <span className="text-xs font-semibold">{progress}</span>}
               </div>
             ) : (
-              <div className="flex items-center gap-1 text-blue-400">
+              <div className="flex items-center gap-1 text-primary">
                 <WatchedEye state="partial" className="h-3.5 w-3.5" />
                 {(progress || statusLabel) && (
                   <span className="text-xs font-semibold">
@@ -308,7 +308,7 @@ function HistoryCard({ row, meta, userRating, onRemove }: {
               </div>
             )
           ) : (
-            <div className="flex items-center gap-1 text-blue-400">
+            <div className="flex items-center gap-1 text-primary">
               <WatchedEye state="complete" className="h-3.5 w-3.5" />
               <span className="text-xs font-semibold">Watched</span>
             </div>

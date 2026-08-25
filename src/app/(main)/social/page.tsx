@@ -193,7 +193,7 @@ function ActivityCard({ item, onToggleLike, onRemove }: {
             {item.type === 'activity' && (
               <>
                 {item.watched && <WatchedEye state="complete" className="h-3.5 w-3.5" />}
-                {item.rating !== undefined && <Star className="h-3.5 w-3.5 text-yellow-400 fill-current" />}
+                {item.rating !== undefined && <Star className="h-3.5 w-3.5 text-primary" />}
                 {item.reviewBody && <MessageSquare className="h-3.5 w-3.5 text-green-400" />}
                 <span>{[item.watched ? 'Watched' : null, item.rating !== undefined ? `Rated ${item.rating}/10` : null, item.reviewBody ? 'Reviewed' : null].filter(Boolean).join(' · ')}</span>
               </>
@@ -240,8 +240,8 @@ function ActivityCard({ item, onToggleLike, onRemove }: {
               : <><div className="h-4 bg-muted rounded-full w-3/4 animate-pulse" /><div className="h-3 bg-muted rounded-full w-1/4 animate-pulse mt-1" /></>
             }
             {item.type === 'activity' && item.rating !== undefined && (
-              <div className="flex items-center gap-1 text-yellow-400 font-bold text-sm bg-yellow-400/10 w-fit px-2.5 py-0.5 rounded-full">
-                <Star className="h-3.5 w-3.5 fill-current" />{item.rating} / 10
+              <div className="flex items-center gap-1 text-primary font-bold text-sm bg-primary/10 w-fit px-2.5 py-0.5 rounded-full">
+                <Star className="h-3.5 w-3.5" />{item.rating} / 10
               </div>
             )}
             {item.type === 'activity' && item.reviewBody && (
@@ -298,7 +298,7 @@ function EpisodeBatchCard({ item }: { item: UnifiedItem }) {
           </Link>
           <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
             <WatchedEye state="complete" className="h-3.5 w-3.5" />
-            {rated > 0 && <Star className="h-3.5 w-3.5 text-yellow-400 fill-current" />}
+            {rated > 0 && <Star className="h-3.5 w-3.5 text-primary" />}
             <span className="truncate">{label}</span>
             <span>·</span>
             <span className="shrink-0">{relativeTime(item.createdAt)}</span>

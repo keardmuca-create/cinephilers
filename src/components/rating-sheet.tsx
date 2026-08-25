@@ -98,7 +98,7 @@ export function RatingSheet({ open, onClose, title, poster, currentRating, showW
                 aria-label={`${i} out of 10`}
                 className="transition-all hover:scale-125 active:scale-90 p-0.5"
               >
-                <Star className={`h-7 w-7 transition-colors ${selected >= i ? 'fill-yellow-400 text-yellow-400' : 'text-gray-300 hover:text-gray-400'}`} />
+                <Star className={`h-7 w-7 transition-colors ${selected >= i ? 'fill-primary text-primary' : 'text-gray-300 hover:text-gray-400'}`} />
               </button>
             ))}
           </div>

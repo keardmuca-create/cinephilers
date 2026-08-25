@@ -91,15 +91,15 @@ function MovieListItem({ movie }: { movie: Movie }) {
           )}
           {userRating !== undefined && (
             <div className="flex items-center gap-0.5">
-              <span className="text-xs text-blue-400 font-bold">★</span>
-              <span className="text-xs font-bold text-blue-400">{userRating}</span>
+              <span className="text-xs text-primary font-bold">☆</span>
+              <span className="text-xs font-bold text-primary">{userRating}</span>
             </div>
           )}
           {watched !== 'none' && (
             // A row has room for the words a card can't spare. A part-watched
             // show gets the count, not "Watching" — someone who saw one episode
             // for a guest star isn't watching it, and the number says so.
-            <div className="flex items-center gap-1 text-blue-400">
+            <div className="flex items-center gap-1 text-primary">
               <WatchedEye state={watched} className="h-3.5 w-3.5" />
               {/* The eye is right immediately; the fraction waits for the total
                   rather than showing a placeholder it will have to replace. */}

@@ -183,7 +183,7 @@ function ReviewCard({ review }: { review: ReviewItem }) {
           <p className="text-xs text-muted-foreground">{meta?.year ? `${meta.year} · ` : ''}{dateLabel}</p>
           {review.score != null && (
             <div className="flex items-center gap-1">
-              <Star className="h-3.5 w-3.5 fill-yellow-400 text-yellow-400" />
+              <Star className="h-3.5 w-3.5 text-primary" />
               <span className="text-sm font-bold text-foreground">{review.score}/10</span>
             </div>
           )}
@@ -213,7 +213,7 @@ function RecentCard({ item }: { item: RecentItem }) {
         {meta ? <p className="text-sm font-bold group-hover:text-primary transition-colors line-clamp-1">{meta.title}</p> : <div className="h-3 bg-muted rounded-full w-3/4 animate-pulse" />}
         <div className="flex items-center gap-1.5 mt-1 text-xs">
           {item.watched && <WatchedEye state="complete" className="h-3 w-3" />}
-          {item.rating != null && <Star className="h-3 w-3 text-yellow-400 fill-current shrink-0" />}
+          {item.rating != null && <Star className="h-3 w-3 text-primary shrink-0" />}
           {item.reviewBody && <MessageSquare className="h-3 w-3 text-green-400 shrink-0" />}
           <span className="text-muted-foreground truncate">{label}</span>
           <span className="text-muted-foreground shrink-0">· {relativeTime(item.createdAt)}</span>
@@ -360,7 +360,7 @@ function SectionRow({ item, section }: { item: SectionItem; section: SectionKey 
   const shown = resolveDisplayRating(meta?.tmdbRating, cine[item.tmdbId]);
   const cfg = SECTION_META[section];
   const StatusIcon = cfg.statusIcon;
-  // The label only adds info for watched/rewatched — for ratings the blue score
+  // The label only adds info for watched/rewatched — for ratings the score
   // says it all, and on the Watchlist page "Watchlist" is redundant.
   const showLabel = section === 'watched' || section === 'rewatched';
   // A show row earns its status in place of the plain "Watched". Progress only
@@ -398,10 +398,10 @@ function SectionRow({ item, section }: { item: SectionItem; section: SectionKey 
             </span>
           )}
           {item.score != null && (
-            <span className="flex items-center gap-1 text-sm font-bold text-blue-400"><Star className="h-3.5 w-3.5 fill-current" />{item.score}</span>
+            <span className="flex items-center gap-1 text-sm font-bold text-primary"><Star className="h-3.5 w-3.5" />{item.score}</span>
           )}
           {showLabel && (
-            <span className="flex items-center gap-1 text-xs font-semibold text-blue-400">
+            <span className="flex items-center gap-1 text-xs font-semibold text-primary">
               {/* Someone else's watch history reads by the same rule as your own:
                   filled means they finished it, hollow means they're partway in.
                   Rewatched and the rest keep their own icons. */}

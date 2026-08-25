@@ -119,8 +119,8 @@ function CollectionCard({ part }: { part: CollectionItem }) {
             {isWatched && <WatchedEye state="complete" className="h-3.5 w-3.5" />}
             {userRating !== undefined && (
               <div className="flex items-center gap-0.5">
-                <span className="text-xs text-blue-400 font-bold">★</span>
-                <span className="text-xs font-bold text-blue-400">{userRating}</span>
+                <span className="text-xs text-primary font-bold">☆</span>
+                <span className="text-xs font-bold text-primary">{userRating}</span>
               </div>
             )}
           </div>
@@ -869,9 +869,9 @@ function ReviewsSection({ movie, writeOpen, setWriteOpen, myReview, setMyReview,
                     </div>
                   </Link>
                   {r.rating !== null && (
-                    <div className="flex items-center gap-1 bg-yellow-400/10 px-2.5 py-1 rounded-full shrink-0">
-                      <Star className="h-3.5 w-3.5 fill-yellow-400 text-yellow-400" />
-                      <span className="text-sm font-black text-yellow-400">{r.rating}/10</span>
+                    <div className="flex items-center gap-1 bg-primary/10 px-2.5 py-1 rounded-full shrink-0">
+                      <Star className="h-3.5 w-3.5 text-primary" />
+                      <span className="text-sm font-black text-primary">{r.rating}/10</span>
                     </div>
                   )}
                 </div>
@@ -905,8 +905,8 @@ function ReviewsSection({ movie, writeOpen, setWriteOpen, myReview, setMyReview,
             <span className="text-xs font-bold uppercase tracking-widest text-primary">Your Review</span>
             <div className="flex items-center gap-3">
               {myReview.rating > 0 && (
-                <div className="flex items-center gap-1 text-yellow-500 text-xs font-black">
-                  <Star className="h-3 w-3 fill-current" /> {myReview.rating}
+                <div className="flex items-center gap-1 text-primary text-xs font-black">
+                  <Star className="h-3 w-3" /> {myReview.rating}
                 </div>
               )}
               <button
@@ -939,8 +939,8 @@ function ReviewsSection({ movie, writeOpen, setWriteOpen, myReview, setMyReview,
                     <span className="text-[10px] text-muted-foreground font-bold">{r.date}</span>
                   </div>
                 </div>
-                <div className="flex items-center gap-1 bg-yellow-400/10 text-yellow-500 px-2.5 py-1 rounded-full text-xs font-black">
-                  <Star className="h-3 w-3 fill-current" /> {r.rating}
+                <div className="flex items-center gap-1 bg-primary/10 text-primary px-2.5 py-1 rounded-full text-xs font-black">
+                  <Star className="h-3 w-3" /> {r.rating}
                 </div>
               </div>
               <p className="text-sm text-foreground line-clamp-3 italic leading-relaxed">&ldquo;{r.content}&rdquo;</p>
@@ -969,7 +969,7 @@ function ReviewsSection({ movie, writeOpen, setWriteOpen, myReview, setMyReview,
                     className="p-0.5"
                     aria-label={`Rate ${n} out of 10`}
                   >
-                    <Star className={`h-5 w-5 transition-colors ${(hoverRating || draftRating) >= n ? 'fill-yellow-400 text-yellow-400' : 'text-muted-foreground/40'}`} />
+                    <Star className={`h-5 w-5 transition-colors ${(hoverRating || draftRating) >= n ? 'fill-primary text-primary' : 'text-muted-foreground/40'}`} />
                   </button>
                 ))}
                 <span className="ml-2 text-sm font-bold text-foreground w-12">{draftRating > 0 ? `${draftRating}/10` : ''}</span>
@@ -2032,7 +2032,7 @@ function MovieDetailInner() {
                   <div>
                     <div className="flex items-center gap-2">
                       <span className="text-5xl font-black font-headline text-foreground">{score.toFixed(1)}</span>
-                      <Star className="h-7 w-7 fill-yellow-400 text-yellow-400" />
+                      <Star className={`h-7 w-7 ${useCine ? 'fill-primary text-primary' : 'fill-yellow-400 text-yellow-400'}`} />
                     </div>
                     <div className="text-xs text-muted-foreground font-bold mt-1.5">{count.toLocaleString()} ratings</div>
                   </div>
@@ -2042,7 +2042,7 @@ function MovieDetailInner() {
                   onClick={() => { if (!authUser) { setAuthGate('rate movies'); return; } setRateSheetOpen(true); }}
                   className="rounded-full border-border font-bold shrink-0"
                 >
-                  <Star className={`h-4 w-4 mr-2 ${userRating > 0 ? 'fill-yellow-400 text-yellow-400' : ''}`} />
+                  <Star className={`h-4 w-4 mr-2 ${userRating > 0 ? 'text-primary' : ''}`} />
                   {userRating > 0 ? `Your rating: ${userRating}/10` : 'Rate this'}
                 </Button>
               </div>

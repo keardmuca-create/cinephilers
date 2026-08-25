@@ -324,9 +324,9 @@ export default function MovieReviewsPage() {
                   </div>
                 </Link>
                 {r.rating !== null && (
-                  <div className="flex items-center gap-1 bg-yellow-400/10 px-2.5 py-1 rounded-full shrink-0">
-                    <Star className="h-3.5 w-3.5 fill-yellow-400 text-yellow-400" />
-                    <span className="text-sm font-black text-yellow-400">{r.rating}/10</span>
+                  <div className="flex items-center gap-1 bg-primary/10 px-2.5 py-1 rounded-full shrink-0">
+                    <Star className="h-3.5 w-3.5 text-primary" />
+                    <span className="text-sm font-black text-primary">{r.rating}/10</span>
                   </div>
                 )}
               </div>

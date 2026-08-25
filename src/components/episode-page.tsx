@@ -420,7 +420,7 @@ export function EpisodePage({ showTmdbId, season, episodeNumber }: {
                 <div>
                   <div className="flex items-center gap-2">
                     <span className="text-5xl font-black font-headline text-foreground">{score.toFixed(1)}</span>
-                    <Star className="h-7 w-7 fill-yellow-400 text-yellow-400" />
+                    <Star className={`h-7 w-7 ${useCine ? 'fill-primary text-primary' : 'fill-yellow-400 text-yellow-400'}`} />
                   </div>
                   <div className="text-xs text-muted-foreground font-bold mt-1.5">{count.toLocaleString()} ratings</div>
                 </div>
@@ -430,7 +430,7 @@ export function EpisodePage({ showTmdbId, season, episodeNumber }: {
                 onClick={() => { if (!authUser) { toast({ title: 'Sign in to rate' }); return; } setRateOpen(true); }}
                 className="rounded-full border-border font-bold shrink-0"
               >
-                <Star className={`h-4 w-4 mr-2 ${userRating > 0 ? 'fill-yellow-400 text-yellow-400' : ''}`} />
+                <Star className={`h-4 w-4 mr-2 ${userRating > 0 ? 'text-primary' : ''}`} />
                 {userRating > 0 ? `Your rating: ${userRating}/10` : 'Rate this'}
               </Button>
             </section>
@@ -490,8 +490,8 @@ export function EpisodePage({ showTmdbId, season, episodeNumber }: {
                   </span>
                   {/* A friend who only watchlisted it has no score to show, but the
                       line still has to occupy its height or the row goes ragged. */}
-                  <span className="flex items-center gap-0.5 text-xs font-bold text-yellow-400">
-                    {f.rating != null ? <><Star className="h-3 w-3 fill-current" />{f.rating}</> : <>&nbsp;</>}
+                  <span className="flex items-center gap-0.5 text-xs font-bold text-primary">
+                    {f.rating != null ? <><Star className="h-3 w-3" />{f.rating}</> : <>&nbsp;</>}
                   </span>
                 </Link>
               ))}
@@ -592,7 +592,7 @@ export function EpisodePage({ showTmdbId, season, episodeNumber }: {
                     className="p-0.5"
                     aria-label={`Rate ${n} out of 10`}
                   >
-                    <Star className={`h-5 w-5 transition-colors ${(hoverRating || draftRating) >= n ? 'fill-yellow-400 text-yellow-400' : 'text-muted-foreground/40'}`} />
+                    <Star className={`h-5 w-5 transition-colors ${(hoverRating || draftRating) >= n ? 'fill-primary text-primary' : 'text-muted-foreground/40'}`} />
                   </button>
                 ))}
                 <span className="ml-2 text-sm font-bold text-foreground w-12">{draftRating > 0 ? `${draftRating}/10` : ''}</span>

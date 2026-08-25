@@ -74,8 +74,8 @@ export default function CommunityReviewsPage() {
                     <span className="text-[10px] text-muted-foreground uppercase tracking-widest font-bold">{r.date}</span>
                   </div>
                 </div>
-                <div className="flex items-center gap-1 bg-yellow-400/10 text-yellow-500 px-3 py-1 rounded-full text-xs font-black">
-                  <Star className="h-3 w-3 fill-current" /> {r.rating}
+                <div className="flex items-center gap-1 bg-primary/10 text-primary px-3 py-1 rounded-full text-xs font-black">
+                  <Star className="h-3 w-3" /> {r.rating}
                 </div>
               </div>
               <p className="text-sm text-foreground leading-relaxed italic">&ldquo;{r.content}&rdquo;</p>

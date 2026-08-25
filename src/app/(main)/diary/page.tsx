@@ -244,8 +244,8 @@ export default function DiaryPage() {
                         <CommunityStar id={item.tmdbId} tmdbRating={item.tmdbRating} />
                         {item.userRating !== undefined && (
                           <div className="flex items-center gap-0.5">
-                            <span className="text-xs text-blue-400 font-bold">★</span>
-                            <span className="text-xs font-bold text-blue-400">{item.userRating}</span>
+                            <span className="text-xs text-primary font-bold">☆</span>
+                            <span className="text-xs font-bold text-primary">{item.userRating}</span>
                           </div>
                         )}
                         <WatchedEye state="complete" className="h-3.5 w-3.5" />

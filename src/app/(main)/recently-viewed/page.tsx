@@ -52,8 +52,8 @@ function ItemCard({ item, userRating }: { item: RecentItem; userRating?: number 
           )}
           {userRating !== undefined && (
             <div className="flex items-center gap-0.5">
-              <span className="text-xs text-blue-400 font-bold">★</span>
-              <span className="text-xs font-bold text-blue-400">{userRating}</span>
+              <span className="text-xs text-primary font-bold">☆</span>
+              <span className="text-xs font-bold text-primary">{userRating}</span>
             </div>
           )}
         </div>

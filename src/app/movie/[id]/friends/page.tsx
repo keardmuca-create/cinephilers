@@ -150,7 +150,7 @@ export default function MovieFriendsPage() {
                 <p className="font-bold truncate">{e.user.displayName ?? e.user.username}</p>
                 <p className="text-sm text-muted-foreground truncate">@{e.user.username}</p>
                 {e.progress && (
-                  <p className="text-xs font-medium text-blue-400/90 truncate mt-0.5">{e.progress}</p>
+                  <p className="text-xs font-medium text-primary/90 truncate mt-0.5">{e.progress}</p>
                 )}
               </div>
 
@@ -170,7 +170,7 @@ export default function MovieFriendsPage() {
                 <span className="w-10 flex items-center justify-center gap-1">
                   {e.rating !== null ? (
                     <>
-                      <Star className="h-3.5 w-3.5 fill-yellow-400 text-yellow-400" />
+                      <Star className="h-3.5 w-3.5 text-primary" />
                       <span className="text-sm font-bold text-foreground">{e.rating}</span>
                     </>
                   ) : (

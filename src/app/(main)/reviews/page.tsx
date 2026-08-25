@@ -90,8 +90,8 @@ export default function ReviewsPage() {
               <div className="flex items-start justify-between gap-2">
                 <p className="text-sm font-bold font-headline line-clamp-1 group-hover:text-primary transition-colors">{r.movieTitle}</p>
                 {r.rating > 0 && (
-                  <div className="flex items-center gap-0.5 shrink-0 text-yellow-500 text-xs font-black">
-                    <Star className="h-3 w-3 fill-current" /> {r.rating}
+                  <div className="flex items-center gap-0.5 shrink-0 text-primary text-xs font-black">
+                    <Star className="h-3 w-3" /> {r.rating}
                   </div>
                 )}
               </div>

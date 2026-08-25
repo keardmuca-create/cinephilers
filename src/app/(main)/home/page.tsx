@@ -80,8 +80,8 @@ function Top10Card({ movie, index }: { movie: ChartEntry; index: number }) {
             )}
             {userRating !== undefined && (
               <div className="flex items-center gap-0.5">
-                <Star className="h-3 w-3 fill-blue-400 text-blue-400" />
-                <span className="text-[10px] font-bold text-blue-400">{userRating}</span>
+                <Star className="h-3 w-3 text-primary" />
+                <span className="text-[10px] font-bold text-primary">{userRating}</span>
               </div>
             )}
             {(watched !== 'none' || userRating !== undefined) && (

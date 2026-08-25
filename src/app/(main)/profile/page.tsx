@@ -121,8 +121,8 @@ function DiarySection() {
               <CommunityStar id={item.id} tmdbRating={item.tmdbRating} showZero />
               {item.userRating !== undefined && (
                 <div className="flex items-center gap-0.5">
-                  <span className="text-xs text-blue-400 font-bold">★</span>
-                  <span className="text-xs font-bold text-blue-400">{item.userRating}</span>
+                  <span className="text-xs text-primary font-bold">☆</span>
+                  <span className="text-xs font-bold text-primary">{item.userRating}</span>
                 </div>
               )}
               <WatchedEye state="complete" className="h-3.5 w-3.5" />
@@ -1599,8 +1599,8 @@ export default function ProfilePage() {
                   <CommunityStar id={item.id} tmdbRating={item.tmdbRating} showZero />
                   {item.rating !== undefined && (
                     <div className="flex items-center gap-0.5">
-                      <span className="text-xs text-blue-400 font-bold">★</span>
-                      <span className="text-xs font-bold text-blue-400">{item.rating}</span>
+                      <span className="text-xs text-primary font-bold">☆</span>
+                      <span className="text-xs font-bold text-primary">{item.rating}</span>
                     </div>
                   )}
                   {/* A show you're partway through gets the hollow eye, the same
@@ -1662,8 +1662,8 @@ export default function ProfilePage() {
                 <div className="flex items-center gap-1.5 mb-0.5 flex-wrap">
                   <CommunityStar id={item.id} tmdbRating={item.tmdbRating} showZero />
                   <div className="flex items-center gap-0.5">
-                    <span className="text-xs text-blue-400 font-bold">★</span>
-                    <span className="text-xs font-bold text-blue-400">{item.userRating}</span>
+                    <span className="text-xs text-primary font-bold">☆</span>
+                    <span className="text-xs font-bold text-primary">{item.userRating}</span>
                   </div>
                   <WatchedEye state="complete" className="h-3.5 w-3.5" />
                 </div>
@@ -1778,7 +1778,7 @@ export default function ProfilePage() {
                   <p className="text-xs text-muted-foreground">{r.movieYear} · {r.date}</p>
                   {r.rating > 0 && (
                     <div className="flex items-center gap-1">
-                      <Star className="h-3.5 w-3.5 fill-yellow-400 text-yellow-400" />
+                      <Star className="h-3.5 w-3.5 text-primary" />
                       <span className="text-sm font-bold text-foreground">{r.rating}/10</span>
                     </div>
                   )}

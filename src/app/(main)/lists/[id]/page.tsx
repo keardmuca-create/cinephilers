@@ -311,7 +311,7 @@ export default function ListDetailPage() {
               {watchedPct && watchedPct.done > 0 && (
                 <>
                   <span>·</span>
-                  <span className="flex items-center gap-1 text-blue-400 font-bold">
+                  <span className="flex items-center gap-1 text-primary font-bold">
                     <WatchedEye state="complete" className="h-3 w-3" />
                     {Math.round((watchedPct.done / watchedPct.total) * 100)}%
                   </span>
