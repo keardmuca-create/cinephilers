@@ -1141,8 +1141,12 @@ function MovieDetailInner() {
 
   const { user: authUser } = useAuth();
 
+  // Returns the promise now. Nothing is forced to await it — every existing
+  // caller ignores it exactly as before — but rating needs to know when the
+  // server has actually taken the vote, because the community aggregate is
+  // recomputed there and asking any earlier just re-reads the old number.
   const syncDb = useCallback((method: string, path: string, body?: object) => {
-    fetchWithAuth(path, {
+    return fetchWithAuth(path, {
       method,
       headers: body ? { 'Content-Type': 'application/json' } : undefined,
       body: body ? JSON.stringify(body) : undefined,
@@ -1167,7 +1171,13 @@ function MovieDetailInner() {
     // date, so a film watchlisted in July and rated in August would otherwise
     // report July as the day it was scored.
     recordRatedAt(id);
-    syncDb('POST', '/api/ratings', { tmdbId: id, mediaType: movie?.type === 'show' ? 'SHOW' : 'MOVIE', score: i });
+    // Once the vote is in the database the aggregate has moved, so every list
+    // still mounted behind this page is showing a number that is now wrong.
+    // Announced only after the POST settles — fired at the same time as the
+    // optimistic event below, the refetch would race the write and cache the
+    // old score for another two minutes.
+    syncDb('POST', '/api/ratings', { tmdbId: id, mediaType: movie?.type === 'show' ? 'SHOW' : 'MOVIE', score: i })
+      .then(() => window.dispatchEvent(new Event('cinephilers-rating-synced')));
     if (movie) logActivity({ action: 'rated', contentId: id, contentTitle: movie.title, contentPoster: movie.poster, contentYear: movie.year, rating: i });
     toast({ title: `You rated it ${i}/10!` });
     window.dispatchEvent(new CustomEvent('cinephilers-rating-changed', { detail: { id, rating: i } }));
@@ -1206,6 +1216,9 @@ function MovieDetailInner() {
     removeActivity('rated', id);
     toast({ title: 'Rating removed' });
     window.dispatchEvent(new CustomEvent('cinephilers-rating-changed', { detail: { id, rating: null } }));
+    // The delete is already confirmed by the server here, so the aggregate has
+    // moved and the lists behind this page can be told straight away.
+    window.dispatchEvent(new Event('cinephilers-rating-synced'));
   };
 
   // Watchlist removal for the sheet's checkbox — server first, same invariant.

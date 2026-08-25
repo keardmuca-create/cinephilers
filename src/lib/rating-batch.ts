@@ -30,6 +30,67 @@ const inflight = new Map<string, Promise<BatchRating | null>>();
 const resolvers = new Map<string, (r: BatchRating | null) => void>();
 let flushScheduled = false;
 
+// ── Staying current ─────────────────────────────────────────────────────────
+//
+// Everything above assumes a page that eventually gets read again: the cache
+// expires after two minutes and the next mount asks for a fresh number. In a
+// browser tab that holds, because navigating anywhere remounts the lists.
+//
+// Installed as a PWA it does not. The home screen mounts once and stays mounted
+// for days, so the request that fills these scores happens exactly once, and the
+// number under a poster is frozen at whatever it was when the app was opened —
+// including after you have voted on it yourself. The film page looked right
+// because it refreshes its own score on the vote event; the row behind it never
+// heard about any of it.
+//
+// So the cache announces itself. Two things invalidate it, and both notify every
+// mounted list:
+//
+//   1. A vote that the SERVER has confirmed. Not the optimistic local write —
+//      the aggregate is recomputed server-side, so asking before the POST lands
+//      returns the old number and caches it for another two minutes.
+//   2. The app coming back to the foreground, throttled. This is the PWA case:
+//      whatever changed while it was in your pocket is picked up on the way in.
+type Listener = () => void;
+const listeners = new Set<Listener>();
+
+// Set when the cache is dropped for a reason, and consumed by the next flush as
+// a cache-busting query param. The endpoint is CDN-cached for a minute
+// (s-maxage=60), so a refetch immediately after a vote would be served the very
+// number the vote changed. One param per invalidation, not per request — the
+// CDN copy is worth having the rest of the time.
+let bust = 0;
+
+const RESUME_THROTTLE_MS = 60_000;
+let lastInvalidated = 0;
+
+function invalidate() {
+  cache.clear();
+  bust = Date.now();
+  lastInvalidated = Date.now();
+  for (const l of listeners) l();
+}
+
+/**
+ * Called when a list wants to know that the scores it is showing have gone
+ * stale. Returns the unsubscribe.
+ */
+export function subscribeRatingCache(fn: Listener): () => void {
+  listeners.add(fn);
+  return () => { listeners.delete(fn); };
+}
+
+if (typeof window !== 'undefined') {
+  // Dispatched by the film page once the server has accepted the vote.
+  window.addEventListener('cinephilers-rating-synced', invalidate);
+
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState !== 'visible') return;
+    if (Date.now() - lastInvalidated < RESUME_THROTTLE_MS) return;
+    invalidate();
+  });
+}
+
 function fresh(id: string): Entry | null {
   const hit = cache.get(id);
   if (!hit) return null;
@@ -53,10 +114,17 @@ async function flush() {
     inflight.delete(id);
   };
 
+  // Consumed here, so only the first request after an invalidation skips the
+  // CDN. Every later one is allowed the shared copy again.
+  const nonce = bust;
+  bust = 0;
+
   for (let i = 0; i < ids.length; i += CHUNK) {
     const chunk = ids.slice(i, i + CHUNK);
     try {
-      const res = await fetch(`/api/movies/ratings?ids=${chunk.map(encodeURIComponent).join(',')}`);
+      const res = await fetch(
+        `/api/movies/ratings?ids=${chunk.map(encodeURIComponent).join(',')}${nonce ? `&_=${nonce}` : ''}`
+      );
       if (!res.ok) { for (const id of chunk) settle(id, null); continue; }
       const data: Record<string, BatchRating> = await res.json();
       for (const id of chunk) settle(id, data[id] ?? null);
@@ -97,7 +165,13 @@ export async function batchFetchRatings(ids: string[]): Promise<Record<string, B
   return out;
 }
 
-/** Drop everything — used when a vote lands so the next read reflects it. */
+/**
+ * Drop everything and tell every mounted list to ask again.
+ *
+ * This existed before with only the first half and no callers at all, which is
+ * precisely why the scores froze: the mechanism for reacting to a vote was
+ * written and never wired to anything.
+ */
 export function clearRatingCache() {
-  cache.clear();
+  invalidate();
 }

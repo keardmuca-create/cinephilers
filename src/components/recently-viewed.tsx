@@ -7,7 +7,7 @@ import { Clock, Star, ChevronRight, Film, User } from 'lucide-react';
 import { WatchedEye } from '@/components/watched-eye';
 import { readWatchedState, type WatchedState } from '@/lib/watched-state';
 import { batchFetchMeta } from '@/lib/meta-batch';
-import { batchFetchRatings } from '@/lib/rating-batch';
+import { batchFetchRatings, subscribeRatingCache } from '@/lib/rating-batch';
 import { resolveDisplayRating } from '@/lib/cinephilers-rating';
 import type { BatchRating } from '@/app/api/movies/ratings/route';
 
@@ -100,6 +100,12 @@ export function RecentlyViewed() {
     window.addEventListener('cinephilers-rating-changed', handler);
     return () => window.removeEventListener('cinephilers-rating-changed', handler);
   }, []);
+
+  // Your own number above reacts to the event; the community score under the
+  // poster did not, because it is only ever fetched when this component mounts —
+  // and installed as a PWA this component mounts once and then lives for days.
+  // This row asks again whenever the cache says the answer has moved.
+  useEffect(() => subscribeRatingCache(() => refreshRatings(items)), [items, refreshRatings]);
 
   // The section stays put even with nothing in it. A row that appears out of
   // nowhere after the first tap makes the home screen jump; and an empty section

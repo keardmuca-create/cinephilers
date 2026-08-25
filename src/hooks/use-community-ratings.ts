@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useState } from 'react';
-import { batchFetchRatings } from '@/lib/rating-batch';
+import { batchFetchRatings, subscribeRatingCache } from '@/lib/rating-batch';
 import { isEpisodeId } from '@/lib/media-id';
 import type { BatchRating } from '@/app/api/movies/ratings/route';
 
@@ -28,6 +28,12 @@ export function useCommunityRatings(ids: (string | undefined | null)[]): Record<
   // restart the effect every render.
   const key = [...new Set(ids.filter((id): id is string => !!id && !isEpisodeId(id)))].sort().join(',');
   const [ratings, setRatings] = useState<Record<string, BatchRating | null>>({});
+  // Bumped when the cache is dropped — by a vote the server has confirmed, or by
+  // the app returning to the foreground. Without it a card fetches once per
+  // mount, which in an installed PWA means once per week.
+  const [stale, setStale] = useState(0);
+
+  useEffect(() => subscribeRatingCache(() => setStale(n => n + 1)), []);
 
   useEffect(() => {
     if (!key) return;
@@ -36,7 +42,7 @@ export function useCommunityRatings(ids: (string | undefined | null)[]): Record<
       .then(map => { if (!cancelled) setRatings(map); })
       .catch(() => { /* the TMDB score stays on screen */ });
     return () => { cancelled = true; };
-  }, [key]);
+  }, [key, stale]);
 
   return ratings;
 }
