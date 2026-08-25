@@ -51,6 +51,7 @@ export async function GET(req: NextRequest) {
       avatarUrl: true, bio: true, favoriteGenres: true, country: true,
       role: true, isVerified: true, isPrivate: true,
       ratingsCount: true, reviewsCount: true, createdAt: true, listPrefs: true,
+      welcomedAt: true,
       _count: { select: { followers: true, following: true } },
     },
   });

@@ -1,10 +1,12 @@
 "use client"
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Sparkles, Check, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { BadgeMedal } from '@/components/badge-medal';
 import { fetchWithAuth } from '@/lib/fetch-with-auth';
+import { needsFounderWelcome } from '@/lib/welcome';
 import { useAuth } from '@/contexts/auth-context';
 
 // The one screen shown before the app.
@@ -18,6 +20,11 @@ import { useAuth } from '@/contexts/auth-context';
 // Everything else onboarding needs — the import, filling a watchlist — lives in
 // the Get started card on the home screen, where it can keep nudging over days
 // instead of getting one shot at the door.
+//
+// A brand-new account meets the Founder medal first (see `needsFounderWelcome`):
+// one screen, no question on it, that says when they joined. It comes before the
+// genres rather than sharing the screen with them, because a badge handed over in
+// the corner of a form is a badge nobody reads.
 
 // TMDB's own genre names, spelled exactly as GENRE_MAP has them, because
 // genreNameToId matches on the string. Daily-television genres are not offered,
@@ -34,9 +41,18 @@ const SKIP_KEY = 'onboarding-genres-skipped';
 
 export default function WelcomePage() {
   const router = useRouter();
-  const { refetch } = useAuth();
+  const { user, loading, refetch } = useAuth();
   const [picked, setPicked] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
+  // Decided once, from the first user object that arrives. Marking the welcome as
+  // seen flips `welcomedAt`, and re-deciding after that would yank the screen out
+  // from under somebody mid-tap.
+  const [step, setStep] = useState<'founder' | 'genres' | null>(null);
+
+  useEffect(() => {
+    if (step !== null || loading) return;
+    setStep(needsFounderWelcome(user) ? 'founder' : 'genres');
+  }, [user, loading, step]);
 
   const toggle = (g: string) =>
     setPicked(p => (p.includes(g) ? p.filter(x => x !== g) : [...p, g]));
@@ -70,6 +86,76 @@ export default function WelcomePage() {
     } catch { /* ignore */ }
     leave();
   };
+
+  // Continue, from the Founder screen. The stamp is awaited rather than fired off
+  // — if it never lands the account is still owed its welcome, and the next sign
+  // in should give it rather than swallow it.
+  const acceptFounder = async () => {
+    if (saving) return;
+    setSaving(true);
+    const alreadyChosen = (user?.favoriteGenres?.length ?? 0) > 0;
+    try {
+      await fetchWithAuth('/api/users/me/welcomed', { method: 'POST' });
+      await refetch();
+    } catch { /* ignore */ }
+    setSaving(false);
+    if (alreadyChosen) leave();
+    else setStep('genres');
+  };
+
+  // Nothing until we know which screen this is. It costs one paint, and it beats
+  // showing the genres and then replacing them with a medal.
+  if (step === null) {
+    return (
+      <main className="min-h-screen flex items-center justify-center bg-background">
+        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+      </main>
+    );
+  }
+
+  if (step === 'founder') {
+    const joined = user?.createdAt
+      ? new Date(user.createdAt).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })
+      : null;
+
+    return (
+      <main className="min-h-screen flex flex-col items-center justify-center px-6 py-12 bg-background">
+        <div className="w-full max-w-lg space-y-8 text-center">
+          <div className="flex justify-center">
+            <BadgeMedal tier="gold" size={104} />
+          </div>
+
+          <div className="space-y-3">
+            <span className="inline-block rounded-full bg-primary/15 border border-primary/25 text-primary text-xs font-bold uppercase tracking-wide px-3 py-1">
+              Founder
+            </span>
+            <h1 className="text-3xl font-headline font-bold">Welcome to Cinephilers</h1>
+            <p className="text-sm text-muted-foreground max-w-sm mx-auto">
+              You&apos;re part of the Cinephilers community now. Every film you watch, rate
+              and review from here counts towards the rest of your badges.
+            </p>
+          </div>
+
+          {joined && (
+            <div className="bg-muted/50 rounded-2xl p-4">
+              <p className="text-base font-bold font-headline">Member since {joined}</p>
+              <p className="text-xs text-muted-foreground mt-1">
+                Your Founder badge keeps this date. It sits first on your profile.
+              </p>
+            </div>
+          )}
+
+          <Button
+            onClick={acceptFounder}
+            disabled={saving}
+            className="w-full rounded-full h-12 font-bold text-base"
+          >
+            {saving ? <Loader2 className="h-5 w-5 animate-spin" /> : 'Continue'}
+          </Button>
+        </div>
+      </main>
+    );
+  }
 
   return (
     <main className="min-h-screen flex flex-col items-center justify-center px-6 py-12 bg-background">

@@ -41,6 +41,11 @@ model User {
   isBanned       Boolean  @default(false)
   ratingsCount   Int      @default(0)
   reviewsCount   Int      @default(0)
+  // When this account was shown the Founder welcome. Null means never, which is
+  // what makes the moment happen exactly once on any device — the genre skip is
+  // per-device on purpose, this is the opposite: a first sign-in happens once in
+  // a lifetime, so it is remembered on the account and not in localStorage.
+  welcomedAt     DateTime?
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 

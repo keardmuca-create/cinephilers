@@ -88,5 +88,10 @@ export async function POST(req: NextRequest) {
     // Returned so the login page can decide where to land without a second round
     // trip: an account that has never chosen any goes to the welcome screen once.
     favoriteGenres: user.favoriteGenres,
+    // Both returned for the same reason: the login page decides where to land
+    // with no second round trip. Never welcomed and created after the cutoff
+    // means the Founder screen; see needsFounderWelcome.
+    welcomedAt: user.welcomedAt,
+    createdAt: user.createdAt,
   });
 }

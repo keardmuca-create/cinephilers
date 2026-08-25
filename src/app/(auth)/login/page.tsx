@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { clearUserData } from '@/lib/clear-user-data';
+import { needsFounderWelcome } from '@/lib/welcome';
 
 export default function LoginPage() {
   const router = useRouter();
@@ -79,7 +80,12 @@ export default function LoginPage() {
     try { skipped = localStorage.getItem('onboarding-genres-skipped') === 'true'; } catch { /* ignore */ }
     const noGenres = Array.isArray(data.data?.favoriteGenres) && data.data.favoriteGenres.length === 0;
 
-    router.push(noGenres && !skipped ? '/welcome' : '/profile');
+    // A brand-new account is met by the Founder screen before anything else,
+    // whether or not it has genres to pick. That one is not skippable per device:
+    // it is stamped on the account, so it happens exactly once.
+    const founder = needsFounderWelcome(data.data);
+
+    router.push(founder || (noGenres && !skipped) ? '/welcome' : '/profile');
     router.refresh();
   };
 

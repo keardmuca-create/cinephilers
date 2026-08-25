@@ -26,6 +26,10 @@ export interface AuthUser {
   followingCount: number;
   /** Chosen on the welcome screen; feeds the Top Picks backfill. */
   favoriteGenres?: string[];
+  /** Join date — the whole story of the Founder badge. */
+  createdAt?: string;
+  /** When the Founder welcome was shown; null until it has been. */
+  welcomedAt?: string | null;
 }
 
 function saveUserToStorage(user: AuthUser | null) {
