@@ -369,9 +369,11 @@ export function FavoritesSection() {
                       <p className="text-sm font-semibold truncate">{r.title}</p>
                       <p className="text-xs text-muted-foreground">{r.year}</p>
                     </div>
-                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full flex-shrink-0 ${
-                      r.type === 'show' ? 'bg-blue-500/20 text-blue-400' : 'bg-primary/20 text-primary'
-                    }`}>
+                    {/* One colour for both, because the chip already says which
+                        it is. TV used to be blue purely to contrast with Film's
+                        crimson — a second brand colour doing a job the word was
+                        already doing, and the last blue left in the app. */}
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full flex-shrink-0 bg-primary/20 text-primary">
                       {r.type === 'show' ? 'TV' : 'Film'}
                     </span>
                   </button>
