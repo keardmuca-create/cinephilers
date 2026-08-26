@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { rateLimit, clearRateLimit, getIp } from './rate-limit';
+import { rateLimit, clearRateLimit, getIp, limiterHealth } from './rate-limit';
 
 // No Redis configured under test, so these exercise the in-memory path — the
 // same counting rules either way.
@@ -78,5 +78,17 @@ describe('getIp', () => {
 
   it('returns a constant when neither header is present', () => {
     expect(getIp(new Request('https://example.test'))).toBe('unknown');
+  });
+});
+
+// The test environment has no Upstash credentials, which is exactly the state
+// this asserts: with none configured the limiter is running on the in-memory Map
+// — fine locally, and on serverless the same as no limiting at all, because the
+// map dies with the instance. `configured: false` in production is the alarm.
+describe('limiterHealth', () => {
+  it('reports every field false when there are no credentials', async () => {
+    await expect(limiterHealth()).resolves.toEqual({
+      configured: false, reachable: false, counting: false,
+    });
   });
 });
