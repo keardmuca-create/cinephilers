@@ -208,29 +208,101 @@ const WALL_COLS = 8;
 const WALL_ROWS = 8;
 const WALL_TILES = WALL_COLS * WALL_ROWS;
 
-// Films Keard picked by name for the wall, plus the two series. Verified against
-// TMDB rather than typed from memory — every id below resolved to the intended
-// title with artwork present.
+// A FIXED wall: the same sixty-four titles every day, for everybody.
 //
-// He asked for IMDb's Top 250. There is no IMDb in this app and no free API for
-// that list, so the rest of the wall is filled from TMDB's top-rated films
-// instead: same idea, films huge numbers of people rated highly, and it overlaps
-// heavily with the Top 250. The alternative — hardcoding 250 ids to mirror the
-// list — would be wrong in places and would need hand-maintaining forever.
-const PINNED_WALL_IDS = [
-  'tmdb-2668',      // Sleepy Hollow (1999)
-  'tmdb-22',        // Pirates of the Caribbean: The Curse of the Black Pearl
-  'tmdb-297',       // Meet Joe Black
-  'tmdb-438631',    // Dune
-  'tmdb-693134',    // Dune: Part Two
-  'tmdb-238',       // The Godfather
-  'tmdb-278',       // The Shawshank Redemption
-  'tmdb-tv-1396',   // Breaking Bad
-  'tmdb-tv-1399',   // Game of Thrones
-  'tmdb-11324',     // Shutter Island
-  'tmdb-597',       // Titanic
-  'tmdb-2832',      // Identity
-];
+// It used to be Keard's twelve followed by TMDB's top-rated, reshuffled each
+// morning by the date. Two things were wrong with that. The shuffle meant nobody
+// could point at the app and say what it looks like — including Keard, who could
+// not tell whether the wall was meant to change. And "top-rated" is not "famous":
+// it surfaced Harakiri and Ikiru, superb films almost nobody recognises on sight,
+// while the wall's whole job is to be recognised at a glance.
+//
+// So the rest is chosen by FAME rather than by score — the titles a stranger
+// scrolling past would know without reading the name. That distinction matters:
+// Titanic and Avengers have enormous audiences and middling scores; the reverse
+// is just as common.
+//
+// Keard's twelve lead, unchanged and in his order. Fifty-five films and nine
+// series in total, films first, which is the balance he asked for: television is
+// first-class in this app, but a poster wall should still read as cinema.
+//
+// Every path below was resolved through the app's own /api/tmdb/search — title
+// and year matched exactly, and each came back `confident`. None were typed from
+// memory. Nothing is stored or re-hosted: TMDB serves these at w92, and a path
+// that ever 404s costs one blank tile behind an opaque card.
+const WALL_POSTERS = [
+  // Keard's twelve, first and in order.
+  '/1GuK965FLJxqUw9fd1pmvjbFAlv.jpg', // Sleepy Hollow (1999)
+  '/poHwCZeWzJCShH7tOjg8RIoyjcw.jpg', // Pirates of the Caribbean: The Curse of the Black Pearl
+  '/fDPAjvfPMomkKF7cMRmL5Anak61.jpg', // Meet Joe Black
+  '/v1tRXZ4JtD2Iv6fjkPvT4GiwslV.jpg', // Dune
+  '/6izwz7rsy95ARzTR3poZ8H6c5pp.jpg', // Dune: Part Two
+  '/3bhkrj58Vtu7enYsRolD1fZdja1.jpg', // The Godfather
+  '/9cqNxx0GxF0bflZmeSMuL5tnGzr.jpg', // The Shawshank Redemption
+  '/anFx9aTOOYqgS3v7x3R84Kz67ly.jpg', // Breaking Bad
+  '/37sTgAG9QardbdzCq51FoUw1Ijb.jpg', // Game of Thrones
+  '/nrmXQ0zcZUL8jFLrakWc90IR8z9.jpg', // Shutter Island
+  '/9xjZS2rlVxm8SFx8kPC3aIGCOYQ.jpg', // Titanic
+  '/sYgimsiBywqVwJI8H4sETke8m7v.jpg', // Identity
+  // The rest, by fame.
+  '/gKY6q7SjCkAU6FqvqWybDYgUKIF.jpg', // Avatar
+  '/ulzhLuWrPK07P1YkdWQLZnQh1JL.jpg', // Avengers: Endgame
+  '/7WsyChQLEftFiDOVTGkv3hFpyyt.jpg', // Avengers: Infinity War
+  '/qJ2tW6WMUDux911r6m7haRef0WH.jpg', // The Dark Knight
+  '/xlaY2zyzMfkhk0HSC5VUwzoZPU1.jpg', // Inception
+  '/yQvGrMoipbRoddT0ZR8tPoR7NfX.jpg', // Interstellar
+  '/dXNAPwY7VrqMAo51EKhhCJfaGb5.jpg', // The Matrix
+  '/Cw4hIUIAmSYfK9QfaUW5igp9La.jpg',  // Forrest Gump
+  '/63viWuPfYQjRYLSZSZNq7dglJP5.jpg', // Jurassic Park
+  '/fai0rspsNeJCS69wHNjOdWxcI7P.jpg', // Star Wars
+  '/nNAeTmF4CtdSgMDplXTDPOpYzsX.jpg', // The Empire Strikes Back
+  '/an0nD6uq6byfxXCfk6lQBzdL2J1.jpg', // E.T. the Extra-Terrestrial
+  '/lxM6kqilAdpdhqUl2biYp5frUxE.jpg', // Jaws
+  '/vN5B5WgYscRGcQpVhHl6p9DDTP0.jpg', // Back to the Future
+  '/sKCr78MXSLixwmZ8DyJLrpMsd15.jpg', // The Lion King
+  '/uXDfjJbdP4ijW5hWSBrPrlKpxab.jpg', // Toy Story
+  '/eHuGQ10FUzK1mdOY69wF5pGgEf5.jpg', // Finding Nemo
+  '/iB64vpL3dIObOtMZgX3RqdVdQDc.jpg', // Shrek
+  '/itAKcobTYGpYT8Phwjd8c9hleTo.jpg', // Frozen
+  '/wuMc08IPKEatf9rnMNXvIDxqP4W.jpg', // Harry Potter and the Philosopher's Stone
+  '/6oom5QYQ2yQTMJIbnvbkBL9cHo6.jpg', // LOTR: The Fellowship of the Ring
+  '/rCzpDGLbOoPwLjy3OAm5NUPOTrC.jpg', // LOTR: The Return of the King
+  '/vQWk5YBFWF4bZaofAbv0tShwBvQ.jpg', // Pulp Fiction
+  '/jSziioSwPVrOy9Yow3XhWIBDjq1.jpg', // Fight Club
+  '/wN2xWp1eIwCKOD0BHTcErTBv1Uq.jpg', // Gladiator
+  '/jFTVD4XoWQTcg7wdyJKa8PEds5q.jpg', // Terminator 2: Judgment Day
+  '/xSI0dbKLDETwhiVUy6hGE8KXUln.jpg', // Rocky
+  '/onTSipZ8R3bliBdKfPtsDuHTdlL.jpg', // Home Alone
+  '/uS9m8OBk1A8eM9I042bx8XXpqAq.jpg', // The Silence of the Lambs
+  '/191nKfP0ehp3uIvWqgPbFmI4lv9.jpg', // Se7en
+  '/udDclJoHjfjb8Ekgsd4FDteOkCU.jpg', // Joker
+  '/1g0dhYtq4irTY1GPXvft6k4YLjm.jpg', // Spider-Man: No Way Home
+  '/78lPtwv72eTNqFW9COBYI0dWDJa.jpg', // Iron Man
+  '/uxzzxijgPIY7slzFvMotPv8wjKA.jpg', // Black Panther
+  '/kW9LmvYHAaS9iA0tHmZVq8hQYoq.jpg', // The Wolf of Wall Street
+  '/7oWY8VDWW7thTzWh3OKYRkWUlD5.jpg', // Django Unchained
+  '/7IiTTgloJzvGI1TAYymCfbfl3vT.jpg', // Parasite
+  '/8VG8fDNiy50H4FedGwdSVUPoaJe.jpg', // The Green Mile
+  '/sF1U4EUQS8YHUYjNl3pMGNIQyr0.jpg', // Schindler's List
+  '/uqx37cS8cpHg8U35f9U5IBlrCV3.jpg', // Saving Private Ryan
+  '/d0IVecFQvsGdSbnMAHqiYsNYaJT.jpg', // Skyfall
+  '/3E53WEZJqP6aM84D8CckXx4pIHw.jpg', // Deadpool
+  '/n0YuM4f5lvGAP6MAW2kBIzugXnc.jpg', // Top Gun: Maverick
+  '/iuFNMS8U5cb6xfzi51Dbkovj7vM.jpg', // Barbie
+  '/8Gxv8gSFCU0XGDykEGv7zR1n2ua.jpg', // Oppenheimer
+  // The series.
+  '/2koX1xLkpTQM4IZebYvKysFW1Nh.jpg', // Friends
+  '/7DJKHzAi83BmQrWLrYYOqcoKfhR.jpg', // The Office
+  '/uOOtwVbSr4QDjAGIifLDwpb2Pdl.jpg', // Stranger Things
+  '/1QdXdRYfktUSONkl1oD5gc6Be0s.jpg', // Squid Game
+  '/reEMJA1uzscCbkpeRJeTT2bjqUp.jpg', // Money Heist
+  '/aN29llVoCFtBTwDZFtqdD9d8dHb.jpg', // The Walking Dead
+  '/vUUqzWa2LnHIVqkaKVlVGkVcZIW.jpg', // Peaky Blinders
+]
+  // Capped at the grid's own size, so adding a favourite title to the list can
+  // never quietly grow the wall past eight rows.
+  .slice(0, WALL_TILES)
+  .map(p => `https://image.tmdb.org/t/p/w92${p}`);
 
 // The wall itself, shared by both faces of the section. It used to live only on
 // the pre-Generate banner, which meant the one state most people look at — the
@@ -360,42 +432,12 @@ export function TodaysPick() {
   // shared home pool instead: many different popular titles, so the backdrop is
   // a wall of varied artwork.
   const [deckPosters, setDeckPosters] = useState<string[]>([]);
-  const [wallPosters, setWallPosters] = useState<string[]>([]);
   const [helpOpen, setHelpOpen] = useState(false);
 
-  useEffect(() => {
-    let cancelled = false;
-    // Keard's picks always appear; the rest of the wall is top-rated films, so
-    // every tile is something a viewer is likely to recognise. This used to draw
-    // from the home pool, which is "popular THIS WEEK" — hence Chicago Fire and
-    // NCIS turning up on a wall meant to say "cinema".
-    //
-    // Both sources are cached (meta for a day, top-rated on the CDN for an hour),
-    // so in practice this is not two fresh round trips.
-    Promise.all([
-      batchFetchMeta(PINNED_WALL_IDS),
-      fetch('/api/see-all/top-rated-movies')
-        .then(r => (r.ok ? r.json() : null))
-        .catch(() => null),
-    ])
-      .then(([metaMap, topRated]: [Record<string, { poster?: string } | null>, { items?: Movie[] } | null]) => {
-        if (cancelled) return;
-        const pinned = PINNED_WALL_IDS
-          .map(id => metaMap[id]?.poster)
-          .filter((p): p is string => !!p);
-        const filler = (topRated?.items ?? [])
-          .map(m => m.poster)
-          .filter((p): p is string => !!p);
-
-        // Pinned first so they survive the slice, then top-rated shuffled by the
-        // day — a different wall each morning that holds still while you look at
-        // it. Deduped in case a pinned film is also top-rated (Shawshank is).
-        const unique = [...new Set([...pinned, ...seededShuffle(filler, daySeed())])];
-        setWallPosters(unique.slice(0, WALL_TILES));
-      })
-      .catch(() => {});
-    return () => { cancelled = true; };
-  }, []);
+  // The wall is a constant now, so there is no state and no request behind it:
+  // two fetches (pinned metadata, and the top-rated list) are gone from every
+  // load of the home screen.
+  const wallPosters = WALL_POSTERS;
   // Which poster the shuffle is currently on. -1 means the shuffle isn't running.
   const [shuffleAt, setShuffleAt] = useState(-1);
   const [marking, setMarking] = useState(false);
