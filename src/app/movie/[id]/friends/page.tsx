@@ -8,6 +8,7 @@ import { WatchedEye } from '@/components/watched-eye';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/contexts/auth-context';
 import { fetchWithAuth } from '@/lib/fetch-with-auth';
+import { lensCounts, matchesLens, lensRank, type Lens } from '@/lib/friend-lens';
 
 interface FriendRatingEntry {
   user: { id: string; username: string; displayName: string | null; avatarUrl: string | null };
@@ -45,14 +46,31 @@ export default function MovieFriendsPage() {
       .finally(() => setLoading(false));
   }, [id, authUser]);
 
+  // Which chip is on. Null is "everyone who has anything here", which is what
+  // the endpoint returns in the first place — it only ever includes people you
+  // follow who watched, rated, reviewed or watchlisted this title.
+  const [lens, setLens] = useState<Lens>(null);
+
+  // Derived, never fetched: the payload already carries every flag, so the chip
+  // numbers cost one pass over an array the page is holding anyway.
+  const counts = useMemo(() => lensCounts(entries), [entries]);
+
   const filtered = useMemo(() => {
-    if (!search.trim()) return entries;
     const q = search.trim().toLowerCase();
-    return entries.filter(e =>
+    const matchesSearch = (e: FriendRatingEntry) =>
+      !q ||
       (e.user.displayName ?? e.user.username).toLowerCase().includes(q) ||
-      e.user.username.toLowerCase().includes(q)
-    );
-  }, [entries, search]);
+      e.user.username.toLowerCase().includes(q);
+
+    // Ties fall back to the name, so the order is stable between visits rather
+    // than depending on which query happened to return first.
+    return entries
+      .filter(e => matchesLens(e, lens) && matchesSearch(e))
+      .sort((a, b) =>
+        lensRank(a) - lensRank(b) ||
+        (a.user.displayName ?? a.user.username).localeCompare(b.user.displayName ?? b.user.username)
+      );
+  }, [entries, search, lens]);
 
   if (!authLoading && !authUser) {
     router.replace('/login');
@@ -76,6 +94,43 @@ export default function MovieFriendsPage() {
           {movieTitle && <p className="text-sm text-muted-foreground truncate">{movieTitle}</p>}
         </div>
       </div>
+
+      {/* The chips. They FILTER rather than label — at eighty-three friends,
+          knowing that twenty-four reviewed it does not help; seeing only those
+          twenty-four does. Same decision as the role chips on a person page.
+
+          A chip with nothing behind it is left out entirely: "0 reviewed" is a
+          dead control that still costs a tap's worth of attention. */}
+      {!loading && entries.length > 0 && (
+        <div className="flex flex-wrap gap-2">
+          {([
+            [null, 'friends', counts.all],
+            ['watched', 'watched', counts.watched],
+            ['rated', 'rated', counts.rated],
+            ['reviewed', 'reviewed', counts.reviewed],
+            ['watchlist', 'watchlist', counts.watchlist],
+          ] as [Lens, string, number][])
+            .filter(([key, , n]) => key === null || n > 0)
+            .map(([key, label, n]) => {
+              const on = lens === key;
+              return (
+                <button
+                  key={label}
+                  type="button"
+                  onClick={() => setLens(key)}
+                  aria-pressed={on}
+                  className={`rounded-full px-3.5 py-1.5 text-xs font-bold border transition-colors ${
+                    on
+                      ? 'bg-primary text-primary-foreground border-primary'
+                      : 'bg-muted/40 text-muted-foreground border-border hover:bg-muted'
+                  }`}
+                >
+                  {n} {label}
+                </button>
+              );
+            })}
+        </div>
+      )}
 
       {/* Search */}
       {!loading && entries.length > 4 && (
@@ -118,11 +173,21 @@ export default function MovieFriendsPage() {
         </div>
       )}
 
-      {/* No search results */}
+      {/* Nothing left after the search and the chip. A chip alone can't empty the
+          list — one with a count of zero is never rendered — so this only appears
+          once a search is involved, and it says which of the two to undo. */}
       {!loading && entries.length > 0 && filtered.length === 0 && (
         <div className="flex flex-col items-center justify-center py-16 gap-2 text-center">
-          <p className="text-sm text-muted-foreground">No friends match &ldquo;{search}&rdquo;</p>
-          <button onClick={() => setSearch('')} className="text-xs text-primary font-bold">Clear search</button>
+          <p className="text-sm text-muted-foreground">
+            {search ? <>No friends match &ldquo;{search}&rdquo;</> : 'Nothing here'}
+            {lens && <> in <span className="font-bold">{lens}</span></>}
+          </p>
+          <button
+            onClick={() => { setSearch(''); setLens(null); }}
+            className="text-xs text-primary font-bold"
+          >
+            Show all friends
+          </button>
         </div>
       )}
 
