@@ -758,9 +758,17 @@ export function TodaysPick() {
                 {(() => {
                   const shown = resolveDisplayRating(movie.rating, pickCine[movie.id]);
                   if (!shown) return null;
+                  // Same rule as every other star in the app: a filled yellow star is
+                  // TMDB's number, a filled crimson one is ours. This card was the last
+                  // place still drawing TMDB's score in the accent colour, which is the
+                  // colour that means community — and drawing it hollow, which is the
+                  // colour that means one person's own score.
                   return (
-                    <span className={`flex items-center gap-1 ${shown.source === 'cinephilers' ? 'text-primary' : 'text-accent'}`}>
-                      <Star className="h-3.5 w-3.5" />{shown.value.toFixed(1)}
+                    <span className="flex items-center gap-1 text-foreground">
+                      <Star className={`h-3.5 w-3.5 ${shown.source === 'cinephilers'
+                        ? 'fill-primary text-primary'
+                        : 'fill-yellow-400 text-yellow-400'}`} />
+                      {shown.value.toFixed(1)}
                     </span>
                   );
                 })()}
