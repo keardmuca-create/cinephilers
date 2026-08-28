@@ -11,7 +11,7 @@ export async function GET(req: NextRequest) {
   const now = new Date();
   const yearStart = new Date(now.getFullYear(), 0, 1);
 
-  const [watched, ratings, reviewsCount, episodesByShow] = await Promise.all([
+  const [watched, ratings, reviewsCount, watchedEpisodes] = await Promise.all([
     prisma.watchedItem.findMany({
       where: { userId },
       select: { tmdbId: true, mediaType: true, watchedAt: true },
@@ -22,13 +22,11 @@ export async function GET(req: NextRequest) {
       select: { score: true },
     }),
     prisma.review.count({ where: { userId } }),
-    // Episodes are where a series' hours actually are. Grouped in the database
-    // rather than counted here — 602 rows today, but somebody who ticks through
-    // several long shows will have thousands.
-    prisma.watchedEpisode.groupBy({
-      by: ['showTmdbId'],
+    // Every episode individually, not a count per show: each one is looked up by
+    // its own runtime below, so which episodes matters and not merely how many.
+    prisma.watchedEpisode.findMany({
       where: { userId },
-      _count: { _all: true },
+      select: { showTmdbId: true, season: true, episode: true },
     }),
   ]);
 
@@ -50,17 +48,16 @@ export async function GET(req: NextRequest) {
   //
   // Films are the easy half: a runtime per title, stored on FilmMeta already.
   //
-  // Series are counted per EPISODE, not per series, because a show marked
-  // watched says nothing about how long it was — Breaking Bad and a two-part
-  // documentary both count as one row. Episode length is an average per show
-  // (TMDB gives one number for the whole series), so this is an estimate and is
-  // presented as one: days and hours, never minutes.
+  // Series are counted per EPISODE, and each episode by its own runtime — not by
+  // a series average, which was arithmetic on an estimate and could be hours out
+  // over a long run. The app states this figure to the minute, so the minutes
+  // are the real ones.
   //
   // A title with no runtime stored contributes zero rather than a guess. It
   // undercounts slightly, which is the right direction — a number that claims
   // more than it can prove is worse than one that admits a gap.
   const showIds = new Set<string>([
-    ...episodesByShow.map(e => e.showTmdbId),
+    ...watchedEpisodes.map(e => e.showTmdbId),
     ...watched.filter(w => w.mediaType === 'SHOW').map(w => w.tmdbId),
   ]);
   const metaIds = [...new Set([
@@ -71,7 +68,10 @@ export async function GET(req: NextRequest) {
   const metaRows = metaIds.length
     ? await prisma.filmMeta.findMany({
         where: { tmdbId: { in: metaIds } },
-        select: { tmdbId: true, runtime: true, episodeRuntime: true, episodeCount: true },
+        select: {
+          tmdbId: true, runtime: true,
+          episodeRuntime: true, episodeRuntimes: true, episodeCount: true,
+        },
       })
     : [];
   const metaById = new Map(metaRows.map(m => [m.tmdbId, m]));
@@ -80,18 +80,46 @@ export async function GET(req: NextRequest) {
     .filter(w => w.mediaType === 'MOVIE')
     .reduce((sum, w) => sum + (metaById.get(w.tmdbId)?.runtime ?? 0), 0);
 
-  const episodeCountByShow = new Map(episodesByShow.map(e => [e.showTmdbId, e._count._all]));
+  /** This exact episode's runtime, falling back to the series average. */
+  const runtimeOf = (
+    map: Record<string, Record<string, number>> | null,
+    average: number | null,
+    season: number,
+    episode: number,
+  ): number => map?.[String(season)]?.[String(episode)] ?? average ?? 0;
 
+  // Each watched episode contributes its OWN length. Counting episodes and
+  // multiplying by an average was arithmetic on an estimate: Breaking Bad runs
+  // 43 to 58 minutes an episode and every one of them counted as 50, so a
+  // finished series could be hours out — in a figure the app states to the
+  // minute.
   let showMinutes = 0;
+  for (const e of watchedEpisodes) {
+    const meta = metaById.get(e.showTmdbId);
+    if (!meta) continue;
+    showMinutes += runtimeOf(
+      meta.episodeRuntimes as Record<string, Record<string, number>> | null,
+      meta.episodeRuntime,
+      e.season,
+      e.episode,
+    );
+  }
+
+  // A series marked watched at show level with no episodes ticked still means "I
+  // have seen this", and zero would be the more wrong answer. Its whole run is
+  // credited — every stored episode runtime, or the episode count times the
+  // average when the map is missing.
+  const showsWithTickedEpisodes = new Set(watchedEpisodes.map(e => e.showTmdbId));
   for (const id of showIds) {
+    if (showsWithTickedEpisodes.has(id)) continue;
     const meta = metaById.get(id);
-    if (!meta?.episodeRuntime) continue;
-    // Ticked episodes are the truth when they exist. A series marked watched at
-    // show level with none of them ticked is credited its full episode count —
-    // that mark means "I have seen this", and pricing it at zero would be the
-    // more wrong of the two answers.
-    const episodes = episodeCountByShow.get(id) ?? meta.episodeCount ?? 0;
-    showMinutes += episodes * meta.episodeRuntime;
+    if (!meta) continue;
+    const map = meta.episodeRuntimes as Record<string, Record<string, number>> | null;
+    if (map) {
+      showMinutes += Object.values(map).flatMap(s => Object.values(s)).reduce((a, b) => a + b, 0);
+    } else if (meta.episodeRuntime) {
+      showMinutes += (meta.episodeCount ?? 0) * meta.episodeRuntime;
+    }
   }
 
   // Monthly activity — last 12 months

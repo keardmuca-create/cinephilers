@@ -4,35 +4,93 @@ import { tmdbRequest } from '@/lib/tmdb-fetch';
 const BASE = 'https://api.themoviedb.org/3';
 const IMG  = 'https://image.tmdb.org/t/p';
 
-/** {"1":7,"2":13} from TMDB's season list, specials dropped. */
 /**
- * How long an episode of this series runs, in minutes.
+ * A single episode length for the series, in minutes.
  *
- * TMDB's `episode_run_time` is the obvious answer and it is empty on most of the
- * shows that matter — 13 of the first 19 checked, Breaking Bad and Game of
- * Thrones among them. So season one is the fallback: its episodes each carry a
- * real runtime, and their average describes the series well enough for "days
- * spent watching".
+ * Secondary now that every episode carries its own runtime: this is the fallback
+ * for an episode the map is missing, and the number shown on the film page as
+ * "48 min/ep". It is averaged across every episode of every season rather than
+ * taken from TMDB's own episode_run_time, which is empty on most major
+ * series — 13 of the first 19 checked, Breaking Bad and Game of Thrones
+ * included — and, where present, is one declared figure rather than a measure of
+ * what actually aired.
  *
- * A pilot is often longer than the rest, so the average is taken across the
- * whole season rather than from the first episode.
- *
- * Returns 0 when neither source knows, never a guess — a zero means "no length
- * on record" and the hours it would have contributed are simply left out.
+ * Returns 0 when nothing is known, never a guess: a zero means "no length on
+ * record" and those minutes are simply left out of any total.
  */
-function episodeRuntimeOf(d: Record<string, unknown>): number {
-  const declared = (d.episode_run_time as number[] | undefined)?.[0];
-  if (typeof declared === 'number' && declared > 0) return declared;
-
-  const season = d['season/1'] as { episodes?: { runtime?: number | null }[] } | undefined;
-  const runtimes = (season?.episodes ?? [])
-    .map(e => e.runtime)
-    .filter((r): r is number => typeof r === 'number' && r > 0);
-  if (runtimes.length === 0) return 0;
-
-  return Math.round(runtimes.reduce((sum, r) => sum + r, 0) / runtimes.length);
+function averageEpisodeRuntime(
+  runtimes: Record<string, Record<string, number>> | undefined,
+  declared: number[] | undefined,
+): number {
+  const all = Object.values(runtimes ?? {}).flatMap(season => Object.values(season));
+  if (all.length > 0) return Math.round(all.reduce((sum, r) => sum + r, 0) / all.length);
+  const fallback = declared?.[0];
+  return typeof fallback === 'number' && fallback > 0 ? fallback : 0;
 }
 
+/**
+ * Every episode's own runtime, keyed season → episode → minutes.
+ *
+ * The average-per-show it replaces was arithmetic on an estimate: Breaking Bad
+ * episodes run 43 to 58 minutes and were all counted as 50, so a finished series
+ * could be out by hours. If the app is going to show somebody a figure to the
+ * minute, the minutes have to be real.
+ *
+ * TMDB carries the runtime on each episode of a season, and append_to_response
+ * takes up to twenty seasons in a single request — so this is one extra call for
+ * nearly every series, not one per season. Shows with more than twenty seasons
+ * (soaps, mostly) take a second round.
+ *
+ * Specials (season 0) are skipped, matching every other count in the app.
+ */
+const APPEND_LIMIT = 20;
+
+async function episodeRuntimesOf(
+  showNum: number,
+  seasons: unknown,
+  key: string,
+): Promise<Record<string, Record<string, number>> | undefined> {
+  const numbers = Array.isArray(seasons)
+    ? (seasons as { season_number?: number }[])
+        .map(s => s?.season_number)
+        .filter((n): n is number => typeof n === 'number' && n > 0)
+    : [];
+  if (numbers.length === 0) return undefined;
+
+  const out: Record<string, Record<string, number>> = {};
+
+  for (let i = 0; i < numbers.length; i += APPEND_LIMIT) {
+    const chunk = numbers.slice(i, i + APPEND_LIMIT);
+    const append = chunk.map(n => `season/${n}`).join(',');
+    try {
+      const res = await tmdbRequest(
+        `${BASE}/tv/${showNum}?api_key=${key}&language=en-US&append_to_response=${append}`,
+        { next: { revalidate: 3600 } },
+      );
+      if (!res.ok) continue;
+      const data = await res.json() as Record<string, unknown>;
+      for (const n of chunk) {
+        const season = data[`season/${n}`] as { episodes?: { episode_number?: number; runtime?: number | null }[] } | undefined;
+        const episodes = season?.episodes ?? [];
+        const map: Record<string, number> = {};
+        for (const ep of episodes) {
+          if (typeof ep.episode_number !== 'number') continue;
+          if (typeof ep.runtime !== 'number' || ep.runtime <= 0) continue;
+          map[String(ep.episode_number)] = ep.runtime;
+        }
+        if (Object.keys(map).length > 0) out[String(n)] = map;
+      }
+    } catch {
+      // A season that won't load costs that season's precision, not the whole
+      // show — the per-show average still covers anything missing here.
+      continue;
+    }
+  }
+
+  return Object.keys(out).length > 0 ? out : undefined;
+}
+
+/** {"1":7,"2":13} from TMDB's season list, specials dropped. */
 function seasonCountsFrom(seasons: unknown): Record<string, number> | undefined {
   if (!Array.isArray(seasons)) return undefined;
   const out: Record<string, number> = {};
@@ -87,18 +145,13 @@ export async function fetchOneMeta(id: string, key: string): Promise<ItemMeta> {
   const path = isShow ? `/tv/${num}` : `/movie/${num}`;
   // append_to_response rides along in the SAME request, so credits cost no
   // extra TMDB call — that's what gives us director and cast for free.
-  //
-  // Shows ask for season one as well, for one reason: TMDB's own
-  // episode_run_time is EMPTY on most major series. Breaking Bad, Game of
-  // Thrones, The Sopranos, The Walking Dead, Squid Game and House of the Dragon
-  // all return nothing, which is precisely the set of shows people actually
-  // finish. Season one's episodes carry a real runtime each, so averaging them
-  // gives an episode length for the series — and it rides along in this same
-  // request rather than costing another.
-  const appended = isShow ? 'credits,season/1' : 'credits';
-  const res = await tmdbRequest(`${BASE}${path}?api_key=${key}&language=en-US&append_to_response=${appended}`, { next: { revalidate: 3600 } });
+  const res = await tmdbRequest(`${BASE}${path}?api_key=${key}&language=en-US&append_to_response=credits`, { next: { revalidate: 3600 } });
   if (!res.ok) throw new Error(`TMDB ${res.status}`);
   const d = await res.json();
+
+  // Which seasons exist is only known once the show itself has answered, so the
+  // episode runtimes are a second request rather than an append on this one.
+  const episodeRuntimes = isShow ? await episodeRuntimesOf(num, d.seasons, key) : undefined;
 
   const poster = d.poster_path ? `${IMG}/w342${d.poster_path}` : '';
   const title = d.title ?? d.name ?? 'Untitled';
@@ -128,7 +181,10 @@ export async function fetchOneMeta(id: string, key: string): Promise<ItemMeta> {
     // The mirror of runtime above: a number for shows (0 when TMDB has none) so a
     // cached entry from before this field can be told from a show whose episode
     // length is genuinely unknown.
-    episodeRuntime: isShow ? episodeRuntimeOf(d) : undefined,
+    episodeRuntime: isShow ? averageEpisodeRuntime(episodeRuntimes, d.episode_run_time) : undefined,
+    // Season -> episode -> minutes. The exact figures; the average above is only
+    // the fallback for anything missing here.
+    episodeRuntimes,
     // Episodes per season, so the app can say someone finished season one rather
     // than "13 / 62". Specials (season 0) excluded, matching number_of_episodes.
     seasonCounts: isShow ? seasonCountsFrom(d.seasons) : undefined,

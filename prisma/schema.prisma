@@ -415,6 +415,11 @@ model FilmMeta {
   // question it exists to answer, and the alternative is a runtime per episode
   // for every episode of every series.
   episodeRuntime Int?
+  // Exact minutes per episode, keyed season -> episode ({"1":{"1":58,"2":48}}).
+  // The average above is arithmetic on an estimate — Breaking Bad runs 43 to 58
+  // minutes an episode — and "days spent watching" is shown to the minute, so
+  // the minutes have to be the real ones.
+  episodeRuntimes Json?
   showStatus   String?
   showType     String?
 

@@ -25,6 +25,7 @@ export async function saveFilmMeta(meta: ItemMeta): Promise<void> {
     voteAverage: typeof meta.tmdbRating === 'number' ? meta.tmdbRating : null,
     episodeCount: typeof meta.totalEps === 'number' && meta.totalEps > 0 ? meta.totalEps : null,
     episodeRuntime: typeof meta.episodeRuntime === 'number' && meta.episodeRuntime > 0 ? meta.episodeRuntime : null,
+    episodeRuntimes: meta.episodeRuntimes ?? undefined,
     showStatus: meta.tmdbStatus ?? null,
     showType: meta.showType ?? null,
     seasonCounts: meta.seasonCounts ?? undefined,

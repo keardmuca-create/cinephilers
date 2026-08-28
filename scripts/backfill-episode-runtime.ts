@@ -1,18 +1,21 @@
-// One-off: fill episodeRuntime on FilmMeta rows that predate the column.
+// One-off: fill episode runtimes on FilmMeta rows that predate the columns.
 //
-// New shows populate it themselves — the metadata fetch writes it on the way
-// through — but rows already in the table are never refetched just because a
-// column appeared. Without this, "time watched" counts every episode of every
-// existing series as zero minutes.
+// Two fields, and the second is the one that matters:
+//   episodeRuntime   one average for the series — the fallback
+//   episodeRuntimes  every episode's own runtime, season -> episode -> minutes
 //
-// Safe to re-run: it only touches shows still missing the field, and a series
-// TMDB has no episode length for is left null rather than guessed.
+// New shows fill both on the way through the metadata fetch, but rows already in
+// the table are never refetched just because a column appeared. Without this,
+// every episode of every existing series is either zero minutes or an average.
+//
+// Safe to re-run: it only touches shows still missing one of the two, and a
+// series TMDB has nothing for is left null rather than guessed at.
 //
 //   npx tsx scripts/backfill-episode-runtime.ts
 import 'dotenv/config';
 import { config } from 'dotenv';
 config({ path: '.env.local' }); // TMDB_API_KEY lives here, not in .env
-import { PrismaClient } from '../src/generated/prisma/client';
+import { PrismaClient, Prisma } from '../src/generated/prisma/client';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { fetchOneMeta } from '../src/app/api/meta/_fetch';
 
@@ -23,7 +26,10 @@ async function main() {
   if (!key) throw new Error('TMDB_API_KEY not set');
 
   const shows = await prisma.filmMeta.findMany({
-    where: { mediaType: 'SHOW', episodeRuntime: null },
+    where: {
+      mediaType: 'SHOW',
+      OR: [{ episodeRuntime: null }, { episodeRuntimes: { equals: Prisma.DbNull } }],
+    },
     select: { tmdbId: true, title: true },
   });
   console.log(`${shows.length} show(s) to fill`);
@@ -32,22 +38,40 @@ async function main() {
   let unknown = 0;
   let failed = 0;
 
-  for (const s of shows) {
+  for (const show of shows) {
     try {
-      const meta = await fetchOneMeta(s.tmdbId, key);
-      const mins = typeof meta.episodeRuntime === 'number' && meta.episodeRuntime > 0
+      const meta = await fetchOneMeta(show.tmdbId, key);
+      const average = typeof meta.episodeRuntime === 'number' && meta.episodeRuntime > 0
         ? meta.episodeRuntime
         : null;
-      await prisma.filmMeta.update({ where: { tmdbId: s.tmdbId }, data: { episodeRuntime: mins } });
-      if (mins) { filled++; console.log(`  ${s.title}: ${mins} min/ep`); }
-      else { unknown++; console.log(`  ${s.title}: TMDB has no episode length`); }
+      const exact = Object.values(meta.episodeRuntimes ?? {})
+        .flatMap(season => Object.values(season));
+
+      await prisma.filmMeta.update({
+        where: { tmdbId: show.tmdbId },
+        data: { episodeRuntime: average, episodeRuntimes: meta.episodeRuntimes ?? undefined },
+      });
+
+      if (exact.length > 0) {
+        filled++;
+        const total = exact.reduce((a, b) => a + b, 0);
+        console.log(
+          `  ${show.title}: ${exact.length} episodes, ${Math.min(...exact)}-${Math.max(...exact)} min each, ${total} min in total`,
+        );
+      } else if (average) {
+        filled++;
+        console.log(`  ${show.title}: no per-episode data, average only (${average} min/ep)`);
+      } else {
+        unknown++;
+        console.log(`  ${show.title}: TMDB has no runtime at all`);
+      }
     } catch (err) {
       failed++;
-      console.log(`  ${s.title}: FAILED — ${(err as Error).message}`);
+      console.log(`  ${show.title}: FAILED — ${(err as Error).message}`);
     }
   }
 
-  console.log(`\nfilled ${filled}, no length on TMDB ${unknown}, failed ${failed}`);
+  console.log(`\nfilled ${filled}, nothing on TMDB ${unknown}, failed ${failed}`);
 }
 
 main().finally(() => prisma.$disconnect());
