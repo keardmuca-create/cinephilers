@@ -2,6 +2,7 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import JSZip from 'jszip';
+import { parseCsv } from '@/lib/csv';
 import { X, Upload, Loader2, CheckCircle, AlertCircle, ChevronRight, Film, Check, Search } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { fetchWithAuth } from '@/lib/fetch-with-auth';
@@ -33,37 +34,6 @@ interface MatchedItem extends ParsedItem {
   confident: boolean;
 }
 
-function parseCSV(text: string): Record<string, string>[] {
-  const lines = text.trim().split('\n');
-  if (lines.length < 2) return [];
-  const headers = parseCSVLine(lines[0]);
-  return lines.slice(1).map(line => {
-    const values = parseCSVLine(line);
-    const row: Record<string, string> = {};
-    headers.forEach((h, i) => { row[h.trim()] = (values[i] ?? '').trim(); });
-    return row;
-  }).filter(row => Object.values(row).some(v => v));
-}
-
-function parseCSVLine(line: string): string[] {
-  const result: string[] = [];
-  let current = '';
-  let inQuotes = false;
-  for (let i = 0; i < line.length; i++) {
-    const ch = line[i];
-    if (ch === '"') {
-      if (inQuotes && line[i + 1] === '"') { current += '"'; i++; }
-      else inQuotes = !inQuotes;
-    } else if (ch === ',' && !inQuotes) {
-      result.push(current); current = '';
-    } else {
-      current += ch;
-    }
-  }
-  result.push(current);
-  return result;
-}
-
 async function parseLetterboxd(file: File): Promise<ParsedItem[]> {
   const zip = await JSZip.loadAsync(file);
   const items = new Map<string, ParsedItem>();
@@ -72,7 +42,7 @@ async function parseLetterboxd(file: File): Promise<ParsedItem[]> {
     const f = zip.file(name) ?? zip.file(name.replace('.csv', '').concat('.csv'));
     if (!f) return [];
     const text = await f.async('string');
-    return parseCSV(text);
+    return parseCsv(text);
   };
 
   // Watched
@@ -156,7 +126,7 @@ async function parseLetterboxd(file: File): Promise<ParsedItem[]> {
 
 async function parseIMDb(file: File): Promise<ParsedItem[]> {
   const text = await file.text();
-  const rows = parseCSV(text);
+  const rows = parseCsv(text);
   const items: ParsedItem[] = [];
 
   for (const row of rows) {
