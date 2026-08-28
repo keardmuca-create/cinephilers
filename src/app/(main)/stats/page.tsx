@@ -26,21 +26,33 @@ type SpanKey = 'total' | 'films' | 'shows';
 /**
  * Minutes as something a person would say out loud.
  *
- * Days and hours, never minutes: episode length is an average per series, so the
- * last digit is invented. "12 days 4 hours" is honest about that; "12 days 4
- * hours 37 minutes" pretends to a precision the data does not have.
+ * The unit follows the size, because precision means different things at
+ * different scales.
+ *
+ * Past a day it is days and hours and NOT minutes: episode length is one average
+ * per series, so at forty-seven days the minutes digit is invented. "47d 3h" is
+ * honest; "47d 3h 12m" pretends to an accuracy the data cannot support.
+ *
+ * Under a day, minutes are the whole story and dropping them is the actual lie —
+ * a first film of 96 minutes rounded to hours reads "1h", and a single 45-minute
+ * episode reads "0h", which tells a new member their evening did not happen.
  */
 function humanTime(mins: number): { value: string; sub: string } {
   if (mins <= 0) return { value: '0h', sub: 'Nothing marked watched yet' };
+
   const totalHours = Math.floor(mins / 60);
   const days = Math.floor(totalHours / 24);
-  const hours = totalHours % 24;
-  return {
-    value: days > 0 ? `${days}d ${hours}h` : `${totalHours}h`,
-    sub: days > 0
-      ? `${totalHours.toLocaleString()} hours in front of a screen`
-      : 'Time in front of a screen',
-  };
+
+  if (days > 0) {
+    return {
+      value: `${days}d ${totalHours % 24}h`,
+      sub: `${totalHours.toLocaleString()} hours in front of a screen`,
+    };
+  }
+  if (totalHours > 0) {
+    return { value: `${totalHours}h ${Math.round(mins % 60)}m`, sub: 'Time in front of a screen' };
+  }
+  return { value: `${Math.round(mins)}m`, sub: 'Time in front of a screen' };
 }
 
 function StatCard({ icon: Icon, label, value, sub, color = 'text-primary' }: {
