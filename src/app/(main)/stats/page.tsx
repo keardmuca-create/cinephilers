@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { ChevronLeft, Film, Star, MessageSquare, Eye, TrendingUp, Calendar } from 'lucide-react';
+import { ChevronLeft, Film, Star, MessageSquare, Eye, TrendingUp, Calendar, Clock } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/contexts/auth-context';
 import { fetchWithAuth } from '@/lib/fetch-with-auth';
@@ -18,6 +18,29 @@ interface Stats {
   avgScore: number | null;
   reviewsCount: number;
   monthlyActivity: { month: string; count: number }[];
+  watchMinutes?: { films: number; shows: number; total: number };
+}
+
+type SpanKey = 'total' | 'films' | 'shows';
+
+/**
+ * Minutes as something a person would say out loud.
+ *
+ * Days and hours, never minutes: episode length is an average per series, so the
+ * last digit is invented. "12 days 4 hours" is honest about that; "12 days 4
+ * hours 37 minutes" pretends to a precision the data does not have.
+ */
+function humanTime(mins: number): { value: string; sub: string } {
+  if (mins <= 0) return { value: '0h', sub: 'Nothing marked watched yet' };
+  const totalHours = Math.floor(mins / 60);
+  const days = Math.floor(totalHours / 24);
+  const hours = totalHours % 24;
+  return {
+    value: days > 0 ? `${days}d ${hours}h` : `${totalHours}h`,
+    sub: days > 0
+      ? `${totalHours.toLocaleString()} hours in front of a screen`
+      : 'Time in front of a screen',
+  };
 }
 
 function StatCard({ icon: Icon, label, value, sub, color = 'text-primary' }: {
@@ -65,6 +88,9 @@ export default function StatsPage() {
   const router = useRouter();
   const { user, loading: authLoading } = useAuth();
   const [stats, setStats] = useState<Stats | null>(null);
+  // Which slice of the time figure is on screen. Total first: the whole is what
+  // somebody came to see, and the parts explain it.
+  const [span, setSpan] = useState<SpanKey>('total');
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -101,6 +127,54 @@ export default function StatsPage() {
 
       {!loading && stats && (
         <div className="space-y-6">
+          {/* Time watched — full width and above the grid, because it is the one
+              figure here anybody repeats out loud. The split is not decoration:
+              a lone total invites "from what?", and films and series are two
+              different kinds of viewing life. */}
+          {stats.watchMinutes && stats.watchMinutes.total > 0 && (() => {
+            const mins = stats.watchMinutes[span];
+            const { value, sub } = humanTime(mins);
+            return (
+              <div className="bg-card rounded-3xl border border-border p-5 space-y-4">
+                <div className="flex items-center gap-2">
+                  <Clock className="h-5 w-5 text-primary" />
+                  <h2 className="font-headline font-bold text-lg">Time Watched</h2>
+                </div>
+                <div>
+                  <p className="text-5xl font-black font-headline">{value}</p>
+                  <p className="text-sm text-muted-foreground mt-1">{sub}</p>
+                </div>
+                <div className="flex gap-2">
+                  {([
+                    ['total', 'All'],
+                    ['films', 'Films'],
+                    ['shows', 'Shows'],
+                  ] as [SpanKey, string][]).map(([key, label]) => (
+                    <button
+                      key={key}
+                      type="button"
+                      onClick={() => setSpan(key)}
+                      aria-pressed={span === key}
+                      className={`rounded-full px-4 py-1.5 text-xs font-bold border transition-colors ${
+                        span === key
+                          ? 'bg-primary text-primary-foreground border-primary'
+                          : 'bg-muted/40 text-muted-foreground border-border hover:bg-muted'
+                      }`}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+                {/* Said once, plainly. Episode length is one average per series,
+                    and a title with no runtime stored counts as nothing — so the
+                    figure leans low rather than flattering. */}
+                <p className="text-[11px] text-muted-foreground/70">
+                  Estimated from runtimes — episodes use each show&apos;s average length.
+                </p>
+              </div>
+            );
+          })()}
+
           {/* Stat grid */}
           <div className="grid grid-cols-2 gap-3">
             <StatCard

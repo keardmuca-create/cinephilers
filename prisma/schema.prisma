@@ -409,6 +409,12 @@ model FilmMeta {
   // "Scripted") is what tells a mini-series apart. All three already ride along
   // on the TMDB detail call the meta route makes, so they cost nothing extra.
   episodeCount Int?
+  // Average minutes per episode, from TMDB's episode_run_time. Shows only, and
+  // an average by nature — a season of 42-minute episodes with one 78-minute
+  // finale reports 42. Good enough for "days spent watching", which is the one
+  // question it exists to answer, and the alternative is a runtime per episode
+  // for every episode of every series.
+  episodeRuntime Int?
   showStatus   String?
   showType     String?
 

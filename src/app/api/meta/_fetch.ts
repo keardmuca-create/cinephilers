@@ -88,6 +88,10 @@ export async function fetchOneMeta(id: string, key: string): Promise<ItemMeta> {
     showType: isShow ? (d.type ?? undefined) : undefined,
     tmdbStatus: d.status ?? undefined,
     totalEps: isShow ? (d.number_of_episodes ?? undefined) : undefined,
+    // The mirror of runtime above: a number for shows (0 when TMDB has none) so a
+    // cached entry from before this field can be told from a show whose episode
+    // length is genuinely unknown.
+    episodeRuntime: isShow ? (d.episode_run_time?.[0] ?? 0) : undefined,
     // Episodes per season, so the app can say someone finished season one rather
     // than "13 / 62". Specials (season 0) excluded, matching number_of_episodes.
     seasonCounts: isShow ? seasonCountsFrom(d.seasons) : undefined,
