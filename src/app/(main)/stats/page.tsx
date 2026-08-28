@@ -23,36 +23,66 @@ interface Stats {
 
 type SpanKey = 'total' | 'films' | 'shows';
 
+// A month here is 30 days and a year is 365. Calendar months run 28 to 31 days,
+// and "how much of my life was this" has no calendar behind it — nobody watched
+// their films in February.
+const DAY = 24 * 60;
+const MONTH = 30 * DAY;
+const YEAR = 365 * DAY;
+
+const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`;
+
 /**
- * Minutes as something a person would say out loud.
+ * The whole figure in words: "1 month 26 days 10 hours and 23 minutes".
  *
- * The unit follows the size, because precision means different things at
- * different scales.
+ * Every unit that has anything in it is named, largest first, with "and" before
+ * the last — Keard asked for the full breakdown rather than a rounded headline,
+ * and it reads like something a person would say.
  *
- * Past a day it is days and hours and NOT minutes: episode length is one average
- * per series, so at forty-seven days the minutes digit is invented. "47d 3h" is
- * honest; "47d 3h 12m" pretends to an accuracy the data cannot support.
+ * Empty units are skipped, so 47 days and 10 minutes says exactly that instead
+ * of padding itself out with "0 hours".
  *
- * Under a day, minutes are the whole story and dropping them is the actual lie —
- * a first film of 96 minutes rounded to hours reads "1h", and a single 45-minute
- * episode reads "0h", which tells a new member their evening did not happen.
+ * Worth knowing when reading the minutes: for films they are exact, since every
+ * film carries its own runtime. For series they come from one average episode
+ * length per show, so the last digit of a Shows or All figure is approximate.
  */
 function humanTime(mins: number): { value: string; sub: string } {
-  if (mins <= 0) return { value: '0h', sub: 'Nothing marked watched yet' };
+  if (mins <= 0) return { value: '0 minutes', sub: 'Nothing marked watched yet' };
 
-  const totalHours = Math.floor(mins / 60);
-  const days = Math.floor(totalHours / 24);
+  const total = Math.round(mins);
+  const parts: string[] = [];
 
-  if (days > 0) {
-    return {
-      value: `${days}d ${totalHours % 24}h`,
-      sub: `${totalHours.toLocaleString()} hours in front of a screen`,
-    };
-  }
-  if (totalHours > 0) {
-    return { value: `${totalHours}h ${Math.round(mins % 60)}m`, sub: 'Time in front of a screen' };
-  }
-  return { value: `${Math.round(mins)}m`, sub: 'Time in front of a screen' };
+  // Each unit takes its bite and passes the rest on. Reading every unit off the
+  // total independently looks tidier and is wrong: a 365-day year is not twelve
+  // 30-day months, so `total % MONTH` is not what is left after the years are
+  // taken out. It reported 1 year 3 months and 7 days for a figure that is 1
+  // year 3 months and 2 days.
+  let rest = total;
+  const years = Math.floor(rest / YEAR); rest -= years * YEAR;
+  const months = Math.floor(rest / MONTH); rest -= months * MONTH;
+  const days = Math.floor(rest / DAY); rest -= days * DAY;
+  const hours = Math.floor(rest / 60); rest -= hours * 60;
+  const minutes = rest;
+
+  if (years) parts.push(plural(years, 'year'));
+  if (months) parts.push(plural(months, 'month'));
+  if (days) parts.push(plural(days, 'day'));
+  if (hours) parts.push(plural(hours, 'hour'));
+  if (minutes) parts.push(plural(minutes, 'minute'));
+
+  const value = parts.length > 1
+    ? `${parts.slice(0, -1).join(' ')} and ${parts[parts.length - 1]}`
+    : parts[0];
+
+  const totalDays = Math.floor(total / DAY);
+  const totalHours = Math.floor(total / 60);
+
+  return {
+    value,
+    sub: totalDays > 0
+      ? `${totalDays.toLocaleString()} days · ${totalHours.toLocaleString()} hours watched`
+      : 'Time in front of a screen',
+  };
 }
 
 function StatCard({ icon: Icon, label, value, sub, color = 'text-primary' }: {
@@ -153,7 +183,7 @@ export default function StatsPage() {
                   <h2 className="font-headline font-bold text-lg">Time Watched</h2>
                 </div>
                 <div>
-                  <p className="text-5xl font-black font-headline">{value}</p>
+                  <p className="text-3xl font-black font-headline leading-tight">{value}</p>
                   <p className="text-sm text-muted-foreground mt-1">{sub}</p>
                 </div>
                 <div className="flex gap-2">
