@@ -42,12 +42,12 @@ const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`;
  * Empty units are skipped, so 47 days and 10 minutes says exactly that instead
  * of padding itself out with "0 hours".
  *
- * Worth knowing when reading the minutes: for films they are exact, since every
- * film carries its own runtime. For series they come from one average episode
- * length per show, so the last digit of a Shows or All figure is approximate.
+ * Every minute in it is real: films carry their own runtime and so does each
+ * episode, so there is nothing to caveat and no second line restating the same
+ * figure in another unit.
  */
-function humanTime(mins: number): { value: string; sub: string } {
-  if (mins <= 0) return { value: '0 minutes', sub: 'Nothing marked watched yet' };
+function humanTime(mins: number): string {
+  if (mins <= 0) return '0 minutes';
 
   const total = Math.round(mins);
   const parts: string[] = [];
@@ -70,19 +70,9 @@ function humanTime(mins: number): { value: string; sub: string } {
   if (hours) parts.push(plural(hours, 'hour'));
   if (minutes) parts.push(plural(minutes, 'minute'));
 
-  const value = parts.length > 1
+  return parts.length > 1
     ? `${parts.slice(0, -1).join(' ')} and ${parts[parts.length - 1]}`
     : parts[0];
-
-  const totalDays = Math.floor(total / DAY);
-  const totalHours = Math.floor(total / 60);
-
-  return {
-    value,
-    sub: totalDays > 0
-      ? `${totalDays.toLocaleString()} days · ${totalHours.toLocaleString()} hours watched`
-      : 'Time in front of a screen',
-  };
 }
 
 function StatCard({ icon: Icon, label, value, sub, color = 'text-primary' }: {
@@ -173,49 +163,38 @@ export default function StatsPage() {
               figure here anybody repeats out loud. The split is not decoration:
               a lone total invites "from what?", and films and series are two
               different kinds of viewing life. */}
-          {stats.watchMinutes && stats.watchMinutes.total > 0 && (() => {
-            const mins = stats.watchMinutes[span];
-            const { value, sub } = humanTime(mins);
-            return (
-              <div className="bg-card rounded-3xl border border-border p-5 space-y-4">
-                <div className="flex items-center gap-2">
-                  <Clock className="h-5 w-5 text-primary" />
-                  <h2 className="font-headline font-bold text-lg">Time Watched</h2>
-                </div>
-                <div>
-                  <p className="text-3xl font-black font-headline leading-tight">{value}</p>
-                  <p className="text-sm text-muted-foreground mt-1">{sub}</p>
-                </div>
-                <div className="flex gap-2">
-                  {([
-                    ['total', 'All'],
-                    ['films', 'Films'],
-                    ['shows', 'Shows'],
-                  ] as [SpanKey, string][]).map(([key, label]) => (
-                    <button
-                      key={key}
-                      type="button"
-                      onClick={() => setSpan(key)}
-                      aria-pressed={span === key}
-                      className={`rounded-full px-4 py-1.5 text-xs font-bold border transition-colors ${
-                        span === key
-                          ? 'bg-primary text-primary-foreground border-primary'
-                          : 'bg-muted/40 text-muted-foreground border-border hover:bg-muted'
-                      }`}
-                    >
-                      {label}
-                    </button>
-                  ))}
-                </div>
-                {/* Said once, plainly. Episode length is one average per series,
-                    and a title with no runtime stored counts as nothing — so the
-                    figure leans low rather than flattering. */}
-                <p className="text-[11px] text-muted-foreground/70">
-                  Estimated from runtimes — episodes use each show&apos;s average length.
-                </p>
+          {stats.watchMinutes && stats.watchMinutes.total > 0 && (
+            <div className="bg-card rounded-3xl border border-border p-5 space-y-4">
+              <div className="flex items-center gap-2">
+                <Clock className="h-5 w-5 text-primary" />
+                <h2 className="font-headline font-bold text-lg">Time Watched</h2>
               </div>
-            );
-          })()}
+              <p className="text-3xl font-black font-headline leading-tight">
+                {humanTime(stats.watchMinutes[span])}
+              </p>
+              <div className="flex gap-2">
+                {([
+                  ['total', 'All'],
+                  ['films', 'Films'],
+                  ['shows', 'Shows'],
+                ] as [SpanKey, string][]).map(([key, label]) => (
+                  <button
+                    key={key}
+                    type="button"
+                    onClick={() => setSpan(key)}
+                    aria-pressed={span === key}
+                    className={`rounded-full px-4 py-1.5 text-xs font-bold border transition-colors ${
+                      span === key
+                        ? 'bg-primary text-primary-foreground border-primary'
+                        : 'bg-muted/40 text-muted-foreground border-border hover:bg-muted'
+                    }`}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* Stat grid */}
           <div className="grid grid-cols-2 gap-3">
