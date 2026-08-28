@@ -16,18 +16,23 @@ import type { BadgeTierName } from '@/lib/badge-defs';
 
 const CRIMSON = 'hsl(348, 83%, 47%)';
 
+// The ribbon is the app's colour, not the tier's. It used to be tinted to match
+// the metal, which meant a bronze medal was brown from top to bottom and the
+// three tiers read as three different objects. One crimson ribbon makes them one
+// medal that changes metal — and it's the same crimson as the C at the centre.
+const RIBBON = CRIMSON;
+const RIBBON_EDGE = 'hsl(348, 83%, 32%)';
+
 interface Metal {
   face: string;
   inner: string;
   edge: string;
-  ribbon: string;
-  ribbonEdge: string;
 }
 
 const METALS: Record<BadgeTierName, Metal> = {
-  bronze: { face: '#C87F45', inner: '#E0A570', edge: '#7A4718', ribbon: '#B0703B', ribbonEdge: '#7A4718' },
-  silver: { face: '#A8AAB2', inner: '#D5D7DD', edge: '#6B6D75', ribbon: '#9B9DA5', ribbonEdge: '#6B6D75' },
-  gold:   { face: '#D9A72C', inner: '#F3D072', edge: '#8A6510', ribbon: '#C09122', ribbonEdge: '#8A6510' },
+  bronze: { face: '#C87F45', inner: '#E0A570', edge: '#7A4718' },
+  silver: { face: '#A8AAB2', inner: '#D5D7DD', edge: '#6B6D75' },
+  gold:   { face: '#D9A72C', inner: '#F3D072', edge: '#8A6510' },
 };
 
 export function BadgeMedal({ tier, progress = 0, size = 56 }: {
@@ -79,8 +84,8 @@ export function BadgeMedal({ tier, progress = 0, size = 56 }: {
     <div className="relative shrink-0" style={{ width: size, height }}>
       <svg viewBox="0 0 72 94" width={size} height={height} aria-hidden>
         {/* Ribbon */}
-        <path d={ribbonPath} fill={m.ribbon} stroke={m.ribbonEdge} strokeWidth="1" strokeLinejoin="round" />
-        <path d="M36 0 V20" stroke={m.ribbonEdge} strokeWidth="0.75" opacity="0.35" />
+        <path d={ribbonPath} fill={RIBBON} stroke={RIBBON_EDGE} strokeWidth="1" strokeLinejoin="round" />
+        <path d="M36 0 V20" stroke={RIBBON_EDGE} strokeWidth="0.75" opacity="0.35" />
 
         {/* Disc — a plain circle. No milling, no notches; the metal does the work. */}
         <circle cx="36" cy={CY} r={R} fill={m.face} stroke={m.edge} strokeWidth="1.5" />
