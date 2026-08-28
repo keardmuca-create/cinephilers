@@ -4,8 +4,20 @@
     {
       "name": "dev",
       "runtimeExecutable": "npm",
-      "runtimeArgs": ["run", "dev"],
+      "runtimeArgs": [
+        "run",
+        "dev"
+      ],
       "port": 9002
+    },
+    {
+      "name": "dev-test",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": [
+        "tsx",
+        "scripts/dev-test.ts"
+      ],
+      "port": 9003
     }
   ]
 }
