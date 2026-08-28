@@ -6,6 +6,7 @@ import './globals.css';
 import { Toaster } from '@/components/ui/toaster';
 import { AuthProvider } from '@/contexts/auth-context';
 import { OfflineBanner } from '@/components/offline-banner';
+import { ConfirmProvider } from '@/components/confirm-dialog';
 
 export const metadata: Metadata = {
   title: 'Cinephilers | Track, Rate & Discuss with Friends',
@@ -84,7 +85,11 @@ export default async function RootLayout({
         />
         <OfflineBanner />
         <AuthProvider>
-          {children}
+          {/* One confirm dialog for the whole app, so a delete button anywhere
+              can ask its question without owning any state of its own. */}
+          <ConfirmProvider>
+            {children}
+          </ConfirmProvider>
           <Toaster />
         </AuthProvider>
         <Analytics />

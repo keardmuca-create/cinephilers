@@ -30,6 +30,7 @@ import { EpisodePage } from '@/components/episode-page';
 import { RatingSheet } from '@/components/rating-sheet';
 import { logActivity, removeActivity, relativeTime } from '@/lib/activity';
 import { useAuth } from '@/contexts/auth-context';
+import { useConfirm } from '@/components/confirm-dialog';
 import { fetchWithAuth } from '@/lib/fetch-with-auth';
 import { AuthGateModal } from '@/components/auth-gate-modal';
 import { CinephilersRating } from '@/lib/cinephilers-rating';
@@ -729,6 +730,7 @@ function ReviewsSection({ movie, writeOpen, setWriteOpen, myReview, setMyReview,
   onRate: (score: number) => void;
 }) {
   const [draftContent, setDraftContent] = useState('');
+  const confirm = useConfirm();
   const [draftRating, setDraftRating] = useState(0);
   const [draftSpoiler, setDraftSpoiler] = useState(false);
   const [hoverRating, setHoverRating] = useState(0);
@@ -799,7 +801,12 @@ function ReviewsSection({ movie, writeOpen, setWriteOpen, myReview, setMyReview,
   // database, and the next sync puts it back. Restoring on failure is safe here —
   // nothing the user wrote is lost by returning it.
   const deleteReview = async () => {
-    if (!window.confirm('Delete your review? This cannot be undone.')) return;
+    const yes = await confirm({
+      title: 'Delete your review?',
+      description: 'This cannot be undone.',
+      confirmLabel: 'Delete review',
+    });
+    if (!yes) return;
     const previousReview = myReview;
     const previousList = cinephilersReviews;
     const own = cinephilersReviews.find(r => r.isOwn);

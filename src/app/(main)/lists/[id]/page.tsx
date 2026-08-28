@@ -9,6 +9,7 @@ import { fetchWithAuth } from '@/lib/fetch-with-auth';
 import { persistRefine } from '@/lib/refine-sort';
 import { toast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/auth-context';
+import { useConfirm } from '@/components/confirm-dialog';
 import { RefineSheet, type RefineValue, type SortOption, type CountOption } from '@/components/refine-sheet';
 import { WatchedEye } from '@/components/watched-eye';
 import { readWatchedState } from '@/lib/watched-state';
@@ -58,6 +59,7 @@ function normalise(list: CustomList): { id: string; name: string; isPrivate: boo
 export default function ListDetailPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
+  const confirm = useConfirm();
   const { user } = useAuth();
 
   const [list, setList] = useState<ReturnType<typeof normalise> | null>(null);
@@ -157,7 +159,12 @@ export default function ListDetailPage() {
   // buttons and stay in the library). Confirmed, then server-first, then drop
   // from the local cache and leave the page.
   const deleteList = async () => {
-    if (!window.confirm(`Delete the list "${list?.name ?? ''}"? This removes the whole list. The films inside stay in your library. This can't be undone.`)) return;
+    const yes = await confirm({
+      title: `Delete the list "${list?.name ?? ''}"?`,
+      description: "This removes the whole list. The films inside stay in your library. This can't be undone.",
+      confirmLabel: 'Delete list',
+    });
+    if (!yes) return;
     try {
       const res = await fetchWithAuth(`/api/lists/${id}`, { method: 'DELETE' });
       if (!res.ok) { toast({ title: "Couldn't delete the list. Try again.", variant: 'destructive' }); return; }

@@ -16,6 +16,8 @@ import { MediaToggle } from '@/components/media-toggle';
 import { RefineSheet, type RefineValue, type SortOption, type CountOption } from '@/components/refine-sheet';
 import { WatchedEye } from '@/components/watched-eye';
 import { useCommunityRatings } from '@/hooks/use-community-ratings';
+import { useConfirm } from '@/components/confirm-dialog';
+import { toast } from '@/hooks/use-toast';
 
 // ─── Refine config ──────────────────────────────────────────────────────────
 
@@ -124,6 +126,7 @@ function HistoryCard({ row, meta, userRating, onRemove }: {
 }) {
   const id = row.id;
   // Above the early return below: hooks cannot be called conditionally.
+  const confirm = useConfirm();
   const cine = useCommunityRatings([id]);
   const community = cine[id];
   // Not resolveDisplayRating here. This row deliberately prints 0.0 for a
@@ -204,7 +207,12 @@ function HistoryCard({ row, meta, userRating, onRemove }: {
 
     if (row.isShow && row.watchedEpisodes > 0) {
       const count = row.watchedEpisodes;
-      if (!confirm(`Remove ${displayTitle} from your history? This unmarks ${count} watched episode${count === 1 ? '' : 's'}.`)) return;
+      const yes = await confirm({
+        title: `Remove ${displayTitle} from your history?`,
+        description: `This unmarks ${count} watched episode${count === 1 ? '' : 's'}.`,
+        confirmLabel: 'Remove',
+      });
+      if (!yes) return;
     }
 
     // Await the server delete(s). A failed delete leaves the DB row alive, which the
@@ -231,7 +239,7 @@ function HistoryCard({ row, meta, userRating, onRemove }: {
         }
       }
     } catch {
-      alert("Couldn't delete this on the server — please check your connection and try again.");
+      toast({ title: "Couldn't delete this. Check your connection and try again.", variant: 'destructive' });
       return;
     }
     onRemove(row.memberIds);

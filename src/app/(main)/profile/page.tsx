@@ -22,6 +22,7 @@ import { fetchWithAuth } from '@/lib/fetch-with-auth';
 import { batchFetchMeta, isStaleMeta, type CachedMeta } from '@/lib/meta-batch';
 import { collapseShows, statusFor, type CollapsedRow, type ShowProgressStatus } from '@/lib/collapse-shows';
 import { useAuth } from '@/contexts/auth-context';
+import { useConfirm } from '@/components/confirm-dialog';
 import { readSavedRefine, applyRefineSort } from '@/lib/refine-sort';
 import type { RefineValue } from '@/components/refine-sheet';
 import { WatchedEye } from '@/components/watched-eye';
@@ -387,6 +388,7 @@ function FollowStatLink({ username, type, count }: { username: string; type: 'fo
 
 export default function ProfilePage() {
   const router = useRouter();
+  const confirm = useConfirm();
   const { user: authUser, loading: authLoading, logout, refetch, updateUserLocally } = useAuth();
   const [showSettings, setShowSettings] = useState(false);
   const [settingsView, setSettingsView] = useState<SettingsView>('main');
@@ -811,7 +813,12 @@ export default function ProfilePage() {
   // done and came back on the next sync — the exact shape of the bug that made
   // hundreds of imported films reappear in June.
   const deleteReview = async (movieId: string) => {
-    if (!window.confirm('Delete this review? This cannot be undone.')) return;
+    const yes = await confirm({
+      title: 'Delete this review?',
+      description: 'This cannot be undone.',
+      confirmLabel: 'Delete review',
+    });
+    if (!yes) return;
     // Clear the legacy bare-numeric twin too. The list now folds both ids into
     // one row, so leaving the other key behind would bring the review straight
     // back on the next load. Both keys are kept so a failure can put them back.

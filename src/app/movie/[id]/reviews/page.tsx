@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { SpoilerWrap } from '@/components/spoiler-wrap';
 import { relativeTime } from '@/lib/activity';
 import { useAuth } from '@/contexts/auth-context';
+import { useConfirm } from '@/components/confirm-dialog';
 import { fetchWithAuth } from '@/lib/fetch-with-auth';
 
 interface ReviewComment {
@@ -218,6 +219,7 @@ function CommentSection({ reviewId, currentUser }: { reviewId: string; currentUs
 export default function MovieReviewsPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
+  const confirm = useConfirm();
   const { user } = useAuth();
 
   const [reviews, setReviews] = useState<CinephilersReview[]>([]);
@@ -239,7 +241,12 @@ export default function MovieReviewsPage() {
   }, [id]);
 
   const deleteReview = async (reviewId: string) => {
-    if (!window.confirm('Delete your review? This cannot be undone.')) return;
+    const yes = await confirm({
+      title: 'Delete your review?',
+      description: 'This cannot be undone.',
+      confirmLabel: 'Delete review',
+    });
+    if (!yes) return;
     setReviews(prev => prev.filter(r => r.id !== reviewId));
     try { localStorage.removeItem(`review-${id}`); } catch { /* ignore */ }
     try {

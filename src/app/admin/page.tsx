@@ -275,6 +275,13 @@ export default function AdminPage() {
   // Permanent, irreversible: hard-deletes the account and cascades all their
   // data (ratings, reviews, watchlist, etc.). Double-confirm by username so a
   // mis-click can't wipe a real account.
+  //
+  // The native confirm/prompt/alert are DELIBERATE and the only ones left in the
+  // app — everywhere else now uses <ConfirmProvider>. This is the single action
+  // nothing can undo, it lives behind a door only an admin opens, and a dialog
+  // that stops the world and can't be dismissed by tapping past it is the right
+  // shape for it. Converting only part of the flow would be worse than either
+  // end of the choice, so the whole flow stays native or none of it does.
   const deleteUser = async (u: AdminUser) => {
     const name = u.username;
     if (!window.confirm(`Permanently delete @${name} and ALL their data? This cannot be undone.`)) return;

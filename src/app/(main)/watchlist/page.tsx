@@ -13,6 +13,7 @@ import { getItemType, sideOf, SIDE_TYPES, TYPE_LABELS, type TypeFilter, type Med
 import { MediaToggle } from '@/components/media-toggle';
 import { RefineSheet, type RefineValue, type SortOption, type CountOption } from '@/components/refine-sheet';
 import { useCommunityRatings } from '@/hooks/use-community-ratings';
+import { toast } from '@/hooks/use-toast';
 import { resolveDisplayRating } from '@/lib/cinephilers-rating';
 
 const SORT_OPTIONS: SortOption[] = [
@@ -56,7 +57,7 @@ function ItemCard({ item, onRemove, showReleaseDate }: { item: WatchlistItem; on
       const res = await fetchWithAuth(`/api/watchlist/${item.id}?mediaType=${item.mediaType}`, { method: 'DELETE' });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
     } catch {
-      alert("Couldn't remove this on the server — please check your connection and try again.");
+      toast({ title: "Couldn't remove this. Check your connection and try again.", variant: 'destructive' });
       return;
     }
     try {
