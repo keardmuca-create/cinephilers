@@ -69,6 +69,23 @@ describe('the badge set', () => {
     }
   });
 
+  // The rule, not the numbers: an episode is a smaller act than a film, so it
+  // must never cost the same. These were level at 100/500/1000 until 2026-08-28,
+  // which made a season of television worth more than it is.
+  it('prices episodes above films at every tier', () => {
+    const film = BADGE_BY_ID.get('movie-watcher')!.tiers!;
+    const eps = BADGE_BY_ID.get('episodes-watched')!.tiers!;
+    expect(eps.bronze).toBeGreaterThan(film.bronze);
+    expect(eps.silver).toBeGreaterThan(film.silver);
+    expect(eps.gold).toBeGreaterThan(film.gold);
+  });
+
+  // Rating what you watch shouldn't be a harder badge than watching it.
+  it('keeps the two episode badges level', () => {
+    expect(BADGE_BY_ID.get('episode-rater')!.tiers)
+      .toEqual(BADGE_BY_ID.get('episodes-watched')!.tiers);
+  });
+
   // Keard's numbers the day this was built, as a sanity check on the thresholds.
   it('places a real library where expected', () => {
     const film = BADGE_BY_ID.get('movie-watcher')!.tiers!;

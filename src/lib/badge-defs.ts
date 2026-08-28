@@ -76,7 +76,9 @@ export const BADGES: BadgeDef[] = [
     description: 'Every episode counts, finished show or not.',
     unit: 'episodes',
     icon: 'list-video',
-    tiers: { bronze: 100, silver: 500, gold: 1000 },
+    // Not the film numbers. An episode is forty minutes and a film is two hours,
+    // so pricing them the same made a season of television worth more than it is.
+    tiers: { bronze: 500, silver: 1000, gold: 3000 },
   },
   {
     id: 'episode-rater',
@@ -86,7 +88,9 @@ export const BADGES: BadgeDef[] = [
     description: 'Rate episodes to build the community score.',
     unit: 'rated',
     icon: 'sparkles',
-    tiers: { bronze: 100, silver: 500, gold: 1000 },
+    // Kept level with Episodes watched — rating what you watch shouldn't be a
+    // harder badge than watching it.
+    tiers: { bronze: 500, silver: 1000, gold: 3000 },
   },
   {
     id: 'reviewer',
