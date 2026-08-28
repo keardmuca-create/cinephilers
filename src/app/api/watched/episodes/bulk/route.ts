@@ -30,6 +30,10 @@ export async function POST(req: NextRequest) {
   if (!Array.isArray(episodes)) return err('episodes must be an array');
   if (episodes.length === 0) return err('episodes must not be empty');
   if (episodes.length > MAX_EPISODES) return err(`Too many episodes (max ${MAX_EPISODES})`);
+  // Same rule as the single-episode route, and it matters more here: `watched`
+  // chooses between marking and DELETING, and this route does it to a whole
+  // season at a time. A missing field must be a refusal, not a mass unmark.
+  if (typeof watched !== 'boolean') return err('watched must be true or false');
 
   // Same bounds as the single-episode route: non-integers throw a Prisma 500 and
   // absurd values would just store junk rows.

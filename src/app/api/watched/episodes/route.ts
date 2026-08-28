@@ -20,6 +20,10 @@ export async function POST(req: NextRequest) {
     watched: boolean;
   };
   if (!showTmdbId || season == null || episode == null) return err('showTmdbId, season, and episode are required');
+  // Required, and required explicitly: `watched` decides between marking and
+  // DELETING, so leaving it out used to fall through to the delete branch and
+  // report success. A forgotten field must not be able to unmark an episode.
+  if (typeof watched !== 'boolean') return err('watched must be true or false');
   if (typeof showTmdbId !== 'string' || showTmdbId.length > 64) return err('Invalid showTmdbId');
   // Non-integers throw a Prisma 500; absurd values would just store junk rows.
   if (!Number.isInteger(season) || season < 0 || season > 200) return err('Invalid season');
