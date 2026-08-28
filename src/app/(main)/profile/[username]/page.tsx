@@ -652,7 +652,7 @@ export default function PublicProfilePage() {
 
         {openSection === 'badges' ? (
           earnedBadges.length === 0 ? emptyState
-            : <div className="bg-card rounded-3xl border border-border px-5 py-1"><BadgeList badges={earnedBadges} memberSince={badgeData?.memberSince} /></div>
+            : <div className="bg-card rounded-3xl border border-border px-5 py-1"><BadgeList badges={earnedBadges} memberSince={badgeData?.memberSince} username={username} /></div>
         ) : openSection === 'reviews' ? (
           reviewsLoading && reviews.length === 0 ? posterSkeleton
             : reviews.length === 0 ? emptyState

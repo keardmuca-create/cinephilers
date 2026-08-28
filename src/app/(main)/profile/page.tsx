@@ -1829,7 +1829,7 @@ export default function ProfilePage() {
             ))}
           </div>
         ) : (
-          <BadgeList badges={serverBadges} memberSince={memberSince} limit={3} />
+          <BadgeList badges={serverBadges} memberSince={memberSince} limit={3} username={authUser?.username} />
         )}
       </section>
 

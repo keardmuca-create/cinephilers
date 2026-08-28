@@ -61,11 +61,13 @@ export function BadgeRow({ badge, onOpen }: { badge: EarnedBadge; onOpen: (b: Ea
   );
 }
 
-export function BadgeList({ badges, memberSince, limit }: {
+export function BadgeList({ badges, memberSince, limit, username }: {
   badges: EarnedBadge[];
   memberSince?: string;
   /** Show only the first N after sorting — the profile shows a taste, /badges shows all. */
   limit?: number;
+  /** Whose badges these are — World cinema's detail lists their languages. */
+  username?: string;
 }) {
   const [open, setOpen] = useState<EarnedBadge | null>(null);
 
@@ -87,7 +89,7 @@ export function BadgeList({ badges, memberSince, limit }: {
   return (
     <>
       <div>{shown.map(b => <BadgeRow key={b.id} badge={b} onOpen={setOpen} />)}</div>
-      <BadgeDetail badge={open} open={open !== null} onClose={() => setOpen(null)} memberSince={memberSince} />
+      <BadgeDetail badge={open} open={open !== null} onClose={() => setOpen(null)} memberSince={memberSince} username={username} />
     </>
   );
 }

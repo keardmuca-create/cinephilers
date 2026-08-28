@@ -61,7 +61,7 @@ export default function BadgesPage() {
         </div>
       ) : (
         <>
-          <BadgeList badges={badges} memberSince={memberSince} />
+          <BadgeList badges={badges} memberSince={memberSince} username={user?.username} />
 
           {/* Moved here from the Today's Pick help sheet, which is where it had
               been living for want of anywhere better. This is the page where

@@ -1,7 +1,8 @@
 "use client"
 
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { Check } from 'lucide-react';
+import { fetchWithAuth } from '@/lib/fetch-with-auth';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { BadgeMedal } from '@/components/badge-medal';
 import { BADGE_BY_ID, progressTo, type BadgeTierName } from '@/lib/badge-defs';
@@ -16,15 +17,82 @@ const CHIP: Record<BadgeTierName, string> = {
   gold:   'bg-[#D9A72C]/18 text-[#8A6510] dark:text-[#F3D072]',
 };
 
+interface WatchedLanguage { code: string; count: number; }
+
+// Language codes into names, using the browser's own table rather than a list we
+// would have to maintain. Falls back to the code itself — an unknown code shown
+// as "cn" is still more use than an empty row.
+function languageName(code: string): string {
+  try {
+    return new Intl.DisplayNames(undefined, { type: 'language' }).of(code) ?? code.toUpperCase();
+  } catch {
+    return code.toUpperCase();
+  }
+}
+
+// The languages behind World cinema, loaded only when that badge is opened.
+//
+// It lists what you HAVE watched and stops there. Suggesting what to watch next
+// would mean picking the languages worth having, and that is the user's call —
+// seeing that ten of your 566 films are French and one is Turkish is enough to
+// decide where to go next without being told.
+function WatchedLanguages({ username }: { username?: string }) {
+  const [languages, setLanguages] = useState<WatchedLanguage[] | null>(null);
+  const [failed, setFailed] = useState(false);
+
+  useEffect(() => {
+    if (!username) return;
+    let cancelled = false;
+    fetchWithAuth(`/api/users/${username}/languages`)
+      .then(r => r.ok ? r.json() : null)
+      .then(json => {
+        if (cancelled) return;
+        const list = json?.data?.languages;
+        if (Array.isArray(list)) setLanguages(list); else setFailed(true);
+      })
+      .catch(() => { if (!cancelled) setFailed(true); });
+    return () => { cancelled = true; };
+  }, [username]);
+
+  if (!username || failed) return null;
+
+  return (
+    <div className="space-y-1">
+      <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-2">Languages watched</p>
+      {languages === null ? (
+        <p className="text-sm text-muted-foreground px-3 py-2">Loading…</p>
+      ) : languages.length === 0 ? (
+        <p className="text-sm text-muted-foreground px-3 py-2">No films logged yet.</p>
+      ) : (
+        // No inner cap: the dialog itself scrolls, and a scrolling list inside a
+        // scrolling dialog is a trap on a phone. Nothing is trimmed either —
+        // the rare languages at the bottom are the whole point of looking.
+        <div>
+          {languages.map(l => (
+            <div key={l.code} className="flex items-baseline gap-3 rounded-xl px-3 py-2">
+              <span className="flex-1 text-sm font-semibold text-foreground truncate">{languageName(l.code)}</span>
+              <span className="text-sm text-muted-foreground shrink-0">
+                {l.count.toLocaleString()} {l.count === 1 ? 'film' : 'films'}
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // What one badge is, how far along you are, and what's left. Opened by pressing
 // a badge row — the row itself stays a single line, and everything that would
 // have crowded it lives here instead.
-export function BadgeDetail({ badge, open, onClose, memberSince }: {
+export function BadgeDetail({ badge, open, onClose, memberSince, username }: {
   badge: EarnedBadge | null;
   open: boolean;
   onClose: () => void;
   /** ISO date, shown on Founder — the one badge whose story is a date. */
   memberSince?: string;
+  /** Whose badges these are. Only World cinema needs it, to list the languages. */
+  username?: string;
 }) {
   const def = badge ? BADGE_BY_ID.get(badge.id) : undefined;
   if (!badge || !def) return null;
@@ -44,7 +112,7 @@ export function BadgeDetail({ badge, open, onClose, memberSince }: {
 
   return (
     <Dialog open={open} onOpenChange={o => { if (!o) onClose(); }}>
-      <DialogContent className="max-w-sm rounded-3xl">
+      <DialogContent className="max-w-sm rounded-3xl max-h-[85vh] overflow-y-auto">
         <DialogHeader>
           <div className="flex items-center gap-3">
             <BadgeMedal tier={badge.tier} progress={progress} size={48} />
@@ -97,6 +165,8 @@ export function BadgeDetail({ badge, open, onClose, memberSince }: {
                 )}
               </div>
             </div>
+
+            {badge.id === 'world-cinema' && <WatchedLanguages username={username} />}
 
             <div className="space-y-1">
               <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-2">Tiers</p>
