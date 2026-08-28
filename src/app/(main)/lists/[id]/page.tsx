@@ -173,7 +173,10 @@ export default function ListDetailPage() {
         localStorage.setItem('user-lists', JSON.stringify(stored.filter(l => l.id !== id)));
       } catch { /* ignore */ }
       toast({ title: 'List deleted' });
-      router.push('/lists');
+      // Back to the profile, because that is where lists actually live. There is
+      // no /lists route — only /lists/[id] — so this used to land the user on the
+      // 404 page immediately after a delete that had in fact succeeded.
+      router.push('/profile');
     } catch {
       toast({ title: "Couldn't delete the list. Check your connection.", variant: 'destructive' });
     }
