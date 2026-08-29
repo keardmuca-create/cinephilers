@@ -19,7 +19,7 @@ interface Stats {
   totalRatings: number;
   avgScore: number | null;
   reviewsCount: number;
-  monthlyActivity: { month: string; count: number }[];
+  monthlyActivity: { month: string; movies: number; episodes: number }[];
   watchMinutes?: { films: number; shows: number; total: number };
 }
 
@@ -142,7 +142,16 @@ export default function StatsPage() {
   }
 
   const year = new Date().getFullYear();
-  const maxMonth = stats ? Math.max(...stats.monthlyActivity.map(m => m.count), 1) : 1;
+  // Which series the Monthly Activity chart is plotting. Films and episodes are
+  // never summed: one film and one episode are not two of the same thing, and
+  // that sum was what the old single series showed.
+  const [activityKind, setActivityKind] = useState<'movies' | 'episodes'>('movies');
+  const activity = stats
+    ? stats.monthlyActivity.map(m => ({ month: m.month, count: m[activityKind] }))
+    : [];
+  // Scaled to the series on screen, or a films-height axis would flatten a month
+  // of episodes into nothing.
+  const maxMonth = Math.max(...activity.map(m => m.count), 1);
 
   return (
     <main className="max-w-xl mx-auto px-4 pt-6 pb-32 space-y-6">
@@ -240,15 +249,36 @@ export default function StatsPage() {
               <TrendingUp className="h-5 w-5 text-primary" />
               <h2 className="font-headline font-bold text-lg">Monthly Activity</h2>
             </div>
-            <p className="text-xs text-muted-foreground -mt-2">Titles watched per month — last 12 months</p>
-            {stats.monthlyActivity.every(m => m.count === 0) ? (
+            {/* The subtitle changes with the toggle. It names the unit being
+                counted, and the two units are not interchangeable — leaving it
+                at "titles" would have the axis quietly lying on one of them. */}
+            <p className="text-xs text-muted-foreground -mt-2">
+              {activityKind === 'movies' ? 'Films' : 'Episodes'} watched per month — last 12 months
+            </p>
+
+            <div className="flex gap-2">
+              {([['movies', 'Movies', Film], ['episodes', 'Episodes', Tv]] as const).map(([key, label, Icon]) => (
+                <button
+                  key={key}
+                  onClick={() => setActivityKind(key)}
+                  aria-pressed={activityKind === key}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold transition-colors ${activityKind === key ? 'bg-primary text-white' : 'bg-muted text-muted-foreground hover:bg-muted/80'}`}
+                >
+                  <Icon className="h-3.5 w-3.5" /> {label}
+                </button>
+              ))}
+            </div>
+
+            {activity.every(m => m.count === 0) ? (
               <div className="h-40 flex items-center justify-center">
-                <p className="text-sm text-muted-foreground">No activity in the last 12 months</p>
+                <p className="text-sm text-muted-foreground">
+                  No {activityKind === 'movies' ? 'films' : 'episodes'} watched in the last 12 months
+                </p>
               </div>
             ) : (
               <div className="h-44">
                 <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={stats.monthlyActivity} barCategoryGap="25%">
+                  <BarChart data={activity} barCategoryGap="25%">
                     <XAxis
                       dataKey="month"
                       axisLine={false}
@@ -259,15 +289,20 @@ export default function StatsPage() {
                     <ChartTooltip
                       cursor={{ fill: 'rgba(0,0,0,0.04)' }}
                       contentStyle={{ backgroundColor: '#fff', border: '1px solid rgba(0,0,0,0.1)', borderRadius: '12px', color: '#111', fontSize: 12 }}
-                      formatter={(value: number) => [`${value} title${value !== 1 ? 's' : ''}`, '']}
+                      formatter={(value: number) => [
+                        activityKind === 'movies'
+                          ? `${value} film${value !== 1 ? 's' : ''}`
+                          : `${value} episode${value !== 1 ? 's' : ''}`,
+                        '',
+                      ]}
                     />
                     <Bar dataKey="count" radius={[6, 6, 0, 0]}>
-                      {stats.monthlyActivity.map((entry, i) => (
+                      {activity.map((entry, i) => (
                         <Cell
                           key={i}
-                          fill={entry.count === Math.max(...stats.monthlyActivity.map(m => m.count))
-                            ? 'hsl(var(--primary))'
-                            : 'hsl(var(--accent))'}
+                          // The busiest month of the series on screen, not of the
+                          // other one — maxMonth already follows the toggle.
+                          fill={entry.count === maxMonth ? 'hsl(var(--primary))' : 'hsl(var(--accent))'}
                           opacity={0.85}
                         />
                       ))}

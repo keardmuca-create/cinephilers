@@ -26,7 +26,7 @@ export async function GET(req: NextRequest) {
     // its own runtime below, so which episodes matters and not merely how many.
     prisma.watchedEpisode.findMany({
       where: { userId },
-      select: { showTmdbId: true, season: true, episode: true },
+      select: { showTmdbId: true, season: true, episode: true, watchedAt: true },
     }),
   ]);
 
@@ -127,14 +127,26 @@ export async function GET(req: NextRequest) {
     }
   }
 
-  // Monthly activity — last 12 months
-  const months: { month: string; count: number }[] = [];
+  // Monthly activity — last 12 months, films and episodes counted separately.
+  //
+  // They are deliberately NOT summed into one series. A film and an episode are
+  // not the same unit, so "1 film + 20 episodes = 21" describes nothing anyone
+  // watches, and that sum is what the single blended series used to plot.
+  //
+  // Films come from WatchedItem (MOVIE only — a show marked watched there is one
+  // row for a whole series, which would be a single notch beside a month of
+  // episodes). Episodes come from WatchedEpisode, each with its own date.
+  const months: { month: string; movies: number; episodes: number }[] = [];
+  const movieRows = watched.filter(w => w.mediaType === 'MOVIE');
   for (let i = 11; i >= 0; i--) {
     const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
     const end = new Date(now.getFullYear(), now.getMonth() - i + 1, 1);
     const label = d.toLocaleDateString('en-US', { month: 'short', year: '2-digit' });
-    const count = watched.filter(w => w.watchedAt >= d && w.watchedAt < end).length;
-    months.push({ month: label, count });
+    months.push({
+      month: label,
+      movies: movieRows.filter(w => w.watchedAt >= d && w.watchedAt < end).length,
+      episodes: watchedEpisodes.filter(e => e.watchedAt >= d && e.watchedAt < end).length,
+    });
   }
 
   return ok({
