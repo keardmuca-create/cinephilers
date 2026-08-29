@@ -2,10 +2,11 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
-import { Flag, Trash2, Check, X, Loader2, ShieldAlert, Users, Search, Ban, ShieldCheck, ChevronUp, ChevronDown, Database, RotateCcw, Mail } from 'lucide-react';
+import { Flag, Trash2, Check, X, Loader2, ShieldAlert, Users, Search, Ban, ShieldCheck, ChevronUp, ChevronDown, Database, RotateCcw, Mail, ScrollText } from 'lucide-react';
 import { useAuth } from '@/contexts/auth-context';
 import { fetchWithAuth } from '@/lib/fetch-with-auth';
 import { relativeTime } from '@/lib/activity';
+import { AuditLog } from './audit-log';
 
 interface Report {
   id: string;
@@ -150,7 +151,7 @@ function SupportReply() {
 export default function AdminPage() {
   const { user, loading: authLoading } = useAuth();
   const router = useRouter();
-  const [tab, setTab] = useState<'reports' | 'users' | 'support'>('reports');
+  const [tab, setTab] = useState<'reports' | 'users' | 'support' | 'audit'>('reports');
 
   // Reports state
   const [reports, setReports] = useState<Report[]>([]);
@@ -395,9 +396,16 @@ export default function AdminPage() {
         >
           <Mail className="h-4 w-4" /> Support
         </button>
+        <button
+          onClick={() => setTab('audit')}
+          className={`flex items-center gap-2 px-4 py-2 rounded-full text-sm font-semibold transition-colors ${tab === 'audit' ? 'bg-primary text-white' : 'bg-muted text-muted-foreground hover:bg-muted/80'}`}
+        >
+          <ScrollText className="h-4 w-4" /> Audit
+        </button>
       </div>
 
       {tab === 'support' && <SupportReply />}
+      {tab === 'audit' && <AuditLog />}
 
       {/* Reports tab */}
       {tab === 'reports' && (
