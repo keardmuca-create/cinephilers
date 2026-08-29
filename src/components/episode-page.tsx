@@ -19,7 +19,7 @@ import { useAuth } from '@/contexts/auth-context';
 import { fetchWithAuth } from '@/lib/fetch-with-auth';
 import { toast } from '@/hooks/use-toast';
 import { batchFetchMeta } from '@/lib/meta-batch';
-import { recordWatchedAt, recordManualWatch, removeManualWatch, recordAddedAt } from '@/lib/media-id';
+import { recordWatchedAt, recordManualWatch, removeManualWatch, recordAddedAt, recordRatedAt } from '@/lib/media-id';
 import { logActivity, removeActivity } from '@/lib/activity';
 import type { CinephilersRating } from '@/lib/cinephilers-rating';
 
@@ -178,6 +178,10 @@ export function EpisodePage({ showTmdbId, season, episodeNumber }: {
   const applyRating = useCallback(async (score: number) => {
     setUserRating(score);
     try { localStorage.setItem(`movie-rating-${episodeId}`, String(score)); } catch { /* ignore */ }
+    // Every other rating path stamps this; the episode one did not, so an episode
+    // rating fell back to the date the episode was first seen and sorted as though
+    // it had been scored then.
+    recordRatedAt(episodeId);
     logActivity({ action: 'rated', contentId: episodeId, contentTitle: detail?.name ?? '', contentPoster: showMeta?.poster ?? '', contentYear: '', rating: score });
     toast({ title: `You rated it ${score}/10!` });
     await fetchWithAuth('/api/ratings', {

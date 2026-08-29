@@ -4,7 +4,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { Movie } from '@/lib/types';
-import { normalizeLocalMediaIds, getAddedAt, getWatchedAtISO, getManualWatchISO, canonicalId, legacyTwin } from '@/lib/media-id';
+import { normalizeLocalMediaIds, getAddedAt, getRatedAt, getWatchedAtISO, getManualWatchISO, canonicalId, legacyTwin } from '@/lib/media-id';
 
 import { BadgeList, FounderChip, type EarnedBadge } from '@/components/badge-row';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -1185,7 +1185,13 @@ export default function ProfilePage() {
         if (!title || !poster) { ratedMissing.push({ id, userRating }); continue; }
         rated.push({ id, title, poster, year: meta?.year ?? rv?.year ?? '', tmdbRating: meta?.tmdbRating ?? rv?.tmdbRating, userRating });
       }
-      setRatedItems(rated.sort((a, b) => getAddedAt(b.id) - getAddedAt(a.id)));
+      // getRatedAt, not getAddedAt. The add index keeps the EARLIEST date a title
+      // was seen, so a film watchlisted in June and rated in August sorted as
+      // June — and since this row renders only the first 50 of what can be
+      // hundreds of ratings, a newly rated film did not merely sink, it fell off
+      // the end and vanished from the row entirely while sitting first under
+      // See All. 885bb7e fixed the full Ratings page and missed this row.
+      setRatedItems(rated.sort((a, b) => getRatedAt(b.id) - getRatedAt(a.id)));
 
       if (ratedMissing.length > 0) {
         (async () => {
@@ -1199,8 +1205,10 @@ export default function ProfilePage() {
           if (fetched.length > 0) {
             setRatedItems(prev => {
               const seen = new Set(prev.map(p => p.id));
+              // Same order as the first pass above — titles whose posters arrive
+              // late must not be sorted by a different date from the rest.
               return [...prev, ...fetched.filter(f => !seen.has(f.id))]
-                .sort((a, b) => getAddedAt(b.id) - getAddedAt(a.id));
+                .sort((a, b) => getRatedAt(b.id) - getRatedAt(a.id));
             });
           }
         })();
