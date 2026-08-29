@@ -4,7 +4,7 @@ import type { Metadata } from 'next';
 
 export const metadata: Metadata = {
   title: 'About | Cinephilers',
-  description: 'Cinephilers gives you one film a day from your own watchlist, tracks every film and episode you watch, and awards badges for what you have seen.',
+  description: 'Everything you watch, remembered — films, shows and every episode, rated and reviewed with friends, with badges for what you have seen.',
   alternates: { canonical: '/about' },
 };
 
@@ -39,11 +39,11 @@ export default function AboutPage() {
           <h2 className="text-2xl font-headline font-bold">What you can do</h2>
           <div className="grid gap-4">
             {[
-              // Today's Pick leads, because it is the one thing here no other
-              // tracker does. The four that follow are the category basics, and
-              // every competitor claims them too.
-              { icon: Sparkles, title: "Today's Pick", body: 'One film a day, drawn from your own watchlist. Locked until midnight, so there is no rerolling until you like the answer. Mark it watched and it counts towards a streak.' },
+              // Track leads because it is what the app IS. The features that make
+              // it different follow it — none of them stands in for the whole idea
+              // on its own, which is the same reason the title is left plain.
               { icon: Film, title: 'Track', body: 'Mark movies and shows as watched. Build a history of everything you\'ve seen and keep a watchlist of what\'s next.' },
+              { icon: Sparkles, title: "Today's Pick", body: 'One film a day, drawn from your own watchlist. Locked until midnight, so there is no rerolling until you like the answer. Mark it watched and it counts towards a streak.' },
               { icon: Star, title: 'Rate & Review', body: 'Give ratings out of 10 and write full reviews. Mark spoilers so others can read safely.' },
               { icon: Users, title: 'Follow Friends', body: 'Follow people you know and see their ratings, reviews, and activity. Private accounts require a follow request.' },
               { icon: BookOpen, title: 'Build Lists', body: 'Organise films into custom lists — public or private. Share your favourites, your comfort watches, your all-time bests.' },

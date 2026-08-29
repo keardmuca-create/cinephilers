@@ -15,7 +15,7 @@ export const SITE_URL = 'https://cinephilers.app';
 
 /** The one-liner used for the site description and the schema, kept identical. */
 export const SITE_DESCRIPTION =
-  'One film a day, chosen from your own watchlist. Track every film and episode you watch, rate it, earn badges, and see what your friends are watching.';
+  'Everything you watch, remembered — films, shows and every episode, rated and reviewed with friends. Earn badges, and get a film a day from your watchlist.';
 
 // Ordered most-distinctive first: a summary that keeps only the first two or
 // three should still be left holding the things nobody else offers.

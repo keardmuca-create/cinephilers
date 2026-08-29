@@ -10,19 +10,19 @@ import { ConfirmProvider } from '@/components/confirm-dialog';
 
 export const metadata: Metadata = {
   title: 'Cinephilers | Track, Rate & Discuss with Friends',
-  description: 'One film a day, chosen from your own watchlist. Track every film and episode you watch, rate it, earn badges, and see what your friends are watching.',
+  description: 'Everything you watch, remembered — films, shows and every episode, rated and reviewed with friends. Earn badges, and get a film a day from your watchlist.',
   metadataBase: new URL('https://cinephilers.app'),
   openGraph: {
     type: 'website',
     siteName: 'Cinephilers',
     title: 'Cinephilers | Track, Rate & Discuss with Friends',
-    description: 'One film a day, chosen from your own watchlist. Track every film and episode you watch, rate it, earn badges, and see what your friends are watching.',
+    description: 'Everything you watch, remembered — films, shows and every episode, rated and reviewed with friends. Earn badges, and get a film a day from your watchlist.',
     url: 'https://cinephilers.app',
   },
   twitter: {
     card: 'summary',
     title: 'Cinephilers | Track, Rate & Discuss with Friends',
-    description: 'One film a day, chosen from your own watchlist. Track every film and episode you watch, rate it, earn badges, and see what your friends are watching.',
+    description: 'Everything you watch, remembered — films, shows and every episode, rated and reviewed with friends. Earn badges, and get a film a day from your watchlist.',
   },
   verification: {
     google: 'iXOrHwM2YB_g3HVEb6FnHIISh0He81e5DUdazpKHsvk',
