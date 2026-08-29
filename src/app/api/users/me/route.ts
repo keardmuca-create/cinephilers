@@ -5,6 +5,7 @@ import { writeLimit } from '@/lib/write-limit';
 import { getCurrentUser } from '@/lib/auth-utils';
 import { sanitizeText } from '@/lib/sanitize';
 import { recomputeMovieRatings } from '@/lib/movie-rating-sync';
+import { writeAudit } from '@/lib/audit';
 import { put, del } from '@vercel/blob';
 
 const BLOB_HOST = '.blob.vercel-storage.com';
@@ -147,9 +148,30 @@ export async function DELETE(req: NextRequest) {
     select: { tmdbId: true, mediaType: true },
   });
 
+  // Read the username before the delete: afterwards the id resolves to nothing
+  // and the audit row would name nobody.
+  const self = await prisma.user.findUnique({
+    where: { id: auth.sub },
+    select: { username: true },
+  });
+
   // Hard delete — cascades to all related data (ratings, reviews, watchlist, etc.)
   await prisma.user.delete({ where: { id: auth.sub } });
   await recomputeMovieRatings(ratedTitles);
+
+  // Logged as its own action, not as USER_DELETED. "My account is gone and I did
+  // not do that" is the question this table exists to answer, and answering it
+  // means being able to tell an admin removing someone apart from someone
+  // leaving — a single action name with the actor equal to the target would make
+  // the two read identically at a glance.
+  await writeAudit({
+    action: 'USER_SELF_DELETED',
+    actorId: auth.sub,
+    actorUsername: self?.username ?? null,
+    targetId: auth.sub,
+    targetLabel: self?.username ?? null,
+    details: { ratedTitles: ratedTitles.length },
+  }, req);
 
   return ok(null, 'Account deleted');
 }

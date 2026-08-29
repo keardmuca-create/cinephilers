@@ -4,6 +4,7 @@ import { prisma } from '@/lib/db';
 import { ok, err } from '@/lib/api-response';
 import { signAccessToken, signRefreshToken, setAuthCookies } from '@/lib/auth-utils';
 import { rateLimit, clearRateLimit, getIp } from '@/lib/rate-limit';
+import { writeAudit, alreadyLoggedLockout } from '@/lib/audit';
 
 // Email verification is only enforced for accounts created on or after this date.
 // Everyone who signed up before it is grandfathered in (verification was never
@@ -33,6 +34,19 @@ export async function POST(req: NextRequest) {
   const accountKey = `login-account:${identifier.toLowerCase().trim()}`;
   const account = await rateLimit(accountKey, ACCOUNT_ATTEMPT_LIMIT, ACCOUNT_LOCK_MS);
   if (!account.allowed) {
+    // Every attempt made while the lock holds comes through here, so writing
+    // unconditionally would turn one lockout into a row per guess — the log
+    // would be loudest exactly when it most needs to be readable. One row per
+    // lock window instead; the attempts behind it are the limiter's business.
+    if (!(await alreadyLoggedLockout(identifier, ACCOUNT_LOCK_MS))) {
+      await writeAudit({
+        action: 'LOGIN_LOCKED',
+        // No actor: nobody proved who they were. The identifier that was typed
+        // is the target, and it may not name a real account at all.
+        targetLabel: identifier.toLowerCase().trim(),
+        details: { lockMinutes: ACCOUNT_LOCK_MS / 60_000 },
+      }, req);
+    }
     const mins = Math.ceil(account.retryAfter / 60);
     return err(`Too many failed attempts for this account. Try again in ${mins} minute${mins === 1 ? '' : 's'}.`, 429);
   }

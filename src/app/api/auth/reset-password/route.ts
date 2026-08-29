@@ -4,6 +4,7 @@ import { prisma } from '@/lib/db';
 import { ok, err } from '@/lib/api-response';
 import { rateLimit, getIp } from '@/lib/rate-limit';
 import { hashToken } from '@/lib/token-hash';
+import { writeAudit } from '@/lib/audit';
 
 export async function POST(req: NextRequest) {
   const { allowed, retryAfter } = await rateLimit(`reset:${getIp(req)}`, 5, 60_000);
@@ -37,6 +38,18 @@ export async function POST(req: NextRequest) {
       tokenVersion: { increment: 1 }, // invalidate all existing sessions
     },
   });
+
+  // The actor and the target are the same person here — whoever held the emailed
+  // token. The IP is the useful column: it is what tells the owner of an account
+  // whether the reset that logged them out everywhere was theirs.
+  await writeAudit({
+    action: 'PASSWORD_RESET_COMPLETED',
+    actorId: user.id,
+    actorUsername: user.username,
+    targetId: user.id,
+    targetLabel: user.username,
+    details: { sessionsRevoked: true },
+  }, req);
 
   return ok(null, 'Password reset successfully. You can now log in.');
 }

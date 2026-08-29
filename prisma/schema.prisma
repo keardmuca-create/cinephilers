@@ -19,13 +19,13 @@ enum MediaType {
 }
 
 model User {
-  id             String   @id @default(uuid())
-  email          String   @unique
-  username       String   @unique
+  id             String    @id @default(uuid())
+  email          String    @unique
+  username       String    @unique
   passwordHash   String
   displayName    String?
   avatarUrl      String?
-  bio            String?  @db.VarChar(300)
+  bio            String?   @db.VarChar(300)
   favoriteGenres String[]
   country        String?
   // IANA zone name reported by the browser ("Europe/Tirane"), so the SERVER can
@@ -35,19 +35,19 @@ model User {
   // sent up with each request. Null until a device reports one; everything falls
   // back to UTC in the meantime, which is the behaviour that existed before.
   timezone       String?
-  role           Role     @default(USER)
-  isVerified     Boolean  @default(false)
-  isPrivate      Boolean  @default(false)
-  isBanned       Boolean  @default(false)
-  ratingsCount   Int      @default(0)
-  reviewsCount   Int      @default(0)
+  role           Role      @default(USER)
+  isVerified     Boolean   @default(false)
+  isPrivate      Boolean   @default(false)
+  isBanned       Boolean   @default(false)
+  ratingsCount   Int       @default(0)
+  reviewsCount   Int       @default(0)
   // When this account was shown the Founder welcome. Null means never, which is
   // what makes the moment happen exactly once on any device — the genre skip is
   // per-device on purpose, this is the opposite: a first sign-in happens once in
   // a lifetime, so it is remembered on the account and not in localStorage.
   welcomedAt     DateTime?
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
 
   // emailVerificationToken / passwordResetToken hold SHA-256 digests of the
   // emailed tokens (see src/lib/token-hash.ts), never the raw values.
@@ -408,20 +408,20 @@ model FilmMeta {
   // completed series from one that's merely up to date; showType ("Miniseries",
   // "Scripted") is what tells a mini-series apart. All three already ride along
   // on the TMDB detail call the meta route makes, so they cost nothing extra.
-  episodeCount Int?
+  episodeCount    Int?
   // Average minutes per episode, from TMDB's episode_run_time. Shows only, and
   // an average by nature — a season of 42-minute episodes with one 78-minute
   // finale reports 42. Good enough for "days spent watching", which is the one
   // question it exists to answer, and the alternative is a runtime per episode
   // for every episode of every series.
-  episodeRuntime Int?
+  episodeRuntime  Int?
   // Exact minutes per episode, keyed season -> episode ({"1":{"1":58,"2":48}}).
   // The average above is arithmetic on an estimate — Breaking Bad runs 43 to 58
   // minutes an episode — and "days spent watching" is shown to the minute, so
   // the minutes have to be the real ones.
   episodeRuntimes Json?
-  showStatus   String?
-  showType     String?
+  showStatus      String?
+  showType        String?
 
   // Episodes per season, keyed by season number: {"1":7,"2":13}. Specials
   // (season 0) are excluded, matching episodeCount. Lets the app say someone
@@ -430,8 +430,72 @@ model FilmMeta {
   // same TMDB detail call as the three fields above, so it costs nothing.
   seasonCounts Json?
 
-  updatedAt   DateTime  @updatedAt
+  updatedAt DateTime @updatedAt
 
   @@index([language])
   @@index([year])
+}
+
+// ---------------------------------------------------------------------------
+// Audit log — who did what, and when.
+//
+// The rest of this schema stores STATE: this account is banned, this review is
+// hidden, this user no longer exists. None of it records the EVENT that got it
+// there. An admin can permanently delete an account from /admin and afterwards
+// nothing anywhere says it happened, who did it, or when — and unlike almost
+// everything else on the pre-launch list, that cannot be backfilled later.
+//
+// Deliberately NOT logged: watches, ratings, reviews, watchlist changes. They
+// are already stored with their own timestamps, so logging them again doubles
+// writes to record what the app already knows. What is here is the irreversible
+// and the security-relevant only — a few hundred rows a year at this size.
+//
+// Rows are only ever INSERTED. Nothing in the app updates or deletes one; a log
+// that can be quietly edited proves nothing.
+enum AuditAction {
+  // Admin actions
+  USER_DELETED
+  USER_SELF_DELETED
+  USER_BANNED
+  USER_UNBANNED
+  USER_ROLE_CHANGED
+  REVIEW_HIDDEN
+  REVIEW_RESTORED
+  COMMENT_DELETED
+  // Account security
+  PASSWORD_RESET_COMPLETED
+  LOGIN_LOCKED
+}
+
+model AuditLog {
+  id        String      @id @default(uuid())
+  createdAt DateTime    @default(now())
+  action    AuditAction
+
+  // NO relation to User, on purpose. A foreign key with onDelete: Cascade would
+  // delete the record of an account deletion along with the account — the exact
+  // event this table exists to keep. The username is copied in beside the id for
+  // the same reason: after the cascade the id resolves to nothing, and "who did
+  // this" has to still read as a name months later.
+  actorId       String?
+  actorUsername String?
+
+  // What was acted on: a user id, a review id, a comment id, or (for a login
+  // lockout, where no account is known to exist) the identifier that was typed.
+  targetId    String?
+  targetLabel String?
+
+  // Request origin. Null for anything not triggered by an HTTP request.
+  ip        String?
+  userAgent String? @db.VarChar(500)
+
+  // Anything action-specific worth keeping — { from: "USER", to: "ADMIN" } on a
+  // role change, the reported review's id on a moderation removal. Deliberately
+  // loose: the shape differs per action and none of it is queried by key.
+  details Json?
+
+  @@index([createdAt])
+  @@index([action, createdAt])
+  @@index([actorId])
+  @@index([targetId])
 }

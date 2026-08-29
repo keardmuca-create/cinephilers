@@ -154,6 +154,7 @@ const tables = {
   customList: new Table(),
   customListItem: new Table(),
   follow: new Table(),
+  auditLog: new Table(),
 };
 
 // Wrap user.findUnique to inject _count for followers/following

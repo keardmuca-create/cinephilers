@@ -3,6 +3,7 @@ import { prisma } from '@/lib/db';
 import { ok, err } from '@/lib/api-response';
 import { writeLimit } from '@/lib/write-limit';
 import { requireAdmin } from '@/lib/admin-auth';
+import { writeAudit } from '@/lib/audit';
 
 export const dynamic = 'force-dynamic';
 
@@ -64,7 +65,7 @@ export async function PATCH(req: NextRequest) {
 }
 
 export async function DELETE(req: NextRequest) {
-  const { status } = await requireAdmin(req);
+  const { auth, status } = await requireAdmin(req);
   const limited = await writeLimit(req);
   if (limited) return limited;
   if (status === 'unauthenticated') return err('Unauthorized', 401);
@@ -76,16 +77,46 @@ export async function DELETE(req: NextRequest) {
   // action can be undone via Restore below; comments are hard-deleted. Either
   // way the author's reviewsCount is decremented so profile stats stay accurate.
   if (targetType === 'review') {
-    const review = await prisma.review.findUnique({ where: { id: targetId }, select: { userId: true, hidden: true } });
+    const review = await prisma.review.findUnique({
+      where: { id: targetId },
+      select: { userId: true, hidden: true, user: { select: { username: true } } },
+    });
     if (review && !review.hidden) {
       await prisma.review.update({ where: { id: targetId }, data: { hidden: true } }).catch(() => {});
       await prisma.user.update({
         where: { id: review.userId },
         data: { reviewsCount: { decrement: 1 } },
       }).catch(() => {});
+      // Inside the !hidden branch on purpose: removing an already-removed review
+      // changes nothing, and a log that records non-events is a log nobody reads.
+      await writeAudit({
+        action: 'REVIEW_HIDDEN',
+        actorId: auth?.sub ?? null,
+        actorUsername: auth?.username ?? null,
+        targetId,
+        targetLabel: review.user.username,
+        details: { reportId: reportId ?? null, authorId: review.userId },
+      }, req);
     }
   } else if (targetType === 'comment') {
-    await prisma.reviewComment.delete({ where: { id: targetId } }).catch(() => {});
+    // Comments are HARD deleted — after this line the body, its author and the
+    // fact it ever existed are gone, so the audit row is the only trace.
+    const comment = await prisma.reviewComment.findUnique({
+      where: { id: targetId },
+      select: { userId: true, user: { select: { username: true } } },
+    }).catch(() => null);
+    const deleted = await prisma.reviewComment.delete({ where: { id: targetId } })
+      .then(() => true).catch(() => false);
+    if (deleted) {
+      await writeAudit({
+        action: 'COMMENT_DELETED',
+        actorId: auth?.sub ?? null,
+        actorUsername: auth?.username ?? null,
+        targetId,
+        targetLabel: comment?.user.username ?? null,
+        details: { reportId: reportId ?? null, authorId: comment?.userId ?? null },
+      }, req);
+    }
   }
 
   // Mark report as reviewed
@@ -97,7 +128,7 @@ export async function DELETE(req: NextRequest) {
 // Restore a soft-removed review (undo a moderation removal). Un-hides it and
 // re-increments the author's reviewsCount; the report is marked dismissed.
 export async function POST(req: NextRequest) {
-  const { status } = await requireAdmin(req);
+  const { auth, status } = await requireAdmin(req);
   const limited = await writeLimit(req);
   if (limited) return limited;
   if (status === 'unauthenticated') return err('Unauthorized', 401);
@@ -106,7 +137,10 @@ export async function POST(req: NextRequest) {
   const { reportId, targetType, targetId } = await req.json().catch(() => ({}));
   if (targetType !== 'review') return err('Only reviews can be restored', 400);
 
-  const review = await prisma.review.findUnique({ where: { id: targetId }, select: { userId: true, hidden: true } });
+  const review = await prisma.review.findUnique({
+    where: { id: targetId },
+    select: { userId: true, hidden: true, user: { select: { username: true } } },
+  });
   if (!review) return err('Review no longer exists', 404);
 
   if (review.hidden) {
@@ -115,6 +149,14 @@ export async function POST(req: NextRequest) {
       where: { id: review.userId },
       data: { reviewsCount: { increment: 1 } },
     }).catch(() => {});
+    await writeAudit({
+      action: 'REVIEW_RESTORED',
+      actorId: auth?.sub ?? null,
+      actorUsername: auth?.username ?? null,
+      targetId,
+      targetLabel: review.user.username,
+      details: { reportId: reportId ?? null, authorId: review.userId },
+    }, req);
   }
 
   if (reportId) {
