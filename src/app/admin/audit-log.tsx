@@ -40,6 +40,37 @@ const ADMIN_ACTIONS = [
 ];
 const SECURITY_ACTIONS = ['USER_SELF_DELETED', 'PASSWORD_RESET_COMPLETED', 'LOGIN_LOCKED'];
 
+// Audit rows date themselves differently from the rest of the app.
+//
+// relativeTime is right for the activity feed — a social feed is about what just
+// happened, and "Jun 12" is friendlier than a timestamp. But it drops the year
+// and the time entirely after a week, and those are exactly what an audit row is
+// consulted for: a year from now "Jun 12" cannot tell 2026 from 2027, and "was
+// that reset at 3am or 3pm" is the question being asked.
+//
+// So: relative for the first day, when it genuinely reads better, and the full
+// stamp from then on. 24-hour clock, because AM/PM is one more thing to get
+// wrong in a security record.
+const FULL_STAMP: Intl.DateTimeFormatOptions = {
+  day: 'numeric', month: 'short', year: 'numeric',
+  hour: '2-digit', minute: '2-digit', hour12: false,
+};
+
+function auditTime(iso: string): string {
+  const t = new Date(iso);
+  if (Number.isNaN(t.getTime())) return '';
+  const age = Date.now() - t.getTime();
+  if (age < 24 * 60 * 60 * 1000) return relativeTime(iso);
+  return t.toLocaleString('en-GB', FULL_STAMP);
+}
+
+// The exact moment, for every row including today's — hovering a fresh "1m ago"
+// should still answer "at what time, exactly?" without waiting a day for it.
+function exactTime(iso: string): string {
+  const t = new Date(iso);
+  return Number.isNaN(t.getTime()) ? '' : t.toLocaleString('en-GB', FULL_STAMP);
+}
+
 /**
  * The audit log, read-only.
  *
@@ -136,8 +167,11 @@ export function AuditLog() {
                     </p>
                     {r.ip && <p className="text-xs text-muted-foreground mt-1">from {r.ip}</p>}
                   </div>
-                  <span className="text-xs text-muted-foreground whitespace-nowrap">
-                    {relativeTime(r.createdAt)}
+                  <span
+                    className="text-xs text-muted-foreground whitespace-nowrap"
+                    title={exactTime(r.createdAt)}
+                  >
+                    {auditTime(r.createdAt)}
                   </span>
                 </div>
               </div>
