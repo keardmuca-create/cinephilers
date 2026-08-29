@@ -39,12 +39,12 @@ export default function AboutPage() {
           <h2 className="text-2xl font-headline font-bold">What you can do</h2>
           <div className="grid gap-4">
             {[
-              // Track leads because it is what the app IS. The features that make
-              // it different follow it — none of them stands in for the whole idea
-              // on its own, which is the same reason the title is left plain.
+              // Track and Rate & Review lead because between them they are what the
+              // app IS. The features that make it different follow — none of them
+              // stands in for the whole idea, which is why the title is left plain too.
               { icon: Film, title: 'Track', body: 'Mark movies and shows as watched. Build a history of everything you\'ve seen and keep a watchlist of what\'s next.' },
-              { icon: Sparkles, title: "Today's Pick", body: 'One film a day, drawn from your own watchlist. Locked until midnight, so there is no rerolling until you like the answer. Mark it watched and it counts towards a streak.' },
               { icon: Star, title: 'Rate & Review', body: 'Give ratings out of 10 and write full reviews. Mark spoilers so others can read safely.' },
+              { icon: Sparkles, title: "Today's Pick", body: 'One film a day, drawn from your own watchlist. Locked until midnight, so there is no rerolling until you like the answer. Mark it watched and it counts towards a streak.' },
               { icon: Users, title: 'Follow Friends', body: 'Follow people you know and see their ratings, reviews, and activity. Private accounts require a follow request.' },
               { icon: BookOpen, title: 'Build Lists', body: 'Organise films into custom lists — public or private. Share your favourites, your comfort watches, your all-time bests.' },
               { icon: Award, title: 'Badges', body: 'Bronze, silver and gold for what you actually watch — films, shows, episodes, ratings and reviews. Every badge shows how far along you are and exactly what is left to reach the next tier. Counted from your library as it stands, not a total that only ever goes up.' },
