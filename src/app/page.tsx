@@ -1,9 +1,10 @@
-import { cookies } from 'next/headers';
+import { cookies, headers } from 'next/headers';
 import { redirect } from 'next/navigation';
 import Link from 'next/link';
 import { Play, Star, ListPlus, Users, Upload, Award, Sparkles } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { buildHomePool } from '@/lib/home-pool';
+import { siteStructuredData } from '@/lib/structured-data';
 import type { Metadata } from 'next';
 
 export const metadata: Metadata = {
@@ -126,12 +127,24 @@ export default async function RootPage() {
   const jar = await cookies();
   if (jar.get('access_token')?.value || jar.get('refresh_token')?.value) redirect('/home');
 
+  // The CSP allows scripts by nonce only, so the schema block needs the same
+  // per-request nonce the middleware issues — without it the browser drops it and
+  // the markup silently never ships.
+  const nonce = (await headers()).get('x-nonce') ?? undefined;
+
   const pool = await buildHomePool();
   const usable = pool.filter(m => m.poster && !m.poster.includes('picsum'));
   const posters = usable.slice(0, 18);
 
   return (
     <main className="min-h-screen bg-background">
+      {/* Who we are and what the app does, stated outright rather than left to be
+          inferred from the prose below. See src/lib/structured-data.ts. */}
+      <script
+        type="application/ld+json"
+        nonce={nonce}
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(siteStructuredData()) }}
+      />
       {/* Hero */}
       <section className="relative overflow-hidden">
         {/* Poster wall */}

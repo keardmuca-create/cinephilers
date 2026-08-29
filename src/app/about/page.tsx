@@ -1,10 +1,10 @@
 import Link from 'next/link';
-import { ChevronLeft, Film, Star, Users, BookOpen } from 'lucide-react';
+import { ChevronLeft, Film, Star, Users, BookOpen, Sparkles, Award } from 'lucide-react';
 import type { Metadata } from 'next';
 
 export const metadata: Metadata = {
   title: 'About | Cinephilers',
-  description: 'Cinephilers is a social movie and TV tracking app. Track what you watch, rate titles, write reviews, and share with friends.',
+  description: 'Cinephilers gives you one film a day from your own watchlist, tracks every film and episode you watch, and awards badges for what you have seen.',
   alternates: { canonical: '/about' },
 };
 
@@ -39,10 +39,15 @@ export default function AboutPage() {
           <h2 className="text-2xl font-headline font-bold">What you can do</h2>
           <div className="grid gap-4">
             {[
+              // Today's Pick leads, because it is the one thing here no other
+              // tracker does. The four that follow are the category basics, and
+              // every competitor claims them too.
+              { icon: Sparkles, title: "Today's Pick", body: 'One film a day, drawn from your own watchlist. Locked until midnight, so there is no rerolling until you like the answer. Mark it watched and it counts towards a streak.' },
               { icon: Film, title: 'Track', body: 'Mark movies and shows as watched. Build a history of everything you\'ve seen and keep a watchlist of what\'s next.' },
               { icon: Star, title: 'Rate & Review', body: 'Give ratings out of 10 and write full reviews. Mark spoilers so others can read safely.' },
               { icon: Users, title: 'Follow Friends', body: 'Follow people you know and see their ratings, reviews, and activity. Private accounts require a follow request.' },
               { icon: BookOpen, title: 'Build Lists', body: 'Organise films into custom lists — public or private. Share your favourites, your comfort watches, your all-time bests.' },
+              { icon: Award, title: 'Badges', body: 'Bronze, silver and gold for what you actually watch — films, shows, episodes, ratings and reviews. Every badge shows how far along you are and exactly what is left to reach the next tier. Counted from your library as it stands, not a total that only ever goes up.' },
             ].map(({ icon: Icon, title, body }) => (
               <div key={title} className="flex gap-4 p-5 bg-card border border-border rounded-2xl">
                 <div className="h-10 w-10 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
