@@ -35,8 +35,13 @@ export async function GET(req: NextRequest) {
   const totalMovies = watched.filter(w => w.mediaType === 'MOVIE').length;
   const totalShows = watched.filter(w => w.mediaType === 'SHOW').length;
 
-  // This year
-  const watchedThisYear = watched.filter(w => w.watchedAt >= yearStart).length;
+  // This year — split by type as well, since the cards now ask "how many films"
+  // and "how many shows" separately. Filtered once and counted from that, rather
+  // than three passes over the same array.
+  const thisYear = watched.filter(w => w.watchedAt >= yearStart);
+  const watchedThisYear = thisYear.length;
+  const moviesThisYear = thisYear.filter(w => w.mediaType === 'MOVIE').length;
+  const showsThisYear = thisYear.filter(w => w.mediaType === 'SHOW').length;
 
   // Ratings
   const totalRatings = ratings.length;
@@ -145,6 +150,8 @@ export async function GET(req: NextRequest) {
       total: filmMinutes + showMinutes,
     },
     watchedThisYear,
+    moviesThisYear,
+    showsThisYear,
     totalRatings,
     avgScore,
     reviewsCount,

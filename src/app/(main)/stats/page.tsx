@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { ChevronLeft, Film, Star, MessageSquare, Eye, TrendingUp, Calendar, Clock } from 'lucide-react';
+import { ChevronLeft, Film, Tv, Star, MessageSquare, TrendingUp, Clock } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/contexts/auth-context';
 import { fetchWithAuth } from '@/lib/fetch-with-auth';
@@ -14,6 +14,8 @@ interface Stats {
   totalMovies: number;
   totalShows: number;
   watchedThisYear: number;
+  moviesThisYear: number;
+  showsThisYear: number;
   totalRatings: number;
   avgScore: number | null;
   reviewsCount: number;
@@ -198,17 +200,23 @@ export default function StatsPage() {
 
           {/* Stat grid */}
           <div className="grid grid-cols-2 gap-3">
+            {/* Films and shows counted apart, because they are not the same
+                achievement — 300 films and 300 shows are wildly different amounts
+                of watching, and a single blended total hid which one you actually
+                do. The all-time figure leads and the year sits underneath, the
+                same shape the Ratings card uses. */}
             <StatCard
-              icon={Calendar}
-              label={`Watched in ${year}`}
-              value={stats.watchedThisYear}
-              sub={`${stats.totalWatched} all time`}
+              icon={Film}
+              label="Movies watched"
+              value={stats.totalMovies}
+              sub={`${stats.moviesThisYear} in ${year}`}
+              color="text-primary"
             />
             <StatCard
-              icon={Eye}
-              label="Total watched"
-              value={stats.totalWatched}
-              sub="movies & shows"
+              icon={Tv}
+              label="Shows watched"
+              value={stats.totalShows}
+              sub={`${stats.showsThisYear} in ${year}`}
               color="text-primary"
             />
             <StatCard
