@@ -162,37 +162,42 @@ export function RecentlyViewed() {
                     <Film className="h-9 w-9 text-primary/60" />
                   )}
                 </div>
-                <div className="space-y-0.5 px-0.5">
-                  <div className="flex items-start justify-between gap-1">
-                    <h3 className="text-sm font-semibold font-headline line-clamp-2 group-hover:text-primary transition-colors leading-snug flex-1 min-w-0">
+                {/* Title and year are one column, with the badges beside them.
+                    The year used to sit under the whole row, so a title carrying
+                    a community score, your own rating and a watched eye pushed it
+                    three badges further down — leaving a gap under the title on
+                    exactly the titles you had engaged with most. */}
+                <div className="flex items-start justify-between gap-1 px-0.5">
+                  <div className="flex-1 min-w-0">
+                    <h3 className="text-sm font-semibold font-headline line-clamp-2 group-hover:text-primary transition-colors leading-snug">
                       {item.title}
                     </h3>
-                    <div className="flex flex-col items-end gap-0.5 shrink-0">
-                      {/* resolveDisplayRating returns null rather than 0 when
-                          there is nothing to show, so the star is left off
-                          instead of a literal "0" appearing beside the title. */}
-                      {shown && (
-                        <div className="flex items-center gap-0.5">
-                          <Star
-                            className={`h-3 w-3 ${shown.source === 'cinephilers'
-                              ? 'fill-primary text-primary'
-                              : 'fill-yellow-400 text-yellow-400'}`}
-                          />
-                          <span className="text-xs font-bold text-foreground">{shown.value.toFixed(1)}</span>
-                        </div>
-                      )}
-                      {userRating !== undefined && (
-                        <div className="flex items-center gap-0.5">
-                          <Star className="h-3 w-3 text-primary" />
-                          <span className="text-[10px] font-bold text-primary">{userRating}</span>
-                        </div>
-                      )}
-                      {item.watched && item.watched !== 'none' && (
-                        <WatchedEye state={item.watched} className="h-3.5 w-3.5" />
-                      )}
-                    </div>
+                    <p className="text-[10px] text-muted-foreground">{item.year}</p>
                   </div>
-                  <p className="text-[10px] text-muted-foreground">{item.year}</p>
+                  <div className="flex flex-col items-end gap-0.5 shrink-0">
+                    {/* resolveDisplayRating returns null rather than 0 when
+                        there is nothing to show, so the star is left off
+                        instead of a literal "0" appearing beside the title. */}
+                    {shown && (
+                      <div className="flex items-center gap-0.5">
+                        <Star
+                          className={`h-3 w-3 ${shown.source === 'cinephilers'
+                            ? 'fill-primary text-primary'
+                            : 'fill-yellow-400 text-yellow-400'}`}
+                        />
+                        <span className="text-xs font-bold text-foreground">{shown.value.toFixed(1)}</span>
+                      </div>
+                    )}
+                    {userRating !== undefined && (
+                      <div className="flex items-center gap-0.5">
+                        <Star className="h-3 w-3 text-primary" />
+                        <span className="text-[10px] font-bold text-primary">{userRating}</span>
+                      </div>
+                    )}
+                  {item.watched && item.watched !== 'none' && (
+                    <WatchedEye state={item.watched} className="h-3.5 w-3.5" />
+                  )}
+                  </div>
                 </div>
               </div>
             </Link>
