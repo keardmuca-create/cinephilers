@@ -351,7 +351,7 @@ export default function AdminPage() {
           one question meant scrolling past everything that answered the others.
           The pending-report count rides on its own pill rather than the header,
           so the one number worth seeing at a glance survives the move. */}
-      <div className="flex flex-wrap gap-2">
+      <div className="flex gap-2 overflow-x-auto no-scrollbar -mx-4 px-4">
         {SECTIONS.map(({ key, label, icon: Icon }) => {
           const active = tab === key;
           return (
@@ -361,7 +361,7 @@ export default function AdminPage() {
               // bare page once a section has been opened.
               onClick={() => setTab(active ? null : key)}
               aria-pressed={active}
-              className={`flex items-center gap-2 px-4 py-2 rounded-full text-sm font-semibold transition-colors ${active ? 'bg-primary text-white' : 'bg-muted text-muted-foreground hover:bg-muted/80'}`}
+              className={`shrink-0 flex items-center gap-2 px-4 py-2 rounded-full text-sm font-semibold transition-colors ${active ? 'bg-primary text-white' : 'bg-muted text-muted-foreground hover:bg-muted/80'}`}
             >
               <Icon className="h-4 w-4" /> {label}
               {key === 'reports' && pendingCount > 0 && (
