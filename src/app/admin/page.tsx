@@ -47,6 +47,18 @@ interface DbSize {
   tables: { name: string; size: string; bytes: number }[];
 }
 
+// The pills, in the order they read across the top. One list, so adding a
+// section is one entry rather than a hand-written button plus a union member.
+type AdminSection = 'users' | 'audit' | 'reports' | 'support' | 'database' | null;
+
+const SECTIONS = [
+  { key: 'users',    label: 'Users',    icon: Users },
+  { key: 'audit',    label: 'Audit',    icon: ScrollText },
+  { key: 'reports',  label: 'Reports',  icon: Flag },
+  { key: 'support',  label: 'Support',  icon: Mail },
+  { key: 'database', label: 'Database', icon: Database },
+] as const;
+
 const STATUS_COLOURS: Record<string, string> = {
   pending: 'bg-yellow-500/10 text-yellow-400',
   reviewed: 'bg-green-500/10 text-green-400',
@@ -151,7 +163,10 @@ function SupportReply() {
 export default function AdminPage() {
   const { user, loading: authLoading } = useAuth();
   const router = useRouter();
-  const [tab, setTab] = useState<'reports' | 'users' | 'support' | 'audit'>('reports');
+  // null = no section open. The page lands on the pills alone, so every visit is
+  // a deliberate choice rather than a wall of whichever section happened to be
+  // first. Clicking the open pill again closes it and returns here.
+  const [tab, setTab] = useState<AdminSection>(null);
 
   // Reports state
   const [reports, setReports] = useState<Report[]>([]);
@@ -187,11 +202,18 @@ export default function AdminPage() {
       .then(json => { if (json?.data) setStats(json.data); })
       .catch(() => {});
 
+  }, [user, authLoading, router]);
+
+  // Deferred until the Database section is actually opened: it runs a size query
+  // across every table, and nothing on the page shows it until then. Fetched once
+  // — reopening the section reuses what it already has.
+  useEffect(() => {
+    if (tab !== 'database' || dbSize) return;
     fetchWithAuth('/api/admin/db-size')
       .then(r => r.ok ? r.json() : null)
       .then(json => { if (json?.data) setDbSize(json.data); })
       .catch(() => {});
-  }, [user, authLoading, router]);
+  }, [tab, dbSize]);
 
   // Load users when tab opens, then debounce search on query change
   useEffect(() => {
@@ -319,90 +341,77 @@ export default function AdminPage() {
         <div className="h-10 w-10 rounded-2xl bg-primary/10 flex items-center justify-center">
           <ShieldAlert className="h-5 w-5 text-primary" />
         </div>
-        <div>
-          <h1 className="text-2xl font-headline font-bold">Admin</h1>
-          <p className="text-sm text-muted-foreground">{pendingCount} pending reports</p>
-        </div>
+        <h1 className="text-2xl font-headline font-bold">Admin</h1>
       </div>
 
-      {/* Stats overview */}
-      {stats && (
-        <div className="grid grid-cols-2 gap-3">
-          {[
-            { label: 'Total Users', value: stats.totalUsers, icon: <Users className="h-4 w-4" /> },
-            { label: 'Banned', value: stats.bannedUsers, icon: <Ban className="h-4 w-4" /> },
-          ].map(s => (
-            <div key={s.label} className="bg-card border border-border rounded-2xl p-4 flex items-center gap-3">
-              <div className="h-8 w-8 rounded-xl bg-primary/10 flex items-center justify-center text-primary shrink-0">{s.icon}</div>
+      {/* Sections.
+          Every section lives behind its own pill, and the page opens with none of
+          them showing — the counts and the table-by-table database breakdown used
+          to sit above this permanently, which meant arriving at /admin to answer
+          one question meant scrolling past everything that answered the others.
+          The pending-report count rides on its own pill rather than the header,
+          so the one number worth seeing at a glance survives the move. */}
+      <div className="flex flex-wrap gap-2">
+        {SECTIONS.map(({ key, label, icon: Icon }) => {
+          const active = tab === key;
+          return (
+            <button
+              key={key}
+              // Pressing the open one closes it, which is the only way back to a
+              // bare page once a section has been opened.
+              onClick={() => setTab(active ? null : key)}
+              aria-pressed={active}
+              className={`flex items-center gap-2 px-4 py-2 rounded-full text-sm font-semibold transition-colors ${active ? 'bg-primary text-white' : 'bg-muted text-muted-foreground hover:bg-muted/80'}`}
+            >
+              <Icon className="h-4 w-4" /> {label}
+              {key === 'reports' && pendingCount > 0 && (
+                <span className={`text-xs px-1.5 py-0.5 rounded-full ${active ? 'bg-white/20' : 'bg-foreground/10'}`}>
+                  {pendingCount}
+                </span>
+              )}
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Database */}
+      {tab === 'database' && (
+        dbSize ? (
+          <div className="bg-card border border-border rounded-2xl p-5 space-y-4">
+            <div className="flex items-center gap-3">
+              <div className="h-8 w-8 rounded-xl bg-primary/10 flex items-center justify-center text-primary shrink-0">
+                <Database className="h-4 w-4" />
+              </div>
               <div>
-                <p className="text-lg font-bold leading-tight">{s.value.toLocaleString()}</p>
-                <p className="text-xs text-muted-foreground">{s.label}</p>
+                <p className="text-lg font-bold leading-tight">{dbSize.used} <span className="text-muted-foreground font-normal">/ {dbSize.total}</span></p>
+                <p className="text-xs text-muted-foreground">App data (all users) / total database size</p>
               </div>
             </div>
-          ))}
-        </div>
-      )}
-
-      {/* Database storage */}
-      {dbSize && (
-        <div className="bg-card border border-border rounded-2xl p-5 space-y-4">
-          <div className="flex items-center gap-3">
-            <div className="h-8 w-8 rounded-xl bg-primary/10 flex items-center justify-center text-primary shrink-0">
-              <Database className="h-4 w-4" />
-            </div>
-            <div>
-              <p className="text-lg font-bold leading-tight">{dbSize.used} <span className="text-muted-foreground font-normal">/ {dbSize.total}</span></p>
-              <p className="text-xs text-muted-foreground">App data (all users) / total database size</p>
-            </div>
+            {dbSize.tables.length > 0 && (
+              <div className="space-y-1.5">
+                {dbSize.tables.map(t => {
+                  const pct = dbSize.totalBytes > 0 ? (t.bytes / dbSize.totalBytes) * 100 : 0;
+                  return (
+                    <div key={t.name} className="space-y-1">
+                      <div className="flex items-center justify-between gap-3 text-xs">
+                        <span className="font-medium truncate">{t.name}</span>
+                        <span className="text-muted-foreground shrink-0">{t.size}</span>
+                      </div>
+                      <div className="h-1.5 rounded-full bg-muted overflow-hidden">
+                        <div className="h-full bg-primary/60 rounded-full" style={{ width: `${pct}%` }} />
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
-          {dbSize.tables.length > 0 && (
-            <div className="space-y-1.5">
-              {dbSize.tables.map(t => {
-                const pct = dbSize.totalBytes > 0 ? (t.bytes / dbSize.totalBytes) * 100 : 0;
-                return (
-                  <div key={t.name} className="space-y-1">
-                    <div className="flex items-center justify-between gap-3 text-xs">
-                      <span className="font-medium truncate">{t.name}</span>
-                      <span className="text-muted-foreground shrink-0">{t.size}</span>
-                    </div>
-                    <div className="h-1.5 rounded-full bg-muted overflow-hidden">
-                      <div className="h-full bg-primary/60 rounded-full" style={{ width: `${pct}%` }} />
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </div>
+        ) : (
+          <div className="flex justify-center py-12">
+            <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+          </div>
+        )
       )}
-
-      {/* Main tabs */}
-      <div className="flex gap-2">
-        <button
-          onClick={() => setTab('reports')}
-          className={`flex items-center gap-2 px-4 py-2 rounded-full text-sm font-semibold transition-colors ${tab === 'reports' ? 'bg-primary text-white' : 'bg-muted text-muted-foreground hover:bg-muted/80'}`}
-        >
-          <Flag className="h-4 w-4" /> Reports {pendingCount > 0 && <span className="bg-foreground/10 text-xs px-1.5 py-0.5 rounded-full">{pendingCount}</span>}
-        </button>
-        <button
-          onClick={() => setTab('users')}
-          className={`flex items-center gap-2 px-4 py-2 rounded-full text-sm font-semibold transition-colors ${tab === 'users' ? 'bg-primary text-white' : 'bg-muted text-muted-foreground hover:bg-muted/80'}`}
-        >
-          <Users className="h-4 w-4" /> Users
-        </button>
-        <button
-          onClick={() => setTab('support')}
-          className={`flex items-center gap-2 px-4 py-2 rounded-full text-sm font-semibold transition-colors ${tab === 'support' ? 'bg-primary text-white' : 'bg-muted text-muted-foreground hover:bg-muted/80'}`}
-        >
-          <Mail className="h-4 w-4" /> Support
-        </button>
-        <button
-          onClick={() => setTab('audit')}
-          className={`flex items-center gap-2 px-4 py-2 rounded-full text-sm font-semibold transition-colors ${tab === 'audit' ? 'bg-primary text-white' : 'bg-muted text-muted-foreground hover:bg-muted/80'}`}
-        >
-          <ScrollText className="h-4 w-4" /> Audit
-        </button>
-      </div>
 
       {tab === 'support' && <SupportReply />}
       {tab === 'audit' && <AuditLog />}
@@ -504,9 +513,27 @@ export default function AdminPage() {
         </>
       )}
 
-      {/* Users tab */}
+      {/* Users */}
       {tab === 'users' && (
         <div className="space-y-4">
+          {/* These two counts describe the user base, so they belong to this
+              section rather than to the page. */}
+          {stats && (
+            <div className="grid grid-cols-2 gap-3">
+              {[
+                { label: 'Total Users', value: stats.totalUsers, icon: <Users className="h-4 w-4" /> },
+                { label: 'Banned', value: stats.bannedUsers, icon: <Ban className="h-4 w-4" /> },
+              ].map(st => (
+                <div key={st.label} className="bg-card border border-border rounded-2xl p-4 flex items-center gap-3">
+                  <div className="h-8 w-8 rounded-xl bg-primary/10 flex items-center justify-center text-primary shrink-0">{st.icon}</div>
+                  <div>
+                    <p className="text-lg font-bold leading-tight">{st.value.toLocaleString()}</p>
+                    <p className="text-xs text-muted-foreground">{st.label}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
           <div className="relative">
             <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
             <input
