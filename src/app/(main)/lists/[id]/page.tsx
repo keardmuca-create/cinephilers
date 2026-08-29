@@ -316,9 +316,12 @@ export default function ListDetailPage() {
               <span>·</span>
               <span>{list.items.length} title{list.items.length !== 1 ? 's' : ''}</span>
               {/* Same badge the person page uses for the same question, so it
-                  needs no explaining. Hidden at zero: "0%" on a list you have
-                  just opened is a scold, not information. */}
-              {watchedPct && watchedPct.done > 0 && (
+                  needs no explaining. Shown at zero as well: this badge exists to
+                  answer "how much of this have I got through" on somebody else's
+                  list, and none of it is a real answer to that — hiding it made
+                  the badge disappear exactly when the list was most unfamiliar,
+                  which is when the question is loudest. */}
+              {watchedPct && (
                 <>
                   <span>·</span>
                   <span className="flex items-center gap-1 text-primary font-bold">
