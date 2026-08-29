@@ -33,15 +33,34 @@ export async function GET(req: NextRequest) {
   // Totals
   const totalWatched = watched.length;
   const totalMovies = watched.filter(w => w.mediaType === 'MOVIE').length;
-  const totalShows = watched.filter(w => w.mediaType === 'SHOW').length;
 
-  // This year — split by type as well, since the cards now ask "how many films"
-  // and "how many shows" separately. Filtered once and counted from that, rather
-  // than three passes over the same array.
+  // Shows are counted from EPISODES, not from WatchedItem.
+  //
+  // A WatchedItem row with mediaType SHOW only exists if someone marked an
+  // entire series watched in one action. Anybody who watches television the
+  // ordinary way — episode by episode — produces no such row at all, so counting
+  // them read 0 for a person with hundreds of episodes behind them. Episodes are
+  // the record in this app; the show is what they add up to.
+  //
+  // A show counts once you have watched an episode of it. Whole-series marks are
+  // unioned in, so a user who logs that way is not dropped either, and a show
+  // logged both ways is still one show.
+  const startedShows = new Set<string>(watchedEpisodes.map(e => e.showTmdbId));
+  for (const w of watched) if (w.mediaType === 'SHOW') startedShows.add(w.tmdbId);
+  const totalShows = startedShows.size;
+
+  // This year — films by their own watch date, shows by whether an episode of
+  // them landed inside the year. A series begun in 2025 and continued in 2026
+  // counts in both, which is the honest answer to "what did I watch this year".
   const thisYear = watched.filter(w => w.watchedAt >= yearStart);
   const watchedThisYear = thisYear.length;
   const moviesThisYear = thisYear.filter(w => w.mediaType === 'MOVIE').length;
-  const showsThisYear = thisYear.filter(w => w.mediaType === 'SHOW').length;
+
+  const showsThisYearSet = new Set<string>(
+    watchedEpisodes.filter(e => e.watchedAt >= yearStart).map(e => e.showTmdbId),
+  );
+  for (const w of thisYear) if (w.mediaType === 'SHOW') showsThisYearSet.add(w.tmdbId);
+  const showsThisYear = showsThisYearSet.size;
 
   // Ratings
   const totalRatings = ratings.length;
