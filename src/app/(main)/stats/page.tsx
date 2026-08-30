@@ -231,12 +231,14 @@ export default function StatsPage() {
               sub={`${stats.moviesThisYear} in ${year}`}
               color="text-primary"
             />
-            {/* The year first, as on the films card, then the episode count.
-                A show counts here as soon as one episode of it is watched, so
-                the headline number alone cannot tell seven series barely started
-                from seven watched to the end. The episodes are what make it
-                honest, and they have to sit on the card to do it — nobody joins
-                them up with the chart further down. */}
+            {/* Episodes on both lines: all time beside the show count, this
+                year beside the year's shows. A show counts here from its first
+                episode, so seven series barely started and seven watched to the
+                end give the same headline — the episode figure is the only thing
+                that separates them, and it has to sit on the card to do it,
+                since nobody joins it up with the chart further down. The films
+                card carries no companion number because a film is one thing
+                watched and needs none. */}
             <StatCard
               icon={Tv}
               label="Shows watched"
