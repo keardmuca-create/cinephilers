@@ -16,6 +16,8 @@ interface Stats {
   watchedThisYear: number;
   moviesThisYear: number;
   showsThisYear: number;
+  totalEpisodes: number;
+  episodesThisYear: number;
   totalRatings: number;
   avgScore: number | null;
   reviewsCount: number;
@@ -77,10 +79,13 @@ function humanTime(mins: number): string {
     : parts[0];
 }
 
-function StatCard({ icon: Icon, label, value, sub, color = 'text-primary' }: {
+function StatCard({ icon: Icon, label, value, valueSuffix, sub, color = 'text-primary' }: {
   icon: React.ComponentType<{ className?: string }>;
   label: string;
   value: string | number;
+  /** A second all-time figure sharing the headline line, smaller and muted —
+   *  used where one number cannot describe the thing on its own. */
+  valueSuffix?: string;
   sub?: string;
   color?: string;
 }) {
@@ -90,7 +95,12 @@ function StatCard({ icon: Icon, label, value, sub, color = 'text-primary' }: {
         <Icon className="h-5 w-5" />
       </div>
       <div>
-        <p className="text-3xl font-black font-headline">{value}</p>
+        <p className="text-3xl font-black font-headline">
+          {value}
+          {valueSuffix && (
+            <span className="text-sm font-bold text-muted-foreground ml-1.5 align-middle">{valueSuffix}</span>
+          )}
+        </p>
         <p className="text-sm font-bold text-muted-foreground mt-0.5">{label}</p>
         {sub && <p className="text-xs text-muted-foreground/70 mt-0.5">{sub}</p>}
       </div>
@@ -221,11 +231,18 @@ export default function StatsPage() {
               sub={`${stats.moviesThisYear} in ${year}`}
               color="text-primary"
             />
+            {/* The year first, as on the films card, then the episode count.
+                A show counts here as soon as one episode of it is watched, so
+                the headline number alone cannot tell seven series barely started
+                from seven watched to the end. The episodes are what make it
+                honest, and they have to sit on the card to do it — nobody joins
+                them up with the chart further down. */}
             <StatCard
               icon={Tv}
               label="Shows watched"
               value={stats.totalShows}
-              sub={`${stats.showsThisYear} in ${year}`}
+              valueSuffix={`· ${stats.totalEpisodes} eps`}
+              sub={`${stats.showsThisYear} in ${year} · ${stats.episodesThisYear} eps`}
               color="text-primary"
             />
             <StatCard

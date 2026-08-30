@@ -48,6 +48,10 @@ export async function GET(req: NextRequest) {
   const startedShows = new Set<string>(watchedEpisodes.map(e => e.showTmdbId));
   for (const w of watched) if (w.mediaType === 'SHOW') startedShows.add(w.tmdbId);
   const totalShows = startedShows.size;
+  // Shown beside the show count rather than kept for the chart alone. "7 shows"
+  // on its own is ambiguous — seven series barely begun and seven watched to the
+  // end read identically — and the episode figure is what settles it.
+  const totalEpisodes = watchedEpisodes.length;
 
   // This year — films by their own watch date, shows by whether an episode of
   // them landed inside the year. A series begun in 2025 and continued in 2026
@@ -56,9 +60,9 @@ export async function GET(req: NextRequest) {
   const watchedThisYear = thisYear.length;
   const moviesThisYear = thisYear.filter(w => w.mediaType === 'MOVIE').length;
 
-  const showsThisYearSet = new Set<string>(
-    watchedEpisodes.filter(e => e.watchedAt >= yearStart).map(e => e.showTmdbId),
-  );
+  const episodesInYear = watchedEpisodes.filter(e => e.watchedAt >= yearStart);
+  const episodesThisYear = episodesInYear.length;
+  const showsThisYearSet = new Set<string>(episodesInYear.map(e => e.showTmdbId));
   for (const w of thisYear) if (w.mediaType === 'SHOW') showsThisYearSet.add(w.tmdbId);
   const showsThisYear = showsThisYearSet.size;
 
@@ -172,6 +176,8 @@ export async function GET(req: NextRequest) {
     totalWatched,
     totalMovies,
     totalShows,
+    totalEpisodes,
+    episodesThisYear,
     // Minutes, so the client decides how to say it. Split because the total on
     // its own invites "from what?" — and because a films number and a series
     // number are two different kinds of viewing life.
