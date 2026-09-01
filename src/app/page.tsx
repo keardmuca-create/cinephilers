@@ -3,7 +3,6 @@ import { redirect } from 'next/navigation';
 import Link from 'next/link';
 import { Play, Star, ListPlus, Users, Upload, Award, Sparkles } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { buildHomePool } from '@/lib/home-pool';
 import { siteStructuredData } from '@/lib/structured-data';
 import type { Metadata } from 'next';
 
@@ -132,9 +131,11 @@ export default async function RootPage() {
   // the markup silently never ships.
   const nonce = (await headers()).get('x-nonce') ?? undefined;
 
-  const pool = await buildHomePool();
-  const usable = pool.filter(m => m.poster && !m.poster.includes('picsum'));
-  const posters = usable.slice(0, 18);
+  // Fixed for the same reason the Today's Pick wall below is fixed: the live
+  // pool is "popular this week", so whatever happened to be trending stood in
+  // for cinema behind the headline. Eighteen of the same sixty-four, which is
+  // three rows of six on desktop and six of three on a phone.
+  const heroPosters = WALL_POSTERS.slice(0, 18);
 
   return (
     <main className="min-h-screen bg-background">
@@ -148,14 +149,17 @@ export default async function RootPage() {
       {/* Hero */}
       <section className="relative overflow-hidden">
         {/* Poster wall */}
-        {posters.length > 0 && (
-          <div className="absolute inset-0 grid grid-cols-3 sm:grid-cols-6 gap-2 p-2 opacity-30 scale-105 -rotate-1">
-            {posters.filter(m => m.poster).map(m => (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img key={m.id} src={m.poster} alt="" className="w-full aspect-[2/3] object-cover rounded-xl" />
-            ))}
-          </div>
-        )}
+        <div className="absolute inset-0 grid grid-cols-3 sm:grid-cols-6 gap-2 p-2 opacity-30 scale-105 -rotate-1">
+          {heroPosters.map(path => (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              key={path}
+              src={`https://image.tmdb.org/t/p/w342${path}`}
+              alt=""
+              className="w-full aspect-[2/3] object-cover rounded-xl"
+            />
+          ))}
+        </div>
         <div className="absolute inset-0 bg-gradient-to-b from-background/70 via-background/85 to-background" />
 
         <div className="relative z-10 max-w-3xl mx-auto px-6 pt-28 pb-24 text-center space-y-6">
