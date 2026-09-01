@@ -20,7 +20,7 @@ export const metadata: Metadata = {
     url: 'https://cinephilers.app',
   },
   twitter: {
-    card: 'summary',
+    card: 'summary_large_image',
     title: 'Cinephilers | Track, Rate & Discuss with Friends',
     description: 'Everything you watch, remembered — films, shows and every episode, rated and reviewed with friends. Earn badges, and get a film a day from your watchlist.',
   },
