@@ -141,9 +141,15 @@ export default async function RootPage() {
     <main className="min-h-screen bg-background">
       {/* Who we are and what the app does, stated outright rather than left to be
           inferred from the prose below. See src/lib/structured-data.ts. */}
+      {/* Browsers hide the nonce attribute from the DOM once the document is
+          parsed, so React's hydration check reads it back as "" and reports a
+          mismatch against the nonce the server rendered. The attribute is
+          present in the HTML and the CSP accepts it; only the comparison is
+          wrong, so the warning is suppressed rather than the nonce dropped. */}
       <script
         type="application/ld+json"
         nonce={nonce}
+        suppressHydrationWarning
         dangerouslySetInnerHTML={{ __html: JSON.stringify(siteStructuredData()) }}
       />
       {/* Hero */}
