@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import bcrypt from 'bcryptjs';
 import { prisma } from '@/lib/db';
 import { ok, err } from '@/lib/api-response';
-import { signAccessToken, signRefreshToken, setAuthCookies } from '@/lib/auth-utils';
+import { signAccessToken, signRefreshToken, setAuthCookies, isNativeRequest } from '@/lib/auth-utils';
 import { rateLimit, clearRateLimit, getIp } from '@/lib/rate-limit';
 import { writeAudit, alreadyLoggedLockout } from '@/lib/audit';
 
@@ -91,7 +91,15 @@ export async function POST(req: NextRequest) {
 
   await setAuthCookies(accessToken, refreshToken);
 
+  // Native clients are cross-site, so the cookies just set never reach them —
+  // they get the tokens in the body and store them themselves. The web is
+  // deliberately NOT given them: the cookies are httpOnly and unreadable to
+  // JavaScript, and returning the same tokens to the page would put a stealable
+  // copy within reach of any XSS.
+  const native = isNativeRequest(req);
+
   return ok({
+    ...(native ? { accessToken, refreshToken } : {}),
     id: user.id,
     username: user.username,
     email: user.email,

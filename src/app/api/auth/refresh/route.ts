@@ -1,7 +1,7 @@
 import { NextRequest } from 'next/server';
 import { prisma } from '@/lib/db';
 import { ok, err } from '@/lib/api-response';
-import { verifyRefreshToken, signAccessToken, signRefreshToken, setAuthCookies, clearAuthCookies } from '@/lib/auth-utils';
+import { verifyRefreshToken, signAccessToken, signRefreshToken, setAuthCookies, clearAuthCookies, getRefreshTokenFromRequest } from '@/lib/auth-utils';
 import { rateLimit, getIp } from '@/lib/rate-limit';
 
 export async function POST(req: NextRequest) {
@@ -13,7 +13,9 @@ export async function POST(req: NextRequest) {
   const { allowed, retryAfter } = await rateLimit(`refresh:${getIp(req)}`, 20, 60_000);
   if (!allowed) return err(`Too many requests. Try again in ${retryAfter}s`, 429);
 
-  const refreshToken = req.cookies.get('refresh_token')?.value;
+  // Cookie for the web, Authorization header for native clients, which are
+  // cross-site and have no cookie jar for this origin.
+  const { token: refreshToken, fromHeader } = getRefreshTokenFromRequest(req);
   if (!refreshToken) return err('No refresh token', 401);
 
   const payload = await verifyRefreshToken(refreshToken);
@@ -44,5 +46,9 @@ export async function POST(req: NextRequest) {
 
   // Slide the 90-day window forward on every open so active users never expire.
   await setAuthCookies(newAccess, newRefresh);
-  return ok({ accessToken: newAccess });
+  // The rotated refresh token is echoed back ONLY to a caller that presented one
+  // in a header — i.e. a native client that already holds it. A browser riding
+  // httpOnly cookies (including one running injected script) gets the access
+  // token alone, so this cannot be used to lift a refresh token out of the jar.
+  return ok({ accessToken: newAccess, ...(fromHeader ? { refreshToken: newRefresh } : {}) });
 }

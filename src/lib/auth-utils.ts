@@ -91,6 +91,27 @@ export async function clearAuthCookies() {
   jar.set('refresh_token', '', { ...COOKIE_OPTS, maxAge: 0 });
 }
 
+// A Capacitor app runs from a local origin, so it is cross-site to this API and
+// the SameSite=Lax cookies above never reach it. Native clients announce
+// themselves with this header and carry their tokens by hand instead.
+export const CLIENT_HEADER = 'x-client';
+
+export function isNativeRequest(req: NextRequest): boolean {
+  return req.headers.get(CLIENT_HEADER)?.toLowerCase() === 'native';
+}
+
+// The refresh token, from the cookie jar if there is one and from the
+// Authorization header if there is not. `fromHeader` is reported back because
+// it decides whether the caller may be handed a new refresh token in the
+// response body: only a client that already presented one gets one returned.
+export function getRefreshTokenFromRequest(req: NextRequest): { token: string | null; fromHeader: boolean } {
+  const fromCookie = req.cookies.get('refresh_token')?.value;
+  if (fromCookie) return { token: fromCookie, fromHeader: false };
+  const auth = req.headers.get('authorization');
+  if (auth?.startsWith('Bearer ')) return { token: auth.slice(7), fromHeader: true };
+  return { token: null, fromHeader: false };
+}
+
 export async function getAccessTokenFromRequest(req: NextRequest): Promise<string | null> {
   const fromCookie = req.cookies.get('access_token')?.value;
   if (fromCookie) return fromCookie;
