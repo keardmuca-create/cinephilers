@@ -40,6 +40,10 @@ function buildCsp(nonce: string): string {
     "frame-src 'self' https://www.youtube.com https://www.youtube-nocookie.com",
     "connect-src 'self' https://api.themoviedb.org https://*.ingest.sentry.io https://*.sentry.io",
     "media-src 'self' https://www.youtube.com",
+    // Service workers fall back to child-src then script-src, and 'strict-dynamic'
+    // there makes 'self' inert — so without this line the worker registers fine in
+    // dev and is silently blocked in production.
+    "worker-src 'self'",
     "object-src 'none'",
     "base-uri 'self'",
     "form-action 'self'",
@@ -92,8 +96,11 @@ export const config = {
     // covering writes here would mean running middleware on every read as well —
     // and reads outnumber writes by a wide margin. The write ceiling lives in the
     // routes instead, where it costs nothing per request. See lib/write-limit.
+    //
+    // sw.js and offline.html are out for a different reason: both are served to
+    // and by the service worker, and neither renders a script that needs a nonce.
     {
-      source: '/((?!api|_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico)$).*)',
+      source: '/((?!api|sw.js|offline.html|_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico)$).*)',
     },
   ],
 };

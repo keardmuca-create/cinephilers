@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex">
+<title>Offline | Cinephilers</title>
+<!--
+  Deliberately self-contained: no stylesheet, no script, no font, no image request.
+  This page is served by the service worker when a navigation fails, which is
+  exactly the moment nothing else can load. It also means the page carries no
+  reference to a Next.js build, so a deploy can never leave a cached copy of it
+  pointing at chunks that no longer exist. System fonts, inline SVG, one link.
+  Colours are the app's own tokens from globals.css, written out by hand.
+-->
+<style>
+  :root {
+    --background: hsl(0, 0%, 100%);
+    --foreground: hsl(0, 0%, 8%);
+    --muted-foreground: hsl(0, 0%, 42%);
+    --border: hsl(0, 0%, 88%);
+    --primary: hsl(348, 83%, 47%);
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; }
+  body {
+    margin: 0;
+    background: var(--background);
+    color: var(--foreground);
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 1.5rem;
+    padding-top: calc(1.5rem + env(safe-area-inset-top));
+    padding-bottom: calc(1.5rem + env(safe-area-inset-bottom));
+  }
+  main { width: 100%; max-width: 26rem; text-align: center; }
+  .logo { margin: 0 auto 2.5rem; display: block; }
+  h1 { font-size: 1.5rem; font-weight: 700; margin: 0 0 0.75rem; letter-spacing: -0.01em; }
+  p { color: var(--muted-foreground); font-size: 0.9375rem; line-height: 1.6; margin: 0 0 2rem; }
+  .retry {
+    display: inline-block;
+    background: var(--primary);
+    color: #fff;
+    text-decoration: none;
+    font-weight: 600;
+    font-size: 0.9375rem;
+    padding: 0.75rem 1.75rem;
+    border-radius: 0.75rem;
+  }
+  .retry:active { opacity: 0.85; }
+  .note { margin: 2rem 0 0; font-size: 0.8125rem; color: var(--muted-foreground); }
+</style>
+</head>
+<body>
+  <main>
+    <svg class="logo" width="200" viewBox="0 0 520 110" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Cinephilers">
+      <text x="260" y="95" text-anchor="middle" font-family="Georgia, 'Times New Roman', serif" font-weight="700">
+        <tspan fill="hsl(348,83%,47%)" font-size="130">C</tspan>
+        <tspan fill="white" font-size="68" dy="-18" stroke="#222222" stroke-width="5" paint-order="stroke">inephilers</tspan>
+      </text>
+    </svg>
+    <h1>You're offline</h1>
+    <p>Cinephilers needs a connection to load what you're watching. Reconnect and we'll pick up where you left off.</p>
+    <a class="retry" href="/">Try again</a>
+    <p class="note">Nothing you logged has been lost.</p>
+  </main>
+</body>
+</html>

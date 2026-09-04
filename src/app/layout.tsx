@@ -7,6 +7,7 @@ import { Toaster } from '@/components/ui/toaster';
 import { AuthProvider } from '@/contexts/auth-context';
 import { OfflineBanner } from '@/components/offline-banner';
 import { ConfirmProvider } from '@/components/confirm-dialog';
+import { ServiceWorkerRegistrar } from '@/components/service-worker';
 
 export const metadata: Metadata = {
   title: 'Cinephilers | Track, Rate & Discuss with Friends',
@@ -93,6 +94,7 @@ export default async function RootLayout({
           <Toaster />
         </AuthProvider>
         <Analytics />
+        <ServiceWorkerRegistrar />
       </body>
     </html>
   );

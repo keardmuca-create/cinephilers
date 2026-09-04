@@ -48,6 +48,25 @@ const nextConfig: NextConfig = {
         source: '/(.*)',
         headers: securityHeaders,
       },
+      {
+        // The service worker script must NEVER be served from a cache. The whole
+        // recovery path for a bad worker is "deploy a new sw.js and every browser
+        // picks it up on its next navigation" — a cached copy would break exactly
+        // the mechanism that fixes the problem. See scripts/sw-kill.js.
+        source: '/sw.js',
+        headers: [
+          { key: 'Cache-Control', value: 'no-cache, must-revalidate' },
+          // Lets the worker control the whole origin regardless of where it sits.
+          { key: 'Service-Worker-Allowed', value: '/' },
+        ],
+      },
+      {
+        // Revalidated for the same reason, one step removed: the worker refetches
+        // this on every version bump, and a stale copy would be what people see
+        // when they are offline.
+        source: '/offline.html',
+        headers: [{ key: 'Cache-Control', value: 'no-cache, must-revalidate' }],
+      },
     ];
   },
 };
