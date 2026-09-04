@@ -19,6 +19,32 @@ const securityHeaders = [
   // carry a unique nonce for scripts (instead of 'unsafe-inline'/'unsafe-eval').
 ];
 
+
+// The Capacitor iOS webview serves the bundled app from its own scheme, so every
+// request it makes to this API is cross-origin and needs CORS. `capacitor` is
+// Capacitor's default iosScheme and `localhost` its default hostname, which makes
+// this the app's origin as long as capacitor.config.ts leaves both alone.
+//
+// This exact string is the point: no browser can ever hold a `capacitor://` origin,
+// so allowing it grants nothing to any website. Android's default scheme is
+// `https`, so shipping to Play later means allowing `https://localhost` too —
+// which a local dev server CAN hold, and is worth thinking about then rather than
+// pre-allowing now. Play is deferred.
+const NATIVE_ORIGIN = 'capacitor://localhost';
+
+const corsHeaders = [
+  { key: 'Access-Control-Allow-Origin', value: NATIVE_ORIGIN },
+  { key: 'Access-Control-Allow-Methods', value: 'GET, POST, PUT, PATCH, DELETE, OPTIONS' },
+  // What the native client actually sends: bearer tokens, JSON bodies, and the
+  // x-client header that opts it into the native auth response shape.
+  { key: 'Access-Control-Allow-Headers', value: 'Content-Type, Authorization, x-client' },
+  { key: 'Access-Control-Max-Age', value: '86400' },
+  // Access-Control-Allow-Credentials is deliberately ABSENT. Native carries its
+  // tokens in an Authorization header, never in cookies, so nothing needs
+  // credentialed cross-origin requests — and leaving it off means the web's
+  // httpOnly session cookies can never be sent from another origin at all.
+];
+
 const nextConfig: NextConfig = {
   images: {
     // Posters come from image.tmdb.org already resized — the app asks for w185,
@@ -47,6 +73,17 @@ const nextConfig: NextConfig = {
         // Apply security headers to all routes
         source: '/(.*)',
         headers: securityHeaders,
+      },
+      {
+        // CORS for the native app only. This sits in next.config rather than in
+        // middleware because middleware deliberately does NOT run on /api (see the
+        // matcher comment in middleware.ts) — routing every API read through it to
+        // add four constant headers would be the cost that comment exists to avoid.
+        //
+        // Next answers the preflight itself: an OPTIONS request to a route handler
+        // gets a 204 with an `allow` list, and these headers ride along with it.
+        source: '/api/:path*',
+        headers: corsHeaders,
       },
       {
         // The service worker script must NEVER be served from a cache. The whole
