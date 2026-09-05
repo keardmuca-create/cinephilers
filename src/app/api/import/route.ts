@@ -7,6 +7,7 @@ import { sanitizeText } from '@/lib/sanitize';
 import { rateLimit } from '@/lib/rate-limit';
 import { canonicalId, isValidMediaId } from '@/lib/media-id';
 import { recomputeMovieRatings } from '@/lib/movie-rating-sync';
+import * as Sentry from '@sentry/nextjs';
 
 export const dynamic = 'force-dynamic';
 
@@ -155,7 +156,25 @@ export async function POST(req: NextRequest) {
   // Imported votes must count toward the Cinephilers score. Recompute the
   // aggregates for every title this import rated — recompute (not increment)
   // so it stays correct regardless of what skipDuplicates actually skipped.
-  await recomputeMovieRatings(ratingData.map(r => ({ tmdbId: r.tmdbId, mediaType: r.mediaType })));
+  //
+  // Deliberately not allowed to fail the request. Every row above is already
+  // committed by this point, so throwing here tells someone their import failed
+  // when it did not — and they retry, against a 3-per-10-minutes limit. The
+  // aggregate is a derived number that self-heals on the next vote for that
+  // title; the user's library is not. Report it and move on.
+  try {
+    const { failed: aggregateFailed } = await recomputeMovieRatings(
+      ratingData.map(r => ({ tmdbId: r.tmdbId, mediaType: r.mediaType })),
+    );
+    if (aggregateFailed > 0) {
+      Sentry.captureMessage(
+        `Import left ${aggregateFailed} MovieRating aggregates stale for user ${userId}`,
+        'warning',
+      );
+    }
+  } catch (e) {
+    Sentry.captureException(e);
+  }
 
   const watchedAdded = watchedRes.count;
   const watchlistAdded = watchlistRes.count;
