@@ -140,6 +140,10 @@ export async function POST(req: NextRequest) {
     }
   }
 
+  // Marks the boundary between rows that existed before this request and rows it
+  // wrote, which is what scopes the updatedAt repair further down.
+  const importStartedAt = new Date();
+
   // skipDuplicates guards against any (userId, tmdbId, mediaType) collision the
   // pre-filter missed (e.g. duplicate rows within the uploaded file itself).
   const [watchedRes, watchlistRes, ratingRes, reviewRes] = await Promise.all([
@@ -152,6 +156,34 @@ export async function POST(req: NextRequest) {
   // Diary events after the watched rows land (no unique constraint to lean on,
   // and the pre-filter already excluded titles the user had before this import).
   if (eventData.length) await prisma.watchEvent.createMany({ data: eventData });
+
+
+  // Prisma stamps @updatedAt with the moment a row is written and ignores any value
+  // passed on create, so every imported rating lands with updatedAt = now even though
+  // createdAt was correctly backdated to the real watch date.
+  //
+  // That field is not cosmetic: /api/feed orders the social feed by it, and the
+  // profile's Recent Activity reads it in preference to createdAt. Without this, an
+  // import reads as "watched all of these just now" and floods followers' feeds with
+  // the whole library — exactly what backdating the reviews above was written to
+  // prevent, missed for ratings because they carry a second timestamp.
+  //
+  // Scoped to rows this request wrote (updatedAt at or after the start) that were
+  // backdated (createdAt before it), so a rating genuinely re-scored later is never
+  // touched. Like the recompute below, it must not fail an import that has already
+  // committed — a wrong sort order is worth less than a library.
+  if (ratingRes.count > 0) {
+    try {
+      await prisma.$executeRaw`
+        UPDATE "Rating" SET "updatedAt" = "createdAt"
+        WHERE "userId" = ${userId}
+          AND "updatedAt" >= ${importStartedAt}
+          AND "createdAt" < ${importStartedAt}
+      `;
+    } catch (e) {
+      Sentry.captureException(e);
+    }
+  }
 
   // Imported votes must count toward the Cinephilers score. Recompute the
   // aggregates for every title this import rated — recompute (not increment)
