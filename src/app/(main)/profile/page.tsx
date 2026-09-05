@@ -19,6 +19,7 @@ import { Separator } from '@/components/ui/separator';
 import { Progress } from '@/components/ui/progress';
 import { toast } from '@/hooks/use-toast';
 import { fetchWithAuth } from '@/lib/fetch-with-auth';
+import { withTimeout } from '@/lib/fetch-timeout';
 import { batchFetchMeta, isStaleMeta, type CachedMeta } from '@/lib/meta-batch';
 import { collapseShows, statusFor, type CollapsedRow, type ShowProgressStatus } from '@/lib/collapse-shows';
 import { useAuth } from '@/contexts/auth-context';
@@ -90,10 +91,18 @@ function DiarySection() {
             Rewatched
           </h3>
         </div>
+        {/* Plain <a>, not <Link>, on every See All in this file — deliberate, do
+            not "fix". iOS freezes a PWA in the background and kills the requests
+            it had in flight; the Next router can come back with a navigation that
+            never resolves, and because <Link> calls preventDefault a tap on it is
+            then swallowed silently: no navigation, no error, no way off the page
+            except closing the app. A real browser navigation cannot be swallowed,
+            so these stay the escape hatch. The cost is a full page load instead of
+            an instant client-side jump. Guarded by lib/see-all-links.test.ts. */}
         {items && items.length > 0 && (
-          <Link href="/diary" className="text-xs text-primary border border-primary/30 rounded-full px-3 py-1 hover:bg-primary/10 transition-colors font-semibold flex items-center gap-1">
+          <a href="/diary" className="text-xs text-primary border border-primary/30 rounded-full px-3 py-1 hover:bg-primary/10 transition-colors font-semibold flex items-center gap-1">
             See All <ChevronRight className="h-3 w-3" />
-          </Link>
+          </a>
         )}
       </div>
       <p className="text-sm text-muted-foreground mb-5">Films you&apos;ve watched more than once</p>
@@ -209,7 +218,7 @@ function ListsSection() {
   useEffect(() => {
     setLists(loadLists());
     // Sync from DB in background
-    fetch('/api/lists', { credentials: 'include' })
+    fetch('/api/lists', withTimeout({ credentials: 'include' }))
       .then(r => r.ok ? r.json() : null)
       .then(json => {
         if (!json?.data?.length) return;
@@ -1592,9 +1601,9 @@ export default function ProfilePage() {
               Watch history
             </h3>
           </div>
-          <Link href="/history" className="text-xs text-primary border border-primary/30 rounded-full px-3 py-1 hover:bg-primary/10 transition-colors font-semibold flex items-center gap-1">
+          <a href="/history" className="text-xs text-primary border border-primary/30 rounded-full px-3 py-1 hover:bg-primary/10 transition-colors font-semibold flex items-center gap-1">
             See All <ChevronRight className="h-3 w-3" />
-          </Link>
+          </a>
         </div>
         <p className="text-sm text-muted-foreground mb-5">Everything you&apos;ve watched, rated, or checked into</p>
         {recentWatched.length > 0 ? (
@@ -1656,9 +1665,9 @@ export default function ProfilePage() {
             Ratings
           </h3>
           {ratedItems.length > 0 && (
-            <Link href="/ratings" className="text-xs text-primary border border-primary/30 rounded-full px-3 py-1 hover:bg-primary/10 transition-colors font-semibold flex items-center gap-1">
+            <a href="/ratings" className="text-xs text-primary border border-primary/30 rounded-full px-3 py-1 hover:bg-primary/10 transition-colors font-semibold flex items-center gap-1">
               See All <ChevronRight className="h-3 w-3" />
-            </Link>
+            </a>
           )}
         </div>
         {ratedItems.length > 0 ? (
@@ -1725,9 +1734,9 @@ export default function ProfilePage() {
           title="Watchlist"
           icon={Bookmark}
           seeAllContent={watchlist.length > 0 ? (
-            <Link href="/watchlist" className="text-xs text-primary border border-primary/30 rounded-full px-3 py-1 hover:bg-primary/10 transition-colors font-semibold flex items-center gap-1">
+            <a href="/watchlist" className="text-xs text-primary border border-primary/30 rounded-full px-3 py-1 hover:bg-primary/10 transition-colors font-semibold flex items-center gap-1">
               See All <ChevronRight className="h-3 w-3" />
-            </Link>
+            </a>
           ) : undefined}
         />
         {watchlist.length > 0 ? (
@@ -1767,12 +1776,12 @@ export default function ProfilePage() {
           icon={MessageSquare}
           count={userReviews.length}
           seeAllContent={userReviews.length > 0 ? (
-            <Link
+            <a
               href="/reviews"
               className="text-xs text-primary border border-primary/30 rounded-full px-3 py-1 hover:bg-primary/10 transition-colors font-semibold flex items-center gap-1"
             >
               See All <ChevronRight className="h-3 w-3" />
-            </Link>
+            </a>
           ) : undefined}
         />
         {userReviews.length > 0 ? (
@@ -1820,12 +1829,12 @@ export default function ProfilePage() {
           title="Badges & Achievements"
           icon={Award}
           seeAllContent={(serverBadges?.length ?? 0) > 0 ? (
-            <Link
+            <a
               href="/badges"
               className="text-xs text-primary border border-primary/30 rounded-full px-3 py-1 hover:bg-primary/10 transition-colors font-semibold flex items-center gap-1"
             >
               See All <ChevronRight className="h-3 w-3" />
-            </Link>
+            </a>
           ) : undefined}
         />
 

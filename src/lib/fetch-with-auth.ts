@@ -1,6 +1,8 @@
+import { withTimeout } from './fetch-timeout';
+
 async function tryRefresh(): Promise<boolean> {
   try {
-    const res = await fetch('/api/auth/refresh', { method: 'POST', credentials: 'include' });
+    const res = await fetch('/api/auth/refresh', withTimeout({ method: 'POST', credentials: 'include' }));
     return res.ok;
   } catch {
     return false;
@@ -9,7 +11,9 @@ async function tryRefresh(): Promise<boolean> {
 
 export async function fetchWithAuth(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
   const opts = { ...init, credentials: 'include' as RequestCredentials };
-  const res = await fetch(input, opts);
+  // Every attempt gets its own deadline: a frozen request must reject rather than
+  // leave the caller waiting forever. See lib/fetch-timeout.
+  const res = await fetch(input, withTimeout(opts));
   if (res.status !== 401) return res;
 
   const refreshed = await tryRefresh();
@@ -21,5 +25,5 @@ export async function fetchWithAuth(input: RequestInfo | URL, init?: RequestInit
     return res;
   }
 
-  return fetch(input, opts);
+  return fetch(input, withTimeout(opts));
 }

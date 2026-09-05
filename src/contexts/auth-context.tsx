@@ -2,6 +2,7 @@
 
 import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
 import { fetchWithAuth } from '@/lib/fetch-with-auth';
+import { withTimeout } from '@/lib/fetch-timeout';
 import { canonicalId, normalizeLocalMediaIds, recordAddedAt, recordWatchedAt, recordRatedAt } from '@/lib/media-id';
 import { batchFetchMeta } from '@/lib/meta-batch';
 import { clearUserData } from '@/lib/clear-user-data';
@@ -55,7 +56,7 @@ async function restoreFromDb(me?: { createdAt?: string; followingCount?: number;
     // `me` is the user object refetch() already fetched from /api/users/me —
     // passed in so we don't re-request the same endpoint here (it was a fully
     // redundant call + DB query on every app open). We only need /api/sync now.
-    const res = await fetch('/api/sync', { credentials: 'include' });
+    const res = await fetch('/api/sync', withTimeout({ credentials: 'include' }));
     if (!res.ok) return;
     const { data } = await res.json();
     const { ratings: ratingsRaw, watchlist: watchlistRaw, watched: watchedRaw, watchedEpisodes: watchedEpisodesRaw, reviews: reviewsRaw, favorites: favoritesRaw, lists: listsRaw, hidden } = data as {
@@ -342,13 +343,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const refetch = useCallback(async () => {
     try {
-      let res = await fetch('/api/users/me', { credentials: 'include' });
+      let res = await fetch('/api/users/me', withTimeout({ credentials: 'include' }));
       if (res.status === 401) {
         // Access token expired (e.g. app reopened after 15+ min). Without this retry,
         // the user looks logged in (cached) but restoreFromDb never runs — no data syncs.
-        const refreshRes = await fetch('/api/auth/refresh', { method: 'POST', credentials: 'include' }).catch(() => null);
+        const refreshRes = await fetch('/api/auth/refresh', withTimeout({ method: 'POST', credentials: 'include' })).catch(() => null);
         if (refreshRes?.ok) {
-          res = await fetch('/api/users/me', { credentials: 'include' });
+          res = await fetch('/api/users/me', withTimeout({ credentials: 'include' }));
         }
       }
       if (res.ok) {
