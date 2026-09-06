@@ -562,7 +562,14 @@ export default function AdminPage() {
             {userResults.map(u => (
               <div key={u.id} className="bg-card border border-border rounded-2xl p-4 space-y-3">
                 <div className="flex items-center justify-between gap-3">
-                  <div className="flex items-center gap-3 min-w-0">
+                  {/* Opens the member's profile exactly as any other user sees it —
+                      a private account shows its private state here too, which is the
+                      point: this is the public view, not an admin override. Only the
+                      avatar and name are the link; the ban, promote and delete buttons
+                      sit in this same card and a card-wide target next to a delete
+                      button is how accidents happen. Plain <a> for a real navigation,
+                      matching the See All links on the profile page. */}
+                  <a href={`/profile/${u.username}`} className="flex items-center gap-3 min-w-0 hover:opacity-70 transition-opacity">
                     <div className="h-10 w-10 rounded-2xl bg-primary/20 overflow-hidden flex items-center justify-center shrink-0">
                       {u.avatarUrl
                         ? <img src={u.avatarUrl} alt={u.username} className="w-full h-full object-cover" />
@@ -580,7 +587,7 @@ export default function AdminPage() {
                         <span className="text-[10px] text-muted-foreground">Joined {relativeTime(u.createdAt)}</span>
                       </div>
                     </div>
-                  </div>
+                  </a>
 
                   {u.id !== user.id && (
                     <div className="flex items-center gap-1.5 shrink-0">
