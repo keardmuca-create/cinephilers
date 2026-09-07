@@ -14,7 +14,7 @@ import {
   Play, Check, Plus, Star, ChevronLeft, Share2, ListPlus, Quote,
   Info, Film, Calendar, Clock, Globe, Building2, Tv, ChevronDown, ChevronUp,
   DollarSign, Images, Clapperboard, PenLine, ChevronRight, User, Users, MessageSquare, Trash2,
-  Repeat, CheckCircle2,
+  Repeat, CheckCircle2, Eye,
 } from 'lucide-react';
 import { WatchedEye } from '@/components/watched-eye';
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
@@ -274,12 +274,15 @@ function EpisodeRow({
   ep,
   fallbackImage,
   isWatched,
+  userRating,
   onToggleWatched,
   onClick,
 }: {
   ep: TvEpisode;
   fallbackImage: string | null;
   isWatched: boolean;
+  /** What you gave this episode, if anything. Undefined prints nothing. */
+  userRating?: number;
   onToggleWatched: (e: React.MouseEvent) => void;
   onClick: () => void;
 }) {
@@ -288,51 +291,79 @@ function EpisodeRow({
   // list looking broken — one wide still among a column of posters.
   const still = fallbackImage;
 
+  // A hairline of primary, not another shade of grey: on a grey panel full of
+  // white cards the rows ran together, and the one colour the app already owns
+  // separates them without adding a second border weight.
   return (
-    <div className={`flex gap-4 p-4 rounded-2xl border transition-colors ${isWatched ? 'bg-gray-50 border-gray-100' : 'bg-white border-gray-100 hover:bg-gray-50'}`}>
-      {/* Still — opens modal */}
-      <button className="relative aspect-video w-28 shrink-0 rounded-xl overflow-hidden group bg-gray-100" onClick={onClick}>
+    <div className={`flex gap-4 p-4 rounded-2xl border transition-colors ${isWatched ? 'bg-gray-50 border-primary/25' : 'bg-white border-primary/25 hover:bg-gray-50'}`}>
+      {/* Poster — opens the episode. Shaped like the artwork it holds: this is
+          the season's poster, and a 16:9 well left it a stamp floating in grey
+          bars, since TMDB's episode stills are too patchy to use. */}
+      <button className="relative aspect-[2/3] w-14 shrink-0 rounded-xl overflow-hidden group bg-gray-100" onClick={onClick}>
         {still
-          ? <Image src={still} alt={ep.name} fill className="object-contain" />
+          ? <Image src={still} alt={ep.name} fill className="object-cover" />
           : <span className="absolute inset-0 flex items-center justify-center"><Tv className="h-5 w-5 text-gray-400" /></span>
         }
         <div className="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity">
-          <Play className="h-6 w-6 fill-current text-white" />
+          <Play className="h-5 w-5 fill-current text-white" />
         </div>
       </button>
 
-      {/* Info — opens modal */}
-      <button className="flex-1 min-w-0 space-y-1 text-left" onClick={onClick}>
-        <div className="flex items-center gap-2">
-          <span className="text-[10px] font-bold text-primary uppercase tracking-widest shrink-0">E{ep.episode_number}</span>
-          <h5 className={`text-sm font-bold font-headline line-clamp-1 ${isWatched ? 'text-gray-400' : 'text-gray-900'}`}>{ep.name}</h5>
-        </div>
-        {ep.air_date && (
-          <p className="text-[10px] text-gray-500 font-bold">{new Date(ep.air_date).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })}</p>
-        )}
-        {ep.overview && <p className="text-xs text-gray-500 line-clamp-2">{ep.overview}</p>}
-        <div className="flex items-center gap-3 pt-1">
+      {/* An episode reads like a film row now: the same marks in the same order,
+          so the eye and the two stars mean here exactly what they mean on the
+          Watch history and Ratings lists. The synopsis is gone — it was two
+          lines nobody rereads, and it pushed the marks below the fold on a
+          phone. The title and still still open the episode; only the eye is a
+          control, which is why the meta line sits outside that button rather
+          than nested inside it. */}
+      <div className="flex-1 min-w-0 space-y-1">
+        <button className="w-full min-w-0 space-y-1 text-left" onClick={onClick}>
+          <div className="flex items-center gap-2">
+            <span className="text-[10px] font-bold text-primary uppercase tracking-widest shrink-0">E{ep.episode_number}</span>
+            {/* Full black whether or not you have seen it. Greying a watched
+                title made the episodes you HAD watched the hardest ones to read,
+                and the eye on the row already says which those are. */}
+            <h5 className="text-sm font-bold font-headline line-clamp-1 text-gray-900">{ep.name}</h5>
+          </div>
+          {/* Three stacked lines, and the poster is tall enough to carry them:
+              when it aired, how long it runs, then the marks that are about you.
+              Facts about the episode above, facts about your history with it
+              below. */}
+          {ep.air_date && (
+            <p className="text-[10px] text-gray-500 font-bold">{new Date(ep.air_date).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })}</p>
+          )}
+          {ep.runtime && (
+            <p className="text-[10px] text-gray-500 font-bold">{ep.runtime} min</p>
+          )}
+        </button>
+        <div className="flex items-center gap-3 pt-1 flex-wrap">
           {ep.vote_average > 0 && (
             <span className="flex items-center gap-1 text-[10px] font-bold text-gray-900">
               <Star className="h-3 w-3 fill-yellow-400 text-yellow-400" /> {ep.vote_average.toFixed(1)}
             </span>
           )}
-          {ep.runtime && <span className="text-[10px] text-gray-500 font-bold">{ep.runtime} min</span>}
+          {/* Filled star = a public score, hollow = yours. The app's rule
+              everywhere; fill carries the meaning, not colour. */}
+          {userRating !== undefined && (
+            <span className="flex items-center gap-1 text-[10px] font-bold text-primary">
+              <Star className="h-3 w-3" /> {userRating}
+            </span>
+          )}
+          {/* Only the watched state prints. An unwatched episode said "Not
+              watched" on every row of every season — a column of the same two
+              words, stating the default. Silence says it, and the eye stays a
+              control for taking it back off. */}
+          {isWatched && (
+            <button
+              onClick={onToggleWatched}
+              title="Remove from watched"
+              className="flex items-center gap-1 text-[10px] font-bold text-primary transition-opacity hover:opacity-70"
+            >
+              <WatchedEye state="complete" className="h-3 w-3" /> Watched
+            </button>
+          )}
         </div>
-      </button>
-
-      {/* Watched checkbox */}
-      <button
-        onClick={onToggleWatched}
-        title={isWatched ? 'Remove from watched' : 'Mark as watched'}
-        className={`shrink-0 self-center h-7 w-7 rounded-full border-2 flex items-center justify-center transition-all ${
-          isWatched
-            ? 'bg-primary border-primary text-white hover:bg-primary/80'
-            : 'border-gray-300 bg-transparent hover:border-primary hover:bg-primary/5'
-        }`}
-      >
-        {isWatched && <Check className="h-3.5 w-3.5" />}
-      </button>
+      </div>
     </div>
   );
 }
@@ -340,6 +371,7 @@ function EpisodeRow({
 function SeasonsSection({
   seasons,
   showTmdbId,
+  showKeyId,
   showPoster,
   watchedEpisodes,
   onToggleEpisodeWatched,
@@ -347,7 +379,11 @@ function SeasonsSection({
   onEpisodeClick,
 }: {
   seasons: TvSeason[];
+  /** Bare TMDB number — what the season endpoint takes. */
   showTmdbId: string;
+  /** Canonical `tmdb-tv-{n}` — what episode ids and localStorage keys are built
+      from. The two are not interchangeable; ratings are stored under this one. */
+  showKeyId: string;
   showPoster: string | null;
   watchedEpisodes: Set<string>;
   onToggleEpisodeWatched: (seasonNumber: number, ep: TvEpisode) => void;
@@ -358,6 +394,37 @@ function SeasonsSection({
   const [cache, setCache] = useState<Record<number, TvEpisode[]>>({});
   const [expandLoading, setExpandLoading] = useState<number | null>(null);
   const [markLoading, setMarkLoading] = useState<number | null>(null);
+
+  // Episode ratings, keyed the way the season list needs them: "S1E4" -> 8.
+  // They live in localStorage as `movie-rating-{showId}-S1E4` and are written on
+  // the episode's own page, so this reads them rather than owning them. Re-read
+  // when the tab comes back, since rating an episode happens on another route
+  // and returning here can reuse this component without remounting it.
+  const [episodeRatings, setEpisodeRatings] = useState<Record<string, number>>({});
+  useEffect(() => {
+    const read = () => {
+      const prefix = `movie-rating-${showKeyId}-`;
+      const found: Record<string, number> = {};
+      try {
+        for (let i = 0; i < localStorage.length; i++) {
+          const k = localStorage.key(i);
+          if (!k || !k.startsWith(prefix)) continue;
+          const epKey = k.slice(prefix.length);
+          if (!/^S\d+E\d+$/.test(epKey)) continue;
+          const score = Number(localStorage.getItem(k));
+          if (score > 0) found[epKey] = score;
+        }
+      } catch { /* ignore */ }
+      setEpisodeRatings(found);
+    };
+    read();
+    window.addEventListener('focus', read);
+    document.addEventListener('visibilitychange', read);
+    return () => {
+      window.removeEventListener('focus', read);
+      document.removeEventListener('visibilitychange', read);
+    };
+  }, [showKeyId]);
 
   // The episode list for a season, fetched once and reused. Marking a season
   // needs it just as much as expanding one does — the numbers can't be assumed
@@ -392,7 +459,9 @@ function SeasonsSection({
   const getProgress = (sn: number, total: number) => {
     let watched = 0;
     for (const k of watchedEpisodes) { if (k.startsWith(`S${sn}E`)) watched++; }
-    return { watched, total };
+    let rated = 0;
+    for (const k of Object.keys(episodeRatings)) { if (k.startsWith(`S${sn}E`)) rated++; }
+    return { watched, rated, total };
   };
 
   return (
@@ -412,7 +481,7 @@ function SeasonsSection({
           const posterSrc = season.poster_path
             ? `https://image.tmdb.org/t/p/w154${season.poster_path}`
             : showPoster;
-          const { watched, total } = getProgress(sn, season.episode_count);
+          const { watched, rated, total } = getProgress(sn, season.episode_count);
           const allWatched = total > 0 && watched >= total;
 
           return (
@@ -432,15 +501,27 @@ function SeasonsSection({
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="font-bold font-headline text-sm">{season.name}</p>
-                    <div className="flex items-center gap-2 flex-wrap mt-0.5">
-                      <p className="text-xs text-muted-foreground font-bold">
-                        {total} ep{season.air_date ? ` · ${season.air_date.slice(0, 4)}` : ''}
-                      </p>
-                      {watched > 0 && (
-                        <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${allWatched ? 'bg-primary/20 text-primary' : 'bg-muted text-muted-foreground'}`}>
-                          {allWatched ? '✓ All watched' : `${watched} / ${total}`}
-                        </span>
+                    {/* Two counts, always printed, even at zero — an empty
+                        "0 / 13" is how you learn the season can be rated at all,
+                        and hiding them until you start left a fresh season
+                        stating nothing. The episode total used to be spelled out
+                        as "13 ep"; both denominators already say it, so the word
+                        was the third copy of the same number.
+                        The eye is a count here and a control on an episode row;
+                        the season's own control stays the button to the right,
+                        which is why neither of these is tappable. */}
+                    <div className="flex items-center gap-2.5 flex-wrap mt-0.5">
+                      {season.air_date && (
+                        <p className="text-xs text-muted-foreground font-bold">{season.air_date.slice(0, 4)}</p>
                       )}
+                      <span className="flex items-center gap-1 text-xs font-bold text-primary">
+                        <WatchedEye state={allWatched ? 'complete' : 'partial'} className="h-3.5 w-3.5" />
+                        {watched} / {total}
+                      </span>
+                      <span className="flex items-center gap-1 text-xs font-bold text-primary">
+                        <Star className="h-3.5 w-3.5" />
+                        {rated} / {total}
+                      </span>
                     </div>
                   </div>
                 </button>
@@ -480,6 +561,7 @@ function SeasonsSection({
                       ep={ep}
                       fallbackImage={seasonPoster}
                       isWatched={watchedEpisodes.has(`S${sn}E${ep.episode_number}`)}
+                      userRating={episodeRatings[`S${sn}E${ep.episode_number}`]}
                       onToggleWatched={(e) => { e.stopPropagation(); onToggleEpisodeWatched(sn, ep); }}
                       onClick={() => onEpisodeClick(ep, sn)}
                     />
@@ -2178,6 +2260,7 @@ function MovieDetailInner() {
           <SeasonsSection
             seasons={movie.seasons}
             showTmdbId={showTmdbId}
+            showKeyId={movie.id}
             showPoster={movie.poster && !movie.poster.includes('picsum') ? movie.poster : null}
             watchedEpisodes={watchedEpisodes}
             onToggleEpisodeWatched={toggleEpisodeWatched}
