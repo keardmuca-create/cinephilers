@@ -13,7 +13,7 @@ import Link from 'next/link';
 import { Settings, Star, Film, List, MessageSquare, ChevronRight, Award, History, Bookmark, Plus, Heart, TrendingUp, Download, Upload, Trash2, Share2, Repeat, Loader2 } from 'lucide-react';
 import { ImportDialog } from '@/components/import-dialog';
 import { FavoritesSection } from '@/components/favorites-section';
-import { BarChart, Bar, XAxis, ResponsiveContainer, Cell, YAxis, Tooltip as ChartTooltip } from 'recharts';
+import { BarChart, Bar, XAxis, ResponsiveContainer, Cell, YAxis, LabelList } from 'recharts';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Separator } from '@/components/ui/separator';
 import { Progress } from '@/components/ui/progress';
@@ -1710,8 +1710,20 @@ export default function ProfilePage() {
             <BarChart data={ratingData} onClick={d => { if (d?.activePayload?.[0]) { const r = parseInt(d.activePayload[0].payload.rating); if (ratedItems.filter(i => i.userRating === r).length > 0) router.push(`/ratings?rating=${r}`); } }}>
               <XAxis dataKey="rating" axisLine={false} tickLine={false} tick={{ fill: '#888', fontSize: 11, fontWeight: 'bold' }} />
               <YAxis hide domain={[0, yDomainMax]} />
-              <ChartTooltip cursor={{ fill: 'rgba(0,0,0,0.05)' }} contentStyle={{ backgroundColor: '#fff', border: '1px solid #eee', borderRadius: '12px', color: '#111' }} />
               <Bar dataKey="count" radius={[6, 6, 0, 0]} style={{ cursor: 'pointer' }}>
+                {/* The count sits above its own bar, which is why there is no
+                    tooltip here any more: a tooltip only answers the bar you are
+                    already on, and on a phone that meant tapping ten times to learn
+                    what the chart is for. Empty ratings print nothing rather than a
+                    row of zeros — a gap already says none, and ten 0s would
+                    out-shout the numbers that matter. The Y axis keeps its headroom
+                    above the tallest bar (yDomainMax) so the top label never clips. */}
+                <LabelList
+                  dataKey="count"
+                  position="top"
+                  formatter={(v: number) => (v > 0 ? String(v) : '')}
+                  style={{ fill: '#888', fontSize: 11, fontWeight: 'bold' }}
+                />
                 {ratingData.map((entry, index) => (
                   <Cell key={`cell-${index}`} fill={parseInt(entry.rating) >= 7 ? 'hsl(var(--primary))' : 'hsl(var(--accent))'} opacity={0.85} />
                 ))}
