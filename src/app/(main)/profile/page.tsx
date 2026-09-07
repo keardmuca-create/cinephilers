@@ -13,6 +13,8 @@ import Link from 'next/link';
 import { Settings, Star, Film, List, MessageSquare, ChevronRight, Award, History, Bookmark, Plus, Heart, TrendingUp, Download, Upload, Trash2, Share2, Repeat, Loader2 } from 'lucide-react';
 import { ImportDialog } from '@/components/import-dialog';
 import { FavoritesSection } from '@/components/favorites-section';
+import { MediaToggle } from '@/components/media-toggle';
+import type { MediaSide } from '@/lib/media-type';
 import { BarChart, Bar, XAxis, ResponsiveContainer, Cell, YAxis, LabelList } from 'recharts';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Separator } from '@/components/ui/separator';
@@ -1260,9 +1262,37 @@ export default function ProfilePage() {
     };
   }, [loadFromStorage]);
 
+  // The chart is one side at a time, films or series — the two types the rest of
+  // the app speaks in. Type comes off the id and needs no metadata: an episode
+  // ends in -S1E4, a series starts with tmdb-tv-, everything else is a film.
+  //
+  // Episodes are excluded from both sides rather than folded into Shows. A show
+  // carries a series rating AND, separately, an average of any episodes rated —
+  // and those are never merged, because one is what you said about the show and
+  // the other is arithmetic done on your behalf. So a series lands on the bar of
+  // the score you gave it, or on no bar at all if you only ever rated episodes.
+  const [chartSide, setChartSide] = useState<MediaSide>('movies');
+  const chartSideOf = (id: string): MediaSide | 'episode' =>
+    /-S\d+E\d+$/.test(id) ? 'episode' : id.startsWith('tmdb-tv-') ? 'shows' : 'movies';
+
+  const chartCounts = React.useMemo(() => {
+    let movies = 0, shows = 0;
+    for (const r of ratedItems) {
+      const side = chartSideOf(r.id);
+      if (side === 'movies') movies++;
+      else if (side === 'shows') shows++;
+    }
+    return { movies, shows };
+  }, [ratedItems]);
+
+  const sideRated = React.useMemo(
+    () => ratedItems.filter(r => chartSideOf(r.id) === chartSide),
+    [ratedItems, chartSide],
+  );
+
   const ratingData = [1,2,3,4,5,6,7,8,9,10].map(n => ({
     rating: String(n),
-    count: ratedItems.filter(r => r.userRating === n).length,
+    count: sideRated.filter(r => r.userRating === n).length,
   }));
   const maxRatingCount = Math.max(...ratingData.map(d => d.count), 1);
   const yDomainMax = Math.ceil(maxRatingCount / 0.65);
@@ -1705,9 +1735,10 @@ export default function ProfilePage() {
       {/* Rating Distribution */}
       <section className="space-y-4">
         <SectionHeader title="Rating Distribution" icon={Star} />
+        <MediaToggle value={chartSide} onChange={setChartSide} counts={chartCounts} />
         <div className="h-56 w-full bg-muted/40 rounded-3xl p-6 border border-border">
           <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={ratingData} onClick={d => { if (d?.activePayload?.[0]) { const r = parseInt(d.activePayload[0].payload.rating); if (ratedItems.filter(i => i.userRating === r).length > 0) router.push(`/ratings?rating=${r}`); } }}>
+            <BarChart data={ratingData} onClick={d => { if (d?.activePayload?.[0]) { const r = parseInt(d.activePayload[0].payload.rating); if (sideRated.filter(i => i.userRating === r).length > 0) router.push(`/ratings?rating=${r}`); } }}>
               <XAxis dataKey="rating" axisLine={false} tickLine={false} tick={{ fill: '#888', fontSize: 11, fontWeight: 'bold' }} />
               <YAxis hide domain={[0, yDomainMax]} />
               <Bar dataKey="count" radius={[6, 6, 0, 0]} style={{ cursor: 'pointer' }}>
