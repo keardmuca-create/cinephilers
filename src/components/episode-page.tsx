@@ -142,9 +142,11 @@ export function EpisodePage({ showTmdbId, season, episodeNumber }: {
       .catch(() => { /* ignore */ });
   }, [episodeId, authUser]);
 
-  const toggleWatched = useCallback(() => {
-    if (!authUser) { toast({ title: 'Sign in to track episodes' }); return; }
-    const now = !watched;
+  // The whole of marking an episode watched, in one place, because rating one
+  // now goes through it too. `silent` is for that caller: a rating already
+  // toasts, and "You rated it 8/10" followed by "Guts marked as watched" is two
+  // notifications for one tap.
+  const setWatchedState = useCallback((now: boolean, silent = false) => {
     setWatched(now);
     try {
       const lsKey = `watched-ep-${showTmdbId}-${epKey}`;
@@ -167,13 +169,18 @@ export function EpisodePage({ showTmdbId, season, episodeNumber }: {
       removeManualWatch(episodeId);
       removeActivity('watched', episodeId);
     }
-    toast({ title: now ? `${detail?.name ?? 'Episode'} marked as watched` : 'Removed from watched' });
+    if (!silent) toast({ title: now ? `${detail?.name ?? 'Episode'} marked as watched` : 'Removed from watched' });
     fetchWithAuth('/api/watched/episodes', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ showTmdbId, season, episode: episodeNumber, watched: now }),
     }).catch(() => { /* background sync */ });
-  }, [authUser, watched, showTmdbId, epKey, episodeId, season, episodeNumber, detail, showMeta]);
+  }, [showTmdbId, epKey, episodeId, season, episodeNumber, detail, showMeta]);
+
+  const toggleWatched = useCallback(() => {
+    if (!authUser) { toast({ title: 'Sign in to track episodes' }); return; }
+    setWatchedState(!watched);
+  }, [authUser, watched, setWatchedState]);
 
   const applyRating = useCallback(async (score: number) => {
     setUserRating(score);
@@ -184,6 +191,11 @@ export function EpisodePage({ showTmdbId, season, episodeNumber }: {
     recordRatedAt(episodeId);
     logActivity({ action: 'rated', contentId: episodeId, contentTitle: detail?.name ?? '', contentPoster: showMeta?.poster ?? '', contentYear: '', rating: score });
     toast({ title: `You rated it ${score}/10!` });
+    // An episode is one thing, like a film: you cannot score it without having
+    // watched it, so rating marks it seen. This is the film rule from the movie
+    // page, not the series one — a SHOW's rating still marks nothing, since its
+    // watched state is the sum of its episodes and a score names none of them.
+    if (authUser && !watched) setWatchedState(true, true);
     await fetchWithAuth('/api/ratings', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -194,7 +206,7 @@ export function EpisodePage({ showTmdbId, season, episodeNumber }: {
       .then(r => r.ok ? r.json() : null)
       .then(j => { if (j?.data) setCineRating(j.data as CinephilersRating); })
       .catch(() => { /* ignore */ });
-  }, [episodeId, detail, showMeta]);
+  }, [episodeId, detail, showMeta, authUser, watched, setWatchedState]);
 
   // Episodes can be saved for later too — you might want one episode because a
   // favourite actor guest-stars, or because the show is an anthology. Today's
