@@ -25,6 +25,7 @@ import { fetchWithAuth } from '@/lib/fetch-with-auth';
 import { withTimeout } from '@/lib/fetch-timeout';
 import { batchFetchMeta, isStaleMeta, type CachedMeta } from '@/lib/meta-batch';
 import { collapseShows, statusFor, type CollapsedRow, type ShowProgressStatus } from '@/lib/collapse-shows';
+import { collapseRatings } from '@/lib/collapse-ratings';
 import { useAuth } from '@/contexts/auth-context';
 import { useConfirm } from '@/components/confirm-dialog';
 import { readSavedRefine, applyRefineSort } from '@/lib/refine-sort';
@@ -37,7 +38,22 @@ import { CommunityStar } from '@/components/community-star';
 // short enough that a title marked watched elsewhere still appears to arrive at once.
 const REBUILD_DEBOUNCE_MS = 200;
 
-interface RatedItem { id: string; title: string; poster: string; year: string; tmdbRating?: number; userRating: number; }
+// One rated TITLE, never one rating. A show whose episodes were scored is a
+// single item carrying the count, the same way the watch shelf carries "13 / 177"
+// — a poster identifies a title, so three cards showing the same poster is the
+// list saying an episode is a title, which it is not.
+interface RatedItem {
+  id: string;
+  title: string;
+  poster: string;
+  year: string;
+  tmdbRating?: number;
+  /** What you gave the title itself. Undefined when only its episodes were rated. */
+  userRating?: number;
+  /** How many of its episodes you rated, and out of how many there are. */
+  ratedEpisodes?: number;
+  totalEpisodes?: number;
+}
 
 interface DiaryShelfItem { id: string; count: number; lastWatchedAt: string | null; title: string; poster: string; year: string; tmdbRating?: number; userRating?: number }
 
@@ -1198,21 +1214,39 @@ export default function ProfilePage() {
         }
       } catch { /* ignore */ }
 
-      const rated: RatedItem[] = [];
-      const ratedMissing: { id: string; userRating: number }[] = [];
+      // Collapse first, exactly as /ratings does. Reading the keys straight into
+      // cards was what put three House of the Dragon posters in a row — the
+      // series and two of its episodes, each claiming to be a title. This is the
+      // same helper, so the shelf and its own See All can no longer disagree.
+      const scored: { id: string; score: number }[] = [];
       for (let i = 0; i < localStorage.length; i++) {
         const k = localStorage.key(i)!;
         if (!k.startsWith('movie-rating-')) continue;
-        const userRating = Number(localStorage.getItem(k));
-        if (!userRating) continue;
-        const id = k.slice('movie-rating-'.length);
-        const raw = localStorage.getItem(`meta-${id}`);
+        const score = Number(localStorage.getItem(k));
+        if (!score) continue;
+        scored.push({ id: k.slice('movie-rating-'.length), score });
+      }
+
+      const rated: RatedItem[] = [];
+      const ratedMissing: { id: string; userRating?: number; ratedEpisodes?: number }[] = [];
+      for (const row of collapseRatings(scored)) {
+        const raw = localStorage.getItem(`meta-${row.id}`);
         const meta = raw ? JSON.parse(raw) : null;
-        const rv = rvMap.get(id);
+        const rv = rvMap.get(row.id);
         const title = meta?.title ?? rv?.title;
         const poster = meta?.poster ?? rv?.poster;
-        if (!title || !poster) { ratedMissing.push({ id, userRating }); continue; }
-        rated.push({ id, title, poster, year: meta?.year ?? rv?.year ?? '', tmdbRating: meta?.tmdbRating ?? rv?.tmdbRating, userRating });
+        const ratedEpisodes = row.episodeCount || undefined;
+        if (!title || !poster) { ratedMissing.push({ id: row.id, userRating: row.seriesRating, ratedEpisodes }); continue; }
+        rated.push({
+          id: row.id,
+          title,
+          poster,
+          year: meta?.year ?? rv?.year ?? '',
+          tmdbRating: meta?.tmdbRating ?? rv?.tmdbRating,
+          userRating: row.seriesRating,
+          ratedEpisodes,
+          totalEpisodes: typeof meta?.totalEps === 'number' ? meta.totalEps : undefined,
+        });
       }
       // getRatedAt, not getAddedAt. The add index keeps the EARLIEST date a title
       // was seen, so a film watchlisted in June and rated in August sorted as
@@ -1226,10 +1260,19 @@ export default function ProfilePage() {
         (async () => {
           const metaMap = await batchFetchMeta(ratedMissing.map(r => r.id));
           if (!isCurrent()) return;
-          const fetched: RatedItem[] = ratedMissing.flatMap(({ id, userRating }) => {
+          const fetched: RatedItem[] = ratedMissing.flatMap(({ id, userRating, ratedEpisodes }) => {
             const m = metaMap[id];
             if (!m?.title) return [];
-            return [{ id, title: m.title, poster: m.poster ?? '', year: m.year ?? '', tmdbRating: typeof m.tmdbRating === 'number' ? m.tmdbRating : undefined, userRating }];
+            return [{
+              id,
+              title: m.title,
+              poster: m.poster ?? '',
+              year: m.year ?? '',
+              tmdbRating: typeof m.tmdbRating === 'number' ? m.tmdbRating : undefined,
+              userRating,
+              ratedEpisodes,
+              totalEpisodes: typeof m.totalEps === 'number' ? m.totalEps : undefined,
+            }];
           });
           if (fetched.length > 0) {
             setRatedItems(prev => {
@@ -1733,10 +1776,27 @@ export default function ProfilePage() {
                 </div>
                 <div className="flex items-center gap-1.5 mb-0.5 flex-wrap">
                   <CommunityStar id={item.id} tmdbRating={item.tmdbRating} showZero />
-                  <div className="flex items-center gap-0.5">
-                    <span className="text-xs text-primary font-bold">☆</span>
-                    <span className="text-xs font-bold text-primary">{item.userRating}</span>
-                  </div>
+                  {item.userRating !== undefined && (
+                    <div className="flex items-center gap-0.5">
+                      <span className="text-xs text-primary font-bold">☆</span>
+                      <span className="text-xs font-bold text-primary">{item.userRating}</span>
+                    </div>
+                  )}
+                  {/* Rated episodes read like watched ones: same fraction, same
+                      place, a hollow star instead of an eye. A show you scored
+                      two episodes of and never judged as a whole shows the
+                      fraction and no verdict — which is exactly what happened.
+                      Never the episode average here: at this width there is no
+                      room to label it as an average, so it would read as your
+                      score for the series. */}
+                  {item.ratedEpisodes !== undefined && (
+                    <div className="flex items-center gap-0.5">
+                      <span className="text-xs text-primary font-bold">☆</span>
+                      <span className="text-xs font-bold text-primary">
+                        {item.ratedEpisodes}{item.totalEpisodes ? ` / ${item.totalEpisodes}` : ' ep'}
+                      </span>
+                    </div>
+                  )}
                   {/* The eye used to be printed here unconditionally, so a film
                       rated but never ticked, and a show you were one episode
                       into, both claimed you had watched them. No count: these

@@ -29,7 +29,7 @@ interface Meta {
   title?: string; poster?: string; year?: string; releaseDate?: string;
   tmdbRating?: number; genre?: string; type?: 'movie' | 'show'; showType?: string;
   isEpisode?: boolean; runtime?: number; showName?: string;
-  seasonNumber?: number; episodeNumber?: number;
+  seasonNumber?: number; episodeNumber?: number; totalEps?: number;
 }
 
 // One row in the list. A show is always ONE row no matter how many of its
@@ -67,22 +67,31 @@ function ItemCard({ item }: { item: RatedItem }) {
   // coalesced with every other meta lookup on the page.
   const [watched, setWatched] = useState<WatchedState>('none');
   const [progress, setProgress] = useState<string | null>(null);
+  // The denominator the rated fraction shares with the watched one. Taken from
+  // the cache rather than from `progress`, which is null for a show you have
+  // finished — the rated count still needs a total on those.
+  const [progressTotal, setProgressTotal] = useState<number | null>(null);
   useEffect(() => {
     let live = true;
     const read = () => {
       if (!live) return;
       setWatched(readWatchedState(item.id));
       setProgress(readEpisodeProgress(item.id));
+      setProgressTotal(readMetaCache(item.id)?.totalEps ?? null);
       void loadEpisodeProgress(item.id).then(p => { if (live && p) setProgress(p); });
     };
     read();
     window.addEventListener('focus', read);
     return () => { live = false; window.removeEventListener('focus', read); };
   }, [item.id]);
-  // The episode average is deliberately quieter than the series rating: one is
-  // what you said, the other is arithmetic done on your behalf.
+  // The average stays on its own quiet line. The count moved up beside the eye
+  // as a fraction, because how many episodes you rated is the same kind of fact
+  // as how many you watched and now reads the same way; the average is a
+  // different kind entirely — arithmetic done on your behalf rather than
+  // anything you said — and keeping it down here is what stops it being mistaken
+  // for your verdict on the series.
   const episodeLine = item.episodeCount
-    ? `${item.episodeCount} episode${item.episodeCount === 1 ? '' : 's'} rated · avg ${item.episodeAverage}`
+    ? `avg ${item.episodeAverage} across ${item.episodeCount} episode${item.episodeCount === 1 ? '' : 's'}`
     : null;
 
   return (
@@ -139,6 +148,18 @@ function ItemCard({ item }: { item: RatedItem }) {
                 <span className="text-xs font-semibold">Watched</span>
               </div>
             )
+          )}
+          {/* The rated count in the same shape as the watched one, so "2 of 26
+              seen" and "2 of 26 scored" read as the pair they are. A fraction,
+              never a score — which is what lets a third star sit on this row
+              without competing with the two above it. */}
+          {item.episodeCount !== undefined && (
+            <div className="flex items-center gap-1 text-primary">
+              <Star className="h-3.5 w-3.5" />
+              <span className="text-xs font-semibold">
+                {item.episodeCount}{progressTotal ? ` / ${progressTotal}` : ' ep'}
+              </span>
+            </div>
           )}
         </div>
         {episodeLine && (
