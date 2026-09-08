@@ -12,6 +12,7 @@ import { collapseRatings, type CollapsedRating } from '@/lib/collapse-ratings';
 import { MediaToggle } from '@/components/media-toggle';
 import { RefineSheet, type RefineValue, type SortOption, type CountOption } from '@/components/refine-sheet';
 import { WatchedEye } from '@/components/watched-eye';
+import { readWatchedState, readEpisodeProgress, loadEpisodeProgress, type WatchedState } from '@/lib/watched-state';
 import { useCommunityRatings } from '@/hooks/use-community-ratings';
 import { resolveDisplayRating } from '@/lib/cinephilers-rating';
 
@@ -28,7 +29,7 @@ interface Meta {
   title?: string; poster?: string; year?: string; releaseDate?: string;
   tmdbRating?: number; genre?: string; type?: 'movie' | 'show'; showType?: string;
   isEpisode?: boolean; runtime?: number; showName?: string;
-  seasonNumber?: number; episodeNumber?: number; totalEps?: number;
+  seasonNumber?: number; episodeNumber?: number;
 }
 
 // One row in the list. A show is always ONE row no matter how many of its
@@ -48,8 +49,6 @@ interface RatedItem {
   episodeAverage?: number;
   /** Episode rows (the Episodes sub-type view) carry their place in the show. */
   episodeLabel?: string;
-  /** How many episodes the show has, for the watched count's denominator. */
-  totalEpisodes?: number;
   kind: Exclude<TypeFilter, 'any'>;
   genre: string;
 }
@@ -58,51 +57,28 @@ function readMetaCache(id: string): Meta | null {
   try { return JSON.parse(localStorage.getItem(`meta-${id}`) ?? 'null'); } catch { return null; }
 }
 
-// What this page knows about whether you actually watched the thing you rated.
-// Read from the same two places history reads: a film carries a `watched-{id}`
-// flag, a show carries an index of the episode keys ticked off. Null means
-// untouched — rating something has never marked it watched, and the row should
-// not imply it did.
-function readWatched(id: string, totalEpisodes?: number):
-  { complete: boolean; progress: string | null } | null {
-  try {
-    // An episode has no key of its own. It is ticked off inside its show's
-    // index, under just the "S1E4" part — so an episode row has to ask the show.
-    const ep = /^(.*)-(S\d+E\d+)$/.exec(id);
-    if (ep) {
-      const showIdx = localStorage.getItem(`watched-eps-index-${ep[1]}`);
-      const seen = showIdx ? (JSON.parse(showIdx) as string[]).includes(ep[2]) : false;
-      return seen ? { complete: true, progress: null } : null;
-    }
-
-    const idxRaw = localStorage.getItem(`watched-eps-index-${id}`);
-    if (idxRaw) {
-      const seen = (JSON.parse(idxRaw) as string[]).length;
-      if (seen > 0) {
-        return totalEpisodes && totalEpisodes > 0
-          ? { complete: seen >= totalEpisodes, progress: `${seen} / ${totalEpisodes}` }
-          : { complete: false, progress: `${seen} episode${seen === 1 ? '' : 's'}` };
-      }
-    }
-    if (localStorage.getItem(`watched-${id}`) === 'true') {
-      return { complete: true, progress: null };
-    }
-  } catch { /* ignore */ }
-  return null;
-}
-
 function ItemCard({ item }: { item: RatedItem }) {
   const cine = useCommunityRatings([item.id]);
   const shown = resolveDisplayRating(item.tmdbRating, cine[item.id]);
-  // Re-read on mount rather than at module level: ticking an episode happens on
-  // another route, and this list is often returned to rather than reloaded.
-  const [watched, setWatched] = useState<ReturnType<typeof readWatched>>(null);
+  // Read after mount, and again when the tab comes back: ticking an episode
+  // happens on another route, and this list is returned to more often than it is
+  // reloaded. The progress label may need the show's episode total, which the
+  // meta cache does not always have yet — loadEpisodeProgress fetches it,
+  // coalesced with every other meta lookup on the page.
+  const [watched, setWatched] = useState<WatchedState>('none');
+  const [progress, setProgress] = useState<string | null>(null);
   useEffect(() => {
-    const read = () => setWatched(readWatched(item.id, item.totalEpisodes));
+    let live = true;
+    const read = () => {
+      if (!live) return;
+      setWatched(readWatchedState(item.id));
+      setProgress(readEpisodeProgress(item.id));
+      void loadEpisodeProgress(item.id).then(p => { if (live && p) setProgress(p); });
+    };
     read();
     window.addEventListener('focus', read);
-    return () => window.removeEventListener('focus', read);
-  }, [item.id, item.totalEpisodes]);
+    return () => { live = false; window.removeEventListener('focus', read); };
+  }, [item.id]);
   // The episode average is deliberately quieter than the series rating: one is
   // what you said, the other is arithmetic done on your behalf.
   const episodeLine = item.episodeCount
@@ -151,15 +127,15 @@ function ItemCard({ item }: { item: RatedItem }) {
               show, the word only for a film — and prints nothing at all for
               something you have not watched, which is the third state the eye
               has always had. */}
-          {watched && (
-            watched.progress ? (
+          {watched !== 'none' && (
+            progress ? (
               <div className="flex items-center gap-1 text-primary">
-                <WatchedEye state={watched.complete ? 'complete' : 'partial'} className="h-3.5 w-3.5" />
-                <span className="text-xs font-semibold">{watched.progress}</span>
+                <WatchedEye state={watched} className="h-3.5 w-3.5" />
+                <span className="text-xs font-semibold">{progress}</span>
               </div>
             ) : (
               <div className="flex items-center gap-1 text-primary">
-                <WatchedEye state="complete" className="h-3.5 w-3.5" />
+                <WatchedEye state={watched} className="h-3.5 w-3.5" />
                 <span className="text-xs font-semibold">Watched</span>
               </div>
             )
@@ -308,7 +284,6 @@ function RatingsPageInner() {
       userRating: row.seriesRating,
       episodeCount: row.episodeCount || undefined,
       episodeAverage: row.episodeAverage,
-      totalEpisodes: meta?.totalEps,
       kind: kindOf(row.id, row.isShow),
       genre: meta?.genre ?? '',
     };

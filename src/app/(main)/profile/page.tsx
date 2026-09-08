@@ -14,6 +14,7 @@ import { Settings, Star, Film, List, MessageSquare, ChevronRight, Award, History
 import { ImportDialog } from '@/components/import-dialog';
 import { FavoritesSection } from '@/components/favorites-section';
 import { MediaToggle } from '@/components/media-toggle';
+import { readWatchedState, type WatchedState } from '@/lib/watched-state';
 import type { MediaSide } from '@/lib/media-type';
 import { BarChart, Bar, XAxis, ResponsiveContainer, Cell, YAxis, LabelList } from 'recharts';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -372,6 +373,23 @@ function ListsSection() {
 
 
 type SettingsView = 'main' | 'edit-profile' | 'privacy' | 'account';
+
+// The eye on a rated title. Its own component because the lookup is a
+// localStorage read that has to happen after mount — rendering it inline would
+// either run on the server, where there is no localStorage, or make the whole
+// shelf re-read on every render.
+function RatedWatchedEye({ id }: { id: string }) {
+  const [state, setState] = useState<WatchedState>('none');
+  useEffect(() => {
+    const read = () => setState(readWatchedState(id));
+    read();
+    window.addEventListener('focus', read);
+    return () => window.removeEventListener('focus', read);
+  }, [id]);
+
+  if (state === 'none') return null;
+  return <WatchedEye state={state} className="h-3.5 w-3.5" />;
+}
 
 function Pulse({ className }: { className: string }) {
   return <div className={`bg-muted animate-pulse rounded-lg ${className}`} />;
@@ -1719,7 +1737,13 @@ export default function ProfilePage() {
                     <span className="text-xs text-primary font-bold">☆</span>
                     <span className="text-xs font-bold text-primary">{item.userRating}</span>
                   </div>
-                  <WatchedEye state="complete" className="h-3.5 w-3.5" />
+                  {/* The eye used to be printed here unconditionally, so a film
+                      rated but never ticked, and a show you were one episode
+                      into, both claimed you had watched them. No count: these
+                      cards are 144px wide and "13 / 26" would wrap the line. The
+                      three states carry it on their own — solid finished, hollow
+                      partway, nothing at all for never touched. */}
+                  <RatedWatchedEye id={item.id} />
                 </div>
                 <p className="text-xs font-semibold font-headline line-clamp-2 group-hover:text-primary transition-colors leading-snug">
                   {item.title} {item.year ? `(${item.year})` : ''}

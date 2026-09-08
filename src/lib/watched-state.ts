@@ -89,8 +89,23 @@ export async function loadEpisodeProgress(id: string): Promise<string | null> {
   return typeof total === 'number' && total > 0 ? `${watched} / ${total}` : null;
 }
 
+/** `tmdb-tv-94997-S1E2` — a single episode, split into its show and its key. */
+const EPISODE_ID = /^(.*)-(S\d+E\d+)$/;
+
 export function readWatchedState(id: string): WatchedState {
   try {
+    // An episode has no record of its own. It is ticked inside its show's index
+    // under just the "S1E2" part, so asking about an episode means asking the
+    // show. Checked first: an episode id also fails isShowId, so without this it
+    // fell through to "none" no matter how many times it had been watched.
+    const episode = EPISODE_ID.exec(id);
+    if (episode) {
+      const raw = localStorage.getItem(`watched-eps-index-${episode[1]}`);
+      if (!raw) return 'none';
+      const index = JSON.parse(raw) as unknown;
+      return Array.isArray(index) && index.includes(episode[2]) ? 'complete' : 'none';
+    }
+
     // Films, and anything imported as a flat watch.
     if (localStorage.getItem(`watched-${id}`) === 'true') return 'complete';
     if (!isShowId(id)) return 'none';
