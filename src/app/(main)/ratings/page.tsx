@@ -28,7 +28,7 @@ interface Meta {
   title?: string; poster?: string; year?: string; releaseDate?: string;
   tmdbRating?: number; genre?: string; type?: 'movie' | 'show'; showType?: string;
   isEpisode?: boolean; runtime?: number; showName?: string;
-  seasonNumber?: number; episodeNumber?: number;
+  seasonNumber?: number; episodeNumber?: number; totalEps?: number;
 }
 
 // One row in the list. A show is always ONE row no matter how many of its
@@ -48,6 +48,8 @@ interface RatedItem {
   episodeAverage?: number;
   /** Episode rows (the Episodes sub-type view) carry their place in the show. */
   episodeLabel?: string;
+  /** How many episodes the show has, for the watched count's denominator. */
+  totalEpisodes?: number;
   kind: Exclude<TypeFilter, 'any'>;
   genre: string;
 }
@@ -56,9 +58,51 @@ function readMetaCache(id: string): Meta | null {
   try { return JSON.parse(localStorage.getItem(`meta-${id}`) ?? 'null'); } catch { return null; }
 }
 
+// What this page knows about whether you actually watched the thing you rated.
+// Read from the same two places history reads: a film carries a `watched-{id}`
+// flag, a show carries an index of the episode keys ticked off. Null means
+// untouched — rating something has never marked it watched, and the row should
+// not imply it did.
+function readWatched(id: string, totalEpisodes?: number):
+  { complete: boolean; progress: string | null } | null {
+  try {
+    // An episode has no key of its own. It is ticked off inside its show's
+    // index, under just the "S1E4" part — so an episode row has to ask the show.
+    const ep = /^(.*)-(S\d+E\d+)$/.exec(id);
+    if (ep) {
+      const showIdx = localStorage.getItem(`watched-eps-index-${ep[1]}`);
+      const seen = showIdx ? (JSON.parse(showIdx) as string[]).includes(ep[2]) : false;
+      return seen ? { complete: true, progress: null } : null;
+    }
+
+    const idxRaw = localStorage.getItem(`watched-eps-index-${id}`);
+    if (idxRaw) {
+      const seen = (JSON.parse(idxRaw) as string[]).length;
+      if (seen > 0) {
+        return totalEpisodes && totalEpisodes > 0
+          ? { complete: seen >= totalEpisodes, progress: `${seen} / ${totalEpisodes}` }
+          : { complete: false, progress: `${seen} episode${seen === 1 ? '' : 's'}` };
+      }
+    }
+    if (localStorage.getItem(`watched-${id}`) === 'true') {
+      return { complete: true, progress: null };
+    }
+  } catch { /* ignore */ }
+  return null;
+}
+
 function ItemCard({ item }: { item: RatedItem }) {
   const cine = useCommunityRatings([item.id]);
   const shown = resolveDisplayRating(item.tmdbRating, cine[item.id]);
+  // Re-read on mount rather than at module level: ticking an episode happens on
+  // another route, and this list is often returned to rather than reloaded.
+  const [watched, setWatched] = useState<ReturnType<typeof readWatched>>(null);
+  useEffect(() => {
+    const read = () => setWatched(readWatched(item.id, item.totalEpisodes));
+    read();
+    window.addEventListener('focus', read);
+    return () => window.removeEventListener('focus', read);
+  }, [item.id, item.totalEpisodes]);
   // The episode average is deliberately quieter than the series rating: one is
   // what you said, the other is arithmetic done on your behalf.
   const episodeLine = item.episodeCount
@@ -97,10 +141,29 @@ function ItemCard({ item }: { item: RatedItem }) {
               <span className="text-xs font-bold text-primary">{item.userRating}</span>
             </div>
           )}
-          <div className="flex items-center gap-1 text-primary">
-            <WatchedEye state="complete" className="h-3.5 w-3.5" />
-            <span className="text-xs font-semibold">Watched</span>
-          </div>
+          {/* This row used to print a solid eye and the word "Watched" on
+              everything, unconditionally — nothing here read watched state at
+              all. A show you had seen one episode of claimed you had watched it,
+              which is a claim other people read off your profile: an 8 next to
+              "Watched" says something very different from an 8 next to "1 / 26".
+              A film you rated but never ticked lied the same way.
+              Now it says what history says — the eye carries the count for a
+              show, the word only for a film — and prints nothing at all for
+              something you have not watched, which is the third state the eye
+              has always had. */}
+          {watched && (
+            watched.progress ? (
+              <div className="flex items-center gap-1 text-primary">
+                <WatchedEye state={watched.complete ? 'complete' : 'partial'} className="h-3.5 w-3.5" />
+                <span className="text-xs font-semibold">{watched.progress}</span>
+              </div>
+            ) : (
+              <div className="flex items-center gap-1 text-primary">
+                <WatchedEye state="complete" className="h-3.5 w-3.5" />
+                <span className="text-xs font-semibold">Watched</span>
+              </div>
+            )
+          )}
         </div>
         {episodeLine && (
           <p className="text-[11px] text-muted-foreground/70 mt-1">{episodeLine}</p>
@@ -245,6 +308,7 @@ function RatingsPageInner() {
       userRating: row.seriesRating,
       episodeCount: row.episodeCount || undefined,
       episodeAverage: row.episodeAverage,
+      totalEpisodes: meta?.totalEps,
       kind: kindOf(row.id, row.isShow),
       genre: meta?.genre ?? '',
     };
