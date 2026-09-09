@@ -1749,7 +1749,11 @@ export default function ProfilePage() {
                     pre-Step-2 show record has none, and "0 / 62" reads as a bug. */}
                 {item.isShow && (item.watchedEpisodes ?? 0) > 0 && (
                   <p className="text-[11px] text-muted-foreground line-clamp-1 mt-0.5">
-                    {item.totalEpisodes ? `${item.watchedEpisodes} / ${item.totalEpisodes} episodes` : `${item.watchedEpisodes} episodes`}
+                    {/* "watched", to pair with "rated" on the Ratings shelf below.
+                        The two shelves say the same kind of thing about different
+                        acts, and the number alone left it to the reader to infer
+                        which act this one meant. */}
+                    {item.totalEpisodes ? `${item.watchedEpisodes} / ${item.totalEpisodes} episodes watched` : `${item.watchedEpisodes} episodes watched`}
                     {item.status === 'up-to-date' && ' · Up to date'}
                   </p>
                 )}
