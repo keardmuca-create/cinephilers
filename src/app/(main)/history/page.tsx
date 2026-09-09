@@ -152,6 +152,9 @@ function HistoryCard({ row, meta, userRating, onRemove }: {
   const mediaType = meta.type === 'show' ? 'SHOW' : 'MOVIE';
   // Strip any stale "S1E1 · " prefix from cached titles
   const displayTitle = meta.title.replace(/^S\d+E\d+\s·\s/, '');
+  const episodeLabel = meta.isEpisode && meta.seasonNumber !== undefined && meta.episodeNumber !== undefined
+    ? `S${meta.seasonNumber}·E${meta.episodeNumber}${meta.showName ? ` · ${meta.showName}` : ''}`
+    : null;
 
   // A collapsed show is one row for the whole series: progress instead of an
   // episode subtitle, and a status label once you're all the way through.
@@ -268,6 +271,13 @@ function HistoryCard({ row, meta, userRating, onRemove }: {
         <h3 className="text-sm font-semibold font-headline line-clamp-2 group-hover:text-primary transition-colors leading-snug mb-0.5">
           {displayTitle}
         </h3>
+        {/* On the Episodes side the title alone is an orphan: "What Lies Ahead"
+            names nothing you can place. The show and the number go underneath as
+            context rather than in front of the title, which is still the thing
+            you are looking for. Same line the Ratings list uses. */}
+        {episodeLabel && (
+          <p className="text-xs font-medium text-muted-foreground/90 mb-0.5">{episodeLabel}</p>
+        )}
         <p className="text-xs text-muted-foreground mb-1.5">{meta.year}</p>
         <div className="flex items-center gap-2.5 flex-wrap">
           {/* 0.0 is kept for anything that's OUT: an obscure 1985 series really
@@ -565,20 +575,44 @@ export default function HistoryPage() {
     return r.isShow ? 'shows' : 'movies';
   }, [metaMap]);
 
-  const sideRows = useMemo(() => rows.filter(r => sideForRow(r) === side), [rows, side, sideForRow]);
-
-  const sideCounts = useMemo(() => {
-    let movies = 0, shows = 0;
-    for (const r of rows) (sideForRow(r) === 'shows' ? shows++ : movies++);
-    return { movies, shows };
-  }, [rows, sideForRow]);
-
   // Episodes are the unit of work on the Shows side — seven shows says far less
   // about what you've watched than the episodes under them do.
   const episodeTotal = useMemo(
     () => rows.reduce((n, r) => n + (r.isShow ? r.watchedEpisodes : 0), 0),
     [rows],
   );
+
+  // The Episodes side is the collapse turned off: every episode is its own row,
+  // with the night it was watched, which is the one thing a collapsed show row
+  // can never tell you. The collapse itself is untouched and still governs the
+  // Shows side — this is a different question asked of the same data, not a
+  // reversal. Built from allIds rather than from rows for that reason.
+  const episodeRows = useMemo<CollapsedRow[]>(() => {
+    if (side !== 'episodes') return [];
+    return allIds
+      .filter(id => metaMap.get(id)?.isEpisode)
+      .map(id => ({
+        id,
+        isShow: false,
+        watchedEpisodes: 0,
+        totalEpisodes: 0,
+        status: null,
+        watchedAt: dateMapRef.current.get(id) ?? new Date(0).toISOString(),
+        memberIds: [id],
+      } as CollapsedRow));
+  }, [side, allIds, metaMap]);
+
+  const sideRows = useMemo(
+    () => (side === 'episodes' ? episodeRows : rows.filter(r => sideForRow(r) === side)),
+    [side, episodeRows, rows, sideForRow],
+  );
+
+  const sideCounts = useMemo(() => {
+    let movies = 0, shows = 0;
+    for (const r of rows) (sideForRow(r) === 'shows' ? shows++ : movies++);
+    return { movies, shows, episodes: episodeTotal };
+  }, [rows, sideForRow, episodeTotal]);
+
 
   // ─── Type counts ───────────────────────────────────────────────────────────
 
@@ -594,7 +628,10 @@ export default function HistoryPage() {
       const t = getItemType(meta);
       counts.set(t, (counts.get(t) ?? 0) + 1);
     }
-    const present = SIDE_TYPES[side].filter(t => (counts.get(t) ?? 0) > 0);
+    // Nothing to offer on the Episodes side: every row there is a TV Episode, so
+    // a Type list would be one option filtering nothing. Hidden rather than shown
+    // inert — a control that cannot change the list reads as broken.
+    const present = side === 'episodes' ? [] : SIDE_TYPES[side].filter(t => (counts.get(t) ?? 0) > 0);
     if (present.length === 0) return [];
     return [
       { value: 'any', label: TYPE_LABELS.any, count: sideRows.length },
@@ -691,9 +728,9 @@ export default function HistoryPage() {
         </p>
       </div>
 
-      {/* Movies | Shows */}
+      {/* Movies | Shows | Episodes */}
       <div className="px-6 pb-3">
-        <MediaToggle value={side} onChange={changeSide} counts={sideCounts} />
+        <MediaToggle value={side} onChange={changeSide} counts={sideCounts} sides={['movies', 'shows', 'episodes']} />
       </div>
 
       {/* Search bar */}
@@ -718,7 +755,7 @@ export default function HistoryPage() {
       {/* Sorted by + Refine button */}
       <div className="px-6 pb-4 flex items-center justify-between">
         <p className="text-xs text-muted-foreground truncate">
-          {sortedFilteredRows.length} {side === 'shows' ? 'show' : 'title'}{sortedFilteredRows.length !== 1 ? 's' : ''}
+          {sortedFilteredRows.length} {side === 'shows' ? 'show' : side === 'episodes' ? 'episode' : 'title'}{sortedFilteredRows.length !== 1 ? 's' : ''}
           {side === 'shows' && episodeTotal > 0 && ` · ${episodeTotal} episode${episodeTotal !== 1 ? 's' : ''}`}
           {' · '}{SORT_OPTIONS.find(s => s.value === refine.sortField)?.label}
           {refine.type !== 'any' && ` · ${TYPE_LABELS[refine.type as TypeFilter]}`}

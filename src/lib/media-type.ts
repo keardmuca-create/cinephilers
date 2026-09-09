@@ -18,14 +18,21 @@ export const TYPE_ORDER: TypeFilter[] = [
 // are counted and filtered separately — never mixed, and with no combined view.
 // A TV Movie is a film you watch in one sitting, so it belongs on the Movies side
 // despite the name; an episode belongs to its show.
-export type MediaSide = 'movies' | 'shows';
+// Episodes is a SIDE, not a sub-type of shows, because a side is a counting unit
+// and the app has always counted episodes separately — "568 films · 319 episodes".
+// It does not appear in SIDE_TYPES: those map a side to the types a row can be,
+// and the Episodes side has exactly one, which is why it is listed under shows
+// there. Only lists that pass it to MediaToggle offer it.
+export type MediaSide = 'movies' | 'shows' | 'episodes';
 
 export const SIDE_TYPES: Record<MediaSide, Exclude<TypeFilter, 'any'>[]> = {
   movies: ['movie', 'tv-movie', 'short'],
   shows: ['tv-series', 'tv-mini-series', 'tv-episode'],
+  // One type, so the Type filter has nothing to offer here and lists hide it.
+  episodes: ['tv-episode'],
 };
 
-export const SIDE_LABELS: Record<MediaSide, string> = { movies: 'Movies', shows: 'Shows' };
+export const SIDE_LABELS: Record<MediaSide, string> = { movies: 'Movies', shows: 'Shows', episodes: 'Episodes' };
 
 /** Which side of the toggle a classified item belongs to. */
 export function sideOf(type: Exclude<TypeFilter, 'any'>): MediaSide {
