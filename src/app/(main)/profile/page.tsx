@@ -1816,7 +1816,18 @@ export default function ProfilePage() {
         <MediaToggle value={chartSide} onChange={setChartSide} counts={chartCounts} sides={['movies', 'shows', 'episodes']} />
         <div className="h-56 w-full bg-muted/40 rounded-3xl p-6 border border-border">
           <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={ratingData} onClick={d => { if (d?.activePayload?.[0]) { const r = parseInt(d.activePayload[0].payload.rating); if (sideRated.filter(i => i.userRating === r).length > 0) router.push(`/ratings?rating=${r}`); } }}>
+            {/* A bar opens the list it was drawn from, on the side it was drawn
+                from. Both halves of that were broken: the guard counted
+                sideRated, which is empty on the Episodes side, so an episode bar
+                was dead; and the link named no side, so /ratings opened on
+                whichever one you happened to be on last — tap the 10 under Movies,
+                land on Episodes, see nothing. The bar's own count is the guard
+                now, so it answers for whichever side drew it. */}
+            <BarChart data={ratingData} onClick={d => {
+              const point = d?.activePayload?.[0]?.payload as { rating: string; count: number } | undefined;
+              if (!point || point.count === 0) return;
+              router.push(`/ratings?rating=${parseInt(point.rating, 10)}&side=${chartSide}`);
+            }}>
               <XAxis dataKey="rating" axisLine={false} tickLine={false} tick={{ fill: '#888', fontSize: 11, fontWeight: 'bold' }} />
               <YAxis hide domain={[0, yDomainMax]} />
               <Bar dataKey="count" radius={[6, 6, 0, 0]} style={{ cursor: 'pointer' }}>

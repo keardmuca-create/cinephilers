@@ -192,10 +192,14 @@ function RatingsPageInner() {
       } catch { /* ignore */ }
     };
     readRefine();
-    try {
-      const savedSide = localStorage.getItem('ratings-side');
-      if (savedSide === 'movies' || savedSide === 'shows' || savedSide === 'episodes') setSide(savedSide);
-    } catch { /* ignore */ }
+    // Skipped when the URL names a side — the effect below applies that, and
+    // restoring the stored one first would flash the wrong list.
+    if (!searchParams.get('side')) {
+      try {
+        const savedSide = localStorage.getItem('ratings-side');
+        if (savedSide === 'movies' || savedSide === 'shows' || savedSide === 'episodes') setSide(savedSide);
+      } catch { /* ignore */ }
+    }
     // Re-read after login sync restores the account's saved sort into localStorage.
     window.addEventListener('cinephilers-db-restored', readRefine);
     return () => window.removeEventListener('cinephilers-db-restored', readRefine);
@@ -215,6 +219,13 @@ function RatingsPageInner() {
     const v = searchParams.get('rating');
     const n = v ? parseInt(v, 10) : NaN;
     setRatingFilter(Number.isFinite(n) && n >= 1 && n <= 10 ? n : null);
+    // ?side= comes with a chart bar, and it wins over the stored side. Tapping
+    // the 8 on the Episodes chart and landing on Movies — because Movies is where
+    // you happened to be last time — is how you get an empty list and no idea
+    // why. Reactive rather than mount-only: the page does not remount when only
+    // the query changes.
+    const asked = searchParams.get('side');
+    if (asked === 'movies' || asked === 'shows' || asked === 'episodes') setSide(asked);
   }, [searchParams]);
 
   useEffect(() => {
