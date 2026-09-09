@@ -1234,9 +1234,19 @@ export default function ProfilePage() {
       // the chart is the one place that question is asked.
       setEpisodeScores(scored.filter(s => /-S\d+E\d+$/.test(s.id)).map(s => s.score));
 
+      // When a collapsed row was last rated, counting its episodes. The stamp is
+      // written against whatever id was scored, so a show's own id is only
+      // stamped when the SERIES was rated — rate three episodes tonight and the
+      // show sorted as though nothing had happened, or as never rated at all if
+      // you had not judged the series. The newest of the row and its members.
+      const ratedAtFor = (row: { id: string; memberIds: string[] }) =>
+        Math.max(getRatedAt(row.id), ...row.memberIds.map(getRatedAt));
+      const ratedAtById = new Map<string, number>();
+
       const rated: RatedItem[] = [];
       const ratedMissing: { id: string; userRating?: number; ratedEpisodes?: number }[] = [];
       for (const row of collapseRatings(scored)) {
+        ratedAtById.set(row.id, ratedAtFor(row));
         const raw = localStorage.getItem(`meta-${row.id}`);
         const meta = raw ? JSON.parse(raw) : null;
         const rv = rvMap.get(row.id);
@@ -1261,7 +1271,8 @@ export default function ProfilePage() {
       // hundreds of ratings, a newly rated film did not merely sink, it fell off
       // the end and vanished from the row entirely while sitting first under
       // See All. 885bb7e fixed the full Ratings page and missed this row.
-      setRatedItems(rated.sort((a, b) => getRatedAt(b.id) - getRatedAt(a.id)));
+      const ratedAt = (id: string) => ratedAtById.get(id) ?? getRatedAt(id);
+      setRatedItems(rated.sort((a, b) => ratedAt(b.id) - ratedAt(a.id)));
 
       if (ratedMissing.length > 0) {
         (async () => {
@@ -1285,9 +1296,10 @@ export default function ProfilePage() {
             setRatedItems(prev => {
               const seen = new Set(prev.map(p => p.id));
               // Same order as the first pass above — titles whose posters arrive
-              // late must not be sorted by a different date from the rest.
+              // late must not be sorted by a different date from the rest, which
+              // means the same episode-aware stamp and not getRatedAt directly.
               return [...prev, ...fetched.filter(f => !seen.has(f.id))]
-                .sort((a, b) => getRatedAt(b.id) - getRatedAt(a.id));
+                .sort((a, b) => ratedAt(b.id) - ratedAt(a.id));
             });
           }
         })();
@@ -1787,10 +1799,21 @@ export default function ProfilePage() {
                       <span className="text-xs font-bold text-primary">{item.userRating}</span>
                     </div>
                   )}
-                  {/* No rated-episode fraction: four marks did not fit 144px and
-                      wrapped, and the Episodes segment on the full list answers
-                      the question the fraction was gesturing at — which episodes
-                      and what you gave them, rather than merely how many. */}
+                  {/* Only when there is no series rating to show. A show whose
+                      episodes you scored but which you never judged as a whole
+                      would otherwise sit in the RATINGS shelf carrying no rating
+                      at all, which reads as a bug. Where a verdict does exist it
+                      says more than a count does, and printing both put four
+                      marks in 144px and wrapped the line. So this appears
+                      exactly where the alternative is a blank. */}
+                  {item.userRating === undefined && item.ratedEpisodes !== undefined && (
+                    <div className="flex items-center gap-0.5">
+                      <span className="text-xs text-primary font-bold">☆</span>
+                      <span className="text-xs font-bold text-primary">
+                        {item.ratedEpisodes} ep{item.ratedEpisodes === 1 ? '' : 's'}
+                      </span>
+                    </div>
+                  )}
                   {/* The eye used to be printed here unconditionally, so a film
                       rated but never ticked, and a show you were one episode
                       into, both claimed you had watched them. No count: these

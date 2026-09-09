@@ -47,14 +47,21 @@ interface RatedItem {
   /** Set only on a show row where episodes were rated. */
   episodeCount?: number;
   episodeAverage?: number;
-  /** Episode rows (the Episodes sub-type view) carry their place in the show. */
+  /** Episode rows (the Episodes segment) carry their place in the show. */
   episodeLabel?: string;
+  /** Newest of this title's own rating stamp and any of its episodes'. */
+  ratedAt?: number;
   kind: Exclude<TypeFilter, 'any'>;
   genre: string;
 }
 
 function readMetaCache(id: string): Meta | null {
   try { return JSON.parse(localStorage.getItem(`meta-${id}`) ?? 'null'); } catch { return null; }
+}
+
+/** Episode rows carry no members of their own, so they fall back to their id. */
+function ratedAtOf(item: RatedItem): number {
+  return item.ratedAt ?? getRatedAt(item.id);
 }
 
 function ItemCard({ item }: { item: RatedItem }) {
@@ -158,7 +165,7 @@ function ItemCard({ item }: { item: RatedItem }) {
             getRatedAt, not getAddedAt: this line says "Rated on", and the add
             index answers a different question — when the title first arrived. */}
         {(() => {
-          const t = getRatedAt(item.id);
+          const t = ratedAtOf(item);
           return t > 0 ? (
             <p className="text-xs text-muted-foreground mt-1.5">
               Rated on {new Date(t).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
@@ -307,6 +314,11 @@ function RatingsPageInner() {
       userRating: row.seriesRating,
       episodeCount: row.episodeCount || undefined,
       episodeAverage: row.episodeAverage,
+      // The stamp is written against whatever id was scored, so a show's own is
+      // only set when the SERIES was rated. Without folding the members in, a
+      // show you rated three episodes of last night sorted by a date from months
+      // ago — or by nothing at all, if you never judged the series.
+      ratedAt: Math.max(getRatedAt(row.id), ...row.memberIds.map(getRatedAt)),
       kind: kindOf(row.id, row.isShow),
       genre: meta?.genre ?? '',
     };
@@ -444,7 +456,7 @@ function RatingsPageInner() {
       });
     } else {
       // Date rated — title tie-break keeps bulk-imported same-date items stable
-      result.sort((a, b) => (getRatedAt(b.id) - getRatedAt(a.id)) || a.title.localeCompare(b.title));
+      result.sort((a, b) => (ratedAtOf(b) - ratedAtOf(a)) || a.title.localeCompare(b.title));
       if (refine.sortDir === 'asc') result.reverse();
     }
     return result;
