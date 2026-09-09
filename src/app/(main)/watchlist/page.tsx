@@ -135,7 +135,7 @@ export default function WatchlistPage() {
     readRefine();
     try {
       const savedSide = localStorage.getItem('watchlist-side');
-      if (savedSide === 'movies' || savedSide === 'shows') setSide(savedSide);
+      if (savedSide === 'movies' || savedSide === 'shows' || savedSide === 'episodes') setSide(savedSide);
     } catch { /* ignore */ }
     // Login sync may restore the account's saved sort into localStorage after
     // this page has already mounted — re-read it then so it applies immediately.
@@ -247,12 +247,27 @@ export default function WatchlistPage() {
   // it was saved. Watch History collapses because there the show is the thing
   // you're working through; here it isn't.
 
-  const sideItems = useMemo(() => items.filter(i => sideOf(i.kind as Exclude<TypeFilter, 'any'>) === side), [items, side]);
+  // An episode is a segment here as much as anywhere, and arguably more: saving
+  // one is a CHOICE about that episode — an anthology instalment, a guest star —
+  // rather than a fragment of a show you happen to be partway through. Which is
+  // also why the Shows side keeps them: unlike history and ratings, a saved
+  // episode is not folded into anything, so it appears on both.
+  const isEpisodeKind = (i: { kind: string }) => i.kind === 'tv-episode';
+
+  const sideItems = useMemo(
+    () => (side === 'episodes'
+      ? items.filter(isEpisodeKind)
+      : items.filter(i => sideOf(i.kind as Exclude<TypeFilter, 'any'>) === side)),
+    [items, side],
+  );
 
   const sideCounts = useMemo(() => {
-    let movies = 0, shows = 0;
-    for (const it of items) (sideOf(it.kind as Exclude<TypeFilter, 'any'>) === 'shows' ? shows++ : movies++);
-    return { movies, shows };
+    let movies = 0, shows = 0, episodes = 0;
+    for (const it of items) {
+      if (sideOf(it.kind as Exclude<TypeFilter, 'any'>) === 'shows') shows++; else movies++;
+      if (isEpisodeKind(it)) episodes++;
+    }
+    return { movies, shows, episodes };
   }, [items]);
 
   // Per-type counts for the Type filter, narrowed to this side's own sub-types
@@ -260,7 +275,8 @@ export default function WatchlistPage() {
   const typeOptions = useMemo<CountOption[]>(() => {
     const counts = new Map<TypeFilter, number>();
     for (const it of sideItems) counts.set(it.kind, (counts.get(it.kind) ?? 0) + 1);
-    const present = SIDE_TYPES[side].filter(t => (counts.get(t) ?? 0) > 0);
+    // One type on the Episodes side, so the filter would change nothing.
+    const present = side === 'episodes' ? [] : SIDE_TYPES[side].filter(t => (counts.get(t) ?? 0) > 0);
     if (present.length <= 1) return [];
     return [
       { value: 'any', label: 'Any', count: sideItems.length },
@@ -337,7 +353,7 @@ export default function WatchlistPage() {
 
       {/* Movies | Shows */}
       <div className="px-6 pt-4">
-        <MediaToggle value={side} onChange={changeSide} counts={sideCounts} />
+        <MediaToggle value={side} onChange={changeSide} counts={sideCounts} sides={['movies', 'shows', 'episodes']} />
       </div>
 
       {/* Search */}
@@ -357,7 +373,7 @@ export default function WatchlistPage() {
       {/* Sort bar */}
       <div className="px-6 pb-4 flex items-center justify-between gap-3">
         <p className="text-xs text-muted-foreground truncate">
-          {sortedFiltered.length} {side === 'shows' ? 'show' : 'title'}{sortedFiltered.length !== 1 ? 's' : ''} · {sortLabel}{filterNote}
+          {sortedFiltered.length} {side === 'shows' ? 'show' : side === 'episodes' ? 'episode' : 'title'}{sortedFiltered.length !== 1 ? 's' : ''} · {sortLabel}{filterNote}
         </p>
         <button onClick={() => setRefineOpen(true)}
           className="flex items-center gap-1.5 text-xs font-semibold text-primary hover:opacity-80 transition-opacity shrink-0">
@@ -375,7 +391,9 @@ export default function WatchlistPage() {
         <div className="flex flex-col items-center justify-center py-20 gap-3 text-center px-6">
           <Bookmark className="h-12 w-12 text-muted-foreground/20" />
           <p className="text-muted-foreground text-sm">
-            {side === 'shows' ? 'Save shows to watch later' : 'Save movies to watch later'}
+            {side === 'shows' ? 'Save shows to watch later'
+              : side === 'episodes' ? 'Save episodes to watch later'
+              : 'Save movies to watch later'}
           </p>
         </div>
       ) : sortedFiltered.length === 0 ? (

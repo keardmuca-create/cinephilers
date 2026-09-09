@@ -370,7 +370,7 @@ export default function HistoryPage() {
   useEffect(() => {
     try {
       const saved = localStorage.getItem('history-side');
-      if (saved === 'movies' || saved === 'shows') setSide(saved);
+      if (saved === 'movies' || saved === 'shows' || saved === 'episodes') setSide(saved);
     } catch { /* ignore */ }
   }, []);
 

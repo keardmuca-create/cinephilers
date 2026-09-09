@@ -722,6 +722,8 @@ export default function ProfilePage() {
   const [watchlist, setWatchlist] = useState<Movie[]>([]);
   const [userReviews, setUserReviews] = useState<UserReview[]>([]);
   const [ratedItems, setRatedItems] = useState<RatedItem[]>([]);
+  /** Every episode score, flat. The collapse above cannot carry these. */
+  const [episodeScores, setEpisodeScores] = useState<number[]>([]);
 
   // Saved refines from the full-page lists, so each preview shows the same order
   // the user chose there. Read after mount (localStorage would mismatch SSR) and
@@ -1227,6 +1229,11 @@ export default function ProfilePage() {
         scored.push({ id: k.slice('movie-rating-'.length), score });
       }
 
+      // Kept apart from the collapse, which folds every episode into its show and
+      // so cannot answer "what did I give each episode". The Episodes segment of
+      // the chart is the one place that question is asked.
+      setEpisodeScores(scored.filter(s => /-S\d+E\d+$/.test(s.id)).map(s => s.score));
+
       const rated: RatedItem[] = [];
       const ratedMissing: { id: string; userRating?: number; ratedEpisodes?: number }[] = [];
       for (const row of collapseRatings(scored)) {
@@ -1323,37 +1330,35 @@ export default function ProfilePage() {
     };
   }, [loadFromStorage]);
 
-  // The chart is one side at a time, films or series — the two types the rest of
-  // the app speaks in. Type comes off the id and needs no metadata: an episode
-  // ends in -S1E4, a series starts with tmdb-tv-, everything else is a film.
+  // One side at a time, and the side names the unit: films, series, episodes.
+  // Type comes off the id and needs no metadata — a series starts with tmdb-tv-,
+  // everything else in ratedItems is a film, and episodes were never in there to
+  // begin with since the collapse folds them into their show.
   //
-  // Episodes are excluded from both sides rather than folded into Shows. A show
-  // carries a series rating AND, separately, an average of any episodes rated —
-  // and those are never merged, because one is what you said about the show and
-  // the other is arithmetic done on your behalf. So a series lands on the bar of
-  // the score you gave it, or on no bar at all if you only ever rated episodes.
+  // A series lands on the bar of the score you gave the series, or on no bar at
+  // all if you only ever rated its episodes. An episode average is never
+  // substituted: one is what you said about the show, the other is arithmetic
+  // done on your behalf, and the two are never merged.
   const [chartSide, setChartSide] = useState<MediaSide>('movies');
-  const chartSideOf = (id: string): MediaSide | 'episode' =>
-    /-S\d+E\d+$/.test(id) ? 'episode' : id.startsWith('tmdb-tv-') ? 'shows' : 'movies';
+  const chartSideOf = (id: string): MediaSide =>
+    id.startsWith('tmdb-tv-') ? 'shows' : 'movies';
 
   const chartCounts = React.useMemo(() => {
     let movies = 0, shows = 0;
-    for (const r of ratedItems) {
-      const side = chartSideOf(r.id);
-      if (side === 'movies') movies++;
-      else if (side === 'shows') shows++;
-    }
-    return { movies, shows };
-  }, [ratedItems]);
+    for (const r of ratedItems) (chartSideOf(r.id) === 'shows' ? shows++ : movies++);
+    return { movies, shows, episodes: episodeScores.length };
+  }, [ratedItems, episodeScores]);
 
   const sideRated = React.useMemo(
-    () => ratedItems.filter(r => chartSideOf(r.id) === chartSide),
+    () => (chartSide === 'episodes' ? [] : ratedItems.filter(r => chartSideOf(r.id) === chartSide)),
     [ratedItems, chartSide],
   );
 
   const ratingData = [1,2,3,4,5,6,7,8,9,10].map(n => ({
     rating: String(n),
-    count: sideRated.filter(r => r.userRating === n).length,
+    count: chartSide === 'episodes'
+      ? episodeScores.filter(s => s === n).length
+      : sideRated.filter(r => r.userRating === n).length,
   }));
   const maxRatingCount = Math.max(...ratingData.map(d => d.count), 1);
   const yDomainMax = Math.ceil(maxRatingCount / 0.65);
@@ -1782,21 +1787,10 @@ export default function ProfilePage() {
                       <span className="text-xs font-bold text-primary">{item.userRating}</span>
                     </div>
                   )}
-                  {/* Rated episodes read like watched ones: same fraction, same
-                      place, a hollow star instead of an eye. A show you scored
-                      two episodes of and never judged as a whole shows the
-                      fraction and no verdict — which is exactly what happened.
-                      Never the episode average here: at this width there is no
-                      room to label it as an average, so it would read as your
-                      score for the series. */}
-                  {item.ratedEpisodes !== undefined && (
-                    <div className="flex items-center gap-0.5">
-                      <span className="text-xs text-primary font-bold">☆</span>
-                      <span className="text-xs font-bold text-primary">
-                        {item.ratedEpisodes}{item.totalEpisodes ? ` / ${item.totalEpisodes}` : ' ep'}
-                      </span>
-                    </div>
-                  )}
+                  {/* No rated-episode fraction: four marks did not fit 144px and
+                      wrapped, and the Episodes segment on the full list answers
+                      the question the fraction was gesturing at — which episodes
+                      and what you gave them, rather than merely how many. */}
                   {/* The eye used to be printed here unconditionally, so a film
                       rated but never ticked, and a show you were one episode
                       into, both claimed you had watched them. No count: these
@@ -1819,7 +1813,7 @@ export default function ProfilePage() {
       {/* Rating Distribution */}
       <section className="space-y-4">
         <SectionHeader title="Rating Distribution" icon={Star} />
-        <MediaToggle value={chartSide} onChange={setChartSide} counts={chartCounts} />
+        <MediaToggle value={chartSide} onChange={setChartSide} counts={chartCounts} sides={['movies', 'shows', 'episodes']} />
         <div className="h-56 w-full bg-muted/40 rounded-3xl p-6 border border-border">
           <ResponsiveContainer width="100%" height="100%">
             <BarChart data={ratingData} onClick={d => { if (d?.activePayload?.[0]) { const r = parseInt(d.activePayload[0].payload.rating); if (sideRated.filter(i => i.userRating === r).length > 0) router.push(`/ratings?rating=${r}`); } }}>

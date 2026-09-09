@@ -67,29 +67,23 @@ function ItemCard({ item }: { item: RatedItem }) {
   // coalesced with every other meta lookup on the page.
   const [watched, setWatched] = useState<WatchedState>('none');
   const [progress, setProgress] = useState<string | null>(null);
-  // The denominator the rated fraction shares with the watched one. Taken from
-  // the cache rather than from `progress`, which is null for a show you have
-  // finished — the rated count still needs a total on those.
-  const [progressTotal, setProgressTotal] = useState<number | null>(null);
   useEffect(() => {
     let live = true;
     const read = () => {
       if (!live) return;
       setWatched(readWatchedState(item.id));
       setProgress(readEpisodeProgress(item.id));
-      setProgressTotal(readMetaCache(item.id)?.totalEps ?? null);
       void loadEpisodeProgress(item.id).then(p => { if (live && p) setProgress(p); });
     };
     read();
     window.addEventListener('focus', read);
     return () => { live = false; window.removeEventListener('focus', read); };
   }, [item.id]);
-  // The average stays on its own quiet line. The count moved up beside the eye
-  // as a fraction, because how many episodes you rated is the same kind of fact
-  // as how many you watched and now reads the same way; the average is a
-  // different kind entirely — arithmetic done on your behalf rather than
-  // anything you said — and keeping it down here is what stops it being mistaken
-  // for your verdict on the series.
+  // The one thing on a collapsed show row that still says its episodes were
+  // rated, now the coverage fraction has gone. Quiet, and on its own line,
+  // because an average is arithmetic done on your behalf rather than anything
+  // you said — which is what stops it being read as your verdict on the series.
+  // Cards drop it; they have no room to label it, and See All is one tap.
   const episodeLine = item.episodeCount
     ? `avg ${item.episodeAverage} across ${item.episodeCount} episode${item.episodeCount === 1 ? '' : 's'}`
     : null;
@@ -149,18 +143,13 @@ function ItemCard({ item }: { item: RatedItem }) {
               </div>
             )
           )}
-          {/* The rated count in the same shape as the watched one, so "2 of 26
-              seen" and "2 of 26 scored" read as the pair they are. A fraction,
-              never a score — which is what lets a third star sit on this row
-              without competing with the two above it. */}
-          {item.episodeCount !== undefined && (
-            <div className="flex items-center gap-1 text-primary">
-              <Star className="h-3.5 w-3.5" />
-              <span className="text-xs font-semibold">
-                {item.episodeCount}{progressTotal ? ` / ${progressTotal}` : ' ep'}
-              </span>
-            </div>
-          )}
+          {/* No rated-episode fraction here any more. It existed because a
+              collapsed row was the only place episode ratings could be hinted
+              at, and a count was the most it could say — not which episodes, not
+              what you gave them. The Episodes segment answers that properly, so
+              the fraction is a worse version of something one tap away, and
+              dropping it puts this row and the profile card back inside their
+              width. The average line below still says episodes were rated. */}
         </div>
         {episodeLine && (
           <p className="text-[11px] text-muted-foreground/70 mt-1">{episodeLine}</p>
@@ -205,7 +194,7 @@ function RatingsPageInner() {
     readRefine();
     try {
       const savedSide = localStorage.getItem('ratings-side');
-      if (savedSide === 'movies' || savedSide === 'shows') setSide(savedSide);
+      if (savedSide === 'movies' || savedSide === 'shows' || savedSide === 'episodes') setSide(savedSide);
     } catch { /* ignore */ }
     // Re-read after login sync restores the account's saved sort into localStorage.
     window.addEventListener('cinephilers-db-restored', readRefine);
@@ -289,9 +278,11 @@ function RatingsPageInner() {
     return isShow ? 'tv-series' : 'movie';
   }, [metaMap]);
 
-  // The Episodes sub-type is the release valve: collapsed by default, but pick
-  // TV Episode on the Shows side and the list becomes the episodes themselves.
-  const showingEpisodes = side === 'shows' && refine.type === 'tv-episode';
+  // Episodes are their own segment of the pill now, not a type hidden inside
+  // Refine. Picking TV Episode there changed what a ROW WAS while every other
+  // option in that list merely filtered — one control doing two different jobs
+  // depending on which line you tapped. A segment says what it does.
+  const showingEpisodes = side === 'episodes';
 
   const toItem = useCallback((row: CollapsedRating): RatedItem => {
     const meta = metaMap.get(row.id);
@@ -344,16 +335,16 @@ function RatingsPageInner() {
 
   // ─── Movies / Shows split ──────────────────────────────────────────────────
 
-  const sideCounts = useMemo(() => {
-    let movies = 0, shows = 0;
-    for (const row of rows) (sideOf(kindOf(row.id, row.isShow)) === 'shows' ? shows++ : movies++);
-    return { movies, shows };
-  }, [rows, kindOf]);
-
   const episodeRatingTotal = useMemo(
     () => rows.reduce((n, r) => n + r.episodeCount, 0),
     [rows],
   );
+
+  const sideCounts = useMemo(() => {
+    let movies = 0, shows = 0;
+    for (const row of rows) (sideOf(kindOf(row.id, row.isShow)) === 'shows' ? shows++ : movies++);
+    return { movies, shows, episodes: episodeRatingTotal };
+  }, [rows, kindOf, episodeRatingTotal]);
 
   const sideItems = useMemo(
     // The Episodes view is already show-side only, so it needs no further split.
@@ -370,15 +361,19 @@ function RatingsPageInner() {
       if (sideOf(it.kind) !== side) continue;
       counts.set(it.kind, (counts.get(it.kind) ?? 0) + 1);
     }
-    // Episodes are counted from the collapsed rows, since in the default view
-    // they aren't items at all — but the option has to be offered to reach them.
-    if (side === 'shows') counts.set('tv-episode', episodeRatingTotal);
+    // Nothing to offer on the Episodes side: every row is a TV Episode, so the
+    // list would be one option filtering nothing. TV Episode also leaves the
+    // Shows side — it was only ever there as the way IN to the episode view, and
+    // the pill is that way in now.
+    if (side === 'episodes') return [];
     const total = side === 'shows' ? sideCounts.shows : sideCounts.movies;
     return [
       { value: 'any', label: 'Any', count: total },
-      ...SIDE_TYPES[side].map(t => ({ value: t, label: TYPE_LABELS[t], count: counts.get(t) ?? 0 })),
+      ...SIDE_TYPES[side]
+        .filter(t => t !== 'tv-episode')
+        .map(t => ({ value: t, label: TYPE_LABELS[t], count: counts.get(t) ?? 0 })),
     ];
-  }, [items, side, episodeRatingTotal, sideCounts]);
+  }, [items, side, sideCounts]);
 
   const genreOptions = useMemo<CountOption[]>(() => {
     const counts = new Map<string, number>();
@@ -404,7 +399,9 @@ function RatingsPageInner() {
   const sortedFiltered = useMemo(() => {
     let result = sideItems.filter(i => i.title);
     if (ratingFilter !== null) result = result.filter(i => scoreOf(i) === ratingFilter);
-    // 'tv-episode' already switched the whole list over, so it isn't a filter here.
+    // A saved 'tv-episode' can still be sitting in the stored refine from before
+    // the pill existed, where it meant "switch the list over" rather than
+    // "filter to". Ignored here so it cannot empty the Shows side instead.
     if (refine.type !== 'any' && refine.type !== 'tv-episode') result = result.filter(i => i.kind === refine.type);
     if (refine.genre !== 'any') result = result.filter(i => i.genre.split(',').map(s => s.trim()).includes(refine.genre));
     if (search.trim()) {
@@ -462,9 +459,9 @@ function RatingsPageInner() {
         )}
       </div>
 
-      {/* Movies | Shows */}
+      {/* Movies | Shows | Episodes */}
       <div className="px-6 pt-4">
-        <MediaToggle value={side} onChange={changeSide} counts={sideCounts} />
+        <MediaToggle value={side} onChange={changeSide} counts={sideCounts} sides={['movies', 'shows', 'episodes']} />
       </div>
 
       {/* Search */}
