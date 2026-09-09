@@ -1799,21 +1799,10 @@ export default function ProfilePage() {
                       <span className="text-xs font-bold text-primary">{item.userRating}</span>
                     </div>
                   )}
-                  {/* Only when there is no series rating to show. A show whose
-                      episodes you scored but which you never judged as a whole
-                      would otherwise sit in the RATINGS shelf carrying no rating
-                      at all, which reads as a bug. Where a verdict does exist it
-                      says more than a count does, and printing both put four
-                      marks in 144px and wrapped the line. So this appears
-                      exactly where the alternative is a blank. */}
-                  {item.userRating === undefined && item.ratedEpisodes !== undefined && (
-                    <div className="flex items-center gap-0.5">
-                      <span className="text-xs text-primary font-bold">☆</span>
-                      <span className="text-xs font-bold text-primary">
-                        {item.ratedEpisodes} ep{item.ratedEpisodes === 1 ? '' : 's'}
-                      </span>
-                    </div>
-                  )}
+                  {/* Rated episodes are NOT a fourth mark here — see the line
+                      below the title. Four marks did not fit 144px, and a second
+                      star reading "2 / 26" beside one reading "8" is a puzzle at
+                      this size. */}
                   {/* The eye used to be printed here unconditionally, so a film
                       rated but never ticked, and a show you were one episode
                       into, both claimed you had watched them. No count: these
@@ -1825,6 +1814,19 @@ export default function ProfilePage() {
                 <p className="text-xs font-semibold font-headline line-clamp-2 group-hover:text-primary transition-colors leading-snug">
                   {item.title} {item.year ? `(${item.year})` : ''}
                 </p>
+                {/* Same shape and place as the watch shelf's "13 / 177 episodes"
+                    one row up, saying the same kind of thing about a different
+                    act. Below the title rather than beside the stars because it
+                    is a count, not a verdict — and because the marks line has no
+                    room left. Printed only once an episode has been rated:
+                    "0 / 26 episodes rated" states an absence. */}
+                {item.ratedEpisodes !== undefined && (
+                  <p className="text-[11px] text-muted-foreground line-clamp-1 mt-0.5">
+                    {item.totalEpisodes
+                      ? `${item.ratedEpisodes} / ${item.totalEpisodes} episodes rated`
+                      : `${item.ratedEpisodes} episode${item.ratedEpisodes === 1 ? '' : 's'} rated`}
+                  </p>
+                )}
               </Link>
             ))}
           </div>
