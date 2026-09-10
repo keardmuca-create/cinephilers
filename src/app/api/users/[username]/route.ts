@@ -3,6 +3,9 @@ import { prisma } from '@/lib/db';
 import { ok, err } from '@/lib/api-response';
 import { getCurrentUser } from '@/lib/auth-utils';
 import { countWatchedRows, countWatchedSplit } from '@/lib/watched-rows';
+import { sideWhere } from '@/lib/media-side-where';
+
+const SIDES = ['movies', 'shows', 'episodes'] as const;
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ username: string }> }) {
   const { username } = await params;
@@ -42,7 +45,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ user
   // public profile. Only computed once the profile is known to be visible.
   const yearStart = new Date(new Date().getFullYear(), 0, 1);
   const thisYear = yearStart.getFullYear();
-  const [watchlistCount, listsCount, reviewsCount, watchedCount, rewatchGroups, rewatchThisYearGroups, ratingGroups, watchedSplit, ratingRows, watchlistGroups] = await Promise.all([
+  const [watchlistCount, listsCount, reviewsCount, watchedCount, rewatchGroups, rewatchThisYearGroups, ratingGroups, watchedSplit, ratingRows, watchlistSplit, reviewsSplit] = await Promise.all([
     prisma.watchlistItem.count({ where: { userId: user.id } }),
     prisma.customList.count({ where: { userId: user.id, ...(isOwner ? {} : { isPublic: true }) } }),
     prisma.review.count({ where: { userId: user.id, hidden: false } }),
@@ -67,26 +70,53 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ user
     // Films / shows split for the profile rows. Every list is split in two now,
     // so one mixed number on the row that opens them says nothing.
     countWatchedSplit(user.id),
-    prisma.rating.findMany({ where: { userId: user.id }, select: { tmdbId: true, mediaType: true } }),
-    prisma.watchlistItem.groupBy({ by: ['mediaType'], where: { userId: user.id }, _count: { _all: true } }),
+    prisma.rating.findMany({ where: { userId: user.id }, select: { tmdbId: true, mediaType: true, score: true } }),
+    // Watchlist and reviews split three ways. An episode is filed under SHOW, so
+    // grouping by mediaType alone counted every saved episode as a show.
+    Promise.all(SIDES.map(side => prisma.watchlistItem.count({ where: { userId: user.id, ...sideWhere(side) } }))),
+    Promise.all(SIDES.map(side => prisma.review.count({ where: { userId: user.id, hidden: false, ...sideWhere(side) } }))),
   ]);
 
   // 10 buckets, index 0 = score 1 … index 9 = score 10.
   const ratingDistribution = Array.from({ length: 10 }, (_, i) => ratingGroups.find(g => g.score === i + 1)?._count._all ?? 0);
 
-  // Ratings split. Episode ratings collapse into their show, matching the list —
-  // rating 62 episodes is one show rated, not 62 things rated.
+  // Ratings split three ways, the way the lists show them. On the Shows side an
+  // episode rating collapses into its show — rating 62 episodes is one show rated —
+  // and on the Episodes side each counts. The chart draws every side from its own
+  // scores: a series sits on the bar of the score given the SERIES, never on an
+  // episode average, the same rule the owner's own chart follows.
   const ratedShows = new Set<string>();
   let ratedFilms = 0;
+  let ratedEpisodes = 0;
+  const buckets = () => Array.from({ length: 10 }, () => 0);
+  const ratingDistributionBySide = { movies: buckets(), shows: buckets(), episodes: buckets() };
   for (const r of ratingRows) {
-    if (r.mediaType === 'SHOW') ratedShows.add(r.tmdbId.replace(/-S\d+E\d+$/, ''));
-    else ratedFilms++;
+    const bucket = r.score >= 1 && r.score <= 10 ? r.score - 1 : -1;
+    if (r.mediaType !== 'SHOW') {
+      ratedFilms++;
+      if (bucket >= 0) ratingDistributionBySide.movies[bucket]++;
+      continue;
+    }
+    ratedShows.add(r.tmdbId.replace(/-S\d+E\d+$/, ''));
+    if (/-S\d+E\d+$/.test(r.tmdbId)) {
+      ratedEpisodes++;
+      if (bucket >= 0) ratingDistributionBySide.episodes[bucket]++;
+    } else if (bucket >= 0) {
+      ratingDistributionBySide.shows[bucket]++;
+    }
   }
 
-  // The watchlist deliberately does NOT collapse episodes — a saved episode is
-  // its own intent there — so its shows side counts rows, episodes included.
-  const watchlistFilms = watchlistGroups.find(g => g.mediaType === 'MOVIE')?._count._all ?? 0;
-  const watchlistShows = watchlistGroups.find(g => g.mediaType === 'SHOW')?._count._all ?? 0;
+  // Rewatched split the same three ways, off the id: an episode is filed under
+  // SHOW with an -S1E2 id, a whole show under SHOW without one.
+  const rewatched = { films: 0, shows: 0, episodes: 0 };
+  for (const g of rewatchGroups) {
+    if (g.mediaType !== 'SHOW') rewatched.films++;
+    else if (/-S\d+E\d+$/.test(g.tmdbId)) rewatched.episodes++;
+    else rewatched.shows++;
+  }
+
+  const [watchlistFilms, watchlistShows, watchlistEpisodes] = watchlistSplit;
+  const [reviewsFilms, reviewsShows, reviewsEpisodes] = reviewsSplit;
 
   return ok({
     ...user,
@@ -95,16 +125,26 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ user
     watchedCount,
     watchedFilms: watchedSplit.films,
     watchedShows: watchedSplit.shows,
+    watchedEpisodes: watchedSplit.episodes,
     ratedFilms,
     ratedShows: ratedShows.size,
+    ratedEpisodes,
     watchlistFilms,
     watchlistShows,
+    watchlistEpisodes,
     watchlistCount,
     rewatchedCount: rewatchGroups.length,
+    rewatchedFilms: rewatched.films,
+    rewatchedShows: rewatched.shows,
+    rewatchedEpisodes: rewatched.episodes,
     listsCount,
     reviewsCount,
+    reviewsFilms,
+    reviewsShows,
+    reviewsEpisodes,
     rewatchedThisYear: rewatchThisYearGroups.length,
     ratingDistribution,
+    ratingDistributionBySide,
     isFollowing: isFollowingBool,
     isPendingRequest,
     isOwner,

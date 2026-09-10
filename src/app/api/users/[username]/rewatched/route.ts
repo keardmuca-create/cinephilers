@@ -3,6 +3,7 @@ import { prisma } from '@/lib/db';
 import { ok, err } from '@/lib/api-response';
 import { getCurrentUser } from '@/lib/auth-utils';
 import { clampInt } from '@/lib/query-params';
+import { parseSide, sideWhere } from '@/lib/media-side-where';
 
 // Per-title diary aggregate: watch count + latest watch date per title. By
 // default only titles watched 2+ times ("rewatched"); ?min=1 returns the whole
@@ -39,9 +40,11 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ user
     }
   }
 
+  // ?side= gives one side of the Movies · Shows · Episodes pill.
+  const side = parseSide(searchParams.get('side'));
   const groups = await prisma.watchEvent.groupBy({
     by: ['tmdbId', 'mediaType'],
-    where: { userId: user.id, ...yearWhere },
+    where: { userId: user.id, ...yearWhere, ...(side ? sideWhere(side) : {}) },
     _count: { _all: true },
     _max: { watchedAt: true },
     having: { tmdbId: { _count: { gte: min } } },
@@ -60,5 +63,18 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ user
     lastWatchedAt: g._max.watchedAt,
   }));
 
-  return ok({ items, page, limit, hasMore });
+  // How many titles each side of the pill holds, sent with the first page so the
+  // owner's own Rewatched page can label its pill without a second request.
+  const sideCounts = page === 1
+    ? Object.fromEntries(await Promise.all((['movies', 'shows', 'episodes'] as const).map(async s => [
+        s,
+        (await prisma.watchEvent.groupBy({
+          by: ['tmdbId', 'mediaType'],
+          where: { userId: user.id, ...yearWhere, ...sideWhere(s) },
+          having: { tmdbId: { _count: { gte: min } } },
+        })).length,
+      ])))
+    : undefined;
+
+  return ok({ items, page, limit, hasMore, sideCounts });
 }

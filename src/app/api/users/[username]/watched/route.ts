@@ -3,7 +3,8 @@ import { prisma } from '@/lib/db';
 import { paginated, err } from '@/lib/api-response';
 import { getCurrentUser } from '@/lib/auth-utils';
 import { clampInt } from '@/lib/query-params';
-import { listWatchedRows } from '@/lib/watched-rows';
+import { listWatchedRows, listWatchedEpisodes } from '@/lib/watched-rows';
+import { parseSide } from '@/lib/media-side-where';
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ username: string }> }) {
   const { username } = await params;
@@ -28,7 +29,12 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ user
 
   // Films and per-episode show progress merged into one row per title, so other
   // people see the same library the owner does — see lib/watched-rows.
-  const { rows, total } = await listWatchedRows(user.id, { page, limit, year: year || undefined });
+  // ?side= gives one side of the profile's Movies · Shows · Episodes pill; without
+  // it, the mixed list the Recent Activity box reads, unchanged.
+  const side = parseSide(searchParams.get('side'));
+  const { rows, total } = side === 'episodes'
+    ? await listWatchedEpisodes(user.id, { page, limit })
+    : await listWatchedRows(user.id, { page, limit, year: year || undefined, side: side ?? undefined });
 
   // Attach the owner's own rating for each watched title on this page (one
   // bounded query over the page's ids) so the profile can show it inline.

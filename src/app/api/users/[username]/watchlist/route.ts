@@ -3,6 +3,7 @@ import { prisma } from '@/lib/db';
 import { paginated, err } from '@/lib/api-response';
 import { getCurrentUser } from '@/lib/auth-utils';
 import { clampInt } from '@/lib/query-params';
+import { parseSide, sideWhere } from '@/lib/media-side-where';
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ username: string }> }) {
   const { username } = await params;
@@ -23,10 +24,13 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ user
     }
   }
 
+  // ?side= gives one side of the profile's Movies · Shows · Episodes pill.
+  const side = parseSide(searchParams.get('side'));
+  const where = { userId: user.id, ...(side ? sideWhere(side) : {}) };
   const [total, items] = await Promise.all([
-    prisma.watchlistItem.count({ where: { userId: user.id } }),
+    prisma.watchlistItem.count({ where }),
     prisma.watchlistItem.findMany({
-      where: { userId: user.id },
+      where,
       skip: (page - 1) * limit,
       take: limit,
       orderBy: { addedAt: 'desc' },

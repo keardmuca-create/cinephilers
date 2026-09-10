@@ -4,8 +4,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { useParams, useRouter } from 'next/navigation';
-import { Star, Film, Eye, UserPlus, UserCheck, Loader2, Lock, User, MessageSquare, List, ChevronRight, ChevronLeft, Clock, Heart, Crown, Bookmark, Repeat, Award } from 'lucide-react';
-import { Button } from '@/components/ui/button';
+import { Star, Film, Eye, UserPlus, UserCheck, Loader2, Lock, User, MessageSquare, List, ChevronRight, ChevronLeft, Clock, Heart, Crown, Bookmark, Repeat, Award, Tv, Clapperboard } from 'lucide-react';import { Button } from '@/components/ui/button';
 import { SpoilerWrap } from '@/components/spoiler-wrap';
 import { RING } from '@/components/favorites-section';
 import { useAuth } from '@/contexts/auth-context';
@@ -16,6 +15,9 @@ import { BadgeList, FounderChip, type EarnedBadge } from '@/components/badge-row
 import { WatchedEye } from '@/components/watched-eye';
 import { useCommunityRatings } from '@/hooks/use-community-ratings';
 import { resolveDisplayRating } from '@/lib/cinephilers-rating';
+import { MediaToggle } from '@/components/media-toggle';
+import type { MediaSide } from '@/lib/media-type';
+import { episodeLineFor } from '@/lib/episode-line';
 
 interface ProfileUser {
   id: string;
@@ -36,6 +38,18 @@ interface ProfileUser {
   ratedShows: number;
   watchlistFilms: number;
   watchlistShows: number;
+  // The third side of each split — optional so a profile served before the
+  // episodes counts existed still renders.
+  watchedEpisodes?: number;
+  rewatchedFilms?: number;
+  rewatchedShows?: number;
+  rewatchedEpisodes?: number;
+  ratedEpisodes?: number;
+  watchlistEpisodes?: number;
+  reviewsFilms?: number;
+  reviewsShows?: number;
+  reviewsEpisodes?: number;
+  ratingDistributionBySide?: Record<MediaSide, number[]>;
   watchlistCount: number;
   rewatchedCount: number;
   listsCount: number;
@@ -96,24 +110,34 @@ interface PublicList {
   items: { tmdbId: string; title: string | null; poster: string | null; year: string | null; mediaType: string }[];
 }
 
-type Meta = { title: string; year: string; poster: string; tmdbRating?: number };
+type Meta = { title: string; year: string; poster: string; tmdbRating?: number; showName?: string };
 const metaCache: Record<string, Meta> = {};
+
+// An episode's meta names its show, which the grey "S1·E2 · Show" line needs, and a
+// cached episode title can still carry the old "S1E2 · " prefix — stripped here once.
+function toMeta(d: { title?: string; year?: string; poster?: string; tmdbRating?: number; showName?: string }): Meta {
+  return {
+    title: (d.title ?? 'Unknown').replace(/^S\d+E\d+\s·\s/, ''),
+    year: d.year ?? '',
+    poster: d.poster ?? '',
+    tmdbRating: d.tmdbRating,
+    showName: d.showName,
+  };
+}
 
 async function getMeta(tmdbId: string) {
   if (metaCache[tmdbId]) return metaCache[tmdbId];
   const map = await batchFetchMeta([tmdbId]);
   const d = map[tmdbId];
   if (!d) return null;
-  const m: Meta = { title: d.title ?? 'Unknown', year: d.year ?? '', poster: d.poster ?? '', tmdbRating: d.tmdbRating };
+  const m = toMeta(d);
   metaCache[tmdbId] = m;
   return m;
 }
 
 async function prewarmMetaCache(ids: string[]) {
   const map = await batchFetchMeta(ids);
-  for (const [id, m] of Object.entries(map)) {
-    metaCache[id] = { title: m.title, year: m.year, poster: m.poster, tmdbRating: m.tmdbRating };
-  }
+  for (const [id, m] of Object.entries(map)) metaCache[id] = toMeta(m);
 }
 
 // Same round, ringed avatar as your own profile — a person should look the same
@@ -166,6 +190,7 @@ function ReviewCard({ review }: { review: ReviewItem }) {
   const [meta, setMeta] = useState(review.meta ?? metaCache[review.tmdbId] ?? null);
   useEffect(() => { if (!meta) getMeta(review.tmdbId).then(m => { if (m) setMeta(m); }); }, [review.tmdbId, meta]);
   const dateLabel = new Date(review.createdAt).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+  const episodeLine = episodeLineFor(review.tmdbId, meta as Meta | null);
   return (
     <Link href={`/movie/${review.tmdbId}/reviews`} className="block bg-card hover:bg-muted/50 transition-colors rounded-2xl p-4 border border-border group">
       <div className="flex gap-4">
@@ -180,7 +205,8 @@ function ReviewCard({ review }: { review: ReviewItem }) {
             ? <p className="text-base font-bold group-hover:text-primary transition-colors line-clamp-1">{meta.title}</p>
             : <div className="h-4 bg-muted rounded-full w-2/3 animate-pulse" />
           }
-          <p className="text-xs text-muted-foreground">{meta?.year ? `${meta.year} · ` : ''}{dateLabel}</p>
+          {/* An episode names its show where a film gives its year. */}
+          <p className="text-xs text-muted-foreground line-clamp-1">{episodeLine ? `${episodeLine} · ` : meta?.year ? `${meta.year} · ` : ''}{dateLabel}</p>
           {review.score != null && (
             <div className="flex items-center gap-1">
               <Star className="h-3.5 w-3.5 text-primary" />
@@ -204,6 +230,7 @@ function RecentCard({ item }: { item: RecentItem }) {
   const [meta, setMeta] = useState<Meta | null>(metaCache[item.tmdbId] ?? null);
   useEffect(() => { if (!meta) getMeta(item.tmdbId).then(m => { if (m) setMeta(m); }); }, [item.tmdbId, meta]);
   const label = [item.watched ? 'Watched' : null, item.rating != null ? `Rated ${item.rating}/10` : null, item.reviewBody ? 'Reviewed' : null].filter(Boolean).join(' · ');
+  const episodeLine = episodeLineFor(item.tmdbId, meta);
   return (
     <Link href={`/movie/${item.tmdbId}`} className="flex items-center gap-3 py-3 border-b border-border last:border-0 group">
       <div className="relative w-12 shrink-0 rounded-lg overflow-hidden bg-muted shadow-sm" style={{ aspectRatio: '2/3' }}>
@@ -211,6 +238,7 @@ function RecentCard({ item }: { item: RecentItem }) {
       </div>
       <div className="flex-1 min-w-0">
         {meta ? <p className="text-sm font-bold group-hover:text-primary transition-colors line-clamp-1">{meta.title}</p> : <div className="h-3 bg-muted rounded-full w-3/4 animate-pulse" />}
+        {episodeLine && <p className="text-[11px] text-muted-foreground line-clamp-1">{episodeLine}</p>}
         <div className="flex items-center gap-1.5 mt-1 text-xs">
           {item.watched && <WatchedEye state="complete" className="h-3 w-3" />}
           {item.rating != null && <Star className="h-3 w-3 text-primary shrink-0" />}
@@ -223,28 +251,52 @@ function RecentCard({ item }: { item: RecentItem }) {
   );
 }
 
-// The rating-distribution histogram (10 buckets, score 1–10).
-function RatingGraph({ distribution }: { distribution: number[] }) {
-  const total = distribution.reduce((a, b) => a + b, 0);
-  if (total === 0) return null;
-  const max = Math.max(...distribution);
+const SIDES: MediaSide[] = ['movies', 'shows', 'episodes'];
+
+// The rating-distribution histogram (10 buckets, score 1–10), split like the
+// owner's own chart: one side at a time, the side naming the unit, a count over
+// every bar, and a bar opening the Ratings list on its own side and score. No mixed
+// "N rated" total — the pill carries a count per side.
+function RatingGraph({ bySide, onOpen }: {
+  bySide: Record<MediaSide, number[]>;
+  onOpen: (side: MediaSide, score: number) => void;
+}) {
+  const totals = {
+    movies: (bySide.movies ?? []).reduce((a, b) => a + b, 0),
+    shows: (bySide.shows ?? []).reduce((a, b) => a + b, 0),
+    episodes: (bySide.episodes ?? []).reduce((a, b) => a + b, 0),
+  };
+  // Opens on the first side with anything on it.
+  const [side, setSide] = useState<MediaSide>(() => SIDES.find(s => totals[s] > 0) ?? 'movies');
+  if (totals.movies + totals.shows + totals.episodes === 0) return null;
+  const distribution = Array.from({ length: 10 }, (_, i) => bySide[side]?.[i] ?? 0);
+  const max = Math.max(...distribution, 1);
   return (
-    <section className="space-y-2">
-      <div className="flex items-center justify-between">
-        <h2 className="text-lg font-headline font-bold flex items-center gap-2"><Star className="h-5 w-5 text-primary" />Ratings</h2>
-        <span className="text-xs text-muted-foreground">{total.toLocaleString()} rated</span>
-      </div>
-      <div className="flex items-end gap-1 h-16">
+    <section className="space-y-3">
+      <h2 className="text-lg font-headline font-bold flex items-center gap-2"><Star className="h-5 w-5 text-primary" />Ratings</h2>
+      <MediaToggle value={side} onChange={setSide} counts={totals} sides={SIDES} />
+      <div className="flex items-end gap-1 h-24">
         {distribution.map((c, i) => (
-          <div key={i} className="flex-1 h-full flex flex-col justify-end" title={`${i + 1}/10 · ${c}`}>
-            <div className="rounded-t bg-primary/80" style={{ height: max > 0 ? `${(c / max) * 100}%` : 0, minHeight: c > 0 ? 4 : 0 }} />
-          </div>
+          <button
+            key={i}
+            type="button"
+            disabled={c === 0}
+            onClick={() => onOpen(side, i + 1)}
+            aria-label={`${c} rated ${i + 1} out of 10`}
+            className="flex-1 h-full flex flex-col items-center justify-end disabled:cursor-default"
+          >
+            {c > 0 && <span className="text-[10px] font-bold text-muted-foreground mb-0.5">{c}</span>}
+            <div className="w-full flex-1 flex flex-col justify-end">
+              <div className="rounded-t bg-primary/80" style={{ height: `${(c / max) * 100}%`, minHeight: c > 0 ? 4 : 0 }} />
+            </div>
+          </button>
         ))}
       </div>
       <div className="flex items-center justify-between text-xs text-muted-foreground font-semibold">
         <span className="flex items-center gap-0.5"><Star className="h-3 w-3 fill-current" />1</span>
         <span className="flex items-center gap-0.5"><Star className="h-3 w-3 fill-current" />10</span>
       </div>
+      {totals[side] > 0 && <p className="text-center text-xs text-muted-foreground">Tap a bar to see titles with that rating</p>}
     </section>
   );
 }
@@ -259,7 +311,7 @@ function StatRow({ icon, label, count, split, thisYear, onClick }: {
   icon: React.ReactNode;
   label: string;
   count: number;
-  split?: { films: number; shows: number };
+  split?: { films: number; shows: number; episodes?: number };
   thisYear?: number;
   onClick: () => void;
 }) {
@@ -268,12 +320,24 @@ function StatRow({ icon, label, count, split, thisYear, onClick }: {
       className="w-full flex items-center gap-3 py-4 border-b border-border last:border-0 text-left disabled:opacity-40 disabled:cursor-default hover:opacity-70 transition-opacity">
       {icon}
       <span className="flex-1 font-semibold">{label}</span>
-      <span className="text-sm text-muted-foreground text-right">
+      <span
+        className="text-sm text-muted-foreground text-right inline-flex items-center gap-1 whitespace-nowrap"
+        aria-label={split ? `${split.films} films, ${split.shows} shows${split.episodes !== undefined ? `, ${split.episodes} episodes` : ''}` : undefined}
+      >
+        {/* The pill's own icons rather than the words: "568 films · 7 shows · 319
+            eps" needed 373px on a row a 375px phone gives 311, and wrapped. The
+            icons are the ones on the Movies · Shows · Episodes pill this opens. */}
         {split ? (
           <>
-            {split.films.toLocaleString()} film{split.films !== 1 ? 's' : ''}
-            <span className="text-muted-foreground/60"> · </span>
-            {split.shows.toLocaleString()} show{split.shows !== 1 ? 's' : ''}
+            <Film className="h-3.5 w-3.5" />{split.films.toLocaleString()}
+            <span className="text-muted-foreground/60 mx-0.5">·</span>
+            <Tv className="h-3.5 w-3.5" />{split.shows.toLocaleString()}
+            {split.episodes !== undefined && (
+              <>
+                <span className="text-muted-foreground/60 mx-0.5">·</span>
+                <Clapperboard className="h-3.5 w-3.5" />{split.episodes.toLocaleString()}
+              </>
+            )}
           </>
         ) : count.toLocaleString()}
         {thisYear != null && thisYear > 0 && <span className="text-muted-foreground/60"> · {thisYear} this year</span>}
@@ -307,6 +371,9 @@ const OPEN_META: Record<OpenKey, { title: string; icon: React.ReactNode }> = {
 
 const SECTION_PAGE_SIZE = 60;
 
+/** The lists that split into Movies · Shows · Episodes, as the owner's own do. */
+const SIDED: OpenKey[] = ['watched', 'rewatched', 'ratings', 'watchlist', 'reviews'];
+
 // One row in a poster section's full list — TMDB rating, the user's own rating
 // (when they rated it), a status label (only where it adds info), and the date.
 interface SectionItem {
@@ -314,29 +381,37 @@ interface SectionItem {
   score?: number;
   rewatchCount?: number;
   date?: string;
-  // Watch History only: a show arrives as ONE row carrying its episode progress,
-  // never as a run of individual episodes.
+  // Watch History, Shows side: a show arrives as ONE row carrying its episode
+  // progress. The Episodes side lists the episodes themselves.
   watchedEpisodes?: number;
   totalEpisodes?: number;
   status?: 'completed' | 'up-to-date' | 'watching';
+  /** Ratings, Shows side: episodes rated under the show, and their average. */
+  episodeCount?: number;
+  episodeAverage?: number | null;
 }
 
-async function fetchSectionPage(key: SectionKey, uname: string, page: number): Promise<{ items: SectionItem[]; hasMore: boolean }> {
+async function fetchSectionPage(
+  key: SectionKey, uname: string, page: number, side: MediaSide, score: number | null,
+): Promise<{ items: SectionItem[]; hasMore: boolean }> {
+  const sideParam = `&side=${side}`;
+  const scoreParam = key === 'ratings' && score ? `&score=${score}` : '';
   try {
     if (key === 'rewatched') {
-      const res = await fetch(`/api/users/${uname}/rewatched?min=2&sort=recent&limit=${SECTION_PAGE_SIZE}&page=${page}`, { credentials: 'include' });
+      const res = await fetch(`/api/users/${uname}/rewatched?min=2&sort=recent&limit=${SECTION_PAGE_SIZE}&page=${page}${sideParam}`, { credentials: 'include' });
       if (!res.ok) return { items: [], hasMore: false };
       const json = await res.json();
       const rows: { tmdbId: string; count: number; lastWatchedAt?: string }[] = json.data?.items ?? [];
       return { items: rows.map(i => ({ tmdbId: i.tmdbId, rewatchCount: i.count, date: i.lastWatchedAt })), hasMore: !!json.data?.hasMore };
     }
-    const res = await fetch(`/api/users/${uname}/${key}?limit=${SECTION_PAGE_SIZE}&page=${page}`, { credentials: 'include' });
+    const res = await fetch(`/api/users/${uname}/${key}?limit=${SECTION_PAGE_SIZE}&page=${page}${sideParam}${scoreParam}`, { credentials: 'include' });
     if (!res.ok) return { items: [], hasMore: false };
     const json = await res.json();
     const rows: {
       tmdbId: string; score?: number | null;
       watchedAt?: string; addedAt?: string; updatedAt?: string; createdAt?: string;
       watchedEpisodes?: number; totalEpisodes?: number; status?: SectionItem['status'];
+      episodeCount?: number; episodeAverage?: number | null;
     }[] = json.data ?? [];
     const items: SectionItem[] = rows.map(i => ({
       tmdbId: i.tmdbId,
@@ -345,6 +420,8 @@ async function fetchSectionPage(key: SectionKey, uname: string, page: number): P
       watchedEpisodes: i.watchedEpisodes,
       totalEpisodes: i.totalEpisodes,
       status: i.status,
+      episodeCount: i.episodeCount,
+      episodeAverage: i.episodeAverage,
     }));
     const total: number = json.pagination?.total ?? rows.length;
     return { items, hasMore: page * SECTION_PAGE_SIZE < total };
@@ -358,12 +435,13 @@ function SectionRow({ item, section }: { item: SectionItem; section: SectionKey 
   // Read from the loaded meta, not the cache directly — this row fetches its own
   // and the cache may still be empty on first paint.
   const shown = resolveDisplayRating(meta?.tmdbRating, cine[item.tmdbId]);
+  const episodeLine = episodeLineFor(item.tmdbId, meta);
   const cfg = SECTION_META[section];
   const StatusIcon = cfg.statusIcon;
-  // The label only adds info for watched/rewatched — for ratings the score
-  // says it all, and on the Watchlist page "Watchlist" is redundant.
-  const showLabel = section === 'watched' || section === 'rewatched';
-  // A show row earns its status in place of the plain "Watched". Progress only
+  // A show row earns its status: progress, "Up to date", "Completed". A film or an
+  // episode in someone's Watch History gets no label at all — every row there is
+  // watched, so "Watched" only repeated the list's own title, and Letterboxd's
+  // member Films grid carries no watched mark for the same reason. Progress only
   // once episodes are actually ticked — a show marked whole before episodes were
   // tracked has none, and "0 / 62" reads as a bug rather than as a whole-show mark.
   const episodes = item.watchedEpisodes ?? 0;
@@ -380,7 +458,12 @@ function SectionRow({ item, section }: { item: SectionItem; section: SectionKey 
     : item.status === 'completed' ? (progress ?? 'Completed')
     : item.status === 'up-to-date' ? [progress, 'Up to date'].filter(Boolean).join(' · ')
     : partWatched ? (progress ?? '')
-    : cfg.label;
+    : null;
+  // Ratings says it with the score, and "Watchlist" on the Watchlist is redundant.
+  const showLabel = (section === 'watched' || section === 'rewatched') && !!label;
+  // What the row's date actually is, which differs by list — it read "Added on"
+  // everywhere, which is only true of the Watchlist.
+  const datePrefix = { watched: 'Watched on', rewatched: 'Last watched', ratings: 'Rated on', watchlist: 'Added on' }[section];
   const dateLabel = item.date ? new Date(item.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : null;
   return (
     <Link href={`/movie/${item.tmdbId}`} className="flex gap-4 py-3 border-b border-border last:border-0 group">
@@ -389,12 +472,20 @@ function SectionRow({ item, section }: { item: SectionItem; section: SectionKey 
       </div>
       <div className="flex-1 min-w-0 space-y-1 py-0.5">
         {meta ? <p className="text-sm font-bold group-hover:text-primary transition-colors line-clamp-1">{meta.title}</p> : <div className="h-4 bg-muted rounded-full w-2/3 animate-pulse" />}
-        {meta?.year && <p className="text-xs text-muted-foreground">{meta.year}</p>}
+        {/* An episode names its show where a film or a series gives its year. */}
+        {episodeLine
+          ? <p className="text-xs text-muted-foreground line-clamp-1">{episodeLine}</p>
+          : meta?.year && <p className="text-xs text-muted-foreground">{meta.year}</p>}
         <div className="flex items-center gap-3 flex-wrap pt-0.5">
-          {shown && (
+          {/* 0.0 when TMDB has no score, as on your own cards — but only on lists of
+              things they have seen. A watchlist is full of films not out yet, where
+              0.0 reads as a verdict on a film nobody could have rated, so it shows
+              no star, as your own Watchlist shelf does. Waits for the meta, so a row
+              still loading does not flash 0.0 first. */}
+          {(shown || (meta && section !== 'watchlist')) && (
             <span className="flex items-center gap-1 text-sm font-bold">
-              <Star className={`h-3.5 w-3.5 ${shown.source === 'cinephilers' ? 'fill-primary text-primary' : 'fill-yellow-400 text-yellow-400'}`} />
-              {shown.value.toFixed(1)}
+              <Star className={`h-3.5 w-3.5 ${shown?.source === 'cinephilers' ? 'fill-primary text-primary' : 'fill-yellow-400 text-yellow-400'}`} />
+              {(shown?.value ?? 0).toFixed(1)}
             </span>
           )}
           {item.score != null && (
@@ -412,7 +503,14 @@ function SectionRow({ item, section }: { item: SectionItem; section: SectionKey 
             </span>
           )}
         </div>
-        {dateLabel && <p className="text-xs text-muted-foreground">Added on {dateLabel}</p>}
+        {/* A show whose episodes were rated says so, as the owner's own list does —
+            an average, labelled, never passed off as a verdict on the series. */}
+        {section === 'ratings' && item.episodeCount ? (
+          <p className="text-[11px] text-muted-foreground/70">
+            avg {item.episodeAverage} across {item.episodeCount} episode{item.episodeCount === 1 ? '' : 's'}
+          </p>
+        ) : null}
+        {dateLabel && <p className="text-xs text-muted-foreground">{datePrefix} {dateLabel}</p>}
       </div>
     </Link>
   );
@@ -472,6 +570,10 @@ export default function PublicProfilePage() {
   const [sectionLoading, setSectionLoading] = useState(false);
   const [reviewsLoading, setReviewsLoading] = useState(false);
   const [listsLoading, setListsLoading] = useState(false);
+  // Which side of the Movies · Shows · Episodes pill the open list shows, and the
+  // score a chart bar opened it on (Ratings only).
+  const [sectionSide, setSectionSide] = useState<MediaSide>('movies');
+  const [sectionScore, setSectionScore] = useState<number | null>(null);
 
   const loadActivity = async (uname: string) => {
     try {
@@ -526,21 +628,47 @@ export default function PublicProfilePage() {
     }
   }, [username, router]);
 
-  // (Re)load page 1 of a poster section.
-  const loadSectionFirstPage = async (key: SectionKey) => {
+  // Per-side counts for a list's pill — the same numbers its profile row shows.
+  const sideCountsFor = (key: OpenKey): Record<MediaSide, number> | null => {
+    if (!profile) return null;
+    switch (key) {
+      case 'watched': return { movies: profile.watchedFilms ?? 0, shows: profile.watchedShows ?? 0, episodes: profile.watchedEpisodes ?? 0 };
+      case 'rewatched': return { movies: profile.rewatchedFilms ?? 0, shows: profile.rewatchedShows ?? 0, episodes: profile.rewatchedEpisodes ?? 0 };
+      case 'ratings': return { movies: profile.ratedFilms ?? 0, shows: profile.ratedShows ?? 0, episodes: profile.ratedEpisodes ?? 0 };
+      case 'watchlist': return { movies: profile.watchlistFilms ?? 0, shows: profile.watchlistShows ?? 0, episodes: profile.watchlistEpisodes ?? 0 };
+      case 'reviews': return { movies: profile.reviewsFilms ?? 0, shows: profile.reviewsShows ?? 0, episodes: profile.reviewsEpisodes ?? 0 };
+      default: return null;
+    }
+  };
+
+  // (Re)load page 1 of a poster section, on one side.
+  const loadSectionFirstPage = async (key: SectionKey, side: MediaSide, score: number | null) => {
     if (!profile) return;
     setSectionItems([]);
     setSectionPage(1);
     setSectionHasMore(false);
     setSectionLoading(true);
-    const { items, hasMore } = await fetchSectionPage(key, profile.username, 1);
+    const { items, hasMore } = await fetchSectionPage(key, profile.username, 1, side, score);
     await prewarmMetaCache(items.map(i => i.tmdbId));
     setSectionItems(items);
     setSectionHasMore(hasMore);
     setSectionLoading(false);
   };
 
-  const openSectionView = async (key: OpenKey) => {
+  // Reviews come one side at a time now, so they are fetched per side rather than
+  // once and kept.
+  const loadReviews = async (side: MediaSide) => {
+    if (!profile) return;
+    setReviews([]);
+    setReviewsLoading(true);
+    try {
+      const res = await fetch(`/api/users/${profile.username}/reviews?limit=50&side=${side}`, { credentials: 'include' });
+      if (res.ok) { const j = await res.json(); const items: ReviewItem[] = j.data ?? []; await prewarmMetaCache(items.map(r => r.tmdbId)); setReviews(items); }
+    } catch { /* ignore */ }
+    finally { setReviewsLoading(false); }
+  };
+
+  const openSectionView = async (key: OpenKey, opts?: { side?: MediaSide; score?: number }) => {
     if (!profile) return;
     setOpenSection(key);
     window.scrollTo(0, 0);
@@ -548,15 +676,16 @@ export default function PublicProfilePage() {
     // Badges are already loaded with the profile — nothing to fetch.
     if (key === 'badges') return;
 
+    // Opens on the side asked for, else the first side with anything on it: a
+    // profile of shows alone should not open on an empty Movies list.
+    const counts = sideCountsFor(key);
+    const side = opts?.side ?? (counts ? SIDES.find(s => counts[s] > 0) ?? 'movies' : 'movies');
+    const score = opts?.score ?? null;
+    setSectionSide(side);
+    setSectionScore(score);
+
     if (key === 'reviews') {
-      if (reviews.length === 0) {
-        setReviewsLoading(true);
-        try {
-          const res = await fetch(`/api/users/${profile.username}/reviews?limit=50`, { credentials: 'include' });
-          if (res.ok) { const j = await res.json(); const items: ReviewItem[] = j.data ?? []; await prewarmMetaCache(items.map(r => r.tmdbId)); setReviews(items); }
-        } catch { /* ignore */ }
-        finally { setReviewsLoading(false); }
-      }
+      void loadReviews(side);
       return;
     }
     if (key === 'lists') {
@@ -571,14 +700,24 @@ export default function PublicProfilePage() {
       return;
     }
 
-    loadSectionFirstPage(key);
+    loadSectionFirstPage(key, side, score);
+  };
+
+  const changeSectionSide = (next: MediaSide) => {
+    if (!openSection || next === sectionSide) return;
+    setSectionSide(next);
+    // A score filter came from one side's bar; carried across, it would filter the
+    // other side by a bar that was never drawn from it.
+    setSectionScore(null);
+    if (openSection === 'reviews') void loadReviews(next);
+    else if (openSection !== 'lists' && openSection !== 'badges') loadSectionFirstPage(openSection, next, null);
   };
 
   const loadMoreSection = async () => {
     if (!profile || !openSection || openSection === 'reviews' || openSection === 'lists' || openSection === 'badges' || sectionLoading) return;
     const next = sectionPage + 1;
     setSectionLoading(true);
-    const { items, hasMore } = await fetchSectionPage(openSection, profile.username, next);
+    const { items, hasMore } = await fetchSectionPage(openSection, profile.username, next, sectionSide, sectionScore);
     await prewarmMetaCache(items.map(i => i.tmdbId));
     setSectionItems(prev => [...prev, ...items]);
     setSectionPage(next);
@@ -649,6 +788,25 @@ export default function PublicProfilePage() {
             they've watched, not for slicing it — and a year total counts films and
             shows together, which is the one thing the split exists to stop. Your
             own year breakdowns live on the stats page. */}
+
+        {/* The same Movies · Shows · Episodes pill as the owner's own lists, with
+            the counts the profile row showed. */}
+        {SIDED.includes(openSection) && (
+          <MediaToggle value={sectionSide} onChange={changeSectionSide} counts={sideCountsFor(openSection) ?? undefined} sides={SIDES} />
+        )}
+        {openSection === 'ratings' && sectionScore !== null && (
+          <div className="flex items-center justify-between text-sm">
+            <span className="flex items-center gap-1 font-semibold text-muted-foreground">
+              Rated <Star className="h-3.5 w-3.5 text-primary" />{sectionScore}
+            </span>
+            <button
+              onClick={() => { setSectionScore(null); loadSectionFirstPage('ratings', sectionSide, null); }}
+              className="text-xs font-semibold text-primary hover:opacity-70 transition-opacity"
+            >
+              Show all
+            </button>
+          </div>
+        )}
 
         {openSection === 'badges' ? (
           earnedBadges.length === 0 ? emptyState
@@ -825,21 +983,37 @@ export default function PublicProfilePage() {
       )}
 
       {/* Ratings distribution graph */}
-      {isVisible && <RatingGraph distribution={profile.ratingDistribution ?? []} />}
+      {isVisible && (
+        <RatingGraph
+          bySide={profile.ratingDistributionBySide ?? { movies: profile.ratingDistribution ?? [], shows: [], episodes: [] }}
+          onOpen={(side, score) => openSectionView('ratings', { side, score })}
+        />
+      )}
 
       {/* Stat rows — each opens the full-screen list */}
       {isVisible && (
         <section className="bg-card rounded-2xl border border-border px-4">
-          {/* No "this year" here: it counted films and shows together, which is the
-              one thing the split exists to stop. Rewatched keeps its own, being
-              films only. */}
-          <StatRow icon={<Eye className="h-5 w-5 text-primary" />} label="Watch History" count={profile.watchedCount} split={{ films: profile.watchedFilms ?? 0, shows: profile.watchedShows ?? 0 }} onClick={() => openSectionView('watched')} />
-          {/* Rewatched is films-only, so it keeps its single number. */}
-          <StatRow icon={<Repeat className="h-5 w-5 text-primary" />} label="Rewatched" count={profile.rewatchedCount} thisYear={profile.rewatchedThisYear} onClick={() => openSectionView('rewatched')} />
-          <StatRow icon={<Star className="h-5 w-5 text-primary" />} label="Ratings" count={(profile.ratingDistribution ?? []).reduce((a, b) => a + b, 0)} split={{ films: profile.ratedFilms ?? 0, shows: profile.ratedShows ?? 0 }} onClick={() => openSectionView('ratings')} />
-          <StatRow icon={<Bookmark className="h-5 w-5 text-primary" />} label="Watchlist" count={profile.watchlistCount} split={{ films: profile.watchlistFilms ?? 0, shows: profile.watchlistShows ?? 0 }} onClick={() => openSectionView('watchlist')} />
+          {/* No "this year" on any row: it counted films and shows together, which is
+              the one thing the split exists to stop. Every row names all three sides,
+              with the pill's icons — Rewatched included (Keard, 2026-09-11). */}
+          <StatRow icon={<Eye className="h-5 w-5 text-primary" />} label="Watch History" count={profile.watchedCount} split={{ films: profile.watchedFilms ?? 0, shows: profile.watchedShows ?? 0, episodes: profile.watchedEpisodes }} onClick={() => openSectionView('watched')} />
+          <StatRow
+            icon={<Repeat className="h-5 w-5 text-primary" />}
+            label="Rewatched"
+            count={profile.rewatchedCount}
+            split={profile.rewatchedFilms !== undefined ? { films: profile.rewatchedFilms, shows: profile.rewatchedShows ?? 0, episodes: profile.rewatchedEpisodes } : undefined}
+            onClick={() => openSectionView('rewatched')}
+          />
+          <StatRow icon={<Star className="h-5 w-5 text-primary" />} label="Ratings" count={(profile.ratingDistribution ?? []).reduce((a, b) => a + b, 0)} split={{ films: profile.ratedFilms ?? 0, shows: profile.ratedShows ?? 0, episodes: profile.ratedEpisodes }} onClick={() => openSectionView('ratings')} />
+          <StatRow icon={<Bookmark className="h-5 w-5 text-primary" />} label="Watchlist" count={profile.watchlistCount} split={{ films: profile.watchlistFilms ?? 0, shows: profile.watchlistShows ?? 0, episodes: profile.watchlistEpisodes }} onClick={() => openSectionView('watchlist')} />
           <StatRow icon={<List className="h-5 w-5 text-primary" />} label="Custom Lists" count={profile.listsCount} onClick={() => openSectionView('lists')} />
-          <StatRow icon={<MessageSquare className="h-5 w-5 text-primary" />} label="Reviews" count={profile.reviewsCount} onClick={() => openSectionView('reviews')} />
+          <StatRow
+            icon={<MessageSquare className="h-5 w-5 text-primary" />}
+            label="Reviews"
+            count={profile.reviewsCount}
+            split={profile.reviewsFilms !== undefined ? { films: profile.reviewsFilms, shows: profile.reviewsShows ?? 0, episodes: profile.reviewsEpisodes } : undefined}
+            onClick={() => openSectionView('reviews')}
+          />
           {/* Only earned ones are counted — how close someone else is to a badge
               they haven't won is their business, not a visitor's. */}
           <StatRow icon={<Award className="h-5 w-5 text-primary" />} label="Badges" count={earnedBadges.length} onClick={() => openSectionView('badges')} />

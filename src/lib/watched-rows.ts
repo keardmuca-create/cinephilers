@@ -43,15 +43,18 @@ export interface WatchedRowsResult {
  */
 export async function listWatchedRows(
   userId: string,
-  { page, limit, year }: { page: number; limit: number; year?: number },
+  { page, limit, year, side }: { page: number; limit: number; year?: number; side?: 'movies' | 'shows' },
 ): Promise<WatchedRowsResult> {
   const yearWhere = year
     ? { watchedAt: { gte: new Date(year, 0, 1), lt: new Date(year + 1, 0, 1) } }
     : {};
+  // One side of the pill, when asked: films alone, or shows alone (whole-show marks
+  // and ticked episodes merged, as below). Neither is the mixed list.
+  const typeWhere = side === 'movies' ? { mediaType: 'MOVIE' as const } : side === 'shows' ? { mediaType: 'SHOW' as const } : {};
 
   // One group per show the user has ticked anything in — a handful of rows even
   // for a heavy watcher, so these are all fetched rather than paginated.
-  const episodeGroups = await prisma.watchedEpisode.groupBy({
+  const episodeGroups = side === 'movies' ? [] : await prisma.watchedEpisode.groupBy({
     by: ['showTmdbId'],
     where: { userId, ...yearWhere },
     _count: { _all: true },
@@ -64,13 +67,13 @@ export async function listWatchedRows(
   const scan = Math.min(page * limit + showIds.length, MAX_SCAN);
 
   const [itemTotal, overlap, items, showMeta] = await Promise.all([
-    prisma.watchedItem.count({ where: { userId, ...yearWhere } }),
+    prisma.watchedItem.count({ where: { userId, ...typeWhere, ...yearWhere } }),
     // Shows recorded BOTH ways: counted once, not twice.
     showIds.length
       ? prisma.watchedItem.count({ where: { userId, mediaType: 'SHOW', tmdbId: { in: showIds }, ...yearWhere } })
       : Promise.resolve(0),
     prisma.watchedItem.findMany({
-      where: { userId, ...yearWhere },
+      where: { userId, ...typeWhere, ...yearWhere },
       take: scan,
       orderBy: { watchedAt: 'desc' },
     }),
@@ -119,6 +122,38 @@ export async function listWatchedRows(
   };
 }
 
+/** The canonical show id — an old row may hold the bare TMDB number. */
+const canonicalShowId = (id: string) => (/^\d+$/.test(id) ? `tmdb-tv-${id}` : id);
+
+/**
+ * One page of single episodes watched, newest first — the Episodes side, where
+ * each episode is its own row on the day it was watched rather than folded into
+ * its show.
+ */
+export async function listWatchedEpisodes(
+  userId: string,
+  { page, limit }: { page: number; limit: number },
+): Promise<WatchedRowsResult> {
+  const [total, episodes] = await Promise.all([
+    prisma.watchedEpisode.count({ where: { userId } }),
+    prisma.watchedEpisode.findMany({
+      where: { userId },
+      orderBy: { watchedAt: 'desc' },
+      skip: (page - 1) * limit,
+      take: limit,
+      select: { showTmdbId: true, season: true, episode: true, watchedAt: true },
+    }),
+  ]);
+  return {
+    rows: episodes.map(e => ({
+      tmdbId: `${canonicalShowId(e.showTmdbId)}-S${e.season}E${e.episode}`,
+      mediaType: 'SHOW' as const,
+      watchedAt: e.watchedAt,
+    })),
+    total,
+  };
+}
+
 /**
  * Films and shows counted separately, the way every list now presents them.
  * A profile showing one mixed number says nothing once the list it opens is
@@ -130,24 +165,26 @@ export async function listWatchedRows(
 export async function countWatchedSplit(
   userId: string,
   { year }: { year?: number } = {},
-): Promise<{ films: number; shows: number }> {
+): Promise<{ films: number; shows: number; episodes: number }> {
   const yearWhere = year
     ? { watchedAt: { gte: new Date(year, 0, 1), lt: new Date(year + 1, 0, 1) } }
     : {};
 
-  const [films, showItems, episodeShows] = await Promise.all([
+  const [films, showItems, episodeShows, episodes] = await Promise.all([
     prisma.watchedItem.count({ where: { userId, mediaType: 'MOVIE', ...yearWhere } }),
     prisma.watchedItem.findMany({
       where: { userId, mediaType: 'SHOW', ...yearWhere },
       select: { tmdbId: true },
     }),
     prisma.watchedEpisode.groupBy({ by: ['showTmdbId'], where: { userId, ...yearWhere } }),
+    // The Episodes side counts each one — the number its list has rows for.
+    prisma.watchedEpisode.count({ where: { userId, ...yearWhere } }),
   ]);
 
   const shows = new Set(showItems.map(s => s.tmdbId));
   for (const g of episodeShows) shows.add(g.showTmdbId);
 
-  return { films, shows: shows.size };
+  return { films, shows: shows.size, episodes };
 }
 
 /**
