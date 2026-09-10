@@ -1,6 +1,6 @@
 "use client"
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { ChevronLeft, Repeat, Film, Search, X, ChevronDown, ChevronUp, Trash2, SlidersHorizontal } from 'lucide-react';
@@ -15,6 +15,9 @@ import { RefineSheet, type RefineValue } from '@/components/refine-sheet';
 import { useAuth } from '@/contexts/auth-context';
 import { WatchedEye } from '@/components/watched-eye';
 import { CommunityStar } from '@/components/community-star';
+import { MediaToggle } from '@/components/media-toggle';
+import type { MediaSide } from '@/lib/media-type';
+import { episodeLineFor } from '@/lib/episode-line';
 
 interface DiaryTitle {
   tmdbId: string;
@@ -26,6 +29,8 @@ interface DiaryTitle {
   year: string;
   tmdbRating?: number;
   userRating?: number;
+  /** "S1·E2 · House of the Dragon" for a rewatched episode. */
+  episodeLine?: string;
 }
 
 interface WatchDate { id: string; watchedAt: string; isRewatch: boolean }
@@ -57,6 +62,30 @@ export default function DiaryPage() {
   const [expanded, setExpanded] = useState<string | null>(null);
   const [dates, setDates] = useState<Record<string, WatchDate[]>>({});
   const [busyId, setBusyId] = useState<string | null>(null);
+  // Movies · Shows · Episodes, like every other list. Server-safe default; the saved
+  // side is read after mount, as /history does. The counts come with page one.
+  const [side, setSide] = useState<MediaSide>('movies');
+  const [sideCounts, setSideCounts] = useState<Record<MediaSide, number> | null>(null);
+  /** Whether a side was ever chosen — saved from before, or tapped. Until then the
+   *  page may move itself off an empty side. */
+  const sideChosen = useRef(false);
+
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem('rewatched-side');
+      if (saved === 'movies' || saved === 'shows' || saved === 'episodes') { sideChosen.current = true; setSide(saved); }
+    } catch { /* ignore */ }
+  }, []);
+
+  const changeSide = (next: MediaSide) => {
+    if (next === side) return;
+    sideChosen.current = true;
+    // Cleared at once, so the old side's rows never sit under the new side's pill
+    // while its first page loads.
+    setItems([]);
+    setSide(next);
+    try { localStorage.setItem('rewatched-side', next); } catch { /* ignore */ }
+  };
 
   // Restore the saved refine after mount + re-read once the login sync lands.
   useEffect(() => {
@@ -66,13 +95,23 @@ export default function DiaryPage() {
     return () => window.removeEventListener('cinephilers-db-restored', read);
   }, []);
 
-  const loadPage = async (p: number, r: RefineValue) => {
+  const loadPage = async (p: number, r: RefineValue, s: MediaSide) => {
     if (!user?.username) return;
     try {
       const sort = r.sortField === 'count' ? 'count' : 'recent';
-      const res = await fetchWithAuth(`/api/users/${user.username}/rewatched?min=2&sort=${sort}&dir=${r.sortDir}&page=${p}&limit=${PAGE_SIZE}`);
+      const res = await fetchWithAuth(`/api/users/${user.username}/rewatched?min=2&sort=${sort}&dir=${r.sortDir}&page=${p}&limit=${PAGE_SIZE}&side=${s}`);
       if (!res.ok) return;
       const json = await res.json();
+      if (p === 1 && json.data?.sideCounts) {
+        const counts = json.data.sideCounts as Record<MediaSide, number>;
+        setSideCounts(counts);
+        // No side chosen yet and this one is empty: open on the first side with
+        // anything on it, as someone else's profile does, not on a blank list.
+        if (!sideChosen.current && counts[s] === 0) {
+          const first = (['movies', 'shows', 'episodes'] as MediaSide[]).find(x => counts[x] > 0);
+          if (first) { sideChosen.current = true; setSide(first); return; }
+        }
+      }
       const rows: { tmdbId: string; mediaType: string; count: number; lastWatchedAt: string | null }[] = json.data?.items ?? [];
       setHasMore(json.data?.hasMore ?? false);
       if (rows.length === 0) { if (p === 1) setItems([]); return; }
@@ -83,13 +122,15 @@ export default function DiaryPage() {
           const saved = localStorage.getItem(`movie-rating-${r.tmdbId}`);
           if (saved) userRating = parseInt(saved, 10);
         } catch { /* ignore */ }
+        const episodeLine = episodeLineFor(r.tmdbId, meta[r.tmdbId]);
         return {
           ...r,
-          title: meta[r.tmdbId]?.title ?? 'Untitled',
+          title: (meta[r.tmdbId]?.title ?? 'Untitled').replace(/^S\d+E\d+\s·\s/, ''),
           poster: meta[r.tmdbId]?.poster ?? '',
-          year: meta[r.tmdbId]?.year ?? '',
+          year: episodeLine ? '' : (meta[r.tmdbId]?.year ?? ''),
           tmdbRating: meta[r.tmdbId]?.tmdbRating,
           userRating,
+          episodeLine,
         };
       });
       setItems(prev => (p === 1 ? mapped : [...prev, ...mapped]));
@@ -102,9 +143,9 @@ export default function DiaryPage() {
     setLoading(true);
     setPage(1);
     setExpanded(null);
-    loadPage(1, refine).finally(() => setLoading(false));
+    loadPage(1, refine, side).finally(() => setLoading(false));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [authLoading, user?.id, refine]);
+  }, [authLoading, user?.id, refine, side]);
 
   // Tap the x-count: expand the row into every logged watch date for the title.
   const toggleDates = async (item: DiaryTitle) => {
@@ -175,7 +216,10 @@ export default function DiaryPage() {
         </h1>
       </div>
 
-      {loading ? (
+      {/* The whole-page loader is for the first load only. Once the pill exists,
+          switching side reloads just the list beneath it — the pill vanishing
+          mid-tap read as the page breaking. */}
+      {loading && !sideCounts ? (
         <div className="px-6 py-20 text-center text-sm text-muted-foreground">Loading…</div>
       ) : !user ? (
         <div className="flex flex-col items-center justify-center py-20 gap-3 text-center px-6">
@@ -183,7 +227,10 @@ export default function DiaryPage() {
           <p className="text-muted-foreground text-sm">Log in to see your rewatches</p>
           <Button asChild className="rounded-full font-bold mt-2"><Link href="/login">Log In</Link></Button>
         </div>
-      ) : items.length === 0 && !search ? (
+      ) : (sideCounts ? sideCounts.movies + sideCounts.shows + sideCounts.episodes === 0 : items.length === 0) && !search ? (
+        // The whole-page empty state only when nothing is rewatched on ANY side —
+        // an empty Movies side must still show the pill, or the shows behind it
+        // could never be reached.
         <div className="flex flex-col items-center justify-center py-20 gap-3 text-center px-6">
           <Repeat className="h-12 w-12 text-muted-foreground/20" />
           <p className="text-muted-foreground text-sm">Anything you&apos;ve watched more than once shows up here, with every date</p>
@@ -193,6 +240,10 @@ export default function DiaryPage() {
           <div className="px-6 pt-6 pb-1">
             <h2 className="text-3xl font-headline font-bold mb-0.5">Rewatched</h2>
             <p className="text-muted-foreground text-sm">{items.length}{hasMore ? '+' : ''} Title{items.length !== 1 ? 's' : ''}</p>
+          </div>
+
+          <div className="px-6 pt-4">
+            <MediaToggle value={side} onChange={changeSide} counts={sideCounts ?? undefined} sides={['movies', 'shows', 'episodes']} />
           </div>
 
           {/* Search bar */}
@@ -227,6 +278,12 @@ export default function DiaryPage() {
             </button>
           </div>
 
+          {loading ? (
+            <p className="px-6 py-12 text-center text-sm text-muted-foreground">Loading…</p>
+          ) : filtered.length === 0 && !search && (
+            <p className="px-6 py-12 text-center text-sm text-muted-foreground">No {side} rewatched yet</p>
+          )}
+
           <div className="px-6 divide-y divide-border">
             {filtered.map(item => (
               <div key={item.tmdbId} className="py-3.5">
@@ -244,7 +301,7 @@ export default function DiaryPage() {
                       <h3 className="text-sm font-semibold font-headline line-clamp-2 group-hover:text-primary transition-colors leading-snug mb-0.5">
                         {item.title}
                       </h3>
-                      <p className="text-xs text-muted-foreground mb-1.5">{item.year}</p>
+                      <p className="text-xs text-muted-foreground mb-1.5 line-clamp-1">{item.episodeLine ?? item.year}</p>
                       <div className="flex items-center gap-2.5 flex-wrap">
                         <CommunityStar id={item.tmdbId} tmdbRating={item.tmdbRating} />
                         {item.userRating !== undefined && (
@@ -311,7 +368,7 @@ export default function DiaryPage() {
               <Button
                 variant="outline"
                 className="rounded-full font-bold"
-                onClick={() => { const next = page + 1; setPage(next); loadPage(next, refine); }}
+                onClick={() => { const next = page + 1; setPage(next); loadPage(next, refine, side); }}
               >
                 Load more
               </Button>
