@@ -14,7 +14,7 @@ import {
   Play, Check, Plus, Star, ChevronLeft, Share2, ListPlus, Quote,
   Info, Film, Calendar, Clock, Globe, Building2, Tv, ChevronDown, ChevronUp,
   DollarSign, Images, Clapperboard, PenLine, ChevronRight, User, Users, MessageSquare, Trash2,
-  Repeat, CheckCircle2, Eye,
+  CheckCircle2, Eye,
 } from 'lucide-react';
 import { WatchedEye } from '@/components/watched-eye';
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
@@ -24,6 +24,7 @@ import { Separator } from '@/components/ui/separator';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Badge } from '@/components/ui/badge';
 import { toast } from '@/hooks/use-toast';
+import { RewatchStrip } from '@/components/rewatch-strip';
 import { appendWatchLog, removeFromWatchLog, saveMovieRating } from '@/lib/watch-log';
 import { recordAddedAt, recordWatchedAt, recordManualWatch, removeManualWatch, recordRatedAt, removeRatedAt, legacyTwin, parseEpisodeId } from '@/lib/media-id';
 import { EpisodePage } from '@/components/episode-page';
@@ -1215,15 +1216,6 @@ function MovieDetailInner() {
   const [myReview, setMyReview] = useState<UserReview | null>(null);
   const [authGate, setAuthGate] = useState<string | null>(null);
   const [cineRating, setCineRating] = useState<CinephilersRating | null>(null);
-  // Diary: how many times this title was watched + the latest date. Loaded
-  // from the server (never mirrored to localStorage). rewatchDateOpen shows
-  // the optional backdate picker; lastLoggedEventId powers the Undo.
-  const [seenCount, setSeenCount] = useState<number | null>(null);
-  const [lastSeenAt, setLastSeenAt] = useState<string | null>(null);
-  const [rewatchDateOpen, setRewatchDateOpen] = useState(false);
-  const [rewatchDate, setRewatchDate] = useState('');
-  const [rewatchBusy, setRewatchBusy] = useState(false);
-  const [lastLoggedEventId, setLastLoggedEventId] = useState<string | null>(null);
   // Bumped by the error screen's Try Again button to re-run the title load.
   const [reloadKey, setReloadKey] = useState(0);
   const [rateSheetOpen, setRateSheetOpen] = useState(false);
@@ -1408,67 +1400,6 @@ function MovieDetailInner() {
     })();
     return () => { cancelled = true; };
   }, [id, loadCineRating, reloadKey]);
-
-  // Load this title's diary summary (seen count + last watch date) once we
-  // know the media type. Server-only data — deliberately not in localStorage.
-  useEffect(() => {
-    if (!authUser || !movie || !isWatched) { setSeenCount(null); setLastSeenAt(null); return; }
-    const mediaType = movie.type === 'show' ? 'SHOW' : 'MOVIE';
-    fetchWithAuth(`/api/diary?tmdbId=${encodeURIComponent(id)}&mediaType=${mediaType}&limit=1`)
-      .then(r => r.ok ? r.json() : null)
-      .then(json => {
-        if (!json?.data) return;
-        setSeenCount(json.data.total ?? null);
-        setLastSeenAt(json.data.items?.[0]?.watchedAt ?? null);
-      })
-      .catch(() => { /* ignore */ });
-  }, [authUser, movie, isWatched, id]);
-
-  const logRewatch = async (dateStr?: string) => {
-    if (!movie || rewatchBusy) return;
-    setRewatchBusy(true);
-    try {
-      const res = await fetchWithAuth('/api/diary', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          tmdbId: id,
-          mediaType: movie.type === 'show' ? 'SHOW' : 'MOVIE',
-          ...(dateStr ? { watchedAt: new Date(`${dateStr}T12:00:00`).toISOString() } : {}),
-        }),
-      });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const json = await res.json();
-      setSeenCount(json.data?.count ?? (seenCount ?? 1) + 1);
-      const loggedAt = json.data?.event?.watchedAt ?? null;
-      if (loggedAt && (!lastSeenAt || new Date(loggedAt) > new Date(lastSeenAt))) setLastSeenAt(loggedAt);
-      setLastLoggedEventId(json.data?.event?.id ?? null);
-      setRewatchDateOpen(false);
-      setRewatchDate('');
-      toast({ title: 'Rewatch logged' });
-    } catch {
-      toast({ title: "Couldn't log the rewatch. Check your connection and try again.", variant: 'destructive' });
-    } finally {
-      setRewatchBusy(false);
-    }
-  };
-
-  const undoRewatch = async () => {
-    if (!lastLoggedEventId || rewatchBusy) return;
-    setRewatchBusy(true);
-    try {
-      const res = await fetchWithAuth(`/api/diary/${lastLoggedEventId}`, { method: 'DELETE' });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const json = await res.json();
-      setSeenCount(json.data?.remaining ?? null);
-      setLastLoggedEventId(null);
-      toast({ title: 'Rewatch removed' });
-    } catch {
-      toast({ title: "Couldn't undo. Check your connection and try again.", variant: 'destructive' });
-    } finally {
-      setRewatchBusy(false);
-    }
-  };
 
   // Refetch the Cinephilers aggregate whenever this user rates/unrates, so the
   // displayed score reflects their own just-cast vote without a page reload.
@@ -1733,12 +1664,29 @@ function MovieDetailInner() {
     window.dispatchEvent(new Event('cinephilers-watched-changed'));
   }, [authUser, id, watchedEpisodes, toast, syncShowCompletion]);
 
-  const toggleEpisodeWatched = useCallback((sn: number, ep: TvEpisode) => {
+  // The account first, then the screen and this device — the one-way sync rule.
+  // This ticked the row, wrote localStorage and sent the request without waiting,
+  // so a refused request was forgotten on the spot and the next login sync put the
+  // database's answer back: an unticked episode came back ticked. The episode page
+  // had the same fault and was fixed the same way.
+  const toggleEpisodeWatched = useCallback(async (sn: number, ep: TvEpisode) => {
     if (!authUser) { setAuthGate('track episodes'); return; }
     const key   = epKey(sn, ep.episode_number);
     const lsKey = `watched-ep-${id}-${key}`;
     const logId = `${id}-${key}`;
     const nowWatched = !watchedEpisodes.has(key);
+
+    try {
+      const res = await fetchWithAuth('/api/watched/episodes', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ showTmdbId: id, season: sn, episode: ep.episode_number, watched: nowWatched }),
+      });
+      if (!res.ok) throw new Error('episode watched rejected');
+    } catch {
+      toast({ title: "Couldn't update watched. Check your connection.", variant: 'destructive' });
+      return;
+    }
 
     setWatchedEpisodes(prev => {
       const next = new Set(prev);
@@ -1772,13 +1720,10 @@ function MovieDetailInner() {
       removeActivity('watched', logId);
       toast({ title: `${ep.name} removed from watched` });
     }
-    // Sync to DB in background
-    syncDb('POST', '/api/watched/episodes', { showTmdbId: id, season: sn, episode: ep.episode_number, watched: nowWatched });
-
     // Ticking the last episode completes the show; unticking any one un-completes
     // it. The set hasn't re-rendered yet, so derive the new count from the change.
     void syncShowCompletion(watchedEpisodes.size + (nowWatched ? 1 : -1));
-  }, [id, watchedEpisodes, movie, syncDb, authUser, syncShowCompletion]);
+  }, [id, watchedEpisodes, movie, toast, authUser, syncShowCompletion]);
 
   if (loading) return <DetailSkeleton />;
 
@@ -2034,73 +1979,8 @@ function MovieDetailInner() {
 
         {/* Diary / rewatch strip — every tap logs a new viewing (an event, not a toggle) */}
         {authUser && isWatched && (
-          <section className="flex flex-wrap items-center gap-3 -mt-4">
-            <div className="flex items-center gap-2 text-sm text-muted-foreground font-semibold">
-              <Repeat className="h-4 w-4 text-primary" />
-              {seenCount !== null && seenCount > 0 ? (
-                <span>
-                  Seen {seenCount}&times;
-                  {lastSeenAt && (
-                    <> &middot; last {new Date(lastSeenAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</>
-                  )}
-                </span>
-              ) : (
-                <span>Watched it again?</span>
-              )}
-            </div>
-            {!rewatchDateOpen ? (
-              <div className="flex items-center gap-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  disabled={rewatchBusy}
-                  className="rounded-full font-bold border-primary/40 text-primary hover:bg-primary/10"
-                  onClick={() => logRewatch()}
-                >
-                  <Repeat className="h-3.5 w-3.5 mr-1.5" />
-                  Log rewatch
-                </Button>
-                <button
-                  className="text-xs text-muted-foreground hover:text-foreground underline underline-offset-2"
-                  onClick={() => { setRewatchDate(new Date().toISOString().slice(0, 10)); setRewatchDateOpen(true); }}
-                >
-                  another date?
-                </button>
-                {lastLoggedEventId && (
-                  <button
-                    className="text-xs text-muted-foreground hover:text-destructive underline underline-offset-2"
-                    disabled={rewatchBusy}
-                    onClick={undoRewatch}
-                  >
-                    undo
-                  </button>
-                )}
-              </div>
-            ) : (
-              <div className="flex items-center gap-2">
-                <input
-                  type="date"
-                  value={rewatchDate}
-                  max={new Date().toISOString().slice(0, 10)}
-                  onChange={e => setRewatchDate(e.target.value)}
-                  className="h-8 rounded-full border border-border bg-background px-3 text-xs font-semibold"
-                />
-                <Button
-                  size="sm"
-                  disabled={rewatchBusy || !rewatchDate}
-                  className="rounded-full font-bold"
-                  onClick={() => logRewatch(rewatchDate)}
-                >
-                  Log
-                </Button>
-                <button
-                  className="text-xs text-muted-foreground hover:text-foreground underline underline-offset-2"
-                  onClick={() => setRewatchDateOpen(false)}
-                >
-                  cancel
-                </button>
-              </div>
-            )}
+          <section className="-mt-4">
+            <RewatchStrip tmdbId={id} mediaType={movie.type === 'show' ? 'SHOW' : 'MOVIE'} />
           </section>
         )}
 
@@ -2126,14 +2006,38 @@ function MovieDetailInner() {
                     <div className="text-xs text-muted-foreground font-bold mt-1.5">{count.toLocaleString()} ratings</div>
                   </div>
                 </div>
-                <Button
-                  variant="outline"
-                  onClick={() => { if (!authUser) { setAuthGate('rate movies'); return; } setRateSheetOpen(true); }}
-                  className="rounded-full border-border font-bold shrink-0"
-                >
-                  <Star className={`h-4 w-4 mr-2 ${userRating > 0 ? 'text-primary' : ''}`} />
-                  {userRating > 0 ? `Your rating: ${userRating}/10` : 'Rate this'}
-                </Button>
+                {userRating > 0 ? (
+                  // Once rated, your score sits opposite the community one under the
+                  // same kind of label — centred, a size smaller and crimson, with
+                  // the hollow star that marks "yours" everywhere else, so it reads
+                  // as your score and not a second verdict competing with it
+                  // (Keard's pick, 2026-09-11). Still a button: tapping changes it.
+                  <button
+                    type="button"
+                    onClick={() => setRateSheetOpen(true)}
+                    aria-label={`Your rating: ${userRating} out of 10. Tap to change it`}
+                    className="space-y-3 text-center shrink-0 group"
+                  >
+                    <div className="text-sm font-bold uppercase tracking-widest text-muted-foreground">Your Rating</div>
+                    <div>
+                      <div className="flex items-center justify-center gap-1.5">
+                        <span className="text-4xl font-black font-headline text-primary group-hover:opacity-80 transition-opacity">{userRating}</span>
+                        <Star className="h-6 w-6 text-primary" />
+                      </div>
+                      {/* Holds the height of the "ratings" count opposite, so the two numbers line up. */}
+                      <div className="text-xs font-bold mt-1.5 invisible" aria-hidden>&nbsp;</div>
+                    </div>
+                  </button>
+                ) : (
+                  <Button
+                    variant="outline"
+                    onClick={() => { if (!authUser) { setAuthGate('rate movies'); return; } setRateSheetOpen(true); }}
+                    className="rounded-full border-border font-bold shrink-0"
+                  >
+                    <Star className="h-4 w-4 mr-2" />
+                    Rate this
+                  </Button>
+                )}
               </div>
             );
           })()}

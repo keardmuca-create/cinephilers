@@ -36,9 +36,16 @@ export async function POST(req: NextRequest) {
       update: {},
     });
   } else {
-    await prisma.watchedEpisode.deleteMany({
-      where: { userId: auth.sub, showTmdbId, season, episode },
-    });
+    // Unwatching an episode takes its diary with it, as removing a film from Watch
+    // history does — otherwise it would sit on the Rewatched shelf unwatched.
+    await Promise.all([
+      prisma.watchedEpisode.deleteMany({
+        where: { userId: auth.sub, showTmdbId, season, episode },
+      }),
+      prisma.watchEvent.deleteMany({
+        where: { userId: auth.sub, mediaType: 'SHOW', tmdbId: `${showTmdbId}-S${season}E${episode}` },
+      }),
+    ]);
   }
 
   return ok(null, watched ? 'Episode marked watched' : 'Episode unmarked');

@@ -50,13 +50,23 @@ export async function POST(req: NextRequest) {
       skipDuplicates: true,
     });
   } else {
-    await prisma.watchedEpisode.deleteMany({
-      where: {
-        userId: auth.sub,
-        showTmdbId,
-        OR: episodes.map(e => ({ season: e.season, episode: e.episode })),
-      },
-    });
+    // Their diaries go too — see the single-episode route.
+    await Promise.all([
+      prisma.watchedEpisode.deleteMany({
+        where: {
+          userId: auth.sub,
+          showTmdbId,
+          OR: episodes.map(e => ({ season: e.season, episode: e.episode })),
+        },
+      }),
+      prisma.watchEvent.deleteMany({
+        where: {
+          userId: auth.sub,
+          mediaType: 'SHOW',
+          tmdbId: { in: episodes.map(e => `${showTmdbId}-S${e.season}E${e.episode}`) },
+        },
+      }),
+    ]);
   }
 
   return ok({ count: episodes.length }, watched ? 'Episodes marked watched' : 'Episodes unmarked');

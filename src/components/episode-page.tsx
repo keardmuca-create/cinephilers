@@ -14,6 +14,7 @@ import { Avatar, AvatarImage } from '@/components/ui/avatar';
 import { Skeleton } from '@/components/ui/skeleton';
 import { RatingSheet } from '@/components/rating-sheet';
 import { SpoilerWrap } from '@/components/spoiler-wrap';
+import { RewatchStrip } from '@/components/rewatch-strip';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useAuth } from '@/contexts/auth-context';
 import { fetchWithAuth } from '@/lib/fetch-with-auth';
@@ -48,6 +49,8 @@ export function EpisodePage({ showTmdbId, season, episodeNumber }: {
   const [showMeta, setShowMeta] = useState<{ title: string; poster: string } | null>(null);
 
   const [watched, setWatched] = useState(false);
+  /** True while the account is confirming a watched change — one at a time. */
+  const [savingWatched, setSavingWatched] = useState(false);
   const [userRating, setUserRating] = useState(0);
   const [rateOpen, setRateOpen] = useState(false);
   const [cineRating, setCineRating] = useState<CinephilersRating | null>(null);
@@ -146,7 +149,28 @@ export function EpisodePage({ showTmdbId, season, episodeNumber }: {
   // now goes through it too. `silent` is for that caller: a rating already
   // toasts, and "You rated it 8/10" followed by "Guts marked as watched" is two
   // notifications for one tap.
-  const setWatchedState = useCallback((now: boolean, silent = false) => {
+  //
+  // The account first, then this device — the watchlist button's order, and the
+  // one-way sync rule. This used to write localStorage and send the request
+  // without waiting, so a refused request left the screen saying one thing and the
+  // database another, and the next login sync quietly put the database's answer
+  // back: an unticked episode came back ticked. Resolves to whether it saved.
+  const setWatchedState = useCallback(async (now: boolean, silent = false): Promise<boolean> => {
+    setSavingWatched(true);
+    try {
+      const res = await fetchWithAuth('/api/watched/episodes', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ showTmdbId, season, episode: episodeNumber, watched: now }),
+      });
+      if (!res.ok) throw new Error('episode watched rejected');
+    } catch {
+      toast({ title: "Couldn't update watched. Check your connection.", variant: 'destructive' });
+      return false;
+    } finally {
+      setSavingWatched(false);
+    }
+
     setWatched(now);
     try {
       const lsKey = `watched-ep-${showTmdbId}-${epKey}`;
@@ -170,19 +194,31 @@ export function EpisodePage({ showTmdbId, season, episodeNumber }: {
       removeActivity('watched', episodeId);
     }
     if (!silent) toast({ title: now ? `${detail?.name ?? 'Episode'} marked as watched` : 'Removed from watched' });
-    fetchWithAuth('/api/watched/episodes', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ showTmdbId, season, episode: episodeNumber, watched: now }),
-    }).catch(() => { /* background sync */ });
+    return true;
   }, [showTmdbId, epKey, episodeId, season, episodeNumber, detail, showMeta]);
 
   const toggleWatched = useCallback(() => {
     if (!authUser) { toast({ title: 'Sign in to track episodes' }); return; }
-    setWatchedState(!watched);
-  }, [authUser, watched, setWatchedState]);
+    if (savingWatched) return;
+    void setWatchedState(!watched);
+  }, [authUser, watched, savingWatched, setWatchedState]);
 
   const applyRating = useCallback(async (score: number) => {
+    if (!authUser) { toast({ title: 'Sign in to rate episodes' }); return; }
+    // Same order as watched above: nothing on screen or on this device changes
+    // until the account has the score. Saved locally first, a refused rating
+    // looked kept and was gone after the next sync, with no word said.
+    try {
+      const res = await fetchWithAuth('/api/ratings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tmdbId: episodeId, mediaType: 'SHOW', score }),
+      });
+      if (!res.ok) throw new Error('episode rating rejected');
+    } catch {
+      toast({ title: "Couldn't save your rating. Check your connection.", variant: 'destructive' });
+      return;
+    }
     setUserRating(score);
     try { localStorage.setItem(`movie-rating-${episodeId}`, String(score)); } catch { /* ignore */ }
     // Every other rating path stamps this; the episode one did not, so an episode
@@ -195,12 +231,7 @@ export function EpisodePage({ showTmdbId, season, episodeNumber }: {
     // watched it, so rating marks it seen. This is the film rule from the movie
     // page, not the series one — a SHOW's rating still marks nothing, since its
     // watched state is the sum of its episodes and a score names none of them.
-    if (authUser && !watched) setWatchedState(true, true);
-    await fetchWithAuth('/api/ratings', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ tmdbId: episodeId, mediaType: 'SHOW', score }),
-    }).catch(() => { /* background sync */ });
+    if (!watched) await setWatchedState(true, true);
     // Refresh the community score so the new vote is reflected immediately.
     fetch(`/api/movies/rating?tmdbId=${encodeURIComponent(episodeId)}&mediaType=SHOW`)
       .then(r => r.ok ? r.json() : null)
@@ -226,7 +257,10 @@ export function EpisodePage({ showTmdbId, season, episodeNumber }: {
     setInWatchlist(next);
     try {
       if (next) {
-        localStorage.setItem(`watchlist-${episodeId}`, JSON.stringify({ id: episodeId, title: detail?.name ?? '', poster: still ?? showMeta?.poster ?? '', year: detail?.air_date?.slice(0, 4) ?? '', type: 'show' }));
+        // The show's poster, not the episode's screenshot: a watchlisted episode is
+        // a poster card on the profile like everything else, and a wide still
+        // squeezed into a 2:3 frame was the one card that did not match.
+        localStorage.setItem(`watchlist-${episodeId}`, JSON.stringify({ id: episodeId, title: detail?.name ?? '', poster: showMeta?.poster || still || '', year: detail?.air_date?.slice(0, 4) ?? '', type: 'show' }));
         recordAddedAt(episodeId);
       } else {
         localStorage.removeItem(`watchlist-${episodeId}`);
@@ -274,6 +308,21 @@ export function EpisodePage({ showTmdbId, season, episodeNumber }: {
         body: JSON.stringify({ tmdbId: episodeId, mediaType: 'SHOW', body: draftReview.trim(), containsSpoiler: draftSpoiler }),
       });
       if (!res.ok) { toast({ title: "Couldn't save your review. Try again.", variant: 'destructive' }); return; }
+      // On this device too, once the account has it — the shape the film page and
+      // the login sync write. Saved to the account alone, it reached Reviews and
+      // the profile only after the next sync brought it down.
+      try {
+        localStorage.setItem(`review-${episodeId}`, JSON.stringify({
+          movieId: episodeId,
+          movieTitle: detail?.name ?? '',
+          moviePoster: showMeta?.poster ?? '',
+          movieYear: detail?.air_date?.slice(0, 4) ?? '',
+          content: draftReview.trim(),
+          rating: draftRating,
+          date: new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }),
+          containsSpoiler: draftSpoiler,
+        }));
+      } catch { /* ignore */ }
       // Rate and review in one go, matching the film review dialog.
       if (draftRating > 0 && draftRating !== userRating) await applyRating(draftRating);
       setMyReview({ body: draftReview.trim(), containsSpoiler: draftSpoiler });
@@ -409,6 +458,7 @@ export function EpisodePage({ showTmdbId, season, episodeNumber }: {
             variant={watched ? 'default' : 'outline'}
             className={`h-14 px-8 rounded-2xl font-bold w-full md:w-auto text-base transition-all ${watched ? 'bg-accent border-accent' : 'border-2 border-foreground bg-background text-foreground'}`}
             onClick={toggleWatched}
+            disabled={savingWatched}
           >
             {watched ? <Check className="h-5 w-5 mr-2" /> : <Eye className="h-5 w-5 mr-2" />}
             {watched ? 'Watched' : 'Mark as Watched'}
@@ -421,6 +471,9 @@ export function EpisodePage({ showTmdbId, season, episodeNumber }: {
             <ListPlus className="h-5 w-5 mr-2" /> Add to List
           </Button>
         </div>
+
+        {/* Rewatch strip — the same component as the film page's. */}
+        {authUser && watched && <RewatchStrip tmdbId={episodeId} mediaType="SHOW" />}
 
         {/* Rating card — Cinephilers score once enough people have voted,
             otherwise TMDB's, exactly like the film page. */}
@@ -441,14 +494,35 @@ export function EpisodePage({ showTmdbId, season, episodeNumber }: {
                   <div className="text-xs text-muted-foreground font-bold mt-1.5">{count.toLocaleString()} ratings</div>
                 </div>
               </div>
-              <Button
-                variant="outline"
-                onClick={() => { if (!authUser) { toast({ title: 'Sign in to rate' }); return; } setRateOpen(true); }}
-                className="rounded-full border-border font-bold shrink-0"
-              >
-                <Star className={`h-4 w-4 mr-2 ${userRating > 0 ? 'text-primary' : ''}`} />
-                {userRating > 0 ? `Your rating: ${userRating}/10` : 'Rate this'}
-              </Button>
+              {userRating > 0 ? (
+                // Same as the film page: once rated, your score mirrors the one
+                // beside it, and tapping it changes the score.
+                <button
+                  type="button"
+                  onClick={() => setRateOpen(true)}
+                  aria-label={`Your rating: ${userRating} out of 10. Tap to change it`}
+                  className="space-y-3 text-center shrink-0 group"
+                >
+                  <div className="text-sm font-bold uppercase tracking-widest text-muted-foreground">Your Rating</div>
+                  <div>
+                    <div className="flex items-center justify-center gap-1.5">
+                      <span className="text-4xl font-black font-headline text-primary group-hover:opacity-80 transition-opacity">{userRating}</span>
+                      <Star className="h-6 w-6 text-primary" />
+                    </div>
+                    {/* Holds the height of the "ratings" count opposite, so the two numbers line up. */}
+                    <div className="text-xs font-bold mt-1.5 invisible" aria-hidden>&nbsp;</div>
+                  </div>
+                </button>
+              ) : (
+                <Button
+                  variant="outline"
+                  onClick={() => { if (!authUser) { toast({ title: 'Sign in to rate' }); return; } setRateOpen(true); }}
+                  className="rounded-full border-border font-bold shrink-0"
+                >
+                  <Star className="h-4 w-4 mr-2" />
+                  Rate this
+                </Button>
+              )}
             </section>
           );
         })()}

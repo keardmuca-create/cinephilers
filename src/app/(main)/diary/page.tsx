@@ -133,12 +133,17 @@ export default function DiaryPage() {
       if (remaining === 0) {
         setItems(prev => prev.filter(x => x.tmdbId !== item.tmdbId));
         setExpanded(null);
-        try {
-          localStorage.removeItem(`watched-${item.tmdbId}`);
-          removeFromWatchLog(item.tmdbId, 'movie');
-          removeManualWatch(item.tmdbId);
-        } catch { /* ignore */ }
-        window.dispatchEvent(new Event('cinephilers-watched-changed'));
+        // A film's last entry un-marks it on the server, so this device follows. An
+        // episode's does not — its watched state is its WatchedEpisode row, which a
+        // diary delete leaves alone — so nothing local is cleared for one.
+        if (!/-S\d+E\d+$/.test(item.tmdbId)) {
+          try {
+            localStorage.removeItem(`watched-${item.tmdbId}`);
+            removeFromWatchLog(item.tmdbId, 'movie');
+            removeManualWatch(item.tmdbId);
+          } catch { /* ignore */ }
+          window.dispatchEvent(new Event('cinephilers-watched-changed'));
+        }
       } else {
         setItems(prev => prev.map(x => (x.tmdbId === item.tmdbId ? { ...x, count: remaining } : x)));
       }
@@ -181,7 +186,7 @@ export default function DiaryPage() {
       ) : items.length === 0 && !search ? (
         <div className="flex flex-col items-center justify-center py-20 gap-3 text-center px-6">
           <Repeat className="h-12 w-12 text-muted-foreground/20" />
-          <p className="text-muted-foreground text-sm">Films you&apos;ve watched more than once show up here, with every date</p>
+          <p className="text-muted-foreground text-sm">Anything you&apos;ve watched more than once shows up here, with every date</p>
         </div>
       ) : (
         <>

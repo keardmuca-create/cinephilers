@@ -4,8 +4,91 @@ import { ok, err } from '@/lib/api-response';
 import { getCurrentUser } from '@/lib/auth-utils';
 import { rateLimit } from '@/lib/rate-limit';
 import { clampInt } from '@/lib/query-params';
-import { canonicalId, isValidMediaId } from '@/lib/media-id';
+import { canonicalId, isValidMediaId, isShowId, parseEpisodeId } from '@/lib/media-id';
 import { MediaType } from '@/generated/prisma/client';
+
+/** When a show's last watched episode was watched — a finished show's first
+ *  viewing, since finishing one writes no diary entry. */
+function lastEpisodeWatched(userId: string, showId: string) {
+  return prisma.watchedEpisode.findFirst({
+    // Both id shapes: the canonical one is what the app writes, but a bare number
+    // costs nothing to also match.
+    where: { userId, showTmdbId: { in: [showId, showId.replace('tmdb-tv-', '')] } },
+    orderBy: { watchedAt: 'desc' },
+    select: { watchedAt: true },
+  });
+}
+
+// A whole show's log. Two differences from a film, both because a show has no
+// watched record of its own — its episodes are the record:
+//  - No WatchedItem is created. Those rows were removed on purpose
+//    (scripts/drop-show-watched-records.ts), and writing one here brought the
+//    second record back every time a show rewatch was logged.
+//  - Finishing a show writes no diary entry, so the first log would read "Seen 1×"
+//    for what is really a second viewing. That first log also files the original
+//    watch, dated to the last episode watched (Keard's call, 2026-09-11) — the same
+//    rule logEpisode applies to an episode.
+// The strip that offers this appears only once every episode is watched.
+async function logShow(userId: string, tmdbId: string, watchedAt: Date) {
+  const where = { userId, tmdbId, mediaType: 'SHOW' as MediaType };
+  const [priorCount, finished] = await Promise.all([
+    prisma.watchEvent.count({ where }),
+    lastEpisodeWatched(userId, tmdbId),
+  ]);
+
+  let seeded = 0;
+  if (finished && priorCount === 0) {
+    await prisma.watchEvent.create({ data: { ...where, isRewatch: false, watchedAt: finished.watchedAt } });
+    seeded = 1;
+  }
+  const event = await prisma.watchEvent.create({
+    data: { ...where, isRewatch: priorCount + seeded > 0, watchedAt },
+  });
+
+  const count = priorCount + seeded + 1;
+  return ok({ event, count }, count > 1 ? 'Rewatch logged' : 'Watch logged', { status: 201 });
+}
+
+// One episode's log. Episodes were never given a first-watch entry — ticking one
+// writes only its WatchedEpisode row — so the first log on an episode already
+// ticked would read "Seen 1×" for what is really a second viewing. That first log
+// therefore also files the original watch, dated to when the episode was marked
+// watched (Keard's call, 2026-09-11). An episode logged without ever being ticked
+// is marked watched by the log, the way a film's first log creates its summary.
+async function logEpisode(
+  userId: string,
+  tmdbId: string,
+  ep: { showId: string; season: number; episode: number },
+  watchedAt: Date,
+) {
+  const where = { userId, tmdbId, mediaType: 'SHOW' as MediaType };
+  const [priorCount, ticked] = await Promise.all([
+    prisma.watchEvent.count({ where }),
+    prisma.watchedEpisode.findUnique({
+      where: { userId_showTmdbId_season_episode: { userId, showTmdbId: ep.showId, season: ep.season, episode: ep.episode } },
+      select: { watchedAt: true },
+    }),
+  ]);
+
+  let seeded = 0;
+  if (ticked && priorCount === 0) {
+    await prisma.watchEvent.create({ data: { ...where, isRewatch: false, watchedAt: ticked.watchedAt } });
+    seeded = 1;
+  }
+  const event = await prisma.watchEvent.create({
+    data: { ...where, isRewatch: priorCount + seeded > 0, watchedAt },
+  });
+  if (!ticked) {
+    await prisma.watchedEpisode.create({
+      data: { userId, showTmdbId: ep.showId, season: ep.season, episode: ep.episode, watchedAt },
+    }).catch(e => {
+      if ((e as { code?: string })?.code !== 'P2002') throw e;
+    });
+  }
+
+  const count = priorCount + seeded + 1;
+  return ok({ event, count }, count > 1 ? 'Rewatch logged' : 'Watch logged', { status: 201 });
+}
 
 // Log a watch (first watch or rewatch). Every call appends a diary entry —
 // this is an EVENT, not a toggle. Also keeps the WatchedItem summary row in
@@ -26,7 +109,10 @@ export async function POST(req: NextRequest) {
   if (!rawId || !mediaType) return err('tmdbId and mediaType are required');
   if (!['MOVIE', 'SHOW'].includes(mediaType)) return err('mediaType must be MOVIE or SHOW');
   const tmdbId = canonicalId(String(rawId));
-  if (!isValidMediaId(tmdbId)) return err('Invalid tmdbId');
+  // A single episode can be logged too, filed under SHOW as its rating and review
+  // are. Its summary is the episode's watched row, not a WatchedItem.
+  const episode = mediaType === 'SHOW' ? parseEpisodeId(tmdbId) : null;
+  if (!episode && !isValidMediaId(tmdbId)) return err('Invalid tmdbId');
 
   // Backdating is allowed (a diary is about when you actually watched), but
   // not the future and nothing before cinema existed.
@@ -38,6 +124,9 @@ export async function POST(req: NextRequest) {
     if (d.getFullYear() < 1900) return err('watchedAt is too far in the past');
     watchedAt = d;
   }
+
+  if (episode) return logEpisode(auth.sub, tmdbId, episode, watchedAt);
+  if (mediaType === 'SHOW' && isShowId(tmdbId)) return logShow(auth.sub, tmdbId, watchedAt);
 
   const priorCount = await prisma.watchEvent.count({
     where: { userId: auth.sub, tmdbId, mediaType: mediaType as MediaType },
@@ -115,6 +204,27 @@ export async function GET(req: NextRequest) {
       select: { id: true, tmdbId: true, mediaType: true, isRewatch: true, watchedAt: true },
     }),
   ]);
+
+  // An episode watched once, or a show finished once, has no diary entry — ticking
+  // episodes never wrote one — so counted straight it read 0 ("Watched it again?")
+  // where a film watched once reads "Seen 1×". The watch it does have stands in as
+  // that first viewing: the episode's watched row, or the show's last episode.
+  // Here only, and only until a log files the real one, which POST seeds from the
+  // same date. Nothing is written. The stand-in has no id: there is no entry to
+  // delete, and /diary never asks for a title with fewer than two.
+  if (total === 0 && where.tmdbId && where.mediaType === 'SHOW') {
+    const episode = parseEpisodeId(where.tmdbId);
+    const firstViewing = episode
+      ? await prisma.watchedEpisode.findUnique({
+          where: { userId_showTmdbId_season_episode: { userId: auth.sub, showTmdbId: episode.showId, season: episode.season, episode: episode.episode } },
+          select: { watchedAt: true },
+        })
+      : isShowId(where.tmdbId) ? await lastEpisodeWatched(auth.sub, where.tmdbId) : null;
+    if (firstViewing) {
+      const standIn = { id: null, tmdbId: where.tmdbId, mediaType: where.mediaType, isRewatch: false, watchedAt: firstViewing.watchedAt };
+      return ok({ items: page === 1 ? [standIn] : [], page, limit, total: 1, hasMore: false });
+    }
+  }
 
   return ok({ items, page, limit, total, hasMore: page * limit < total });
 }

@@ -28,8 +28,14 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ t
   await Promise.all([
     prisma.watchedItem.deleteMany({ where: { userId: auth.sub, tmdbId, mediaType } }),
     prisma.watchEvent.deleteMany({ where: { userId: auth.sub, tmdbId, mediaType } }),
+    // And for a show, its episodes' diaries, which are filed under each episode's
+    // own id (`tmdb-tv-123-S1E2`). The trailing "-S" keeps tmdb-tv-12 from also
+    // matching tmdb-tv-123.
     ...(mediaType === 'SHOW'
-      ? [prisma.watchedEpisode.deleteMany({ where: { userId: auth.sub, showTmdbId: tmdbId } })]
+      ? [
+          prisma.watchedEpisode.deleteMany({ where: { userId: auth.sub, showTmdbId: tmdbId } }),
+          prisma.watchEvent.deleteMany({ where: { userId: auth.sub, mediaType, tmdbId: { startsWith: `${tmdbId}-S` } } }),
+        ]
       : []),
   ]);
   return ok(null, 'Removed from watched');
