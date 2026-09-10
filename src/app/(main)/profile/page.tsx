@@ -4,7 +4,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { Movie } from '@/lib/types';
-import { normalizeLocalMediaIds, getAddedAt, getRatedAt, getWatchedAtISO, getManualWatchISO, canonicalId, legacyTwin } from '@/lib/media-id';
+import { normalizeLocalMediaIds, getAddedAt, getRatedAt, getWatchedAtISO, getManualWatchISO, canonicalId, legacyTwin, parseEpisodeId, isShowId } from '@/lib/media-id';
 
 import { BadgeList, FounderChip, type EarnedBadge } from '@/components/badge-row';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -24,7 +24,6 @@ import { toast } from '@/hooks/use-toast';
 import { fetchWithAuth } from '@/lib/fetch-with-auth';
 import { withTimeout } from '@/lib/fetch-timeout';
 import { batchFetchMeta, isStaleMeta, type CachedMeta } from '@/lib/meta-batch';
-import { collapseShows, statusFor, type CollapsedRow, type ShowProgressStatus } from '@/lib/collapse-shows';
 import { collapseRatings } from '@/lib/collapse-ratings';
 import { useAuth } from '@/contexts/auth-context';
 import { useConfirm } from '@/components/confirm-dialog';
@@ -32,33 +31,33 @@ import { readSavedRefine, applyRefineSort } from '@/lib/refine-sort';
 import type { RefineValue } from '@/components/refine-sheet';
 import { WatchedEye } from '@/components/watched-eye';
 import { CommunityStar } from '@/components/community-star';
+import { episodeLineFor, cachedEpisodeLine } from '@/lib/episode-line';
 
 // How long a rebuild trigger waits for its siblings before the profile rebuilds.
 // Long enough to swallow the focus/visibilitychange/db-restored burst of a PWA open,
 // short enough that a title marked watched elsewhere still appears to arrive at once.
 const REBUILD_DEBOUNCE_MS = 200;
 
-// One rated TITLE, never one rating. A show whose episodes were scored is a
-// single item carrying the count, the same way the watch shelf carries "13 / 177"
-// — a poster identifies a title, so three cards showing the same poster is the
-// list saying an episode is a title, which it is not.
+// One card per RATING on the shelf: a film, a series, or a single episode, each
+// by the date it was scored. Episodes used to fold into their show; they are their
+// own cards now, the same way See All places each one by its own date. The chart
+// still counts titles — see chartRated.
 interface RatedItem {
   id: string;
   title: string;
   poster: string;
   year: string;
   tmdbRating?: number;
-  /** What you gave the title itself. Undefined when only its episodes were rated. */
-  userRating?: number;
-  /** How many of its episodes you rated, and out of how many there are. */
-  ratedEpisodes?: number;
-  totalEpisodes?: number;
+  userRating: number;
+  /** "S2·E1 · The Walking Dead" for an episode card. */
+  episodeLine?: string;
 }
 
-interface DiaryShelfItem { id: string; count: number; lastWatchedAt: string | null; title: string; poster: string; year: string; tmdbRating?: number; userRating?: number }
+interface DiaryShelfItem { id: string; count: number; lastWatchedAt: string | null; title: string; poster: string; year: string; tmdbRating?: number; userRating?: number; episodeLine?: string }
 
-// Rewatched shelf — films watched 2+ times, one card per title with the same
-// rating row as Watch History (TMDB score, your rating, eye) plus an xN badge.
+// Rewatched shelf — anything watched 2+ times, one card per title (or per episode,
+// once episodes can be rewatched) with the same rating row as Watch History (TMDB
+// score, your rating, eye) plus an xN badge.
 // Server-only data (never mirrored to localStorage).
 function DiarySection() {
   const { user } = useAuth();
@@ -82,15 +81,17 @@ function DiarySection() {
             const saved = localStorage.getItem(`movie-rating-${r.tmdbId}`);
             if (saved) userRating = parseInt(saved, 10);
           } catch { /* ignore */ }
+          const episodeLine = episodeLineFor(r.tmdbId, meta[r.tmdbId]);
           return {
             id: r.tmdbId,
             count: r.count,
             lastWatchedAt: r.lastWatchedAt,
-            title: meta[r.tmdbId]?.title ?? 'Untitled',
+            title: (meta[r.tmdbId]?.title ?? 'Untitled').replace(/^S\d+E\d+\s·\s/, ''),
             poster: meta[r.tmdbId]?.poster ?? '',
-            year: meta[r.tmdbId]?.year ?? '',
+            year: episodeLine ? '' : (meta[r.tmdbId]?.year ?? ''),
             tmdbRating: meta[r.tmdbId]?.tmdbRating,
             userRating,
+            episodeLine,
           };
         }));
       } catch { if (!cancelled) setItems([]); }
@@ -102,14 +103,11 @@ function DiarySection() {
   // user has no rewatches yet — don't hide it.
   return (
     <section>
-      <div className="flex items-center justify-between mb-2">
-        <div className="flex items-center gap-2">
-          <div className="w-1 h-6 bg-primary rounded-full" />
-          <h3 className="text-2xl font-headline font-bold flex items-center gap-2">
-            <Repeat className="h-6 w-6 text-primary" />
-            Rewatched
-          </h3>
-        </div>
+      <SectionHeader
+        title="Rewatched"
+        icon={Repeat}
+        subtitle="Worth another watch"
+        seeAllContent={<>
         {/* Plain <a>, not <Link>, on every See All in this file — deliberate, do
             not "fix". iOS freezes a PWA in the background and kills the requests
             it had in flight; the Next router can come back with a navigation that
@@ -123,10 +121,10 @@ function DiarySection() {
             See All <ChevronRight className="h-3 w-3" />
           </a>
         )}
-      </div>
-      <p className="text-sm text-muted-foreground mb-5">Films you&apos;ve watched more than once</p>
+        </>}
+      />
       {!items || items.length === 0 ? (
-        <EmptyRow message="Films you watch more than once will show up here" />
+        <EmptyRow message="Anything you watch more than once will show up here" />
       ) : (
       <div className="flex overflow-x-auto gap-4 pb-4 no-scrollbar -mx-6 px-6">
         {items.map(item => (
@@ -159,6 +157,9 @@ function DiarySection() {
             <p className="text-xs font-semibold font-headline line-clamp-2 group-hover:text-primary transition-colors leading-snug">
               {item.title} {item.year ? `(${item.year})` : ''}
             </p>
+            {item.episodeLine && (
+              <p className="text-[11px] text-muted-foreground line-clamp-1 mt-0.5">{item.episodeLine}</p>
+            )}
           </Link>
         ))}
       </div>
@@ -169,25 +170,31 @@ function DiarySection() {
 
 type LucideIcon = React.ComponentType<{ className?: string }>;
 
+// One header for every section on the page: bar, icon, title, and a short line
+// under it where the section has one. No counts — the lists are split into films,
+// shows and episodes, and one mixed total describes none of them.
 const SectionHeader = ({
   title,
   icon: Icon,
   seeAllContent,
-  count,
+  subtitle,
 }: {
   title: string;
   icon: LucideIcon;
   seeAllContent?: React.ReactNode;
-  count?: number;
+  subtitle?: string;
 }) => (
-  <div className="flex items-center justify-between mb-6">
-    <h3 className="text-2xl font-headline font-bold flex items-center gap-3">
-      <Icon className="h-6 w-6 text-primary" /> {title}
-      {count !== undefined && count > 0 && (
-        <span className="text-2xl font-bold text-foreground">{count}</span>
-      )}
-    </h3>
-    {seeAllContent}
+  <div className={subtitle ? 'mb-5' : 'mb-6'}>
+    <div className={`flex items-center justify-between ${subtitle ? 'mb-2' : ''}`}>
+      <div className="flex items-center gap-2">
+        <div className="w-1 h-6 bg-primary rounded-full" />
+        <h3 className="text-2xl font-headline font-bold flex items-center gap-2">
+          <Icon className="h-6 w-6 text-primary" /> {title}
+        </h3>
+      </div>
+      {seeAllContent}
+    </div>
+    {subtitle && <p className="text-sm text-muted-foreground">{subtitle}</p>}
   </div>
 );
 
@@ -197,10 +204,12 @@ const EmptyRow = ({ message }: { message: string }) => (
   </div>
 );
 
-// One card on the Watch History strip. Episodes no longer appear individually —
-// they collapse into a single show card carrying progress and a status label.
-interface RecentItem { id: string; title: string; poster: string; year: string; loggedAt: string; rating?: number; tmdbRating?: number; isShow?: boolean; watchedEpisodes?: number; totalEpisodes?: number; status?: ShowProgressStatus; }
-interface UserReview { movieId: string; movieTitle: string; moviePoster: string; movieYear: string; content: string; rating: number; date: string; }
+// One card on the Watch History strip: a film or a single episode, each by the
+// date it was watched. A show gets no card of its own — its episodes are the
+// record — except a bare whole-show mark with no episodes behind it.
+interface RecentItem { id: string; title: string; poster: string; year: string; loggedAt: string; rating?: number; tmdbRating?: number; episodeLine?: string; }
+type WatchlistItem = Movie & { episodeLine?: string };
+interface UserReview { movieId: string; movieTitle: string; moviePoster: string; movieYear: string; content: string; rating: number; date: string; episodeLine?: string; }
 interface UserList { id: string; title: string; isPrivate: boolean; createdAt: string; items: { movieId: string; title: string; poster: string; year: string; type: string }[]; }
 
 function loadLists(): UserList[] {
@@ -302,6 +311,7 @@ function ListsSection() {
       <SectionHeader
         title="Lists"
         icon={List}
+        subtitle="Your collections"
         seeAllContent={
           <button
             onClick={() => setCreateOpen(true)}
@@ -719,10 +729,14 @@ export default function ProfilePage() {
   const [serverBadges, setServerBadges] = useState<EarnedBadge[] | null>(null);
   const [memberSince, setMemberSince] = useState<string | undefined>();
   const [recentWatched, setRecentWatched] = useState<RecentItem[]>([]);
-  const [watchlist, setWatchlist] = useState<Movie[]>([]);
+  const [watchlist, setWatchlist] = useState<WatchlistItem[]>([]);
   const [userReviews, setUserReviews] = useState<UserReview[]>([]);
   const [ratedItems, setRatedItems] = useState<RatedItem[]>([]);
-  /** Every episode score, flat. The collapse above cannot carry these. */
+  /** Rated TITLES for the chart's Movies and Shows sides: a series is one bar
+   *  entry, at the score given the series, or none if only its episodes were
+   *  rated. The shelf above has one card per rating and cannot answer that. */
+  const [chartRated, setChartRated] = useState<{ id: string; userRating?: number }[]>([]);
+  /** Every episode score, flat, for the chart's Episodes side. */
   const [episodeScores, setEpisodeScores] = useState<number[]>([]);
 
   // Saved refines from the full-page lists, so each preview shows the same order
@@ -934,7 +948,7 @@ export default function ProfilePage() {
     // No watched total is computed here any more: the shelf shows no number, and
     // the count that means something is the per-side one on /history.
 
-    // Build recent watch preview — movies as individual cards, episodes grouped by show
+    // Build recent watch preview — films and episodes, each its own card
     const buildWatchHistory = async (refreshStale = true) => {
       try {
         const rvMap = new Map<string, { title: string; poster: string; year: string; type: string; tmdbRating?: number }>();
@@ -951,20 +965,28 @@ export default function ProfilePage() {
         const logMap = new Map<string, string>();
         for (const entry of watchLog) logMap.set(entry.id, entry.loggedAt);
 
-        // Separate movies/whole-shows from individual episodes
-        const movieIds = new Set<string>();
-        const episodeIds: string[] = [];
-
+        // Films (and any bare whole-show mark) under watched-*, episodes under
+        // watched-ep-*. One set, so an id stored both ways is still one card.
+        const ids = new Set<string>();
         for (let i = 0; i < localStorage.length; i++) {
           const k = localStorage.key(i)!;
           if (k.startsWith('watched-') && !k.startsWith('watched-ep-') && !k.startsWith('watched-show-eps-') && localStorage.getItem(k) === 'true') {
-            movieIds.add(k.slice('watched-'.length));
+            ids.add(k.slice('watched-'.length));
           }
           if (k.startsWith('watched-ep-') && localStorage.getItem(k) === 'true') {
             const epId = k.slice('watched-ep-'.length); // e.g. tmdb-tv-12345-S1E5
-            if (/-S\d+E\d+$/.test(epId)) episodeIds.push(epId);
+            if (parseEpisodeId(epId)) ids.add(epId);
           }
         }
+        // Episodes are the watch record a show has, so a show with any of them
+        // gets no card of its own. Only a whole-show mark with nothing behind it
+        // still stands for the show — dropping that would hide the show outright.
+        const showsWithEpisodes = new Set<string>();
+        for (const id of ids) {
+          const ep = parseEpisodeId(id);
+          if (ep) showsWithEpisodes.add(ep.showId);
+        }
+        for (const showId of showsWithEpisodes) ids.delete(showId);
 
         // Sort by date FIRST using local timestamps only (no network), then fetch
         // metadata for JUST the preview slice. Fetching the whole library (hundreds
@@ -990,80 +1012,46 @@ export default function ProfilePage() {
         };
         const dateOf = (id: string) => logMap.get(id) ?? getWatchedAtISO(id) ?? new Date(0).toISOString();
 
-        // Collapse BEFORE slicing. Sixty-two episodes of one show would otherwise
-        // fill the whole fifty-card preview and bury everything else — which is the
-        // problem the show row exists to fix. Grouping only needs the id shape, so
-        // it works off the meta cache with no network; the episode totals that turn
-        // "45" into "45 / 62" are filled in after the preview batch below.
-        const entries = [
-          ...[...movieIds].map(id => ({ id, episode: false })),
-          ...episodeIds.map(id => ({ id, episode: true })),
-        ].map(c => {
-          const cached = readMeta(c.id);
-          return {
-            id: c.id,
-            showId: cached?.showId as string | undefined,
-            isEpisode: c.episode || cached?.isEpisode === true,
-            totalEpisodes: cached?.totalEps as number | undefined,
-            showStatus: cached?.tmdbStatus as string | undefined,
-            watchedAt: dateOf(c.id),
-          };
-        });
-
-        // Hand-marked titles sort above imports, whose log-dates can all be "today".
-        // A show counts as hand-marked if any of its episodes was.
-        const manualOf = (r: CollapsedRow): string | null => {
-          let best: string | null = null;
-          for (const memberId of r.memberIds) {
-            const iso = getManualWatchISO(memberId);
-            if (iso && (!best || iso > best)) best = iso;
-          }
-          return best;
-        };
-        const collapsed = collapseShows(entries);
-        collapsed.sort((a, b) => {
-          const am = manualOf(a);
-          const bm = manualOf(b);
+        // Each card by its own date, so an episode watched tonight goes first even
+        // when the rest of its show was watched years ago. Hand-marked titles sort
+        // above imports, whose log-dates can all be "today". Both stamps are read
+        // once up front: every lookup parses a whole index, and a sort asks
+        // thousands of times.
+        const manual = new Map([...ids].map(id => [id, getManualWatchISO(id)]));
+        const watchedAt = new Map([...ids].map(id => [id, dateOf(id)]));
+        const sorted = [...ids].sort((a, b) => {
+          const am = manual.get(a);
+          const bm = manual.get(b);
           if (am && !bm) return -1;
           if (!am && bm) return 1;
           if (am && bm) return new Date(bm).getTime() - new Date(am).getTime();
-          return new Date(b.watchedAt).getTime() - new Date(a.watchedAt).getTime();
+          return new Date(watchedAt.get(b)!).getTime() - new Date(watchedAt.get(a)!).getTime();
         });
 
-        const preview = collapsed.slice(0, PREVIEW);
+        const preview = sorted.slice(0, PREVIEW);
         // Fetch only the preview rows missing from the meta cache — one small batch.
-        const uncached = preview.map(r => r.id).filter(id => !readMeta(id));
+        const uncached = preview.filter(id => !readMeta(id));
         const fetched = uncached.length > 0 ? await batchFetchMeta(uncached) : {};
         const getMeta = (id: string): Record<string, unknown> | null => readMeta(id) ?? (fetched[id] as unknown as Record<string, unknown> | undefined) ?? null;
 
         const items: RecentItem[] = [];
-        for (const r of preview) {
-          const rv = rvMap.get(r.id);
-          const data = getMeta(r.id);
+        for (const id of preview) {
+          const rv = rvMap.get(id);
+          const data = getMeta(id);
           const title = (data?.title as string | undefined) ?? rv?.title;
           if (!title) continue;
-          const rating = localStorage.getItem(`movie-rating-${r.id}`);
-          // A whole-show mark with nothing cached looks like a film until its meta
-          // lands, so settle showness here, once the fetch has actually happened.
-          const isShow = r.isShow || (data?.type === 'show' && data?.isEpisode !== true);
-          // The show's own entry first, the one its episodes carry second — same
-          // order as collapseShows, and for the same reason: only the show's is
-          // refreshed, so an episode's number can be a season out of date.
-          const total = (data?.totalEps as number | undefined) || r.totalEpisodes || 0;
+          const rating = localStorage.getItem(`movie-rating-${id}`);
+          const episodeLine = episodeLineFor(id, data);
           items.push({
-            id: r.id,
+            id,
             title: title.replace(/^S\d+E\d+\s·\s/, ''),
             poster: (data?.poster as string) ?? rv?.poster ?? '',
-            year: (data?.year as string) ?? rv?.year ?? '',
-            loggedAt: r.watchedAt,
+            // An episode card names its show on the grey line instead.
+            year: episodeLine ? '' : ((data?.year as string) ?? rv?.year ?? ''),
+            loggedAt: watchedAt.get(id)!,
             rating: rating ? Number(rating) : undefined,
             tmdbRating: typeof data?.tmdbRating === 'number' ? data.tmdbRating : rv?.tmdbRating,
-            isShow,
-            watchedEpisodes: isShow ? r.watchedEpisodes : undefined,
-            totalEpisodes: isShow ? total : undefined,
-            status: isShow
-              ? statusFor(r.watchedEpisodes, total, (r.showStatus ?? data?.tmdbStatus) as string | undefined)
-              : undefined,
+            episodeLine,
           });
         }
         // preview was already date-sorted, so keep that order.
@@ -1071,12 +1059,12 @@ export default function ProfilePage() {
         if (!isCurrent()) return;
         setRecentWatched(items);
 
-        // Painted. Now refresh any show whose entry is a day old and run through
-        // once more, so a total that moved corrects itself a moment later instead
-        // of holding the shelf back. Only shows reach here — episodes never go
-        // stale — so this is a handful of ids, not the whole library.
+        // Painted. Now refresh any entry old enough for its rating to have moved and
+        // run through once more, so it corrects itself a moment later instead of
+        // holding the shelf back. Episodes never go stale, so this is a handful of
+        // the fifty ids at most, not the whole library.
         if (refreshStale) {
-          const stale = preview.map(r => r.id).filter(isStale);
+          const stale = preview.filter(isStale);
           if (stale.length > 0) {
             await batchFetchMeta(stale);
             if (!isCurrent()) return;
@@ -1091,7 +1079,7 @@ export default function ProfilePage() {
 
     // Build watchlist from watchlist-* keys
     try {
-      const wlItems: Movie[] = [];
+      const wlItems: WatchlistItem[] = [];
       const wlMissing: string[] = [];
       for (let i = 0; i < localStorage.length; i++) {
         const k = localStorage.key(i)!;
@@ -1105,17 +1093,25 @@ export default function ProfilePage() {
         // carry — notably tmdbRating — are present. The full watchlist page does
         // this too; without it the profile preview showed no rating while the
         // full page did. The watchlist-* entry still wins on any overlapping key.
+        let cachedMeta: Record<string, unknown> | null = null;
         try {
           const cached = localStorage.getItem(`meta-${id}`);
-          if (cached) meta = { ...JSON.parse(cached), ...meta };
+          if (cached) { cachedMeta = JSON.parse(cached); meta = { ...cachedMeta, ...meta }; }
         } catch { /* ignore */ }
-        if (!meta.title) { wlMissing.push(id); continue; }
+        // An episode saved from its page before 2026-09-11 stored the episode's
+        // screenshot as its poster, and the login sync never rewrites an entry that
+        // has a title. The show's poster lives on the meta entry, so an episode with
+        // none cached is fetched like an untitled one — which also rewrites the
+        // saved entry with the right poster.
+        if (!meta.title || (parseEpisodeId(id) && !cachedMeta)) { wlMissing.push(id); continue; }
+        const episodeLine = episodeLineFor(id, meta);
         wlItems.push({
           id,
-          title: meta.title as string,
-          poster: (meta.poster as string) ?? '',
+          title: (meta.title as string).replace(/^S\d+E\d+\s·\s/, ''),
+          poster: ((episodeLine && typeof cachedMeta?.poster === 'string' ? cachedMeta.poster : meta.poster) as string) ?? '',
           backdrop: (meta.backdrop as string) ?? '',
-          year: (meta.year as string) ?? '',
+          year: episodeLine ? '' : ((meta.year as string) ?? ''),
+          episodeLine,
           genre: (meta.genre as string) ?? '',
           rating: typeof meta.tmdbRating === 'number' ? meta.tmdbRating : 0,
           description: (meta.description as string) ?? '',
@@ -1127,7 +1123,7 @@ export default function ProfilePage() {
           reviews: [],
           quotes: [],
           trivia: [],
-        } as Movie);
+        } as WatchlistItem);
       }
       setWatchlist(wlItems.sort((a, b) => getAddedAt(b.id) - getAddedAt(a.id)));
 
@@ -1137,18 +1133,20 @@ export default function ProfilePage() {
           // Superseded while fetching: a newer pass has already read localStorage,
           // and appending here would re-add anything removed in between.
           if (!isCurrent()) return;
-          const fetched: Movie[] = wlMissing.flatMap(id => {
+          const fetched: WatchlistItem[] = wlMissing.flatMap(id => {
             const m = metaMap[id];
             if (!m?.title) return [];
             try {
               localStorage.setItem(`watchlist-${id}`, JSON.stringify({ id, title: m.title, poster: m.poster ?? '', year: m.year ?? '', type: m.type ?? 'movie' }));
             } catch { /* ignore */ }
+            const episodeLine = episodeLineFor(id, m);
             return [{
-              id, title: m.title, poster: m.poster ?? '', backdrop: '', year: m.year ?? '',
+              id, title: m.title.replace(/^S\d+E\d+\s·\s/, ''), poster: m.poster ?? '', backdrop: '',
+              year: episodeLine ? '' : (m.year ?? ''), episodeLine,
               genre: m.genre ?? '', rating: typeof m.tmdbRating === 'number' ? m.tmdbRating : 0,
               description: '', type: (m.type as 'movie' | 'show') ?? 'movie',
               followingsRating: 0, votes: 0, director: '', cast: [], reviews: [], quotes: [], trivia: [],
-            } as Movie];
+            } as WatchlistItem];
           });
           if (fetched.length > 0) {
             setWatchlist(prev => {
@@ -1183,7 +1181,12 @@ export default function ProfilePage() {
           }
         } catch { /* ignore */ }
       }
-      const reviews = [...byId.values()];
+      // A review of one episode says which show it belongs to, as its card does.
+      const reviews = [...byId.values()].map(r => ({
+        ...r,
+        movieTitle: (r.movieTitle ?? '').replace(/^S\d+E\d+\s·\s/, ''),
+        episodeLine: cachedEpisodeLine(r.movieId),
+      }));
       setUserReviews(reviews.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()));
 
       const reviewsMissing = reviews.filter(r => !r.movieTitle || !r.moviePoster);
@@ -1195,8 +1198,9 @@ export default function ProfilePage() {
             const m = metaMap[r.movieId];
             if (!m?.title) return [];
             const updated = { ...r, movieTitle: m.title, moviePoster: m.poster ?? '', movieYear: m.year ?? '' };
-            try { localStorage.setItem(`review-${r.movieId}`, JSON.stringify(updated)); } catch { /* ignore */ }
-            return [updated];
+            // Stored without the line, which is worked out on every read.
+            try { localStorage.setItem(`review-${r.movieId}`, JSON.stringify({ ...updated, episodeLine: undefined })); } catch { /* ignore */ }
+            return [{ ...updated, movieTitle: m.title.replace(/^S\d+E\d+\s·\s/, ''), episodeLine: episodeLineFor(r.movieId, m) }];
           });
           if (patched.length > 0) {
             setUserReviews(prev => prev.map(p => patched.find(f => f.movieId === p.movieId) ?? p));
@@ -1216,10 +1220,8 @@ export default function ProfilePage() {
         }
       } catch { /* ignore */ }
 
-      // Collapse first, exactly as /ratings does. Reading the keys straight into
-      // cards was what put three House of the Dragon posters in a row — the
-      // series and two of its episodes, each claiming to be a title. This is the
-      // same helper, so the shelf and its own See All can no longer disagree.
+      // Every score under movie-rating-*, whatever it is for: a film, a series,
+      // or a single episode.
       const scored: { id: string; score: number }[] = [];
       for (let i = 0; i < localStorage.length; i++) {
         const k = localStorage.key(i)!;
@@ -1234,72 +1236,60 @@ export default function ProfilePage() {
       // the chart is the one place that question is asked.
       setEpisodeScores(scored.filter(s => /-S\d+E\d+$/.test(s.id)).map(s => s.score));
 
-      // When a collapsed row was last rated, counting its episodes. The stamp is
-      // written against whatever id was scored, so a show's own id is only
-      // stamped when the SERIES was rated — rate three episodes tonight and the
-      // show sorted as though nothing had happened, or as never rated at all if
-      // you had not judged the series. The newest of the row and its members.
-      const ratedAtFor = (row: { id: string; memberIds: string[] }) =>
-        Math.max(getRatedAt(row.id), ...row.memberIds.map(getRatedAt));
-      const ratedAtById = new Map<string, number>();
+      // The chart counts titles, not ratings, so it keeps the collapse the shelf
+      // no longer uses: a series lands on the bar of the score given the series.
+      setChartRated(collapseRatings(scored).map(row => ({ id: row.id, userRating: row.seriesRating })));
+
+      // One card per rating. An episode's own name is its title; the show rides
+      // on the grey line, and the year is left off for the same reason.
+      type RatedSource = { title: string; poster?: string; year?: string; tmdbRating?: unknown; showName?: unknown };
+      const toRated = (id: string, userRating: number, m: RatedSource): RatedItem => {
+        const episodeLine = episodeLineFor(id, m);
+        return {
+          id,
+          title: m.title.replace(/^S\d+E\d+\s·\s/, ''),
+          poster: m.poster ?? '',
+          year: episodeLine ? '' : (m.year ?? ''),
+          tmdbRating: typeof m.tmdbRating === 'number' ? m.tmdbRating : undefined,
+          userRating,
+          episodeLine,
+        };
+      };
 
       const rated: RatedItem[] = [];
-      const ratedMissing: { id: string; userRating?: number; ratedEpisodes?: number }[] = [];
-      for (const row of collapseRatings(scored)) {
-        ratedAtById.set(row.id, ratedAtFor(row));
-        const raw = localStorage.getItem(`meta-${row.id}`);
+      const ratedMissing: { id: string; userRating: number }[] = [];
+      for (const { id, score } of scored) {
+        const raw = localStorage.getItem(`meta-${id}`);
         const meta = raw ? JSON.parse(raw) : null;
-        const rv = rvMap.get(row.id);
+        const rv = rvMap.get(id);
         const title = meta?.title ?? rv?.title;
         const poster = meta?.poster ?? rv?.poster;
-        const ratedEpisodes = row.episodeCount || undefined;
-        if (!title || !poster) { ratedMissing.push({ id: row.id, userRating: row.seriesRating, ratedEpisodes }); continue; }
-        rated.push({
-          id: row.id,
-          title,
-          poster,
-          year: meta?.year ?? rv?.year ?? '',
-          tmdbRating: meta?.tmdbRating ?? rv?.tmdbRating,
-          userRating: row.seriesRating,
-          ratedEpisodes,
-          totalEpisodes: typeof meta?.totalEps === 'number' ? meta.totalEps : undefined,
-        });
+        if (!title || !poster) { ratedMissing.push({ id, userRating: score }); continue; }
+        rated.push(toRated(id, score, { ...rv, ...meta, title, poster, tmdbRating: meta?.tmdbRating ?? rv?.tmdbRating }));
       }
       // getRatedAt, not getAddedAt. The add index keeps the EARLIEST date a title
       // was seen, so a film watchlisted in June and rated in August sorted as
       // June — and since this row renders only the first 50 of what can be
       // hundreds of ratings, a newly rated film did not merely sink, it fell off
       // the end and vanished from the row entirely while sitting first under
-      // See All. 885bb7e fixed the full Ratings page and missed this row.
-      const ratedAt = (id: string) => ratedAtById.get(id) ?? getRatedAt(id);
-      setRatedItems(rated.sort((a, b) => ratedAt(b.id) - ratedAt(a.id)));
+      // See All. 885bb7e fixed the full Ratings page and missed this row. Each
+      // card is one rating now, so its own stamp is the whole answer.
+      setRatedItems(rated.sort((a, b) => getRatedAt(b.id) - getRatedAt(a.id)));
 
       if (ratedMissing.length > 0) {
         (async () => {
           const metaMap = await batchFetchMeta(ratedMissing.map(r => r.id));
           if (!isCurrent()) return;
-          const fetched: RatedItem[] = ratedMissing.flatMap(({ id, userRating, ratedEpisodes }) => {
+          const fetched: RatedItem[] = ratedMissing.flatMap(({ id, userRating }) => {
             const m = metaMap[id];
-            if (!m?.title) return [];
-            return [{
-              id,
-              title: m.title,
-              poster: m.poster ?? '',
-              year: m.year ?? '',
-              tmdbRating: typeof m.tmdbRating === 'number' ? m.tmdbRating : undefined,
-              userRating,
-              ratedEpisodes,
-              totalEpisodes: typeof m.totalEps === 'number' ? m.totalEps : undefined,
-            }];
+            return m?.title ? [toRated(id, userRating, m)] : [];
           });
           if (fetched.length > 0) {
             setRatedItems(prev => {
               const seen = new Set(prev.map(p => p.id));
-              // Same order as the first pass above — titles whose posters arrive
-              // late must not be sorted by a different date from the rest, which
-              // means the same episode-aware stamp and not getRatedAt directly.
+              // Same order as the first pass above, by the same stamps.
               return [...prev, ...fetched.filter(f => !seen.has(f.id))]
-                .sort((a, b) => ratedAt(b.id) - ratedAt(a.id));
+                .sort((a, b) => getRatedAt(b.id) - getRatedAt(a.id));
             });
           }
         })();
@@ -1344,7 +1334,7 @@ export default function ProfilePage() {
 
   // One side at a time, and the side names the unit: films, series, episodes.
   // Type comes off the id and needs no metadata — a series starts with tmdb-tv-,
-  // everything else in ratedItems is a film, and episodes were never in there to
+  // everything else in chartRated is a film, and episodes were never in there to
   // begin with since the collapse folds them into their show.
   //
   // A series lands on the bar of the score you gave the series, or on no bar at
@@ -1357,13 +1347,13 @@ export default function ProfilePage() {
 
   const chartCounts = React.useMemo(() => {
     let movies = 0, shows = 0;
-    for (const r of ratedItems) (chartSideOf(r.id) === 'shows' ? shows++ : movies++);
+    for (const r of chartRated) (chartSideOf(r.id) === 'shows' ? shows++ : movies++);
     return { movies, shows, episodes: episodeScores.length };
-  }, [ratedItems, episodeScores]);
+  }, [chartRated, episodeScores]);
 
   const sideRated = React.useMemo(
-    () => (chartSide === 'episodes' ? [] : ratedItems.filter(r => chartSideOf(r.id) === chartSide)),
-    [ratedItems, chartSide],
+    () => (chartSide === 'episodes' ? [] : chartRated.filter(r => chartSideOf(r.id) === chartSide)),
+    [chartRated, chartSide],
   );
 
   const ratingData = [1,2,3,4,5,6,7,8,9,10].map(n => ({
@@ -1698,22 +1688,16 @@ export default function ProfilePage() {
 
       {/* Watch History */}
       <section>
-        <div className="flex items-center justify-between mb-2">
-          <div className="flex items-center gap-2">
-            <div className="w-1 h-6 bg-primary rounded-full" />
-            <h3 className="text-2xl font-headline font-bold flex items-center gap-2">
-              <History className="h-6 w-6 text-primary" />
-              {/* No number here. Films and shows are separate lists now, and one
-                  mixed total describes neither — See All is where you pick a side
-                  and get a count that means something. */}
-              Watch history
-            </h3>
-          </div>
-          <a href="/history" className="text-xs text-primary border border-primary/30 rounded-full px-3 py-1 hover:bg-primary/10 transition-colors font-semibold flex items-center gap-1">
-            See All <ChevronRight className="h-3 w-3" />
-          </a>
-        </div>
-        <p className="text-sm text-muted-foreground mb-5">Everything you&apos;ve watched, rated, or checked into</p>
+        <SectionHeader
+          title="Watch history"
+          icon={History}
+          subtitle="Everything you've seen"
+          seeAllContent={
+            <a href="/history" className="text-xs text-primary border border-primary/30 rounded-full px-3 py-1 hover:bg-primary/10 transition-colors font-semibold flex items-center gap-1">
+              See All <ChevronRight className="h-3 w-3" />
+            </a>
+          }
+        />
         {recentWatched.length > 0 ? (
           <div className="flex overflow-x-auto gap-4 pb-4 no-scrollbar -mx-6 px-6">
             {sortedWatched.map(item => (
@@ -1735,27 +1719,16 @@ export default function ProfilePage() {
                       <span className="text-xs font-bold text-primary">{item.rating}</span>
                     </div>
                   )}
-                  {/* A show you're partway through gets the hollow eye, the same
-                      as everywhere else — the episode count below says how far. */}
-                  <WatchedEye
-                    state={item.isShow && item.status !== 'completed' ? 'partial' : 'complete'}
-                    className="h-3.5 w-3.5"
-                  />
+                  {/* Every card here is a film or an episode you watched, so the
+                      eye is always full; how far into a show you are is the
+                      See All page's to say. */}
+                  <WatchedEye state="complete" className="h-3.5 w-3.5" />
                 </div>
                 <p className="text-xs font-semibold font-headline line-clamp-2 group-hover:text-primary transition-colors leading-snug">
                   {item.title} {item.year ? `(${item.year})` : ''}
                 </p>
-                {/* Progress only once episodes have actually been ticked — a
-                    pre-Step-2 show record has none, and "0 / 62" reads as a bug. */}
-                {item.isShow && (item.watchedEpisodes ?? 0) > 0 && (
-                  <p className="text-[11px] text-muted-foreground line-clamp-1 mt-0.5">
-                    {/* "watched", to pair with "rated" on the Ratings shelf below.
-                        The two shelves say the same kind of thing about different
-                        acts, and the number alone left it to the reader to infer
-                        which act this one meant. */}
-                    {item.totalEpisodes ? `${item.watchedEpisodes} / ${item.totalEpisodes} episodes watched` : `${item.watchedEpisodes} episodes watched`}
-                    {item.status === 'up-to-date' && ' · Up to date'}
-                  </p>
+                {item.episodeLine && (
+                  <p className="text-[11px] text-muted-foreground line-clamp-1 mt-0.5">{item.episodeLine}</p>
                 )}
               </Link>
             ))}
@@ -1765,23 +1738,21 @@ export default function ProfilePage() {
         )}
       </section>
 
-      {/* Diary — films watched 2+ times, with all their dates (rewatches only) */}
+      {/* Diary — anything watched 2+ times, with all its dates (rewatches only) */}
       <DiarySection />
 
       {/* Ratings */}
       <section>
-        <div className="flex items-center justify-between mb-6">
-          <h3 className="text-2xl font-headline font-bold flex items-center gap-3">
-            <Star className="h-6 w-6 text-primary" />
-            {/* Split list, so no mixed total — see the Watch history note above. */}
-            Ratings
-          </h3>
-          {ratedItems.length > 0 && (
+        <SectionHeader
+          title="Ratings"
+          icon={Star}
+          subtitle="Your scores"
+          seeAllContent={ratedItems.length > 0 ? (
             <a href="/ratings" className="text-xs text-primary border border-primary/30 rounded-full px-3 py-1 hover:bg-primary/10 transition-colors font-semibold flex items-center gap-1">
               See All <ChevronRight className="h-3 w-3" />
             </a>
-          )}
-        </div>
+          ) : undefined}
+        />
         {ratedItems.length > 0 ? (
           <div className="flex overflow-x-auto gap-4 pb-4 no-scrollbar -mx-6 px-6">
             {sortedRated.slice(0, 50).map(item => (
@@ -1803,10 +1774,6 @@ export default function ProfilePage() {
                       <span className="text-xs font-bold text-primary">{item.userRating}</span>
                     </div>
                   )}
-                  {/* Rated episodes are NOT a fourth mark here — see the line
-                      below the title. Four marks did not fit 144px, and a second
-                      star reading "2 / 26" beside one reading "8" is a puzzle at
-                      this size. */}
                   {/* The eye used to be printed here unconditionally, so a film
                       rated but never ticked, and a show you were one episode
                       into, both claimed you had watched them. No count: these
@@ -1818,18 +1785,8 @@ export default function ProfilePage() {
                 <p className="text-xs font-semibold font-headline line-clamp-2 group-hover:text-primary transition-colors leading-snug">
                   {item.title} {item.year ? `(${item.year})` : ''}
                 </p>
-                {/* Same shape and place as the watch shelf's "13 / 177 episodes"
-                    one row up, saying the same kind of thing about a different
-                    act. Below the title rather than beside the stars because it
-                    is a count, not a verdict — and because the marks line has no
-                    room left. Printed only once an episode has been rated:
-                    "0 / 26 episodes rated" states an absence. */}
-                {item.ratedEpisodes !== undefined && (
-                  <p className="text-[11px] text-muted-foreground line-clamp-1 mt-0.5">
-                    {item.totalEpisodes
-                      ? `${item.ratedEpisodes} / ${item.totalEpisodes} episodes rated`
-                      : `${item.ratedEpisodes} episode${item.ratedEpisodes === 1 ? '' : 's'} rated`}
-                  </p>
+                {item.episodeLine && (
+                  <p className="text-[11px] text-muted-foreground line-clamp-1 mt-0.5">{item.episodeLine}</p>
                 )}
               </Link>
             ))}
@@ -1880,10 +1837,10 @@ export default function ProfilePage() {
             </BarChart>
           </ResponsiveContainer>
         </div>
-        {ratedItems.length === 0 && (
+        {chartRated.length === 0 && (
           <p className="text-center text-sm text-muted-foreground">Rate movies to build your chart</p>
         )}
-        {ratedItems.length > 0 && (
+        {chartRated.length > 0 && (
           <p className="text-center text-xs text-muted-foreground">Tap a bar to see titles with that rating</p>
         )}
       </section>
@@ -1894,6 +1851,7 @@ export default function ProfilePage() {
         <SectionHeader
           title="Watchlist"
           icon={Bookmark}
+          subtitle="Up next"
           seeAllContent={watchlist.length > 0 ? (
             <a href="/watchlist" className="text-xs text-primary border border-primary/30 rounded-full px-3 py-1 hover:bg-primary/10 transition-colors font-semibold flex items-center gap-1">
               See All <ChevronRight className="h-3 w-3" />
@@ -1919,6 +1877,9 @@ export default function ProfilePage() {
                 <p className="text-xs font-semibold font-headline line-clamp-2 group-hover:text-primary transition-colors leading-snug">
                   {item.title} {item.year ? `(${item.year})` : ''}
                 </p>
+                {item.episodeLine && (
+                  <p className="text-[11px] text-muted-foreground line-clamp-1 mt-0.5">{item.episodeLine}</p>
+                )}
               </Link>
             ))}
           </div>
@@ -1935,7 +1896,7 @@ export default function ProfilePage() {
         <SectionHeader
           title="Reviews"
           icon={MessageSquare}
-          count={userReviews.length}
+          subtitle="Your take"
           seeAllContent={userReviews.length > 0 ? (
             <a
               href="/reviews"
@@ -1960,7 +1921,7 @@ export default function ProfilePage() {
                 </div>
                 <div className="flex-1 min-w-0 space-y-1">
                   <p className="text-base font-bold font-headline line-clamp-1 group-hover:text-primary transition-colors">{r.movieTitle}</p>
-                  <p className="text-xs text-muted-foreground">{r.movieYear} · {r.date}</p>
+                  <p className="text-xs text-muted-foreground line-clamp-1">{r.episodeLine ?? r.movieYear} · {r.date}</p>
                   {r.rating > 0 && (
                     <div className="flex items-center gap-1">
                       <Star className="h-3.5 w-3.5 text-primary" />

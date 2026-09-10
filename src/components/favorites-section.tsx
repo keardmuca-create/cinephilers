@@ -235,9 +235,13 @@ export function FavoritesSection() {
   return (
     <>
       <div className="flex items-center justify-between mb-4">
-        <h3 className="text-2xl font-headline font-bold flex items-center gap-3">
-          <Heart className="h-6 w-6 text-primary" /> Favorites
-        </h3>
+        {/* Same bar, icon and title as every section header on the profile. */}
+        <div className="flex items-center gap-2">
+          <div className="w-1 h-6 bg-primary rounded-full" />
+          <h3 className="text-2xl font-headline font-bold flex items-center gap-2">
+            <Heart className="h-6 w-6 text-primary" /> Favorites
+          </h3>
+        </div>
         <div className="flex items-center gap-2">
           {favorites.length >= 2 && (
             <button
