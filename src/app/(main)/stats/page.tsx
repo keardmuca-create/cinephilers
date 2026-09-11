@@ -189,6 +189,15 @@ export default function StatsPage() {
   // somebody came to see, and the parts explain it.
   const [span, setSpan] = useState<SpanKey>('total');
   const [loading, setLoading] = useState(true);
+  // Which series the Monthly Activity chart is plotting. Films and episodes are
+  // never summed: one film and one episode are not two of the same thing, and
+  // that sum was what the old single series showed.
+  //
+  // Declared up here with the other state, above the logged-out redirect below.
+  // It used to sit after that early return, so a visitor whose session was still
+  // loading rendered four hooks and then, once it settled logged-out, three — and
+  // React crashes the page on a hook count that changes between renders.
+  const [activityKind, setActivityKind] = useState<'movies' | 'episodes'>('movies');
 
   useEffect(() => {
     if (!user) return;
@@ -205,10 +214,6 @@ export default function StatsPage() {
   }
 
   const year = new Date().getFullYear();
-  // Which series the Monthly Activity chart is plotting. Films and episodes are
-  // never summed: one film and one episode are not two of the same thing, and
-  // that sum was what the old single series showed.
-  const [activityKind, setActivityKind] = useState<'movies' | 'episodes'>('movies');
   const activity = stats
     ? stats.monthlyActivity.map(m => ({ month: m.month, count: m[activityKind] }))
     : [];
