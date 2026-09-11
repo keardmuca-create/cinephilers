@@ -11,7 +11,7 @@ export async function GET(req: NextRequest) {
   const now = new Date();
   const yearStart = new Date(now.getFullYear(), 0, 1);
 
-  const [watched, ratings, reviewsCount, watchedEpisodes] = await Promise.all([
+  const [watched, ratings, reviews, watchedEpisodes, rewatchGroups, rewatchThisYearGroups] = await Promise.all([
     prisma.watchedItem.findMany({
       where: { userId },
       select: { tmdbId: true, mediaType: true, watchedAt: true },
@@ -19,16 +19,29 @@ export async function GET(req: NextRequest) {
     }),
     prisma.rating.findMany({
       where: { userId },
-      select: { score: true },
+      select: { score: true, tmdbId: true, mediaType: true },
     }),
-    prisma.review.count({ where: { userId } }),
+    prisma.review.findMany({ where: { userId }, select: { tmdbId: true, mediaType: true } }),
     // Every episode individually, not a count per show: each one is looked up by
     // its own runtime below, so which episodes matters and not merely how many.
     prisma.watchedEpisode.findMany({
       where: { userId },
       select: { showTmdbId: true, season: true, episode: true, watchedAt: true },
     }),
+    // Titles watched twice or more, all time and within this year — the same
+    // definition the profile's Rewatched row and list use.
+    prisma.watchEvent.groupBy({
+      by: ['tmdbId', 'mediaType'],
+      where: { userId },
+      having: { tmdbId: { _count: { gte: 2 } } },
+    }),
+    prisma.watchEvent.groupBy({
+      by: ['tmdbId', 'mediaType'],
+      where: { userId, watchedAt: { gte: yearStart } },
+      having: { tmdbId: { _count: { gte: 2 } } },
+    }),
   ]);
+  const reviewsCount = reviews.length;
 
   // Totals
   const totalWatched = watched.length;
@@ -71,6 +84,41 @@ export async function GET(req: NextRequest) {
   const avgScore = totalRatings > 0
     ? Math.round((ratings.reduce((sum, r) => sum + r.score, 0) / totalRatings) * 10) / 10
     : null;
+
+  // ── Films · Shows · Episodes ────────────────────────────────────────────────
+  //
+  // Ratings, reviews and rewatches split the way every list in the app now is.
+  // A film score, a series score and an episode score are three different
+  // verdicts, so each side keeps its own average — one average across all three
+  // described none of them. The side comes off the id: an episode is filed under
+  // SHOW with an -S1E2 id, a whole series under SHOW without one.
+  type Side = 'movies' | 'shows' | 'episodes';
+  const sideOf = (tmdbId: string, mediaType: string): Side =>
+    mediaType !== 'SHOW' ? 'movies' : /-S\d+E\d+$/.test(tmdbId) ? 'episodes' : 'shows';
+  const perSide = () => ({ movies: 0, shows: 0, episodes: 0 });
+
+  const ratingCounts = perSide();
+  const ratingSums = perSide();
+  for (const r of ratings) {
+    const side = sideOf(r.tmdbId, r.mediaType);
+    ratingCounts[side]++;
+    ratingSums[side] += r.score;
+  }
+  const averageOf = (side: Side) =>
+    ratingCounts[side] > 0 ? Math.round((ratingSums[side] / ratingCounts[side]) * 10) / 10 : null;
+  const ratingsBySide = {
+    movies: { count: ratingCounts.movies, avg: averageOf('movies') },
+    shows: { count: ratingCounts.shows, avg: averageOf('shows') },
+    episodes: { count: ratingCounts.episodes, avg: averageOf('episodes') },
+  };
+
+  const reviewsBySide = perSide();
+  for (const r of reviews) reviewsBySide[sideOf(r.tmdbId, r.mediaType)]++;
+
+  const rewatchedBySide = perSide();
+  for (const g of rewatchGroups) rewatchedBySide[sideOf(g.tmdbId, g.mediaType)]++;
+  const rewatchedThisYearBySide = perSide();
+  for (const g of rewatchThisYearGroups) rewatchedThisYearBySide[sideOf(g.tmdbId, g.mediaType)]++;
 
   // ── Time watched ────────────────────────────────────────────────────────────
   //
@@ -192,6 +240,10 @@ export async function GET(req: NextRequest) {
     totalRatings,
     avgScore,
     reviewsCount,
+    ratingsBySide,
+    reviewsBySide,
+    rewatchedBySide,
+    rewatchedThisYearBySide,
     monthlyActivity: months,
   });
 }
