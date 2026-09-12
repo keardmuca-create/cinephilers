@@ -384,6 +384,26 @@ model Report {
   reporter User @relation(fields: [reporterId], references: [id], onDelete: Cascade)
 }
 
+// Shared memory of import matches: "this line in someone's export file is this
+// TMDB title", so the next person importing the same film skips the lookup. Filled
+// only by SURE matches — an exact IMDb-id lookup or a confident title search —
+// never by a guess the importer wasn't sure of, or one wrong guess would spread to
+// every import after it. Nothing here is personal; one row per key, for everyone.
+//   imdb:tt0468569                 exact, from an IMDb export's Const column
+//   title:dark knight|2008|movie   normalized title | year | search type
+model ImportMatch {
+  key       String    @id
+  tmdbId    String
+  mediaType MediaType
+  title     String
+  year      String?
+  poster    String?
+  language  String?
+  rating    Float?
+  source    String
+  createdAt DateTime  @default(now())
+}
+
 // Shared, per-TITLE facts: what a film or show actually IS. Everything else in
 // this schema stores only a tmdbId, so genre, language, decade, runtime and
 // people existed solely in each browser's cache — which is why World Cinema

@@ -22,6 +22,7 @@ interface ParsedItem {
   watchedAt?: string;         // earliest viewing (the first watch)
   extraWatchDates?: string[]; // later viewings from diary.csv → become rewatches
   inWatchlist?: boolean;
+  imdbId?: string;            // IMDb exports only: matched exactly, not by title
 }
 
 interface MatchedItem extends ParsedItem {
@@ -144,9 +145,13 @@ async function parseIMDb(file: File): Promise<ParsedItem[]> {
     // Skip TV episodes
     if (titleType === 'tvepisode') continue;
 
+    // The row's own IMDb id, which TMDB resolves exactly — no title guessing.
+    const imdbId = (row['Const'] ?? row['const'] ?? '').trim();
+
     items.push({
       title,
       year,
+      imdbId: /^tt\d+$/.test(imdbId) ? imdbId : undefined,
       rating: yourRating >= 1 && yourRating <= 10 ? yourRating : undefined,
       // IMDb's ratings export dates the row "Date Rated"; the watchlist export
       // uses "Created". Without reading both, imported ratings all stamp "now"
@@ -161,25 +166,45 @@ async function parseIMDb(file: File): Promise<ParsedItem[]> {
 
 const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
-async function matchToTMDB(item: ParsedItem, typeHint?: 'movie' | 'tv'): Promise<MatchedItem | null> {
-  try {
-    const params = new URLSearchParams({ q: item.title });
-    if (item.year) params.set('year', item.year);
-    if (typeHint) params.set('type', typeHint);
-    // A busy moment (429) or a server hiccup (5xx) is not "no match". Treated as one,
-    // a big library quietly filled "couldn't be matched" with films that exist.
-    let res = await fetch(`/api/tmdb/search?${params}`);
-    for (let attempt = 1; attempt <= 3 && (res.status === 429 || res.status >= 500); attempt++) {
-      await sleep(attempt * 5_000);
-      res = await fetch(`/api/tmdb/search?${params}`);
-    }
-    if (!res.ok) return null;
-    const json = await res.json();
-    if (!json.data) return null;
-    return { ...item, tmdbId: json.data.tmdbId, mediaType: json.data.mediaType, matchedTitle: json.data.title, poster: json.data.poster, language: json.data.language ?? '', tmdbRating: json.data.rating, confident: json.data.confident === true };
-  } catch {
-    return null;
+interface BatchMatch {
+  key: string;
+  match: { tmdbId: string; mediaType: 'MOVIE' | 'SHOW'; title: string; poster: string | null; language?: string; rating?: number; confident?: boolean } | null;
+  /** The server couldn't reach TMDB for this title — worth asking again. */
+  retry?: boolean;
+}
+
+// One request for up to 50 titles. Null when the server couldn't be reached after a
+// few tries. A busy moment (429) or a hiccup (5xx) is waited out rather than read as
+// "no match", which once quietly filled "couldn't be matched" with films that exist.
+async function matchBatch(batch: { key: string; item: ParsedItem }[], typeHint?: 'movie' | 'tv'): Promise<BatchMatch[] | null> {
+  const body = JSON.stringify({
+    items: batch.map(({ key, item }) => ({
+      key,
+      title: item.title,
+      year: /^\d{4}$/.test(item.year) ? item.year : undefined,
+      imdbId: item.imdbId,
+      typeHint,
+    })),
+  });
+  for (let attempt = 0; attempt < 4; attempt++) {
+    try {
+      const res = await fetchWithAuth('/api/import/match', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body,
+        ...(typeof AbortSignal !== 'undefined' && typeof AbortSignal.timeout === 'function'
+          ? { signal: AbortSignal.timeout(90_000) }
+          : {}),
+      });
+      if (res.ok) {
+        const json = await res.json();
+        return Array.isArray(json?.data?.results) ? json.data.results as BatchMatch[] : null;
+      }
+      if (res.status !== 429 && res.status < 500) return null;
+    } catch { /* dropped connection or timeout — try again */ }
+    await sleep((attempt + 1) * 5_000);
   }
+  return null;
 }
 
 // Build a MatchedItem from a searched movie, carrying the original parsed item's
@@ -303,31 +328,44 @@ export function ImportDialog({ onClose }: { onClose: () => void }) {
       // Refresh token before the slow TMDB matching phase
       await fetch('/api/auth/refresh', { method: 'POST', credentials: 'include' }).catch(() => {});
 
-      // Match to TMDB — 5 concurrent
+      // Matched on the server, 50 titles a request. It answers from the shared memory
+      // of sure matches first, resolves IMDb rows by their exact IMDb id, and looks
+      // the rest up ten at a time under a TMDB rate cap. One browser request per
+      // title, five at a time and paced under a rate limit, took ~21 minutes for a
+      // 10,000-title library.
       // Letterboxd is movies-only; force movie search to prevent wrong TV matches
       const typeHint: 'movie' | undefined = platform === 'letterboxd' ? 'movie' : undefined;
       const matchedList: MatchedItem[] = [];
       const uncertainList: MatchedItem[] = [];
       const unmatchedList: ParsedItem[] = [];
-      const CONCURRENCY = 5;
+      const BATCH = 50;
 
-      // No faster than 5 lookups per 625 ms — 480 a minute, under the search route's
-      // 600-a-minute limit — so a big library never trips it. Measured from a real
-      // connection the unpaced loop ran at ~530 a minute, close enough to the limit
-      // that a faster one would cross it. A small library barely notices.
-      const MIN_BATCH_MS = 625;
-      for (let i = 0; i < items.length; i += CONCURRENCY) {
-        const batchStartedAt = Date.now();
-        const batch = items.slice(i, i + CONCURRENCY);
-        const results = await Promise.all(batch.map(item => matchToTMDB(item, typeHint)));
-        results.forEach((r, idx) => {
-          if (r && r.confident) matchedList.push(r);
-          else if (r) uncertainList.push(r);   // a guess exists but isn't trustworthy — let the user review it
-          else unmatchedList.push(batch[idx]);
-        });
-        setMatchProgress(Math.min(i + CONCURRENCY, items.length));
-        const elapsed = Date.now() - batchStartedAt;
-        if (elapsed < MIN_BATCH_MS) await sleep(MIN_BATCH_MS - elapsed);
+      // Titles the server couldn't reach TMDB for get one more pass at the end
+      // instead of being written off as unmatched.
+      let pending = items.map((item, i) => ({ key: String(i), item }));
+      let done = 0;
+      for (let round = 0; round < 2 && pending.length > 0; round++) {
+        const tryAgain: typeof pending = [];
+        for (let i = 0; i < pending.length; i += BATCH) {
+          const batch = pending.slice(i, i + BATCH);
+          const results = await matchBatch(batch, typeHint);
+          const byKey = new Map((results ?? []).map(r => [r.key, r]));
+          for (const entry of batch) {
+            const r = byKey.get(entry.key);
+            if (round === 0 && (!results || r?.retry)) { tryAgain.push(entry); continue; }
+            const m = r?.match;
+            if (m) {
+              const matchedItem: MatchedItem = { ...entry.item, tmdbId: m.tmdbId, mediaType: m.mediaType, matchedTitle: m.title, poster: m.poster, language: m.language ?? '', tmdbRating: m.rating, confident: m.confident === true };
+              // A guess that isn't trustworthy goes to the person to review.
+              if (matchedItem.confident) matchedList.push(matchedItem); else uncertainList.push(matchedItem);
+            } else {
+              unmatchedList.push(entry.item);
+            }
+            done++;
+          }
+          setMatchProgress(done);
+        }
+        pending = tryAgain;
       }
 
       setMatched(matchedList);
