@@ -2,37 +2,40 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
-// A first-time Letterboxd import of a few thousand rated films pushed one chunk of
-// the aggregate recompute past the transaction deadline. Prisma then failed to roll
-// back an already-closed transaction, and that error escaped as a 500 — after every
-// row of the import had been committed. The user was told their import failed when
-// their whole library had in fact landed.
+// Big imports broke twice in the same place: the aggregate recompute that runs after
+// every row has been committed. First a transaction deadline turned it into a 500
+// (2026-09-05); then, measured 2026-09-12, its ~10,600 round trips for a
+// 10,000-title library ran past the 5-minute function limit. Either way the person
+// was told the import failed when their whole library had in fact landed.
 //
-// Two properties keep that from happening again, and both are easy to undo by
+// The properties that keep that from happening again are easy to undo by
 // accident, so they are asserted here.
 
 const root = join(__dirname, '..', '..');
 const sync = readFileSync(join(root, 'src', 'lib', 'movie-rating-sync.ts'), 'utf8');
 const importRoute = readFileSync(join(root, 'src', 'app', 'api', 'import', 'route.ts'), 'utf8');
 
-describe('the aggregate recompute survives a transaction deadline', () => {
-  it('uses a chunk small enough to finish inside one', () => {
+describe('the aggregate recompute stays fast on a big library', () => {
+  it('does a whole chunk in one statement, not one query per title', () => {
+    expect(sync).toContain('prisma.$executeRaw`');
+    expect(sync).toContain('ON CONFLICT ("tmdbId", "mediaType")');
+    expect(sync).not.toContain('$transaction(');
+    expect(sync).not.toContain('movieRating.upsert(');
+  });
+
+  it('uses chunks big enough to keep round trips few', () => {
     const chunk = Number(sync.match(/const CHUNK = (\d+)/)?.[1]);
-    expect(chunk).toBeGreaterThan(0);
-    expect(chunk).toBeLessThanOrEqual(100);
+    expect(chunk).toBeGreaterThanOrEqual(500);
   });
 
-  it('falls back to applying a failed chunk one row at a time', () => {
-    // Each row is computed from the Rating table rather than from the others, so
-    // one at a time is not a weaker result — just a slower one.
+  it('removes the aggregate of a title with no ratings left', () => {
+    expect(sync).toContain('DELETE FROM "MovieRating"');
+    expect(sync).toContain('NOT EXISTS');
+  });
+
+  it('falls back to one title at a time when a chunk fails', () => {
     expect(sync).toContain('catch {');
-    expect(sync).toContain('for (const op of buildOps())');
-  });
-
-  it('builds operations through a factory, not a reused array', () => {
-    // A PrismaPromise handed to a failed $transaction cannot be awaited again.
-    expect(sync).toContain('const buildOps = () =>');
-    expect(sync).toContain('$transaction(buildOps())');
+    expect(sync).toContain('await recomputeChunk([title])');
   });
 
   it('reports how many titles were left stale instead of throwing', () => {

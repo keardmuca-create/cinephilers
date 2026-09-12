@@ -159,12 +159,20 @@ async function parseIMDb(file: File): Promise<ParsedItem[]> {
   return items;
 }
 
+const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
 async function matchToTMDB(item: ParsedItem, typeHint?: 'movie' | 'tv'): Promise<MatchedItem | null> {
   try {
     const params = new URLSearchParams({ q: item.title });
     if (item.year) params.set('year', item.year);
     if (typeHint) params.set('type', typeHint);
-    const res = await fetch(`/api/tmdb/search?${params}`);
+    // A busy moment (429) or a server hiccup (5xx) is not "no match". Treated as one,
+    // a big library quietly filled "couldn't be matched" with films that exist.
+    let res = await fetch(`/api/tmdb/search?${params}`);
+    for (let attempt = 1; attempt <= 3 && (res.status === 429 || res.status >= 500); attempt++) {
+      await sleep(attempt * 5_000);
+      res = await fetch(`/api/tmdb/search?${params}`);
+    }
     if (!res.ok) return null;
     const json = await res.json();
     if (!json.data) return null;
@@ -278,7 +286,9 @@ export function ImportDialog({ onClose }: { onClose: () => void }) {
   // Which row's resolver is currently open (only one at a time).
   const [expandedKey, setExpandedKey] = useState<string | null>(null);
   const [matchProgress, setMatchProgress] = useState(0);
-  const [result, setResult] = useState<{ watchedAdded: number; ratingsAdded: number; watchlistAdded: number; reviewsAdded: number; rewatchesAdded?: number; showsMarked?: number; episodesAdded?: number; showsFailed?: number; failed?: number } | null>(null);
+  const [result, setResult] = useState<{ watchedAdded: number; ratingsAdded: number; watchlistAdded: number; reviewsAdded: number; rewatchesAdded?: number; showsMarked?: number; episodesAdded?: number; showsFailed?: number; failed?: number; notSaved?: number } | null>(null);
+  // Titles saved so far while a big library goes up batch by batch.
+  const [saveProgress, setSaveProgress] = useState({ done: 0, total: 0 });
   const [error, setError] = useState<string | null>(null);
   const [shareActivity, setShareActivity] = useState(true);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -301,7 +311,13 @@ export function ImportDialog({ onClose }: { onClose: () => void }) {
       const unmatchedList: ParsedItem[] = [];
       const CONCURRENCY = 5;
 
+      // No faster than 5 lookups per 625 ms — 480 a minute, under the search route's
+      // 600-a-minute limit — so a big library never trips it. Measured from a real
+      // connection the unpaced loop ran at ~530 a minute, close enough to the limit
+      // that a faster one would cross it. A small library barely notices.
+      const MIN_BATCH_MS = 625;
       for (let i = 0; i < items.length; i += CONCURRENCY) {
+        const batchStartedAt = Date.now();
         const batch = items.slice(i, i + CONCURRENCY);
         const results = await Promise.all(batch.map(item => matchToTMDB(item, typeHint)));
         results.forEach((r, idx) => {
@@ -310,6 +326,8 @@ export function ImportDialog({ onClose }: { onClose: () => void }) {
           else unmatchedList.push(batch[idx]);
         });
         setMatchProgress(Math.min(i + CONCURRENCY, items.length));
+        const elapsed = Date.now() - batchStartedAt;
+        if (elapsed < MIN_BATCH_MS) await sleep(MIN_BATCH_MS - elapsed);
       }
 
       setMatched(matchedList);
@@ -356,31 +374,92 @@ export function ImportDialog({ onClose }: { onClose: () => void }) {
     // Refresh token first so a long matching step can't cause a mid-import logout
     await fetch('/api/auth/refresh', { method: 'POST', credentials: 'include' }).catch(() => {});
     try {
-      // Expand diary rewatches into their own rows: the server logs one diary
-      // event per row, marking everything after a title's earliest date as a
-      // rewatch. Unchecked films drop their rewatch rows along with the film.
-      const payloadItems = toImport.flatMap(item => [
-        item,
-        ...(item.extraWatchDates ?? []).map(d => ({
-          tmdbId: item.tmdbId,
-          mediaType: item.mediaType,
-          watchedAt: d,
-        })),
-      ]);
-      const res = await fetchWithAuth('/api/import', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ items: payloadItems }),
-      });
-      const json = await res.json();
-      if (!res.ok) { setError(json?.message ?? 'Import failed'); setStep('confirm'); return; }
+      // A big library goes up in batches. One request for all of it ran past the
+      // server's 5-minute limit on a library of a few thousand titles — and the
+      // browser stops waiting after 20 seconds anyway — so a slow import was reported
+      // as failed even when every row had saved. Each batch finishes in seconds.
+      // Rated shows are capped separately because each one loads its episode lists
+      // from TMDB.
+      const BATCH_TITLES = 500;
+      const BATCH_SHOWS = 25;
+      const batches: MatchedItem[][] = [];
+      {
+        let current: MatchedItem[] = [];
+        let shows = 0;
+        for (const item of toImport) {
+          const ratedShow = item.mediaType === 'SHOW' && !!item.watchedAt;
+          if (current.length >= BATCH_TITLES || (ratedShow && shows >= BATCH_SHOWS)) {
+            batches.push(current);
+            current = [];
+            shows = 0;
+          }
+          current.push(item);
+          if (ratedShow) shows++;
+        }
+        if (current.length) batches.push(current);
+      }
 
+      // Only the fields the server reads; the dialog's display fields (posters,
+      // titles) roughly doubled the upload. Diary rewatches become their own rows —
+      // the server logs one diary event per row, marking everything after a title's
+      // earliest date as a rewatch — and they stay in their title's batch, or a later
+      // batch would see the title as already watched and drop them.
+      const payloadFor = (batch: MatchedItem[]) => batch.flatMap(item => [
+        { tmdbId: item.tmdbId, mediaType: item.mediaType, rating: item.rating, review: item.review, reviewedAt: item.reviewedAt, watchedAt: item.watchedAt, inWatchlist: item.inWatchlist },
+        ...(item.extraWatchDates ?? []).map(d => ({ tmdbId: item.tmdbId, mediaType: item.mediaType, watchedAt: d })),
+      ]);
+
+      const totals = { watchedAdded: 0, ratingsAdded: 0, watchlistAdded: 0, reviewsAdded: 0, rewatchesAdded: 0, showsMarked: 0, episodesAdded: 0, showsFailed: 0, failed: 0 };
       // Episodes the server ticked for each rated show, so this device matches it.
-      const showEpisodes = (json.data?.showEpisodes ?? {}) as Record<string, { keys: string[]; total: number; watchedAt: string }>;
+      const showEpisodes: Record<string, { keys: string[]; total: number; watchedAt: string }> = {};
+      const saved: MatchedItem[] = [];
+      let stopMessage: string | null = null;
+      setSaveProgress({ done: 0, total: toImport.length });
+
+      for (let b = 0; b < batches.length; b++) {
+        const body = JSON.stringify({ items: payloadFor(batches[b]), batch: b });
+        let res: Response | null = null;
+        let json: { message?: string; data?: Record<string, unknown> } | null = null;
+        // One retry for a dropped connection or a server error. Safe to repeat: a
+        // batch that did save is skipped row by row the second time.
+        for (let attempt = 0; attempt < 2; attempt++) {
+          try {
+            res = await fetchWithAuth('/api/import', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body,
+              // Its own deadline, past the 20-second default every other request
+              // gets: a batch waiting on slow TMDB episode lists can take longer.
+              ...(typeof AbortSignal !== 'undefined' && typeof AbortSignal.timeout === 'function'
+                ? { signal: AbortSignal.timeout(180_000) }
+                : {}),
+            });
+            json = await res.json().catch(() => null);
+            if (res.ok || (res.status >= 400 && res.status < 500)) break;
+          } catch {
+            res = null;
+          }
+          if (attempt === 0) await sleep(3_000);
+        }
+        if (!res || !res.ok) {
+          stopMessage = json?.message ?? 'Import failed. Please try again.';
+          break;
+        }
+        const data = json?.data ?? {};
+        for (const k of Object.keys(totals) as (keyof typeof totals)[]) {
+          if (typeof data[k] === 'number') totals[k] += data[k] as number;
+        }
+        Object.assign(showEpisodes, (data.showEpisodes ?? {}) as typeof showEpisodes);
+        saved.push(...batches[b]);
+        setSaveProgress({ done: saved.length, total: toImport.length });
+      }
+
+      // Nothing saved at all: back to the review screen with the reason, as before.
+      if (saved.length === 0) { setError(stopMessage ?? 'Import failed. Please try again.'); setStep('confirm'); return; }
 
       // Write metadata to localStorage so pages can render imported items immediately
       try {
-        for (const item of toImport) {
+        for (const item of saved) {
           const marked = showEpisodes[item.tmdbId];
           // totalEps lets the eye on a card tell a finished show from a part-watched one.
           const meta = { id: item.tmdbId, title: item.matchedTitle, poster: item.poster ?? '', year: item.year, type: item.mediaType === 'SHOW' ? 'show' : 'movie', language: item.language, tmdbRating: item.tmdbRating, ...(marked?.total ? { totalEps: marked.total } : {}) };
@@ -424,7 +503,7 @@ export function ImportDialog({ onClose }: { onClose: () => void }) {
         // hour is fixed to 12 so a late-night import doesn't falsely earn the Night Owl badge.
         const log: WatchEntry[] = JSON.parse(localStorage.getItem('watch-log') ?? '[]');
         const byId = new Map(log.filter(e => e.type === 'movie').map(e => [e.id, e]));
-        for (const item of toImport) {
+        for (const item of saved) {
           if (item.mediaType !== 'MOVIE' || !item.language) continue;
           const existing = byId.get(item.tmdbId);
           if (existing) {
@@ -438,13 +517,13 @@ export function ImportDialog({ onClose }: { onClose: () => void }) {
         localStorage.setItem('watch-log', JSON.stringify(log));
       } catch { /* ignore */ }
 
-      setResult(json.data);
+      setResult({ ...totals, notSaved: toImport.length - saved.length });
 
-      if (shareActivity && toImport.length > 0) {
+      if (shareActivity && saved.length > 0) {
         fetchWithAuth('/api/import-activity', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ platform, count: toImport.length }),
+          body: JSON.stringify({ platform, count: saved.length }),
         }).catch(() => {});
       }
 
@@ -727,6 +806,14 @@ export function ImportDialog({ onClose }: { onClose: () => void }) {
               <Loader2 className="h-8 w-8 animate-spin mx-auto text-primary" />
               <p className="font-bold">Importing your data…</p>
               <p className="text-sm text-muted-foreground">Please don&apos;t close this window</p>
+              {saveProgress.total > 0 && (
+                <div className="space-y-2">
+                  <p className="text-xs text-muted-foreground">Saved {saveProgress.done.toLocaleString()} / {saveProgress.total.toLocaleString()} titles</p>
+                  <div className="h-2 bg-muted rounded-full overflow-hidden">
+                    <div className="h-full bg-primary rounded-full transition-all duration-300" style={{ width: `${(saveProgress.done / saveProgress.total) * 100}%` }} />
+                  </div>
+                </div>
+              )}
               {(() => {
                 const shows = toImport.filter(m => m.mediaType === 'SHOW' && m.watchedAt).length;
                 return shows > 0 ? (
@@ -762,6 +849,12 @@ export function ImportDialog({ onClose }: { onClose: () => void }) {
                   <p className="text-sm text-muted-foreground text-center py-2">Everything was already in your library — nothing new to add.</p>
                 )}
               </div>
+              {(result.notSaved ?? 0) > 0 && (
+                <div className="bg-red-500/10 rounded-2xl px-4 py-3">
+                  <p className="text-xs text-red-400 font-bold">{result.notSaved!.toLocaleString()} title{result.notSaved !== 1 ? 's' : ''} not saved yet</p>
+                  <p className="text-xs text-muted-foreground mt-1">The connection dropped partway through. Everything above is saved — import the same file again and it will add only what&apos;s missing.</p>
+                </div>
+              )}
               {(result.showsFailed ?? 0) > 0 && (
                 <div className="bg-yellow-500/10 rounded-2xl px-4 py-3">
                   <p className="text-xs text-yellow-400 font-bold">{result.showsFailed} show{result.showsFailed !== 1 ? 's' : ''} rated but not marked as watched</p>

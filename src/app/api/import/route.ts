@@ -32,15 +32,26 @@ export async function POST(req: NextRequest) {
   const auth = await verifyAccessToken(token);
   if (!auth) return err('Unauthorized', 401);
 
-  const { allowed, retryAfter } = await rateLimit(`import:${auth.sub}`, 3, 600_000);
-  if (!allowed) return err(`Too many imports. Try again in ${retryAfter}s`, 429);
-
   const body = await req.json().catch(() => null);
   if (!body || !Array.isArray(body.items)) return err('Invalid payload');
+
+  // A big library arrives in batches: the dialog sends about 500 titles per request,
+  // so no single request nears the function time limit. Only the first batch counts
+  // as "an import" against the 3-per-10-minutes limit; every batch counts against a
+  // wider one, and a later batch is capped in size, so the batch number is not a way
+  // around either limit.
+  const batchIndex = Number.isInteger(body.batch) && body.batch > 0 ? body.batch as number : 0;
+  if (batchIndex === 0) {
+    const { allowed, retryAfter } = await rateLimit(`import:${auth.sub}`, 3, 600_000);
+    if (!allowed) return err(`Too many imports. Try again in ${retryAfter}s`, 429);
+  }
+  const { allowed: batchAllowed, retryAfter: batchRetryAfter } = await rateLimit(`import-batch:${auth.sub}`, 100, 600_000);
+  if (!batchAllowed) return err(`Too many imports. Try again in ${batchRetryAfter}s`, 429);
 
   const items = body.items as ImportItem[];
   if (items.length === 0) return ok({ imported: 0 });
   if (items.length > 10000) return err('Too many items (max 10,000 per import)', 400);
+  if (batchIndex > 0 && items.length > 2000) return err('Too many items in one batch', 400);
 
   const userId = auth.sub;
 
@@ -175,7 +186,14 @@ export async function POST(req: NextRequest) {
     // Each show fans out one request per season, so keep the shows themselves few
     // at a time to stay well inside TMDB's rate limit.
     const SHOW_CONCURRENCY = 3;
+    // A ceiling on the whole step, so a slow TMDB can never push a request into the
+    // function time limit. Shows left when it runs out keep their rating and are
+    // reported like a list that failed to load — "open the show and tap Mark as
+    // Watched" — instead of failing everything else in the request.
+    const EPISODE_BUDGET_MS = 60_000;
+    const episodesStartedAt = Date.now();
     for (let i = 0; i < shows.length; i += SHOW_CONCURRENCY) {
+      if (Date.now() - episodesStartedAt > EPISODE_BUDGET_MS) { showsFailed += shows.length - i; break; }
       const batch = shows.slice(i, i + SHOW_CONCURRENCY);
       const results = await Promise.allSettled(
         batch.map(([id]) => getAiredEpisodes(parseInt(id.slice('tmdb-tv-'.length), 10))),

@@ -8,18 +8,53 @@ import { MediaType } from '@/generated/prisma/client';
 // account deletion); the single-vote paths in /api/ratings keep their atomic
 // increments, which are cheaper and safe under concurrency.
 
-// Small enough that a chunk's batch transaction finishes well inside the
-// transaction deadline. It used to be 200, and a first-time Letterboxd import
-// of a few thousand rated films pushed a chunk past that deadline: the
-// transaction was already closed by the time Prisma tried to roll it back, and
-// the resulting error escaped as a 500 — after every row had been written.
-const CHUNK = 50;
+// Titles per statement. Each chunk is ONE round trip: the grouping, the upserts
+// and the deletes all happen inside Postgres.
+//
+// It used to be one groupBy plus a $transaction of an upsert per title, 50 at a
+// time — about 10,600 round trips for a 10,000-title import. Production runs its
+// functions in Washington against a database in Frankfurt, so every one of those
+// crossed the Atlantic, and a library of a few thousand titles ran past the
+// 5-minute function limit: the person was told the import failed after their
+// whole library had saved. Measured on the test database, 2026-09-12: a
+// 10,000-title import took 5 min 4 s, and roughly half its aggregates were never
+// written. Before that, the same shape surfaced as a transaction-deadline 500.
+const CHUNK = 1000;
 
 export interface RecomputeResult {
   /** Titles whose aggregate was recomputed. */
   recomputed: number;
   /** Titles whose aggregate could not be written; their MovieRating row is stale. */
   failed: number;
+}
+
+/** One statement: exact count+sum for every title given, rows with no ratings left removed. */
+async function recomputeChunk(titles: { tmdbId: string; mediaType: MediaType }[]): Promise<void> {
+  const ids = titles.map(t => t.tmdbId);
+  const types = titles.map(t => t.mediaType);
+  await prisma.$executeRaw`
+    WITH input AS (
+      SELECT DISTINCT t."tmdbId", t."mediaType"::"MediaType" AS "mediaType"
+      FROM unnest(${ids}::text[], ${types}::text[]) AS t("tmdbId", "mediaType")
+    ),
+    agg AS (
+      SELECT r."tmdbId", r."mediaType", COUNT(*)::int AS "count", COALESCE(SUM(r."score"), 0)::int AS "sum"
+      FROM "Rating" r
+      JOIN input i ON i."tmdbId" = r."tmdbId" AND i."mediaType" = r."mediaType"
+      GROUP BY r."tmdbId", r."mediaType"
+    ),
+    upserted AS (
+      INSERT INTO "MovieRating" ("tmdbId", "mediaType", "count", "sum", "updatedAt")
+      SELECT "tmdbId", "mediaType", "count", "sum", NOW() FROM agg
+      ON CONFLICT ("tmdbId", "mediaType")
+      DO UPDATE SET "count" = EXCLUDED."count", "sum" = EXCLUDED."sum", "updatedAt" = NOW()
+      RETURNING 1
+    )
+    DELETE FROM "MovieRating" m
+    USING input i
+    WHERE m."tmdbId" = i."tmdbId" AND m."mediaType" = i."mediaType"
+      AND NOT EXISTS (SELECT 1 FROM agg a WHERE a."tmdbId" = i."tmdbId" AND a."mediaType" = i."mediaType")
+  `;
 }
 
 export async function recomputeMovieRatings(
@@ -40,44 +75,17 @@ export async function recomputeMovieRatings(
 
   for (let i = 0; i < unique.length; i += CHUNK) {
     const chunk = unique.slice(i, i + CHUNK);
-    const groups = await prisma.rating.groupBy({
-      by: ['tmdbId', 'mediaType'],
-      where: { tmdbId: { in: [...new Set(chunk.map(t => t.tmdbId))] } },
-      _count: { _all: true },
-      _sum: { score: true },
-    });
-    const byKey = new Map(groups.map(g => [`${g.tmdbId}:${g.mediaType}`, g]));
-
-    // A factory, not an array: a PrismaPromise handed to a failed $transaction
-    // cannot be awaited again, so the fallback below needs fresh operations.
-    const buildOps = () => chunk.map(t => {
-      const g = byKey.get(`${t.tmdbId}:${t.mediaType}`);
-      const count = g?._count._all ?? 0;
-      const sum = g?._sum.score ?? 0;
-      if (count === 0) {
-        return prisma.movieRating.deleteMany({
-          where: { tmdbId: t.tmdbId, mediaType: t.mediaType },
-        });
-      }
-      return prisma.movieRating.upsert({
-        where: { tmdbId_mediaType: { tmdbId: t.tmdbId, mediaType: t.mediaType } },
-        create: { tmdbId: t.tmdbId, mediaType: t.mediaType, count, sum },
-        update: { count, sum },
-      });
-    });
-
     try {
-      await prisma.$transaction(buildOps());
+      await recomputeChunk(chunk);
       recomputed += chunk.length;
     } catch {
-      // The chunk is one transaction, so a deadline overrun loses all of it.
-      // Every row in here is independently correct — each is computed from the
-      // Rating table rather than from the others — so applying them one at a
+      // Every title in the chunk is independently correct — each is computed from
+      // the Rating table rather than from the others — so applying them one at a
       // time is not a weaker result, only a slower one, and a title that still
       // fails is left stale rather than taking the rest down with it.
-      for (const op of buildOps()) {
+      for (const title of chunk) {
         try {
-          await op;
+          await recomputeChunk([title]);
           recomputed++;
         } catch {
           failed++;
