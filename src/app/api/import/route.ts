@@ -7,9 +7,13 @@ import { sanitizeText } from '@/lib/sanitize';
 import { rateLimit } from '@/lib/rate-limit';
 import { canonicalId, isValidMediaId } from '@/lib/media-id';
 import { recomputeMovieRatings } from '@/lib/movie-rating-sync';
+import { getAiredEpisodes } from '@/lib/tmdb';
 import * as Sentry from '@sentry/nextjs';
 
 export const dynamic = 'force-dynamic';
+// Rated shows load their episode lists from TMDB before anything is written, one
+// request per season. A library with a lot of shows needs more than the default.
+export const maxDuration = 300;
 
 interface ImportItem {
   tmdbId: string;
@@ -58,6 +62,8 @@ export async function POST(req: NextRequest) {
   const watchlistData: { userId: string; tmdbId: string; mediaType: 'MOVIE' | 'SHOW' }[] = [];
   const ratingData: { userId: string; tmdbId: string; mediaType: 'MOVIE' | 'SHOW'; score: number; createdAt?: Date }[] = [];
   const reviewData: { userId: string; tmdbId: string; mediaType: 'MOVIE' | 'SHOW'; body: string; containsSpoiler: boolean; createdAt?: Date }[] = [];
+  // Rated shows to mark watched, with the date to stamp their episodes.
+  const showsToMark = new Map<string, Date>();
 
   // Collect rows first, then bulk-insert each table in one round-trip below. The old
   // per-item create loop fired up to ~4 awaited queries per film (thousands for a big
@@ -73,7 +79,23 @@ export async function POST(req: NextRequest) {
 
     const key = `${tmdbId}:${item.mediaType}`;
 
-    if (item.watchedAt && !hasWatched.has(key)) {
+    // A rated show is a watched show — on IMDb, rating it is how you say you saw
+    // it — so every aired episode gets ticked, the same as the show page's "Mark
+    // all". Never as a show-level WatchedItem: a show's episodes ARE its watched
+    // record. Imported that way it was a lone card in Watch history, the show page
+    // still said "Mark as Watched", and Stats credited every episode with none
+    // ticked (seeded test with real TMDB data, 2026-09-12). The episode lists are
+    // fetched below, before anything is written.
+    if (item.watchedAt && item.mediaType === 'SHOW' && tmdbId.startsWith('tmdb-tv-')) {
+      const ratedAt = new Date(item.watchedAt);
+      if (!Number.isNaN(ratedAt.getTime())) {
+        const stamp = ratedAt.getTime() > Date.now() ? new Date() : ratedAt;
+        const prev = showsToMark.get(tmdbId);
+        if (!prev || stamp < prev) showsToMark.set(tmdbId, stamp);
+      }
+    }
+
+    if (item.watchedAt && item.mediaType === 'MOVIE' && !hasWatched.has(key)) {
       const watchedAt = new Date(item.watchedAt);
       if (Number.isNaN(watchedAt.getTime())) failed++;
       else watchedData.push({ userId, tmdbId, mediaType: item.mediaType, watchedAt });
@@ -140,17 +162,76 @@ export async function POST(req: NextRequest) {
     }
   }
 
+  // Every aired episode of each rated show, stamped with the IMDb rating date.
+  // Fetched before any write so a slow TMDB can't leave half an import behind.
+  // A show whose list won't load keeps its rating and is reported back, so the
+  // person knows to mark it from the show page — nothing is guessed.
+  const episodeData: { userId: string; showTmdbId: string; season: number; episode: number; watchedAt: Date }[] = [];
+  // What the importing device needs to mirror the episodes locally.
+  const showEpisodes: Record<string, { keys: string[]; total: number; watchedAt: string }> = {};
+  let showsFailed = 0;
+  {
+    const shows = [...showsToMark.entries()];
+    // Each show fans out one request per season, so keep the shows themselves few
+    // at a time to stay well inside TMDB's rate limit.
+    const SHOW_CONCURRENCY = 3;
+    for (let i = 0; i < shows.length; i += SHOW_CONCURRENCY) {
+      const batch = shows.slice(i, i + SHOW_CONCURRENCY);
+      const results = await Promise.allSettled(
+        batch.map(([id]) => getAiredEpisodes(parseInt(id.slice('tmdb-tv-'.length), 10))),
+      );
+      results.forEach((r, idx) => {
+        const [showTmdbId, watchedAt] = batch[idx];
+        if (r.status !== 'fulfilled') { showsFailed++; return; }
+        // Same ceiling as the bulk episode route.
+        const eps = r.value.episodes.slice(0, 2000);
+        if (eps.length === 0) return;
+        for (const e of eps) episodeData.push({ userId, showTmdbId, season: e.season, episode: e.episode, watchedAt });
+        showEpisodes[showTmdbId] = { keys: eps.map(e => `S${e.season}E${e.episode}`), total: r.value.total, watchedAt: watchedAt.toISOString() };
+      });
+    }
+    if (showsFailed > 0) {
+      Sentry.captureMessage(`Import could not load episodes for ${showsFailed} show(s) for user ${userId}`, 'warning');
+    }
+  }
+  // Episodes already ticked stay as they were, and a show counts as newly marked
+  // only when this import ticked something in it — re-importing the same file
+  // should report nothing, not "3 shows marked".
+  let showsMarked = 0;
+  if (episodeData.length) {
+    const existing = await prisma.watchedEpisode.findMany({
+      where: { userId, showTmdbId: { in: Object.keys(showEpisodes) } },
+      select: { showTmdbId: true, season: true, episode: true },
+    });
+    const had = new Set(existing.map(e => `${e.showTmdbId}:${e.season}:${e.episode}`));
+    const fresh = episodeData.filter(e => !had.has(`${e.showTmdbId}:${e.season}:${e.episode}`));
+    showsMarked = new Set(fresh.map(e => e.showTmdbId)).size;
+    episodeData.length = 0;
+    episodeData.push(...fresh);
+  }
+
   // Marks the boundary between rows that existed before this request and rows it
   // wrote, which is what scopes the updatedAt repair further down.
   const importStartedAt = new Date();
 
   // skipDuplicates guards against any (userId, tmdbId, mediaType) collision the
   // pre-filter missed (e.g. duplicate rows within the uploaded file itself).
-  const [watchedRes, watchlistRes, ratingRes, reviewRes] = await Promise.all([
+  // skipDuplicates on the episodes too, so episodes already ticked stay as they
+  // were. Chunked: a few long shows run to thousands of rows, and one statement
+  // has a 65,535-parameter ceiling.
+  const insertEpisodes = async () => {
+    let count = 0;
+    for (let i = 0; i < episodeData.length; i += 5000) {
+      count += (await prisma.watchedEpisode.createMany({ data: episodeData.slice(i, i + 5000), skipDuplicates: true })).count;
+    }
+    return count;
+  };
+  const [watchedRes, watchlistRes, ratingRes, reviewRes, episodesAdded] = await Promise.all([
     watchedRows.length ? prisma.watchedItem.createMany({ data: watchedRows, skipDuplicates: true }) : Promise.resolve({ count: 0 }),
     watchlistData.length ? prisma.watchlistItem.createMany({ data: watchlistData, skipDuplicates: true }) : Promise.resolve({ count: 0 }),
     ratingData.length ? prisma.rating.createMany({ data: ratingData, skipDuplicates: true }) : Promise.resolve({ count: 0 }),
     reviewData.length ? prisma.review.createMany({ data: reviewData, skipDuplicates: true }) : Promise.resolve({ count: 0 }),
+    insertEpisodes(),
   ]);
 
   // Diary events after the watched rows land (no unique constraint to lean on,
@@ -229,5 +310,5 @@ export async function POST(req: NextRequest) {
 
   // Award any newly earned badges
 
-  return ok({ watchedAdded, ratingsAdded, watchlistAdded, reviewsAdded, rewatchesAdded, failed });
+  return ok({ watchedAdded, ratingsAdded, watchlistAdded, reviewsAdded, rewatchesAdded, showsMarked, episodesAdded, showsFailed, showEpisodes, failed });
 }

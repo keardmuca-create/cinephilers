@@ -133,7 +133,12 @@ async function parseIMDb(file: File): Promise<ParsedItem[]> {
     const title = row['Title'] ?? row['title'] ?? '';
     const year = row['Year'] ?? row['year'] ?? '';
     const yourRating = parseInt(row['Your Rating'] ?? row['your_rating'] ?? '0', 10);
-    const titleType = (row['Title Type'] ?? row['title_type'] ?? '').toLowerCase();
+    // Spaces dropped before comparing: IMDb's older exports say "tvEpisode" and the
+    // current ones "TV Episode". Only the first was skipped, so a current export's
+    // episode rows reached matching and landed in "couldn't be matched", one tap
+    // from being attached to the whole show. An episode row carries no season or
+    // episode number to place it by, so it is still skipped either way.
+    const titleType = (row['Title Type'] ?? row['title_type'] ?? '').toLowerCase().replace(/\s+/g, '');
     if (!title) continue;
 
     // Skip TV episodes
@@ -273,7 +278,7 @@ export function ImportDialog({ onClose }: { onClose: () => void }) {
   // Which row's resolver is currently open (only one at a time).
   const [expandedKey, setExpandedKey] = useState<string | null>(null);
   const [matchProgress, setMatchProgress] = useState(0);
-  const [result, setResult] = useState<{ watchedAdded: number; ratingsAdded: number; watchlistAdded: number; reviewsAdded: number; rewatchesAdded?: number; failed?: number } | null>(null);
+  const [result, setResult] = useState<{ watchedAdded: number; ratingsAdded: number; watchlistAdded: number; reviewsAdded: number; rewatchesAdded?: number; showsMarked?: number; episodesAdded?: number; showsFailed?: number; failed?: number } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [shareActivity, setShareActivity] = useState(true);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -282,7 +287,7 @@ export function ImportDialog({ onClose }: { onClose: () => void }) {
     setError(null);
     try {
       const items = platform === 'letterboxd' ? await parseLetterboxd(file) : await parseIMDb(file);
-      if (items.length === 0) { setError('No films found in this file. Make sure you uploaded the right file.'); return; }
+      if (items.length === 0) { setError('No titles found in this file. Make sure you uploaded the right file.'); return; }
       setParsed(items);
       setStep('matching');
       // Refresh token before the slow TMDB matching phase
@@ -370,12 +375,18 @@ export function ImportDialog({ onClose }: { onClose: () => void }) {
       const json = await res.json();
       if (!res.ok) { setError(json?.message ?? 'Import failed'); setStep('confirm'); return; }
 
+      // Episodes the server ticked for each rated show, so this device matches it.
+      const showEpisodes = (json.data?.showEpisodes ?? {}) as Record<string, { keys: string[]; total: number; watchedAt: string }>;
+
       // Write metadata to localStorage so pages can render imported items immediately
       try {
         for (const item of toImport) {
-          const meta = { id: item.tmdbId, title: item.matchedTitle, poster: item.poster ?? '', year: item.year, type: item.mediaType === 'SHOW' ? 'show' : 'movie', language: item.language, tmdbRating: item.tmdbRating };
+          const marked = showEpisodes[item.tmdbId];
+          // totalEps lets the eye on a card tell a finished show from a part-watched one.
+          const meta = { id: item.tmdbId, title: item.matchedTitle, poster: item.poster ?? '', year: item.year, type: item.mediaType === 'SHOW' ? 'show' : 'movie', language: item.language, tmdbRating: item.tmdbRating, ...(marked?.total ? { totalEps: marked.total } : {}) };
           localStorage.setItem(`meta-${item.tmdbId}`, JSON.stringify(meta));
-          if (item.watchedAt) {
+          // Films get a watched key. A show never does — its episodes are the record.
+          if (item.watchedAt && item.mediaType === 'MOVIE') {
             localStorage.setItem(`watched-${item.tmdbId}`, 'true');
             recordWatchedAt(item.tmdbId, item.watchedAt);
             // Latest rewatch date wins for history sorting (recordWatchedAt keeps the newest)
@@ -389,6 +400,22 @@ export function ImportDialog({ onClose }: { onClose: () => void }) {
           // scored — but far closer than the add index, and it keeps years of
           // imported ratings in a sensible order instead of one flat block.
           if (item.rating) recordRatedAt(item.tmdbId, item.watchedAt || undefined);
+        }
+
+        // The same keys the login sync writes from the DB: one per episode for
+        // Watch History, merged into the show's index for the show page. Imported,
+        // so no manual-watch mark — hand-tapped watches still rank above them.
+        for (const [showId, { keys, total, watchedAt }] of Object.entries(showEpisodes)) {
+          for (const k of keys) {
+            localStorage.setItem(`watched-ep-${showId}-${k}`, 'true');
+            recordWatchedAt(`${showId}-${k}`, watchedAt);
+          }
+          const existingRaw = localStorage.getItem(`watched-eps-index-${showId}`);
+          const merged = new Set<string>(existingRaw ? JSON.parse(existingRaw) : []);
+          for (const k of keys) merged.add(k);
+          localStorage.setItem(`watched-eps-index-${showId}`, JSON.stringify([...merged]));
+          // Only a show with nothing left to air is complete.
+          if (total > 0 && merged.size >= total) localStorage.setItem(`show-status-${showId}`, 'completed');
         }
 
         // Append watched movies to the badge watch-log so badges like World Cinema count them.
@@ -529,7 +556,7 @@ export function ImportDialog({ onClose }: { onClose: () => void }) {
             <div className="space-y-5 py-4 text-center">
               <Loader2 className="h-8 w-8 animate-spin mx-auto text-primary" />
               <div>
-                <p className="font-bold">Matching films…</p>
+                <p className="font-bold">Matching titles…</p>
                 <p className="text-sm text-muted-foreground mt-1">{matchProgress} / {parsed.length} processed</p>
               </div>
               <div className="h-2 bg-muted rounded-full overflow-hidden">
@@ -547,6 +574,7 @@ export function ImportDialog({ onClose }: { onClose: () => void }) {
             <div className="space-y-5">
               <div className="grid grid-cols-2 gap-3">
                 {[
+                  // Films and rated shows — a rated show has every aired episode ticked.
                   { label: 'Watched', value: toImport.filter(m => m.watchedAt).length },
                   { label: 'Ratings', value: toImport.filter(m => m.rating).length },
                   { label: 'Watchlist', value: toImport.filter(m => m.inWatchlist).length },
@@ -563,7 +591,7 @@ export function ImportDialog({ onClose }: { onClose: () => void }) {
                 <div className="space-y-2">
                   <p className="text-sm font-bold text-orange-400 flex items-center gap-1.5">
                     <AlertCircle className="h-4 w-4" />
-                    {uncertain.length} film{uncertain.length !== 1 ? 's' : ''} we&apos;re not sure about
+                    {uncertain.length} title{uncertain.length !== 1 ? 's' : ''} we&apos;re not sure about
                   </p>
                   <p className="text-xs text-muted-foreground">These didn&apos;t clearly match. Tick the ones that are correct — the rest won&apos;t be imported.</p>
                   <div className="max-h-72 overflow-y-auto space-y-1.5">
@@ -618,7 +646,7 @@ export function ImportDialog({ onClose }: { onClose: () => void }) {
                 <div className="space-y-2">
                   <p className="text-sm font-bold text-yellow-400 flex items-center gap-1.5">
                     <AlertCircle className="h-4 w-4" />
-                    {unmatched.length} film{unmatched.length !== 1 ? 's' : ''} couldn&apos;t be matched
+                    {unmatched.length} title{unmatched.length !== 1 ? 's' : ''} couldn&apos;t be matched
                   </p>
                   <p className="text-xs text-muted-foreground">Find the right match here and we&apos;ll add it with its original watch date — no need to search again later.</p>
                   <div className="max-h-72 overflow-y-auto overscroll-contain space-y-1.5">
@@ -673,7 +701,7 @@ export function ImportDialog({ onClose }: { onClose: () => void }) {
               {error && <p className="text-sm text-red-400 bg-red-500/10 rounded-xl px-4 py-3">{error}</p>}
 
               {matched.length === 0 && uncertain.length === 0 ? (
-                <p className="text-sm text-muted-foreground text-center py-4">No films could be matched. Try a different file.</p>
+                <p className="text-sm text-muted-foreground text-center py-4">No titles could be matched. Try a different file.</p>
               ) : (
                 <div className="space-y-3">
                   <label className="flex items-center gap-3 cursor-pointer select-none">
@@ -686,7 +714,7 @@ export function ImportDialog({ onClose }: { onClose: () => void }) {
                     <span className="text-sm text-muted-foreground">Share this import in my activity feed</span>
                   </label>
                   <Button className="w-full rounded-2xl h-12 font-bold" onClick={runImport} disabled={toImport.length === 0}>
-                    Import {toImport.length} film{toImport.length !== 1 ? 's' : ''}
+                    Import {toImport.length} title{toImport.length !== 1 ? 's' : ''}
                   </Button>
                 </div>
               )}
@@ -699,6 +727,12 @@ export function ImportDialog({ onClose }: { onClose: () => void }) {
               <Loader2 className="h-8 w-8 animate-spin mx-auto text-primary" />
               <p className="font-bold">Importing your data…</p>
               <p className="text-sm text-muted-foreground">Please don&apos;t close this window</p>
+              {(() => {
+                const shows = toImport.filter(m => m.mediaType === 'SHOW' && m.watchedAt).length;
+                return shows > 0 ? (
+                  <p className="text-xs text-muted-foreground">Ticking every episode of {shows} show{shows !== 1 ? 's' : ''} — this can take a minute</p>
+                ) : null;
+              })()}
             </div>
           )}
 
@@ -712,6 +746,8 @@ export function ImportDialog({ onClose }: { onClose: () => void }) {
               <div className="space-y-2">
                 {[
                   { label: 'Films marked as watched', value: result.watchedAdded },
+                  { label: 'Shows marked as watched', value: result.showsMarked ?? 0 },
+                  { label: 'Episodes ticked', value: result.episodesAdded ?? 0 },
                   { label: 'Rewatches logged', value: result.rewatchesAdded ?? 0 },
                   { label: 'Ratings imported', value: result.ratingsAdded },
                   { label: 'Added to watchlist', value: result.watchlistAdded },
@@ -722,10 +758,16 @@ export function ImportDialog({ onClose }: { onClose: () => void }) {
                     <p className="text-sm font-bold text-primary">+{s.value}</p>
                   </div>
                 ))}
-                {result.watchedAdded === 0 && result.ratingsAdded === 0 && result.watchlistAdded === 0 && result.reviewsAdded === 0 && (
+                {result.watchedAdded === 0 && result.ratingsAdded === 0 && result.watchlistAdded === 0 && result.reviewsAdded === 0 && !result.episodesAdded && (
                   <p className="text-sm text-muted-foreground text-center py-2">Everything was already in your library — nothing new to add.</p>
                 )}
               </div>
+              {(result.showsFailed ?? 0) > 0 && (
+                <div className="bg-yellow-500/10 rounded-2xl px-4 py-3">
+                  <p className="text-xs text-yellow-400 font-bold">{result.showsFailed} show{result.showsFailed !== 1 ? 's' : ''} rated but not marked as watched</p>
+                  <p className="text-xs text-muted-foreground mt-1">We couldn&apos;t load the episode list. Your rating is saved — open the show and tap Mark as Watched.</p>
+                </div>
+              )}
               {(result.failed ?? 0) > 0 && (
                 <div className="bg-red-500/10 rounded-2xl px-4 py-3">
                   <p className="text-xs text-red-400 font-bold">{result.failed} item{result.failed !== 1 ? 's' : ''} could not be saved</p>
@@ -740,7 +782,7 @@ export function ImportDialog({ onClose }: { onClose: () => void }) {
                 if (skipped.length === 0) return null;
                 return (
                   <div className="bg-yellow-500/10 rounded-2xl px-4 py-3">
-                    <p className="text-xs text-yellow-400 font-bold">{skipped.length} film{skipped.length !== 1 ? 's' : ''} to add manually</p>
+                    <p className="text-xs text-yellow-400 font-bold">{skipped.length} title{skipped.length !== 1 ? 's' : ''} to add manually</p>
                     <p className="text-[11px] text-muted-foreground mt-0.5">We couldn&apos;t confidently match these — search for them to add them yourself.</p>
                     <div className="mt-2 max-h-40 overflow-y-auto overscroll-contain rounded-xl border border-border bg-background/40 p-3 space-y-1">
                       {skipped.map((u, i) => (

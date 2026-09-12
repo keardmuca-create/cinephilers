@@ -759,6 +759,28 @@ export async function getTvSeasonEpisodes(showId: number, seasonNumber: number):
   }));
 }
 
+/**
+ * Every episode of a show that has already aired, for marking the whole show
+ * watched from the server (the IMDb import). Specials (season 0) are left out,
+ * as the show page's "Mark all" leaves them out. An episode with no air date, or
+ * one dated after today, hasn't aired — ticking it would call a running show
+ * finished before it is.
+ *
+ * `total` is TMDB's own episode count, which is what "complete" is measured
+ * against everywhere else.
+ */
+export async function getAiredEpisodes(showId: number): Promise<{ episodes: { season: number; episode: number }[]; total: number }> {
+  const detail = await tmdbFetch<{ seasons?: { season_number: number }[]; number_of_episodes?: number }>(`/tv/${showId}`);
+  const today = new Date().toISOString().slice(0, 10);
+  const seasons = (detail.seasons ?? []).filter(s => s.season_number > 0);
+  const lists = await Promise.all(
+    seasons.map(async s => (await getTvSeasonEpisodes(showId, s.season_number))
+      .filter(e => e.air_date && e.air_date <= today)
+      .map(e => ({ season: s.season_number, episode: e.episode_number }))),
+  );
+  return { episodes: lists.flat(), total: detail.number_of_episodes ?? 0 };
+}
+
 export async function getEpisodeDetail(
   showId: number,
   seasonNumber: number,
