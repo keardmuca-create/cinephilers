@@ -1,7 +1,16 @@
-import { NextRequest } from 'next/server';
+import { NextRequest, after } from 'next/server';
 import { prisma } from '@/lib/db';
 import { ok, err } from '@/lib/api-response';
 import { getCurrentUser } from '@/lib/auth-utils';
+import { fetchOneMeta } from '@/app/api/meta/_fetch';
+import { saveFilmMeta } from '@/lib/film-meta';
+
+// Titles Stats will look up itself on one visit, and how long it waits for them.
+const META_FILL_LIMIT = 20;
+const META_FILL_DEADLINE_MS = 3_000;
+// A row that exists but has no length on it is only retried once a day, so a
+// title TMDB genuinely has no runtime for doesn't cost a lookup on every visit.
+const EMPTY_ROW_RETRY_MS = 24 * 60 * 60 * 1000;
 
 export async function GET(req: NextRequest) {
   const auth = await getCurrentUser(req);
@@ -141,16 +150,41 @@ export async function GET(req: NextRequest) {
     ...showIds,
   ])];
 
+  const metaSelect = {
+    tmdbId: true, runtime: true,
+    episodeRuntime: true, episodeRuntimes: true, episodeCount: true,
+    updatedAt: true,
+  } as const;
   const metaRows = metaIds.length
-    ? await prisma.filmMeta.findMany({
-        where: { tmdbId: { in: metaIds } },
-        select: {
-          tmdbId: true, runtime: true,
-          episodeRuntime: true, episodeRuntimes: true, episodeCount: true,
-        },
-      })
+    ? await prisma.filmMeta.findMany({ where: { tmdbId: { in: metaIds } }, select: metaSelect })
     : [];
   const metaById = new Map(metaRows.map(m => [m.tmdbId, m]));
+
+  // A title's runtime only reaches FilmMeta when some screen loads its details,
+  // so anything watched but never opened counted as zero minutes. An IMDb import
+  // showed it: The Simpsons' 801 ticked episodes added nothing until Watch
+  // history happened to load the show, and then the same account read 15 days
+  // instead of 2 (test database, 2026-09-12).
+  //
+  // So Stats fills the gaps itself. Capped and on a deadline, so a big library
+  // never makes the page wait: whatever isn't back in time is still saved after
+  // the response goes out (after()) and counts on the next visit. The rows are
+  // shared by every user, so each title is looked up once, ever.
+  const key = process.env.TMDB_API_KEY ?? '';
+  const missing = metaIds.filter(id => {
+    const m = metaById.get(id);
+    if (!m) return true;
+    const hasLength = id.startsWith('tmdb-tv-') ? Boolean(m.episodeRuntimes || m.episodeRuntime) : Boolean(m.runtime);
+    return !hasLength && now.getTime() - m.updatedAt.getTime() > EMPTY_ROW_RETRY_MS;
+  }).slice(0, META_FILL_LIMIT);
+
+  if (key && missing.length) {
+    const fill = Promise.allSettled(missing.map(async id => saveFilmMeta(await fetchOneMeta(id, key))));
+    after(() => fill);
+    await Promise.race([fill, new Promise(resolve => setTimeout(resolve, META_FILL_DEADLINE_MS))]);
+    const filled = await prisma.filmMeta.findMany({ where: { tmdbId: { in: missing } }, select: metaSelect });
+    for (const m of filled) metaById.set(m.tmdbId, m);
+  }
 
   const filmMinutes = watched
     .filter(w => w.mediaType === 'MOVIE')
