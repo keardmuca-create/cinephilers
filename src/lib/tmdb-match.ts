@@ -91,23 +91,45 @@ function titleSimilarity(input: string, candidate: string): number {
   return 1 - dist / Math.max(a.length, b.length);
 }
 
-function scoredMatch(results: TMDBResult[], inputYear: number | null, isTV: boolean, query: string): TMDBResult | null {
-  // Only trust results whose title actually resembles the imported title —
-  // otherwise an unavailable film silently matches a popular unrelated one.
-  const candidates = results.filter(r => titleMatches(query, (isTV ? r.name : r.title) ?? ''));
-  if (candidates.length === 0) return null;
-  if (!inputYear) return candidates[0];
-
-  // Score each result: 2 = exact year, 1 = within 1 year, 0 = no match
-  const scored = candidates.map(r => {
-    const diff = Math.abs(yearOf(r, isTV) - inputYear);
-    return { r, score: diff === 0 ? 2 : diff === 1 ? 1 : 0, pop: r.popularity ?? 0 };
-  });
-
-  // Sort: higher score first, then higher popularity
-  scored.sort((a, b) => b.score - a.score || b.pop - a.pop);
-  return scored[0].r;
+interface Candidate {
+  r: TMDBResult;
+  isTV: boolean;
+  /** 2 = released that year, 1 = a year either side, 0 = neither (or no year given). */
+  yearScore: number;
+  /** 2 = the same title once normalized, 1 = a near-identical spelling, 0 = only contains it. */
+  titleScore: number;
+  votes: number;
 }
+
+// Every search result whose title resembles the imported one, scored.
+//
+// The resemblance test deliberately lets "contains the title" through ("Dune" ↔
+// "Dune: Part One"), so short titles pull in longer ones: "Devil" brings "I Saw the
+// Devil", "Safe" brings "Safe House". Those used to win whenever they were more
+// popular — and popularity is TMDB's trending score, which favours whatever is new
+// or airing now. So the title itself is scored too, and an exact title beats one
+// that merely contains it before anyone's popularity is looked at.
+function candidatesFrom(results: TMDBResult[], inputYear: number | null, isTV: boolean, query: string): Candidate[] {
+  return results
+    .filter(r => titleMatches(query, (isTV ? r.name : r.title) ?? ''))
+    .map(r => {
+      const sim = titleSimilarity(query, (isTV ? r.name : r.title) ?? '');
+      const diff = inputYear ? Math.abs(yearOf(r, isTV) - inputYear) : null;
+      return {
+        r,
+        isTV,
+        yearScore: diff === null ? 0 : diff === 0 ? 2 : diff === 1 ? 1 : 0,
+        titleScore: sim === 1 ? 2 : sim >= 0.9 ? 1 : 0,
+        votes: r.vote_count ?? 0,
+      };
+    });
+}
+
+// Year first, then how exactly the title matches, then votes. Votes rather than
+// popularity: a library holds films people have seen, and the vote count measures
+// that; popularity measures what's trending this week.
+const byBestMatch = (a: Candidate, b: Candidate) =>
+  b.yearScore - a.yearScore || b.titleScore - a.titleScore || b.votes - a.votes;
 
 function toMatch(top: TMDBResult, isTV: boolean, confident: boolean, fallbackTitle: string): TitleMatch {
   const title = (isTV ? top.name : top.title) ?? fallbackTitle;
@@ -156,41 +178,41 @@ export async function matchByTitle(
     tvRes.ok ? tvRes.json() : Promise.resolve({ results: [] }),
   ]);
 
-  const movieResults: TMDBResult[] = (movieData.results ?? []).slice(0, 5);
-  const tvResults: TMDBResult[] = (tvData.results ?? []).slice(0, 5);
+  // Every result TMDB returned, not just its first five: the exact title isn't
+  // always near the top ("Return" (1985) sat below "The Return of the Living Dead").
+  // Films and shows are ranked together, by the same rule, so an exact film title
+  // isn't beaten by a show that merely contains it ("It" (2017) ↔ "It Starts Today").
+  const ranked = [
+    ...candidatesFrom(movieData.results ?? [], inputYear, false, q),
+    ...candidatesFrom(tvData.results ?? [], inputYear, true, q),
+  ].sort(byBestMatch);
 
-  const bestMovie = scoredMatch(movieResults, inputYear, false, q);
-  const bestTV = scoredMatch(tvResults, inputYear, true, q);
-
-  if (!bestMovie && !bestTV) return null;
-
-  let top: TMDBResult;
-  let isTV: boolean;
-
-  if (!bestMovie) { top = bestTV!; isTV = true; }
-  else if (!bestTV) { top = bestMovie; isTV = false; }
-  else {
-    // Both candidates — pick by year closeness, then popularity
-    const mDiff = inputYear ? Math.abs(yearOf(bestMovie, false) - inputYear) : 999;
-    const tvDiff = inputYear ? Math.abs(yearOf(bestTV, true) - inputYear) : 999;
-    if (tvDiff < mDiff) { top = bestTV; isTV = true; }
-    else if (mDiff < tvDiff) { top = bestMovie; isTV = false; }
-    else {
-      // Same year distance — prefer higher popularity
-      top = (bestTV.popularity ?? 0) > (bestMovie.popularity ?? 0) ? bestTV : bestMovie;
-      isTV = top === bestTV;
-    }
-  }
+  if (ranked.length === 0) return null;
+  const best = ranked[0];
+  const top = best.r;
+  const isTV = best.isTV;
 
   const title = (isTV ? top.name : top.title) ?? q;
   const sim = titleSimilarity(q, title);
   const yearGap = inputYear ? Math.abs(yearOf(top, isTV) - inputYear) : null;
-  // Confident only when title is near-identical, year lines up, and the match
-  // has enough votes to rule out obscure wrong films with the same name.
+
+  // Two answers equally good by year and title — two well-known films called
+  // "Halloween" and no year to tell them apart — is a coin toss, and a coin toss
+  // isn't sure. An obscure namesake with a fraction of the votes doesn't count.
+  const runnerUp = ranked[1];
+  const ambiguous = !!runnerUp &&
+    runnerUp.yearScore === best.yearScore &&
+    runnerUp.titleScore === best.titleScore &&
+    runnerUp.votes >= best.votes * 0.2;
+
+  // Confident only when title is near-identical, year lines up, the match has
+  // enough votes to rule out obscure wrong films with the same name, and nothing
+  // else fits as well.
   const confident =
     sim >= 0.9 &&
     (yearGap === null || yearGap <= 1) &&
-    (top.vote_count ?? 0) >= 20;
+    (top.vote_count ?? 0) >= 20 &&
+    !ambiguous;
 
   return toMatch(top, isTV, confident, q);
 }
