@@ -18,6 +18,7 @@ import { resolveDisplayRating } from '@/lib/cinephilers-rating';
 import { MediaToggle } from '@/components/media-toggle';
 import type { MediaSide } from '@/lib/media-type';
 import { episodeLineFor } from '@/lib/episode-line';
+import { useLoadOnScroll } from '@/hooks/use-load-on-scroll';
 
 interface ProfileUser {
   id: string;
@@ -725,6 +726,14 @@ export default function PublicProfilePage() {
     setSectionLoading(false);
   };
 
+  // See All loads as you scroll — the next page is asked for as the list nears its
+  // end, instead of waiting on a "Load more" tap.
+  const sectionEnd = useLoadOnScroll(
+    () => { void loadMoreSection(); },
+    !!openSection && sectionHasMore && !sectionLoading,
+    sectionItems.length,
+  );
+
   useEffect(() => { loadProfile(); }, [loadProfile]);
 
   const toggleFollow = async () => {
@@ -828,10 +837,9 @@ export default function PublicProfilePage() {
                   {sectionItems.map(it => <SectionRow key={it.tmdbId} item={it} section={openSection as SectionKey} />)}
                 </div>
                 {sectionHasMore && (
-                  <div className="flex justify-center">
-                    <Button variant="outline" onClick={loadMoreSection} disabled={sectionLoading} className="rounded-xl">
-                      {sectionLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Load more'}
-                    </Button>
+                  // The marker the next page loads from; a spinner while it comes in.
+                  <div ref={sectionEnd} className="flex justify-center py-4" aria-live="polite">
+                    {sectionLoading && <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />}
                   </div>
                 )}
               </>

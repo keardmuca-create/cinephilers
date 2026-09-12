@@ -1,10 +1,10 @@
 "use client"
 
 import React, { useEffect, useState, useCallback } from 'react';
-import Image from 'next/image';
 import Link from 'next/link';
-import { Clock, Star, ChevronRight, Film, User } from 'lucide-react';
+import { Clock, ChevronRight, User } from 'lucide-react';
 import { WatchedEye } from '@/components/watched-eye';
+import { PosterCard, ScoreStar, UserScore } from '@/components/poster-card';
 import { readWatchedState, type WatchedState } from '@/lib/watched-state';
 import { batchFetchMeta } from '@/lib/meta-batch';
 import { batchFetchRatings, subscribeRatingCache } from '@/lib/rating-batch';
@@ -142,65 +142,27 @@ export function RecentlyViewed() {
             // canonicalised them into `tmdb-{id}` and opened whichever film owns
             // that number: tapping Johnny Depp (85) opened Raiders of the Lost
             // Ark. Same id space, different thing.
-            <Link key={item.id} href={item.type === 'person' ? `/person/${item.id}` : `/movie/${item.id}`} className="block shrink-0 group">
-              <div className="w-36 flex flex-col">
-                {/* Guarded: a person with no photo on TMDB stores an empty
-                    string, and Next's Image treats that as a request to
-                    re-download the whole page. */}
-                <div className="relative aspect-[2/3] overflow-hidden rounded-xl bg-muted shadow-lg movie-card-hover mb-2.5 flex items-center justify-center">
-                  {item.poster ? (
-                    <Image
-                      src={item.poster}
-                      alt={item.title}
-                      fill
-                      className="object-cover"
-                      sizes="176px"
-                    />
-                  ) : item.type === 'person' ? (
-                    <User className="h-9 w-9 text-muted-foreground/50" />
-                  ) : (
-                    <Film className="h-9 w-9 text-primary/60" />
-                  )}
-                </div>
-                {/* Title and year are one column, with the badges beside them.
-                    The year used to sit under the whole row, so a title carrying
-                    a community score, your own rating and a watched eye pushed it
-                    three badges further down — leaving a gap under the title on
-                    exactly the titles you had engaged with most. */}
-                <div className="flex items-start justify-between gap-1 px-0.5">
-                  <div className="flex-1 min-w-0">
-                    <h3 className="text-sm font-semibold font-headline line-clamp-2 group-hover:text-primary transition-colors leading-snug">
-                      {item.title}
-                    </h3>
-                    <p className="text-[10px] text-muted-foreground">{item.year}</p>
-                  </div>
-                  <div className="flex flex-col items-end gap-0.5 shrink-0">
-                    {/* resolveDisplayRating returns null rather than 0 when
-                        there is nothing to show, so the star is left off
-                        instead of a literal "0" appearing beside the title. */}
-                    {shown && (
-                      <div className="flex items-center gap-0.5">
-                        <Star
-                          className={`h-3 w-3 ${shown.source === 'cinephilers'
-                            ? 'fill-primary text-primary'
-                            : 'fill-yellow-400 text-yellow-400'}`}
-                        />
-                        <span className="text-xs font-bold text-foreground">{shown.value.toFixed(1)}</span>
-                      </div>
-                    )}
-                    {userRating !== undefined && (
-                      <div className="flex items-center gap-0.5">
-                        <Star className="h-3 w-3 text-primary" />
-                        <span className="text-[10px] font-bold text-primary">{userRating}</span>
-                      </div>
-                    )}
-                  {item.watched && item.watched !== 'none' && (
-                    <WatchedEye state={item.watched} className="h-3.5 w-3.5" />
-                  )}
-                  </div>
-                </div>
-              </div>
-            </Link>
+            // The shared card: scores in the row above the title, which keeps its
+            // full width. (A person with no photo stores an empty string; the card
+            // only draws an image when there is one.)
+            <PosterCard
+              key={item.id}
+              href={item.type === 'person' ? `/person/${item.id}` : `/movie/${item.id}`}
+              poster={item.poster}
+              title={item.title}
+              secondLine={item.year}
+              fallbackIcon={item.type === 'person' ? <User className="h-9 w-9 text-muted-foreground/50" /> : undefined}
+              badges={<>
+                {/* resolveDisplayRating returns null rather than 0 when there is
+                    nothing to show, so the star is left off instead of a literal
+                    "0" appearing on the card. */}
+                {shown && <ScoreStar value={shown.value} source={shown.source} />}
+                {userRating !== undefined && <UserScore value={userRating} />}
+                {item.watched && item.watched !== 'none' && (
+                  <WatchedEye state={item.watched} className="h-3.5 w-3.5" />
+                )}
+              </>}
+            />
           );
         })}
       </div>

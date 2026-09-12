@@ -31,6 +31,7 @@ import { readSavedRefine, applyRefineSort } from '@/lib/refine-sort';
 import type { RefineValue } from '@/components/refine-sheet';
 import { WatchedEye } from '@/components/watched-eye';
 import { CommunityStar } from '@/components/community-star';
+import { PosterCard, UserScore } from '@/components/poster-card';
 import { episodeLineFor, cachedEpisodeLine } from '@/lib/episode-line';
 
 // How long a rebuild trigger waits for its siblings before the profile rebuilds.
@@ -128,39 +129,25 @@ function DiarySection() {
       ) : (
       <div className="flex overflow-x-auto gap-4 pb-4 no-scrollbar -mx-6 px-6">
         {items.map(item => (
-          <Link key={item.id} href={`/movie/${item.id}`} className="group shrink-0 w-36">
-            <div className="relative aspect-[2/3] overflow-hidden rounded-xl bg-muted shadow-lg movie-card-hover mb-2">
-              {item.poster ? (
-                <img src={item.poster} alt={item.title} className="w-full h-full object-cover" />
-              ) : (
-                <div className="w-full h-full flex items-center justify-center bg-muted">
-                  <Film className="h-9 w-9 text-primary/60" />
-                </div>
-              )}
-              {item.count > 1 && (
-                <div className="absolute top-1.5 right-1.5 flex items-center gap-1 bg-background/85 backdrop-blur-sm rounded-full px-2 py-0.5">
-                  <Repeat className="h-3 w-3 text-primary" />
-                  <span className="text-xs font-black text-foreground">&times;{item.count}</span>
-                </div>
-              )}
-            </div>
-            <div className="flex items-center gap-1.5 mb-0.5 flex-wrap">
+          <PosterCard
+            key={item.id}
+            href={`/movie/${item.id}`}
+            poster={item.poster}
+            title={item.title}
+            // An episode card has no year; its episode line takes the year's place.
+            secondLine={item.episodeLine || item.year}
+            overlay={item.count > 1 ? (
+              <div className="absolute top-1.5 right-1.5 flex items-center gap-1 bg-background/85 backdrop-blur-sm rounded-full px-2 py-0.5">
+                <Repeat className="h-3 w-3 text-primary" />
+                <span className="text-xs font-black text-foreground">&times;{item.count}</span>
+              </div>
+            ) : undefined}
+            badges={<>
               <CommunityStar id={item.id} tmdbRating={item.tmdbRating} showZero />
-              {item.userRating !== undefined && (
-                <div className="flex items-center gap-0.5">
-                  <span className="text-xs text-primary font-bold">☆</span>
-                  <span className="text-xs font-bold text-primary">{item.userRating}</span>
-                </div>
-              )}
+              {item.userRating !== undefined && <UserScore value={item.userRating} />}
               <WatchedEye state="complete" className="h-3.5 w-3.5" />
-            </div>
-            <p className="text-xs font-semibold font-headline line-clamp-2 group-hover:text-primary transition-colors leading-snug">
-              {item.title} {item.year ? `(${item.year})` : ''}
-            </p>
-            {item.episodeLine && (
-              <p className="text-[11px] text-muted-foreground line-clamp-1 mt-0.5">{item.episodeLine}</p>
-            )}
-          </Link>
+            </>}
+          />
         ))}
       </div>
       )}
@@ -1701,36 +1688,21 @@ export default function ProfilePage() {
         {recentWatched.length > 0 ? (
           <div className="flex overflow-x-auto gap-4 pb-4 no-scrollbar -mx-6 px-6">
             {sortedWatched.map(item => (
-              <Link key={item.id} href={`/movie/${item.id}`} className="group shrink-0 w-36">
-                <div className="relative aspect-[2/3] overflow-hidden rounded-xl bg-muted shadow-lg movie-card-hover mb-2">
-                  {item.poster ? (
-                    <img src={item.poster} alt={item.title} className="w-full h-full object-cover" />
-                  ) : (
-                    <div className="w-full h-full flex items-center justify-center bg-muted">
-                      <Film className="h-9 w-9 text-primary/60" />
-                    </div>
-                  )}
-                </div>
-                <div className="flex items-center gap-1.5 mb-0.5 flex-wrap">
+              <PosterCard
+                key={item.id}
+                href={`/movie/${item.id}`}
+                poster={item.poster}
+                title={item.title}
+                secondLine={item.episodeLine || item.year}
+                badges={<>
                   <CommunityStar id={item.id} tmdbRating={item.tmdbRating} showZero />
-                  {item.rating !== undefined && (
-                    <div className="flex items-center gap-0.5">
-                      <span className="text-xs text-primary font-bold">☆</span>
-                      <span className="text-xs font-bold text-primary">{item.rating}</span>
-                    </div>
-                  )}
+                  {item.rating !== undefined && <UserScore value={item.rating} />}
                   {/* Every card here is a film or an episode you watched, so the
                       eye is always full; how far into a show you are is the
                       See All page's to say. */}
                   <WatchedEye state="complete" className="h-3.5 w-3.5" />
-                </div>
-                <p className="text-xs font-semibold font-headline line-clamp-2 group-hover:text-primary transition-colors leading-snug">
-                  {item.title} {item.year ? `(${item.year})` : ''}
-                </p>
-                {item.episodeLine && (
-                  <p className="text-[11px] text-muted-foreground line-clamp-1 mt-0.5">{item.episodeLine}</p>
-                )}
-              </Link>
+                </>}
+              />
             ))}
           </div>
         ) : (
@@ -1756,24 +1728,15 @@ export default function ProfilePage() {
         {ratedItems.length > 0 ? (
           <div className="flex overflow-x-auto gap-4 pb-4 no-scrollbar -mx-6 px-6">
             {sortedRated.slice(0, 50).map(item => (
-              <Link key={item.id} href={`/movie/${item.id}`} className="group shrink-0 w-36">
-                <div className="relative aspect-[2/3] overflow-hidden rounded-xl bg-muted shadow-lg movie-card-hover mb-2">
-                  {item.poster ? (
-                    <img src={item.poster} alt={item.title} className="w-full h-full object-cover" />
-                  ) : (
-                    <div className="w-full h-full flex items-center justify-center bg-muted">
-                      <Film className="h-9 w-9 text-primary/60" />
-                    </div>
-                  )}
-                </div>
-                <div className="flex items-center gap-1.5 mb-0.5 flex-wrap">
+              <PosterCard
+                key={item.id}
+                href={`/movie/${item.id}`}
+                poster={item.poster}
+                title={item.title}
+                secondLine={item.episodeLine || item.year}
+                badges={<>
                   <CommunityStar id={item.id} tmdbRating={item.tmdbRating} showZero />
-                  {item.userRating !== undefined && (
-                    <div className="flex items-center gap-0.5">
-                      <span className="text-xs text-primary font-bold">☆</span>
-                      <span className="text-xs font-bold text-primary">{item.userRating}</span>
-                    </div>
-                  )}
+                  {item.userRating !== undefined && <UserScore value={item.userRating} />}
                   {/* The eye used to be printed here unconditionally, so a film
                       rated but never ticked, and a show you were one episode
                       into, both claimed you had watched them. No count: these
@@ -1781,14 +1744,8 @@ export default function ProfilePage() {
                       three states carry it on their own — solid finished, hollow
                       partway, nothing at all for never touched. */}
                   <RatedWatchedEye id={item.id} />
-                </div>
-                <p className="text-xs font-semibold font-headline line-clamp-2 group-hover:text-primary transition-colors leading-snug">
-                  {item.title} {item.year ? `(${item.year})` : ''}
-                </p>
-                {item.episodeLine && (
-                  <p className="text-[11px] text-muted-foreground line-clamp-1 mt-0.5">{item.episodeLine}</p>
-                )}
-              </Link>
+                </>}
+              />
             ))}
           </div>
         ) : (
@@ -1861,26 +1818,14 @@ export default function ProfilePage() {
         {watchlist.length > 0 ? (
           <div className="flex overflow-x-auto gap-4 pb-4 no-scrollbar -mx-6 px-6">
             {sortedWatchlist.map(item => (
-              <Link key={item.id} href={`/movie/${item.id}`} className="group shrink-0 w-36">
-                <div className="relative aspect-[2/3] overflow-hidden rounded-xl bg-muted shadow-lg movie-card-hover mb-2">
-                  {item.poster ? (
-                    <img src={item.poster} alt={item.title} className="w-full h-full object-cover" />
-                  ) : (
-                    <div className="w-full h-full flex items-center justify-center bg-muted">
-                      <Film className="h-9 w-9 text-primary/60" />
-                    </div>
-                  )}
-                </div>
-                <div className="flex items-center gap-1.5 mb-0.5 flex-wrap">
-                  <CommunityStar id={item.id} tmdbRating={item.rating} />
-                </div>
-                <p className="text-xs font-semibold font-headline line-clamp-2 group-hover:text-primary transition-colors leading-snug">
-                  {item.title} {item.year ? `(${item.year})` : ''}
-                </p>
-                {item.episodeLine && (
-                  <p className="text-[11px] text-muted-foreground line-clamp-1 mt-0.5">{item.episodeLine}</p>
-                )}
-              </Link>
+              <PosterCard
+                key={item.id}
+                href={`/movie/${item.id}`}
+                poster={item.poster}
+                title={item.title}
+                secondLine={item.episodeLine || item.year}
+                badges={<CommunityStar id={item.id} tmdbRating={item.rating} />}
+              />
             ))}
           </div>
         ) : (

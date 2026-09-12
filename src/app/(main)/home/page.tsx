@@ -7,6 +7,7 @@ import Link from 'next/link';
 import { Star, ChevronRight } from 'lucide-react';
 import { Movie } from '@/lib/types';
 import { MovieCard } from '@/components/movie-card';
+import { PosterCard, ScoreStar, UserScore } from '@/components/poster-card';
 import { WatchedEye } from '@/components/watched-eye';
 import { readWatchedState, type WatchedState } from '@/lib/watched-state';
 import { useCommunityRatings } from '@/hooks/use-community-ratings';
@@ -53,50 +54,31 @@ function Top10Card({ movie, index }: { movie: ChartEntry; index: number }) {
   }, [movie.id]);
 
   return (
-    <Link href={`/movie/${movie.id}`} className="group shrink-0 w-36">
-      <div className="relative aspect-[2/3] w-36 rounded-xl overflow-hidden shadow-xl movie-card-hover border border-border mb-3">
-        <Image src={movie.poster} alt={movie.title} fill className="object-cover" />
-        {/* Rank number overlaid inside the poster, bottom-left */}
+    <PosterCard
+      href={`/movie/${movie.id}`}
+      poster={movie.poster}
+      title={movie.title}
+      // The rank is earned by this number, so the number is on the card.
+      secondLine={`${movie.watchers} ${movie.watchers === 1 ? 'watcher' : 'watchers'} · ${movie.year}`}
+      overlay={
+        // Rank number overlaid inside the poster, bottom-left
         <span
           className="absolute bottom-0 left-1 text-[72px] leading-none font-headline font-black text-transparent pointer-events-none select-none"
           style={{ WebkitTextStroke: '2px rgba(255,255,255,0.35)' }}
         >
           {index + 1}
         </span>
-      </div>
-      <div className="space-y-1 px-1">
-        <div className="flex items-start justify-between gap-1">
-          <h3 className="text-sm font-semibold font-headline line-clamp-2 group-hover:text-primary transition-colors leading-snug">
-            {movie.title}
-          </h3>
-          <div className="flex flex-col items-end gap-0.5 shrink-0">
-            {shown && (
-              <div className="flex items-center gap-0.5">
-                <Star className={`h-3 w-3 ${shown.source === 'cinephilers'
-                  ? 'fill-primary text-primary'
-                  : 'fill-yellow-400 text-yellow-400'}`} />
-                <span className="text-xs font-bold text-foreground">{shown.value.toFixed(1)}</span>
-              </div>
-            )}
-            {userRating !== undefined && (
-              <div className="flex items-center gap-0.5">
-                <Star className="h-3 w-3 text-primary" />
-                <span className="text-[10px] font-bold text-primary">{userRating}</span>
-              </div>
-            )}
-            {(watched !== 'none' || userRating !== undefined) && (
-              // A rating implies you've seen it — but only enough to fill the eye
-              // when the episodes don't already say you're partway through.
-              <WatchedEye state={watched === 'partial' ? 'partial' : 'complete'} className="h-4 w-4" />
-            )}
-          </div>
-        </div>
-        {/* The rank is earned by this number, so the number is on the card. */}
-        <p className="text-xs text-muted-foreground">
-          {movie.watchers} {movie.watchers === 1 ? 'watcher' : 'watchers'} · {movie.year}
-        </p>
-      </div>
-    </Link>
+      }
+      badges={<>
+        {shown && <ScoreStar value={shown.value} source={shown.source} />}
+        {userRating !== undefined && <UserScore value={userRating} />}
+        {(watched !== 'none' || userRating !== undefined) && (
+          // A rating implies you've seen it — but only enough to fill the eye
+          // when the episodes don't already say you're partway through.
+          <WatchedEye state={watched === 'partial' ? 'partial' : 'complete'} className="h-3.5 w-3.5" />
+        )}
+      </>}
+    />
   );
 }
 

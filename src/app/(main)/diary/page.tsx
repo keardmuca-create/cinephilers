@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { ChevronLeft, Repeat, Film, Search, X, ChevronDown, ChevronUp, Trash2, SlidersHorizontal } from 'lucide-react';
+import { ChevronLeft, Repeat, Film, Search, X, ChevronDown, ChevronUp, Trash2, SlidersHorizontal, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { toast } from '@/hooks/use-toast';
 import { fetchWithAuth } from '@/lib/fetch-with-auth';
@@ -18,6 +18,7 @@ import { CommunityStar } from '@/components/community-star';
 import { MediaToggle } from '@/components/media-toggle';
 import type { MediaSide } from '@/lib/media-type';
 import { episodeLineFor } from '@/lib/episode-line';
+import { useLoadOnScroll } from '@/hooks/use-load-on-scroll';
 
 interface DiaryTitle {
   tmdbId: string;
@@ -62,6 +63,7 @@ export default function DiaryPage() {
   const [expanded, setExpanded] = useState<string | null>(null);
   const [dates, setDates] = useState<Record<string, WatchDate[]>>({});
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [loadingMore, setLoadingMore] = useState(false);
   // Movies · Shows · Episodes, like every other list. Server-safe default; the saved
   // side is read after mount, as /history does. The counts come with page one.
   const [side, setSide] = useState<MediaSide>('movies');
@@ -146,6 +148,17 @@ export default function DiaryPage() {
     loadPage(1, refine, side).finally(() => setLoading(false));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [authLoading, user?.id, refine, side]);
+
+  // Loads as you scroll: the next page is asked for as the list nears its end,
+  // instead of waiting on a "Load more" tap.
+  const loadMore = () => {
+    if (loadingMore || !hasMore) return;
+    const next = page + 1;
+    setPage(next);
+    setLoadingMore(true);
+    loadPage(next, refine, side).finally(() => setLoadingMore(false));
+  };
+  const listEnd = useLoadOnScroll(loadMore, hasMore && !loading && !loadingMore, items.length);
 
   // Tap the x-count: expand the row into every logged watch date for the title.
   const toggleDates = async (item: DiaryTitle) => {
@@ -364,14 +377,9 @@ export default function DiaryPage() {
           </div>
 
           {hasMore && (
-            <div className="pt-8 text-center">
-              <Button
-                variant="outline"
-                className="rounded-full font-bold"
-                onClick={() => { const next = page + 1; setPage(next); loadPage(next, refine, side); }}
-              >
-                Load more
-              </Button>
+            // The marker the next page loads from; a spinner while it comes in.
+            <div ref={listEnd} className="flex justify-center pt-8" aria-live="polite">
+              {loadingMore && <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />}
             </div>
           )}
         </>
