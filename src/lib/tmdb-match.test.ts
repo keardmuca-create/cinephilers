@@ -103,6 +103,66 @@ describe('matchByTitle on short titles', () => {
   });
 });
 
+// Letterboxd dates a film by its festival premiere and often drops a subtitle; TMDB
+// keeps the cinema release year and the full title. Keard's own export (2026-09-13)
+// had 17 right films land in "not sure" for those two reasons.
+describe('matchByTitle on festival years and subtitles', () => {
+  const films = (movies: object[]): TmdbFetcher => async () => json({ results: movies });
+
+  it('takes the well-known film a year off over a 0-vote namesake from the exact year', async () => {
+    const m = await matchByTitle('Demolition', '2015', 'movie', 'k', films([
+      { id: 5, title: 'La démolition familiale', release_date: '2015-06-01', vote_count: 0 },
+      { id: 294016, title: 'Demolition', release_date: '2016-04-07', vote_count: 2610 },
+    ]));
+    expect(m).toMatchObject({ tmdbId: 'tmdb-294016', confident: true });
+  });
+
+  it('lets votes decide between the same title a year apart', async () => {
+    const m = await matchByTitle('Talk to Me', '2022', 'movie', 'k', films([
+      { id: 7, title: 'Talk to Me', release_date: '2022-03-01', vote_count: 0 },
+      { id: 1008042, title: 'Talk to Me', release_date: '2023-07-26', vote_count: 3952 },
+    ]));
+    expect(m).toMatchObject({ tmdbId: 'tmdb-1008042', confident: true });
+  });
+
+  it('is not sure when both films a year apart are widely seen', async () => {
+    const m = await matchByTitle('The Invitation', '2015', 'movie', 'k', films([
+      { id: 8, title: 'The Invitation', release_date: '2015-05-01', vote_count: 1000 },
+      { id: 340176, title: 'The Invitation', release_date: '2016-04-08', vote_count: 2947 },
+    ]));
+    expect(m?.confident).toBe(false);
+  });
+
+  it('stays not sure two years off', async () => {
+    const m = await matchByTitle('Terrifier', '2016', 'movie', 'k', films([
+      { id: 420634, title: 'Terrifier', release_date: '2018-03-15', vote_count: 3059 },
+    ]));
+    expect(m).toMatchObject({ tmdbId: 'tmdb-420634', confident: false });
+  });
+
+  it('is sure of the same title with a subtitle added', async () => {
+    const glass = await matchByTitle('Glass Onion', '2022', 'movie', 'k', films([
+      { id: 661374, title: 'Glass Onion: A Knives Out Mystery', release_date: '2022-11-23', vote_count: 7149 },
+    ]));
+    expect(glass).toMatchObject({ tmdbId: 'tmdb-661374', confident: true });
+    const mi = await matchByTitle('Mission: Impossible – Dead Reckoning', '2023', 'movie', 'k', films([
+      { id: 575264, title: 'Mission: Impossible - Dead Reckoning Part One', release_date: '2023-07-08', vote_count: 5357 },
+    ]));
+    expect(mi?.confident).toBe(true);
+  });
+
+  it('does not treat a hyphenated word as a subtitle, or skip the year check', async () => {
+    const spider = await matchByTitle('Spider', '2002', 'movie', 'k', films([
+      { id: 557, title: 'Spider-Man', release_date: '2002-05-01', vote_count: 20000 },
+    ]));
+    expect(spider?.confident).toBe(false);
+    const wrongYear = await matchByTitle('Glass Onion', '2019', 'movie', 'k', films([
+      { id: 661374, title: 'Glass Onion: A Knives Out Mystery', release_date: '2022-11-23', vote_count: 7149 },
+    ]));
+    expect(wrongYear?.confident).toBe(false);
+  });
+});
+
 describe('createThrottle / mapWithConcurrency', () => {
   it('spaces calls to the rate given', async () => {
     const wait = createThrottle(20); // one slot every 50 ms

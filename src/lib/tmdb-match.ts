@@ -81,6 +81,14 @@ function titleMatches(input: string, candidate: string): boolean {
   return 1 - dist / Math.max(a.length, b.length) >= 0.82;
 }
 
+// True when TMDB's title is the imported one plus a subtitle: Letterboxd says "Glass
+// Onion", TMDB "Glass Onion: A Knives Out Mystery". The subtitle has to be set off by
+// a colon or a spaced dash, so a hyphenated word ("Spider" ↔ "Spider-Man") is not one.
+function isSubtitledTitle(input: string, candidate: string): boolean {
+  const a = normalizeTitle(input);
+  return !!a && normalizeTitle(candidate).startsWith(`${a} `) && /:|\s[-–—]\s/.test(candidate);
+}
+
 // 0..1 similarity between two titles (1 = identical after normalizing)
 function titleSimilarity(input: string, candidate: string): number {
   const a = normalizeTitle(input);
@@ -94,7 +102,7 @@ function titleSimilarity(input: string, candidate: string): number {
 interface Candidate {
   r: TMDBResult;
   isTV: boolean;
-  /** 2 = released that year, 1 = a year either side, 0 = neither (or no year given). */
+  /** 2 = released that year or a year either side, 0 = further off (or no year given). */
   yearScore: number;
   /** 2 = the same title once normalized, 1 = a near-identical spelling, 0 = only contains it. */
   titleScore: number;
@@ -118,7 +126,13 @@ function candidatesFrom(results: TMDBResult[], inputYear: number | null, isTV: b
       return {
         r,
         isTV,
-        yearScore: diff === null ? 0 : diff === 0 ? 2 : diff === 1 ? 1 : 0,
+        // A year either side counts as the file's year. The search is filtered by
+        // that year, and TMDB's filter matches any release date, a festival premiere
+        // included, while release_date is the cinema release. Letterboxd lists
+        // Demolition under its 2015 festival year and TMDB dates it 2016; scoring the
+        // exact year higher let a 0-vote namesake from 2015 outrank it. Between two
+        // such films the title and then the votes decide.
+        yearScore: diff === null ? 0 : diff <= 1 ? 2 : 0,
         titleScore: sim === 1 ? 2 : sim >= 0.9 ? 1 : 0,
         votes: r.vote_count ?? 0,
       };
@@ -205,11 +219,11 @@ export async function matchByTitle(
     runnerUp.titleScore === best.titleScore &&
     runnerUp.votes >= best.votes * 0.2;
 
-  // Confident only when title is near-identical, year lines up, the match has
-  // enough votes to rule out obscure wrong films with the same name, and nothing
-  // else fits as well.
+  // Confident only when title is near-identical (or the same title with a subtitle
+  // added), year lines up, the match has enough votes to rule out obscure wrong films
+  // with the same name, and nothing else fits as well.
   const confident =
-    sim >= 0.9 &&
+    (sim >= 0.9 || isSubtitledTitle(q, title)) &&
     (yearGap === null || yearGap <= 1) &&
     (top.vote_count ?? 0) >= 20 &&
     !ambiguous;
