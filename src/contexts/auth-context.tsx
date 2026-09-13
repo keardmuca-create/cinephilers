@@ -6,6 +6,7 @@ import { withTimeout } from '@/lib/fetch-timeout';
 import { canonicalId, normalizeLocalMediaIds, recordAddedAtMany, recordWatchedAtMany, recordRatedAtMany, type DateEntry } from '@/lib/media-id';
 import { dropLegacyEpisodeKeys } from '@/lib/episode-store';
 import { withoutCopiedEntries, type WatchEntry } from '@/lib/watch-log';
+import { addWatchedTitles, setUserRatings } from '@/lib/library-store';
 import { batchFetchMeta } from '@/lib/meta-batch';
 import { clearUserData } from '@/lib/clear-user-data';
 import { applyServerRefinePrefs } from '@/lib/refine-sort';
@@ -127,8 +128,9 @@ async function restoreFromDb(me?: { createdAt?: string; followingCount?: number;
     // ratings into another's DB — and since rating auto-marks watched, that
     // balloons the wrong account's history. Ratings already persist at action
     // time via syncDb; this sync only mirrors the DB down. ──
+    // One write for every score (lib/library-store), not a key per title.
+    setUserRatings(ratings.map(r => [r.tmdbId, r.score] as [string, number]));
     for (const r of ratings) {
-      try { localStorage.setItem(`movie-rating-${r.tmdbId}`, String(r.score)); } catch { /* ignore */ }
       addedDates.push([r.tmdbId, r.createdAt]);
       // The rating's OWN date, kept apart from the add date. The add index keeps
       // the earliest timestamp by design, so anything watchlisted before it was
@@ -157,10 +159,8 @@ async function restoreFromDb(me?: { createdAt?: string; followingCount?: number;
     // items here: doing so let a shared-browser session leak one account's watched
     // movies into another account's DB (stamped watchedAt=now) and resurrected
     // deleted/unchecked-import titles. Watched state syncs one way: DB → local.
-    for (const w of watched) {
-      try { localStorage.setItem(`watched-${w.tmdbId}`, 'true'); } catch { /* ignore */ }
-      watchedDates.push([w.tmdbId, w.watchedAt]);
-    }
+    addWatchedTitles(watched.map(w => w.tmdbId));
+    for (const w of watched) watchedDates.push([w.tmdbId, w.watchedAt]);
 
     // ── Watched episodes: DB → local only, same one-way rule. ──
     // One list per show (lib/episode-store). Every screen, Watch History included,

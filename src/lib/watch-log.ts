@@ -7,6 +7,7 @@
 // and diary pages prune it when you delete something.
 
 import { recordAddedAt } from '@/lib/media-id';
+import { setUserRating } from '@/lib/library-store';
 
 export interface WatchEntry {
   id: string;
@@ -64,6 +65,6 @@ export function removeFromWatchLog(id: string, type: 'movie' | 'episode'): void 
 }
 
 export function saveMovieRating(id: string, rating: number): void {
-  try { localStorage.setItem(`movie-rating-${id}`, String(rating)); } catch { /* ignore */ }
+  setUserRating(id, rating);
   recordAddedAt(id);
 }

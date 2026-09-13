@@ -8,6 +8,7 @@ import { Movie } from '@/lib/types';
 import { Star, ChevronLeft } from 'lucide-react';
 import { WatchedEye } from '@/components/watched-eye';
 import { readWatchedState, readEpisodeProgress, loadEpisodeProgress, type WatchedState } from '@/lib/watched-state';
+import { readUserRating } from '@/lib/library-store';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 
@@ -52,8 +53,8 @@ function MovieListItem({ movie }: { movie: Movie }) {
       setWatched(readWatchedState(movie.id));
       const known = readEpisodeProgress(movie.id);
       setProgress(known);
-      const r = localStorage.getItem(`movie-rating-${movie.id}`);
-      if (r) setUserRating(Number(r));
+      const r = readUserRating(movie.id);
+      if (r) setUserRating(r);
       if (known) return;
     } catch { /* ignore */ }
 

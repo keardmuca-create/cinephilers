@@ -6,6 +6,7 @@ import { Clock, ChevronRight, User } from 'lucide-react';
 import { WatchedEye } from '@/components/watched-eye';
 import { PosterCard, ScoreStar, UserScore } from '@/components/poster-card';
 import { readWatchedState, type WatchedState } from '@/lib/watched-state';
+import { readUserRating } from '@/lib/library-store';
 import { batchFetchMeta } from '@/lib/meta-batch';
 import { batchFetchRatings, subscribeRatingCache } from '@/lib/rating-batch';
 import { resolveDisplayRating } from '@/lib/cinephilers-rating';
@@ -62,8 +63,8 @@ export function RecentlyViewed() {
         refreshRatings(slice);
         const ratings: Record<string, number> = {};
         for (const item of slice) {
-          const r = localStorage.getItem(`movie-rating-${item.id}`);
-          if (r) ratings[item.id] = parseInt(r, 10);
+          const r = readUserRating(item.id);
+          if (r) ratings[item.id] = r;
         }
         setUserRatings(ratings);
       }

@@ -1,4 +1,5 @@
 import { forgetDateIndexCache } from './media-id';
+import { forgetLibraryCache } from './library-store';
 
 // Wipes every piece of per-user state from localStorage.
 // Used on logout and on account switch (login as a different user in the same
@@ -27,6 +28,8 @@ export function clearUserData() {
         k === 'watched-at-index' ||
         k === 'rated-at-index' ||
         k === 'manual-watched-index' ||
+        k === 'library-watched' ||
+        k === 'library-ratings' ||
         k === 'user-favorites' ||
         k === 'user-lists' ||
         k === 'activity-feed' ||
@@ -46,4 +49,5 @@ export function clearUserData() {
   // The date indexes are also held in memory; without this the next account in
   // this tab would read the previous account's dates.
   forgetDateIndexCache();
+  forgetLibraryCache();
 }

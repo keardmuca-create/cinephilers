@@ -16,6 +16,7 @@ import { FavoritesSection } from '@/components/favorites-section';
 import { MediaToggle } from '@/components/media-toggle';
 import { readWatchedState, type WatchedState } from '@/lib/watched-state';
 import { allWatchedEpisodeIds } from '@/lib/episode-store';
+import { allWatchedTitleIds, allUserRatings, readUserRating as readStoredRating } from '@/lib/library-store';
 import type { MediaSide } from '@/lib/media-type';
 import { BarChart, Bar, XAxis, ResponsiveContainer, Cell, YAxis, LabelList } from 'recharts';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -79,10 +80,7 @@ function DiarySection() {
         if (cancelled) return;
         setItems(rows.map(r => {
           let userRating: number | undefined;
-          try {
-            const saved = localStorage.getItem(`movie-rating-${r.tmdbId}`);
-            if (saved) userRating = parseInt(saved, 10);
-          } catch { /* ignore */ }
+          userRating = readStoredRating(r.tmdbId);
           const episodeLine = episodeLineFor(r.tmdbId, meta[r.tmdbId]);
           return {
             id: r.tmdbId,
@@ -956,12 +954,7 @@ export default function ProfilePage() {
         // Films (and any bare whole-show mark) under watched-*, episodes from each
         // show's list (lib/episode-store). One set, so an id seen twice is one card.
         const ids = new Set<string>();
-        for (let i = 0; i < localStorage.length; i++) {
-          const k = localStorage.key(i)!;
-          if (k.startsWith('watched-') && !k.startsWith('watched-ep-') && !k.startsWith('watched-show-eps-') && localStorage.getItem(k) === 'true') {
-            ids.add(k.slice('watched-'.length));
-          }
-        }
+        for (const id of allWatchedTitleIds()) ids.add(id);
         for (const epId of allWatchedEpisodeIds()) {
           if (parseEpisodeId(epId)) ids.add(epId); // e.g. tmdb-tv-12345-S1E5
         }
@@ -1027,7 +1020,8 @@ export default function ProfilePage() {
           const data = getMeta(id);
           const title = (data?.title as string | undefined) ?? rv?.title;
           if (!title) continue;
-          const rating = localStorage.getItem(`movie-rating-${id}`);
+          const storedScore = readStoredRating(id);
+          const rating = storedScore !== undefined ? String(storedScore) : null;
           const episodeLine = episodeLineFor(id, data);
           items.push({
             id,
@@ -1207,16 +1201,9 @@ export default function ProfilePage() {
         }
       } catch { /* ignore */ }
 
-      // Every score under movie-rating-*, whatever it is for: a film, a series,
+      // Every score in the ratings store, whatever it is for: a film, a series,
       // or a single episode.
-      const scored: { id: string; score: number }[] = [];
-      for (let i = 0; i < localStorage.length; i++) {
-        const k = localStorage.key(i)!;
-        if (!k.startsWith('movie-rating-')) continue;
-        const score = Number(localStorage.getItem(k));
-        if (!score) continue;
-        scored.push({ id: k.slice('movie-rating-'.length), score });
-      }
+      const scored: { id: string; score: number }[] = allUserRatings();
 
       // Kept apart from the collapse, which folds every episode into its show and
       // so cannot answer "what did I give each episode". The Episodes segment of

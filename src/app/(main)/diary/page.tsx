@@ -9,6 +9,7 @@ import { toast } from '@/hooks/use-toast';
 import { fetchWithAuth } from '@/lib/fetch-with-auth';
 import { batchFetchMeta } from '@/lib/meta-batch';
 import { removeFromWatchLog } from '@/lib/watch-log';
+import { readUserRating as readStoredRating, setWatchedTitle } from '@/lib/library-store';
 import { removeManualWatch } from '@/lib/media-id';
 import { readSavedRefine, persistRefine } from '@/lib/refine-sort';
 import { RefineSheet, type RefineValue } from '@/components/refine-sheet';
@@ -120,10 +121,7 @@ export default function DiaryPage() {
       const meta = await batchFetchMeta(rows.map(r => r.tmdbId));
       const mapped = rows.map(r => {
         let userRating: number | undefined;
-        try {
-          const saved = localStorage.getItem(`movie-rating-${r.tmdbId}`);
-          if (saved) userRating = parseInt(saved, 10);
-        } catch { /* ignore */ }
+        userRating = readStoredRating(r.tmdbId);
         const episodeLine = episodeLineFor(r.tmdbId, meta[r.tmdbId]);
         return {
           ...r,
@@ -192,7 +190,7 @@ export default function DiaryPage() {
         // diary delete leaves alone — so nothing local is cleared for one.
         if (!/-S\d+E\d+$/.test(item.tmdbId)) {
           try {
-            localStorage.removeItem(`watched-${item.tmdbId}`);
+            setWatchedTitle(item.tmdbId, false);
             removeFromWatchLog(item.tmdbId, 'movie');
             removeManualWatch(item.tmdbId);
           } catch { /* ignore */ }

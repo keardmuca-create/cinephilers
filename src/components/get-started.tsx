@@ -6,6 +6,7 @@ import { Check, ChevronRight, X, Sparkles } from 'lucide-react';
 import { useAuth } from '@/contexts/auth-context';
 import { ImportDialog } from '@/components/import-dialog';
 import { isEpisodeId } from '@/lib/media-id';
+import { allWatchedTitleIds } from '@/lib/library-store';
 
 // The rest of onboarding, on the home screen rather than in front of it.
 //
@@ -30,7 +31,6 @@ function countLocal(prefix: string, skipEpisodes: boolean): number {
       if (!k?.startsWith(prefix)) continue;
       const id = k.slice(prefix.length);
       if (skipEpisodes && isEpisodeId(id)) continue;
-      if (prefix === 'watched-' && localStorage.getItem(k) !== 'true') continue;
       n++;
     }
   } catch { /* ignore */ }
@@ -78,7 +78,8 @@ export function GetStarted() {
   const read = useCallback(() => {
     setCounts({
       watchlist: countLocal('watchlist-', true),
-      watched: countLocal('watched-', true),
+      // Watched titles live in one store now (lib/library-store), not a key each.
+      watched: allWatchedTitleIds().filter(id => !isEpisodeId(id)).length,
     });
   }, []);
 

@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { fetchWithAuth } from '@/lib/fetch-with-auth';
 import type { Movie } from '@/lib/types';
 import { recordAddedAtMany, recordWatchedAtMany, recordRatedAtMany, type DateEntry } from '@/lib/media-id';
+import { addWatchedTitles, setUserRatings } from '@/lib/library-store';
 
 type Platform = 'letterboxd' | 'imdb';
 type Step = 'pick' | 'upload' | 'matching' | 'confirm' | 'importing' | 'done';
@@ -502,6 +503,9 @@ export function ImportDialog({ onClose }: { onClose: () => void }) {
         const watchedDates: DateEntry[] = [];
         const addedDates: DateEntry[] = [];
         const ratedDates: DateEntry[] = [];
+        // Watched films and scores go to their stores in one write each, too.
+        const watchedIds: string[] = [];
+        const scores: [string, number][] = [];
         try {
           for (const item of saved) {
             const marked = showEpisodes[item.tmdbId];
@@ -510,13 +514,13 @@ export function ImportDialog({ onClose }: { onClose: () => void }) {
             localStorage.setItem(`meta-${item.tmdbId}`, JSON.stringify(meta));
             // Films get a watched key. A show never does — its episodes are the record.
             if (item.watchedAt && item.mediaType === 'MOVIE') {
-              localStorage.setItem(`watched-${item.tmdbId}`, 'true');
+              watchedIds.push(item.tmdbId);
               watchedDates.push([item.tmdbId, item.watchedAt]);
               // Latest rewatch date wins for history sorting (the watched index keeps the newest)
               for (const d of item.extraWatchDates ?? []) watchedDates.push([item.tmdbId, d]);
             }
             if (item.inWatchlist) localStorage.setItem(`watchlist-${item.tmdbId}`, JSON.stringify({ id: item.tmdbId, title: item.matchedTitle, poster: item.poster ?? '', year: item.year, type: meta.type }));
-            if (item.rating) localStorage.setItem(`movie-rating-${item.tmdbId}`, String(item.rating));
+            if (item.rating) scores.push([item.tmdbId, item.rating]);
             if (item.inWatchlist || item.rating) addedDates.push([item.tmdbId, item.watchedAt || undefined]);
             // An imported rating's date is the log date the export carried. Not
             // exact — Letterboxd records when a film was watched, not when it was
@@ -540,6 +544,8 @@ export function ImportDialog({ onClose }: { onClose: () => void }) {
         } finally {
           // Written even if a write above hit the storage limit, so the dates
           // gathered so far still land, as they did one call at a time.
+          addWatchedTitles(watchedIds);
+          setUserRatings(scores);
           recordWatchedAtMany(watchedDates);
           recordAddedAtMany(addedDates);
           recordRatedAtMany(ratedDates);

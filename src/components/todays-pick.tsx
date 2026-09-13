@@ -14,6 +14,7 @@ import { seededShuffle, DAY_MS } from '@/lib/seed-shuffle';
 import { batchFetchMeta } from '@/lib/meta-batch';
 import { isEpisodeId, isShowId, getAddedAt } from '@/lib/media-id';
 import { appendWatchLog } from '@/lib/watch-log';
+import { isWatchedTitle, setWatchedTitle } from '@/lib/library-store';
 import { toast } from '@/hooks/use-toast';
 import { TodaysPickHelp } from '@/components/todays-pick-help';
 
@@ -176,7 +177,7 @@ function watchlistFilmIds(): string[] {
       const k = localStorage.key(i);
       if (!k?.startsWith('watchlist-')) continue;
       const id = k.slice('watchlist-'.length);
-      if (localStorage.getItem(`watched-${id}`) === 'true') continue;
+      if (isWatchedTitle(id)) continue;
       if (isEpisodeId(id) || isShowId(id)) continue;
       ids.push(id);
     }
@@ -573,7 +574,7 @@ export function TodaysPick() {
       const m = await r.json();
       if (m && !m.error) {
         setMovie(m as Movie);
-        try { setMarkedWatched(localStorage.getItem(`watched-${tmdbId}`) === 'true'); } catch { /* ignore */ }
+        setMarkedWatched(isWatchedTitle(tmdbId));
         loadFact(tmdbId, m as Movie);
       }
     } catch { /* ignore */ }
@@ -602,7 +603,7 @@ export function TodaysPick() {
         body: JSON.stringify({ tmdbId: movie.id, mediaType: movie.id.startsWith('tmdb-tv-') ? 'SHOW' : 'MOVIE' }),
       });
       if (!res.ok) throw new Error(String(res.status));
-      try { localStorage.setItem(`watched-${movie.id}`, 'true'); } catch { /* ignore */ }
+      setWatchedTitle(movie.id, true);
       appendWatchLog({
         id: movie.id,
         type: 'movie',
@@ -687,7 +688,7 @@ export function TodaysPick() {
 
     if (picked) {
       setMovie(picked);
-      try { setMarkedWatched(localStorage.getItem(`watched-${id}`) === 'true'); } catch { /* ignore */ }
+      setMarkedWatched(isWatchedTitle(id));
       loadFact(id, picked);
     }
     setGenerating(false);

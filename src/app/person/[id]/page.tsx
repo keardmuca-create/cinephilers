@@ -7,6 +7,7 @@ import Link from 'next/link';
 import { ChevronLeft, Star, Film, User, X } from 'lucide-react';
 import { WatchedEye } from '@/components/watched-eye';
 import { readWatchedState, readEpisodeProgress, loadEpisodeProgress, type WatchedState } from '@/lib/watched-state';
+import { readUserRating } from '@/lib/library-store';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 
@@ -401,8 +402,8 @@ export default function PersonPage() {
             for (const c of all) {
               const state = readWatchedState(c.id);
               if (state !== 'none') watched[c.id] = state;
-              const r = localStorage.getItem(`movie-rating-${c.id}`);
-              if (r) ratings[c.id] = parseInt(r, 10);
+              const r = readUserRating(c.id);
+              if (r) ratings[c.id] = r;
             }
           } catch { /* ignore */ }
           setWatchedMap(watched);

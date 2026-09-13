@@ -10,6 +10,7 @@ import { MovieCard } from '@/components/movie-card';
 import { PosterCard, ScoreStar, UserScore } from '@/components/poster-card';
 import { WatchedEye } from '@/components/watched-eye';
 import { readWatchedState, type WatchedState } from '@/lib/watched-state';
+import { readUserRating } from '@/lib/library-store';
 import { useCommunityRatings } from '@/hooks/use-community-ratings';
 import { resolveDisplayRating } from '@/lib/cinephilers-rating';
 import { AIRecommendations } from '@/components/ai-recommendations';
@@ -39,8 +40,8 @@ function Top10Card({ movie, index }: { movie: ChartEntry; index: number }) {
   useEffect(() => {
     try {
       setWatched(readWatchedState(movie.id));
-      const r = localStorage.getItem(`movie-rating-${movie.id}`);
-      if (r) setUserRating(parseInt(r, 10));
+      const r = readUserRating(movie.id);
+      if (r) setUserRating(r);
     } catch { /* ignore */ }
   }, [movie.id]);
 

@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Star, ChevronLeft, Search, SlidersHorizontal, X, Film } from 'lucide-react';
 import { normalizeLocalMediaIds, getRatedAt } from '@/lib/media-id';
+import { allUserRatings } from '@/lib/library-store';
 import { persistRefine } from '@/lib/refine-sort';
 import { batchFetchMeta } from '@/lib/meta-batch';
 import { getItemType, sideOf, SIDE_TYPES, TYPE_LABELS, type TypeFilter, type MediaSide } from '@/lib/media-type';
@@ -240,12 +241,7 @@ function RatingsPageInner() {
       normalizeLocalMediaIds();
       const entries: { id: string; score: number }[] = [];
       const cached = new Map<string, Meta>();
-      for (let i = 0; i < localStorage.length; i++) {
-        const k = localStorage.key(i)!;
-        if (!k.startsWith('movie-rating-')) continue;
-        const score = Number(localStorage.getItem(k));
-        if (!score) continue;
-        const id = k.slice('movie-rating-'.length);
+      for (const { id, score } of allUserRatings()) {
         entries.push({ id, score });
         const m = readMetaCache(id);
         if (m) cached.set(id, m);

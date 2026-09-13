@@ -26,6 +26,7 @@ import { Badge } from '@/components/ui/badge';
 import { toast } from '@/hooks/use-toast';
 import { RewatchStrip } from '@/components/rewatch-strip';
 import { appendWatchLog, removeFromWatchLog, saveMovieRating } from '@/lib/watch-log';
+import { isWatchedTitle, setWatchedTitle, readUserRating as readStoredRating, removeUserRating as forgetStoredRating, allUserRatings } from '@/lib/library-store';
 import { recordAddedAt, recordWatchedAt, recordManualWatch, removeManualWatch, recordRatedAt, removeRatedAt, legacyTwin, parseEpisodeId } from '@/lib/media-id';
 import { EpisodePage } from '@/components/episode-page';
 import { RatingSheet } from '@/components/rating-sheet';
@@ -81,9 +82,8 @@ function PersonCard({ actor }: { actor: Actor }) {
 // shown in release order so viewers can discover earlier/later entries.
 
 function CollectionCard({ part }: { part: CollectionItem }) {
-  const isWatched = typeof window !== 'undefined' && localStorage.getItem(`watched-${part.id}`) === 'true';
-  const ratingRaw = typeof window !== 'undefined' ? localStorage.getItem(`movie-rating-${part.id}`) : null;
-  const userRating = ratingRaw ? Number(ratingRaw) : undefined;
+  const isWatched = typeof window !== 'undefined' && isWatchedTitle(part.id);
+  const userRating = typeof window !== 'undefined' ? readStoredRating(part.id) : undefined;
   const isUpcoming = part.releaseDate ? new Date(part.releaseDate).getTime() > Date.now() : false;
   const comingLabel = isUpcoming && part.releaseDate
     ? new Date(part.releaseDate).toLocaleDateString('en-US', { month: 'short', year: 'numeric' })
@@ -397,23 +397,20 @@ function SeasonsSection({
   const [markLoading, setMarkLoading] = useState<number | null>(null);
 
   // Episode ratings, keyed the way the season list needs them: "S1E4" -> 8.
-  // They live in localStorage as `movie-rating-{showId}-S1E4` and are written on
-  // the episode's own page, so this reads them rather than owning them. Re-read
-  // when the tab comes back, since rating an episode happens on another route
-  // and returning here can reuse this component without remounting it.
+  // They live in the ratings store (lib/library-store) as `{showId}-S1E4` and are
+  // written on the episode's own page, so this reads them rather than owning them.
+  // Re-read when the tab comes back, since rating an episode happens on another
+  // route and returning here can reuse this component without remounting it.
   const [episodeRatings, setEpisodeRatings] = useState<Record<string, number>>({});
   useEffect(() => {
     const read = () => {
-      const prefix = `movie-rating-${showKeyId}-`;
+      const prefix = `${showKeyId}-`;
       const found: Record<string, number> = {};
       try {
-        for (let i = 0; i < localStorage.length; i++) {
-          const k = localStorage.key(i);
-          if (!k || !k.startsWith(prefix)) continue;
-          const epKey = k.slice(prefix.length);
-          if (!/^S\d+E\d+$/.test(epKey)) continue;
-          const score = Number(localStorage.getItem(k));
-          if (score > 0) found[epKey] = score;
+        for (const { id: ratedId, score } of allUserRatings()) {
+          if (!ratedId.startsWith(prefix)) continue;
+          const epKey = ratedId.slice(prefix.length);
+          if (/^S\d+E\d+$/.test(epKey) && score > 0) found[epKey] = score;
         }
       } catch { /* ignore */ }
       setEpisodeRatings(found);
@@ -1266,7 +1263,7 @@ function MovieDetailInner() {
     // Rating a SERIES marks nothing: its watched state is the sum of its
     // episodes, and a rating doesn't say which ones you saw.
     if (!isWatched && movie?.type !== 'show') {
-      try { localStorage.setItem(`watched-${id}`, 'true'); } catch { /* ignore */ }
+      setWatchedTitle(id, true);
       setIsWatched(true);
       syncDb('POST', '/api/watched', { tmdbId: id, mediaType: 'MOVIE' });
       if (movie) {
@@ -1292,7 +1289,7 @@ function MovieDetailInner() {
       return;
     }
     setUserRating(0);
-    try { localStorage.removeItem(`movie-rating-${id}`); } catch { /* ignore */ }
+    forgetStoredRating(id);
     removeRatedAt(id);
     removeActivity('rated', id);
     toast({ title: 'Rating removed' });
@@ -1319,12 +1316,12 @@ function MovieDetailInner() {
   useEffect(() => {
     if (!id) return;
     try {
-      setIsWatched(localStorage.getItem(`watched-${id}`) === 'true');
+      setIsWatched(isWatchedTitle(id));
       setIsInWatchlist(localStorage.getItem(`watchlist-${id}`) !== null);
-      const saved = localStorage.getItem(`movie-rating-${id}`);
+      const saved = readStoredRating(id);
       const rev = localStorage.getItem(`review-${id}`);
       if (rev) setMyReview(JSON.parse(rev));
-      if (saved) setUserRating(parseInt(saved, 10));
+      if (saved) setUserRating(saved);
       // Load watched episodes from localStorage first (fast)
       const indexRaw = localStorage.getItem(`watched-eps-index-${id}`);
       const watched = new Set<string>(indexRaw ? JSON.parse(indexRaw) : []);
@@ -1515,7 +1512,7 @@ function MovieDetailInner() {
         if (next) localStorage.setItem(`show-status-${id}`, 'completed');
         else localStorage.removeItem(`show-status-${id}`);
       } else {
-        localStorage.setItem(`watched-${id}`, String(next));
+        setWatchedTitle(id, next);
       }
     } catch { /* ignore */ }
 

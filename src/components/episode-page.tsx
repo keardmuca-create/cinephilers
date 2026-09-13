@@ -21,6 +21,7 @@ import { fetchWithAuth } from '@/lib/fetch-with-auth';
 import { toast } from '@/hooks/use-toast';
 import { batchFetchMeta } from '@/lib/meta-batch';
 import { isEpisodeWatched } from '@/lib/episode-store';
+import { readUserRating as readStoredRating, setUserRating as storeRating } from '@/lib/library-store';
 import { recordWatchedAt, recordManualWatch, removeManualWatch, recordAddedAt, recordRatedAt } from '@/lib/media-id';
 import { logActivity, removeActivity } from '@/lib/activity';
 import type { CinephilersRating } from '@/lib/cinephilers-rating';
@@ -112,8 +113,8 @@ export function EpisodePage({ showTmdbId, season, episodeNumber }: {
       setWatched(isEpisodeWatched(showTmdbId, epKey));
       setInWatchlist(!!localStorage.getItem(`watchlist-${episodeId}`));
       const legacy = localStorage.getItem(`ep-rating-${showTmdbId}-${epKey}`);
-      const v = localStorage.getItem(`movie-rating-${episodeId}`) ?? legacy;
-      if (v) setUserRating(parseInt(v, 10));
+      const v = readStoredRating(episodeId) ?? (legacy ? parseInt(legacy, 10) : undefined);
+      if (v) setUserRating(v);
     } catch { /* ignore */ }
   }, [showTmdbId, epKey, episodeId]);
 
@@ -219,7 +220,7 @@ export function EpisodePage({ showTmdbId, season, episodeNumber }: {
       return;
     }
     setUserRating(score);
-    try { localStorage.setItem(`movie-rating-${episodeId}`, String(score)); } catch { /* ignore */ }
+    storeRating(episodeId, score);
     // Every other rating path stamps this; the episode one did not, so an episode
     // rating fell back to the date the episode was first seen and sorted as though
     // it had been scored then.

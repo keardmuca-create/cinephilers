@@ -9,6 +9,7 @@ import { fetchWithAuth } from '@/lib/fetch-with-auth';
 import { persistRefine } from '@/lib/refine-sort';
 import { removeFromWatchLog } from '@/lib/watch-log';
 import { allWatchedEpisodeIds } from '@/lib/episode-store';
+import { allWatchedTitleIds, setWatchedTitle, readUserRating as readStoredRating } from '@/lib/library-store';
 import { legacyTwin, normalizeLocalMediaIds, getWatchedAtISO, getManualWatchISO } from '@/lib/media-id';
 import { batchFetchMeta, isStaleMeta, type CachedMeta } from '@/lib/meta-batch';
 import { getItemType, sideOf, SIDE_TYPES, TYPE_LABELS, type TypeFilter, type MediaSide } from '@/lib/media-type';
@@ -35,12 +36,8 @@ const DEFAULT_REFINE: RefineValue = { sortField: 'date', sortDir: 'desc', type: 
 function readAllWatchedIds(): string[] {
   const ids = new Set<string>();
   try {
-    for (let i = 0; i < localStorage.length; i++) {
-      const k = localStorage.key(i)!;
-      if (k.startsWith('watched-') && !k.startsWith('watched-ep-') && localStorage.getItem(k) === 'true') {
-        ids.add(k.slice('watched-'.length));
-      }
-    }
+    // Films (and any bare whole-show mark) from the watched store.
+    for (const id of allWatchedTitleIds()) ids.add(id);
     // Episodes from each show's list, as full ids (tmdb-tv-299167-S1E2).
     for (const epId of allWatchedEpisodeIds()) ids.add(epId);
   } catch { /* ignore */ }
@@ -99,10 +96,7 @@ function writeMetaCache(id: string, m: CachedMeta) {
 }
 
 function readUserRating(id: string): number | undefined {
-  try {
-    const r = localStorage.getItem(`movie-rating-${id}`);
-    return r ? Number(r) : undefined;
-  } catch { return undefined; }
+  return readStoredRating(id);
 }
 
 function formatAddedDate(iso: string): string {
@@ -117,7 +111,7 @@ function formatAddedDate(iso: string): string {
 // behind, its entry in the per-show index, and its watch-log line.
 function forgetEpisodeLocally(epId: string, showId: string, season: number, episode: number) {
   try {
-    localStorage.removeItem(`watched-${epId}`);
+    setWatchedTitle(epId, false);
     const idxRaw = localStorage.getItem(`watched-eps-index-${showId}`);
     if (idxRaw) {
       const idx = JSON.parse(idxRaw) as string[];
@@ -212,7 +206,7 @@ function HistoryCard({ row, meta, userRating, onRemove }: {
     }
     // The show's own row: deleteMany is a no-op when there isn't one, so this is
     // safe either way and still surfaces a genuine network failure.
-    try { localStorage.removeItem(`watched-${id}`); } catch { /* ignore */ }
+    setWatchedTitle(id, false);
     removeFromWatchLog(id, 'movie');
     await fetchWithAuth(`/api/watched/${id}?mediaType=SHOW`, { method: 'DELETE' }).then(ensureOk);
   };
@@ -240,7 +234,7 @@ function HistoryCard({ row, meta, userRating, onRemove }: {
         await removeShow(ensureOk);
       } else {
         // Movie.
-        try { localStorage.removeItem(`watched-${id}`); } catch { /* ignore */ }
+        setWatchedTitle(id, false);
         removeFromWatchLog(id, 'movie');
         await fetchWithAuth(`/api/watched/${id}?mediaType=${mediaType}`, { method: 'DELETE' }).then(ensureOk);
         // Also clear any legacy bare-numeric twin (older imports stored "262504" instead
@@ -249,7 +243,7 @@ function HistoryCard({ row, meta, userRating, onRemove }: {
         // throws on a genuine failure that would otherwise resurrect the duplicate.
         const twin = legacyTwin(id);
         if (twin) {
-          try { localStorage.removeItem(`watched-${twin}`); } catch { /* ignore */ }
+          setWatchedTitle(twin, false);
           removeFromWatchLog(twin, 'movie');
           await fetchWithAuth(`/api/watched/${twin}?mediaType=${mediaType}`, { method: 'DELETE' }).then(ensureOk);
         }

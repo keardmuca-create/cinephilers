@@ -10,6 +10,8 @@
 // you've started a show is already on the device, so the eye is correct on first
 // paint and never changes under you a moment later.
 
+import { isWatchedTitle } from './library-store';
+
 export type WatchedState = 'none' | 'partial' | 'complete';
 
 /** Shows are the only thing that can be partially watched. */
@@ -107,7 +109,7 @@ export function readWatchedState(id: string): WatchedState {
     }
 
     // Films, and anything imported as a flat watch.
-    if (localStorage.getItem(`watched-${id}`) === 'true') return 'complete';
+    if (isWatchedTitle(id)) return 'complete';
     if (!isShowId(id)) return 'none';
 
     if (localStorage.getItem(`show-status-${id}`) === 'completed') return 'complete';

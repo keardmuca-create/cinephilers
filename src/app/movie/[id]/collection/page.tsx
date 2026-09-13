@@ -7,11 +7,11 @@ import { Movie, CollectionItem } from '@/lib/types';
 import { Button } from '@/components/ui/button';
 import { ChevronLeft, Film } from 'lucide-react';
 import { WatchedEye } from '@/components/watched-eye';
+import { isWatchedTitle, readUserRating } from '@/lib/library-store';
 
 function CollectionRow({ part }: { part: CollectionItem }) {
-  const isWatched = typeof window !== 'undefined' && localStorage.getItem(`watched-${part.id}`) === 'true';
-  const ratingRaw = typeof window !== 'undefined' ? localStorage.getItem(`movie-rating-${part.id}`) : null;
-  const userRating = ratingRaw ? Number(ratingRaw) : undefined;
+  const isWatched = typeof window !== 'undefined' && isWatchedTitle(part.id);
+  const userRating = typeof window !== 'undefined' ? readUserRating(part.id) : undefined;
   const isUpcoming = part.releaseDate ? new Date(part.releaseDate).getTime() > Date.now() : false;
   const comingLabel = isUpcoming && part.releaseDate
     ? new Date(part.releaseDate).toLocaleDateString('en-US', { month: 'short', year: 'numeric' })

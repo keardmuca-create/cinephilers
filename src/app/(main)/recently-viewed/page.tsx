@@ -7,6 +7,7 @@ import { useRouter } from 'next/navigation';
 import { ChevronLeft, Clock, Star, Search, X, Film, User } from 'lucide-react';
 import { useCommunityRatings } from '@/hooks/use-community-ratings';
 import { resolveDisplayRating } from '@/lib/cinephilers-rating';
+import { readUserRating } from '@/lib/library-store';
 
 interface RecentItem {
   id: string;
@@ -76,8 +77,8 @@ export default function RecentlyViewedPage() {
         setItems(parsed.slice(0, 100));
         const ratings: Record<string, number> = {};
         for (const item of parsed) {
-          const r = localStorage.getItem(`movie-rating-${item.id}`);
-          if (r) ratings[item.id] = parseInt(r, 10);
+          const r = readUserRating(item.id);
+          if (r) ratings[item.id] = r;
         }
         setUserRatings(ratings);
       }

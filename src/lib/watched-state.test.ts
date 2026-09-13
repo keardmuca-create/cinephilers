@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { readWatchedState, readEpisodeProgress } from './watched-state';
+import { setWatchedTitle, forgetLibraryCache } from './library-store';
 
 const FILM = 'tmdb-27205';
 const SHOW = 'tmdb-tv-1402';
@@ -15,6 +16,9 @@ const store = new Map<string, string>();
 
 beforeEach(() => {
   store.clear();
+  // The watched store keeps an in-memory copy; emptying the map underneath it
+  // doesn't reach that copy, so each test starts from a fresh read.
+  forgetLibraryCache();
 });
 
 describe('readWatchedState', () => {
@@ -24,7 +28,8 @@ describe('readWatchedState', () => {
   });
 
   it('fills the eye for a watched film', () => {
-    localStorage.setItem(`watched-${FILM}`, 'true');
+    // Marked the way the app marks it now: the watched store, not a key per film.
+    setWatchedTitle(FILM, true);
     expect(readWatchedState(FILM)).toBe('complete');
   });
 
