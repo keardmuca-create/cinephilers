@@ -5,12 +5,7 @@ import { ok, err } from '@/lib/api-response';
 import { signAccessToken, signRefreshToken, setAuthCookies, isNativeRequest } from '@/lib/auth-utils';
 import { rateLimit, clearRateLimit, getIp } from '@/lib/rate-limit';
 import { writeAudit, alreadyLoggedLockout } from '@/lib/audit';
-
-// Email verification is only enforced for accounts created on or after this date.
-// Everyone who signed up before it is grandfathered in (verification was never
-// required, so most existing users have isVerified=false), and we don't flip
-// their flag because isVerified also drives the public ✓ badge.
-const VERIFY_REQUIRED_AFTER = new Date('2026-06-29T00:00:00.000Z');
+import { isUnverifiedAccount } from '@/lib/email-verification';
 
 // Failed attempts allowed against ONE account before it stops answering, and how
 // long the lock lasts. Counted per account rather than per address: an attacker
@@ -72,7 +67,7 @@ export async function POST(req: NextRequest) {
 
   // Block unverified accounts created after enforcement began. The code lets the
   // login page surface a "resend verification email" action.
-  if (!user.isVerified && user.createdAt >= VERIFY_REQUIRED_AFTER) {
+  if (isUnverifiedAccount(user)) {
     return NextResponse.json(
       {
         success: false,

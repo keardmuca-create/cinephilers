@@ -7,6 +7,7 @@ import { useAuth } from '@/contexts/auth-context';
 import { fetchWithAuth } from '@/lib/fetch-with-auth';
 import { relativeTime } from '@/lib/activity';
 import { AuditLog } from './audit-log';
+import { useLoadOnScroll } from '@/hooks/use-load-on-scroll';
 
 interface Report {
   id: string;
@@ -163,10 +164,10 @@ function SupportReply() {
 export default function AdminPage() {
   const { user, loading: authLoading } = useAuth();
   const router = useRouter();
-  // null = no section open. The page lands on the pills alone, so every visit is
-  // a deliberate choice rather than a wall of whichever section happened to be
-  // first. Clicking the open pill again closes it and returns here.
-  const [tab, setTab] = useState<AdminSection>(null);
+  // Opens on Users, the section visited most (Keard, 2026-09-13; it used to open
+  // on the pills alone, which read as an empty page). null = no section open:
+  // clicking the open pill again still closes it.
+  const [tab, setTab] = useState<AdminSection>('users');
 
   // Reports state
   const [reports, setReports] = useState<Report[]>([]);
@@ -180,6 +181,15 @@ export default function AdminPage() {
   const [actionLoadingId, setActionLoadingId] = useState<string | null>(null);
   const [usersError, setUsersError] = useState<string | null>(null);
   const searchTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Accounts that signed up after verification became required and never verified
+  // sit in their own list, away from real users.
+  const [userGroup, setUserGroup] = useState<'users' | 'unverified'>('users');
+  const [userCounts, setUserCounts] = useState<{ users: number; unverified: number } | null>(null);
+  const [userCursor, setUserCursor] = useState<string | null>(null);
+  const [loadingMoreUsers, setLoadingMoreUsers] = useState(false);
+  // Bumped per first-page request, so a slow answer for an old search or the
+  // other list can't overwrite the current one.
+  const usersRequest = useRef(0);
 
   // Stats state
   const [stats, setStats] = useState<AdminStats | null>(null);
@@ -215,31 +225,74 @@ export default function AdminPage() {
       .catch(() => {});
   }, [tab, dbSize]);
 
-  // Load users when tab opens, then debounce search on query change
+  const usersUrl = (cursor?: string) => {
+    const p = new URLSearchParams({ group: userGroup });
+    if (userQuery.trim()) p.set('q', userQuery.trim());
+    if (cursor) p.set('cursor', cursor);
+    return `/api/admin/users?${p}`;
+  };
+
+  // Load the first page when the tab opens or the list changes, then debounce search
   useEffect(() => {
     if (tab !== 'users') return;
     if (searchTimeout.current) clearTimeout(searchTimeout.current);
     const delay = userQuery.trim() ? 400 : 0;
     searchTimeout.current = setTimeout(async () => {
+      const request = ++usersRequest.current;
       setSearchingUsers(true);
       setUsersError(null);
       try {
-        const url = userQuery.trim() ? `/api/admin/users?q=${encodeURIComponent(userQuery)}` : '/api/admin/users';
-        const res = await fetchWithAuth(url);
+        const res = await fetchWithAuth(usersUrl());
         const json = await res.json().catch(() => null);
+        if (request !== usersRequest.current) return;
         if (!res.ok) {
           setUsersError(`API error ${res.status}: ${json?.message ?? 'unknown'}`);
           setUserResults([]);
+          setUserCursor(null);
         } else {
-          setUserResults(json?.data ?? []);
+          setUserResults(json?.data?.users ?? []);
+          setUserCursor(json?.data?.nextCursor ?? null);
+          if (json?.data?.counts) setUserCounts(json.data.counts);
         }
       } catch (e) {
-        setUsersError(`Network error: ${String(e)}`);
+        if (request === usersRequest.current) setUsersError(`Network error: ${String(e)}`);
       } finally {
-        setSearchingUsers(false);
+        if (request === usersRequest.current) setSearchingUsers(false);
       }
     }, delay);
-  }, [userQuery, tab]);
+    // usersUrl reads userQuery and userGroup, both listed.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [userQuery, tab, userGroup]);
+
+  // The next page of whichever list is showing, as the end of it comes into view.
+  const loadMoreUsers = async () => {
+    if (!userCursor || loadingMoreUsers || searchingUsers) return;
+    const request = usersRequest.current;
+    setLoadingMoreUsers(true);
+    try {
+      const res = await fetchWithAuth(usersUrl(userCursor));
+      const json = await res.json().catch(() => null);
+      if (request !== usersRequest.current || !res.ok) return;
+      const more: AdminUser[] = json?.data?.users ?? [];
+      setUserResults(prev => {
+        const seen = new Set(prev.map(u => u.id));
+        return [...prev, ...more.filter(u => !seen.has(u.id))];
+      });
+      setUserCursor(json?.data?.nextCursor ?? null);
+    } catch {
+      /* the marker stays in view; the next scroll asks again */
+    } finally {
+      setLoadingMoreUsers(false);
+    }
+  };
+  const moreUsersRef = useLoadOnScroll(loadMoreUsers, !!userCursor && !loadingMoreUsers && !searchingUsers, userResults.length);
+
+  const switchUserGroup = (next: 'users' | 'unverified') => {
+    if (next === userGroup) return;
+    setUserResults([]);
+    setUserCursor(null);
+    setUserGroup(next);
+  };
 
   const dismiss = async (id: string) => {
     await fetchWithAuth('/api/admin/reports', {
@@ -322,6 +375,7 @@ export default function AdminPage() {
       });
       if (res.ok) {
         setUserResults(prev => prev.filter(x => x.id !== u.id));
+        setUserCounts(prev => prev && { ...prev, [userGroup]: Math.max(0, prev[userGroup] - 1) });
       } else {
         window.alert('Could not delete this account.');
       }
@@ -534,6 +588,29 @@ export default function AdminPage() {
               ))}
             </div>
           )}
+          <div className="flex gap-2">
+            {([
+              { key: 'users', label: 'Users' },
+              { key: 'unverified', label: 'Unverified' },
+            ] as const).map(g => (
+              <button
+                key={g.key}
+                onClick={() => switchUserGroup(g.key)}
+                aria-pressed={userGroup === g.key}
+                className={`flex items-center gap-1.5 px-4 py-1.5 rounded-full text-sm font-semibold transition-colors ${userGroup === g.key ? 'bg-primary/20 text-primary' : 'bg-muted text-muted-foreground hover:bg-muted/80'}`}
+              >
+                {g.label}
+                {userCounts && <span className="text-xs opacity-70">{userCounts[g.key].toLocaleString()}</span>}
+              </button>
+            ))}
+          </div>
+          {userGroup === 'unverified' && (
+            <p className="text-xs text-muted-foreground px-1">
+              Signed up on or after 29 June 2026 and never verified their email, so they can&apos;t log in.
+              A fake or bounced address stays here.
+            </p>
+          )}
+
           <div className="relative">
             <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
             <input
@@ -554,7 +631,9 @@ export default function AdminPage() {
           {!searchingUsers && !usersError && userResults.length === 0 && (
             <div className="flex flex-col items-center justify-center py-16 gap-3 text-center">
               <Users className="h-10 w-10 text-muted-foreground/20" />
-              <p className="text-muted-foreground text-sm">{userQuery ? 'No users found' : 'No users yet'}</p>
+              <p className="text-muted-foreground text-sm">
+                {userQuery ? 'No users found' : userGroup === 'unverified' ? 'No unverified accounts' : 'No users yet'}
+              </p>
             </div>
           )}
 
@@ -626,6 +705,14 @@ export default function AdminPage() {
               </div>
             ))}
           </div>
+
+          {/* The next page loads as this comes into view. */}
+          <div ref={moreUsersRef} className="h-1" />
+          {loadingMoreUsers && (
+            <div className="flex justify-center py-4">
+              <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+            </div>
+          )}
         </div>
       )}
     </main>

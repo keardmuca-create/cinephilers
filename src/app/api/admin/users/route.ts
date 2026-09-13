@@ -1,5 +1,7 @@
 import { NextRequest } from 'next/server';
+import type { Prisma } from '@/generated/prisma/client';
 import { prisma } from '@/lib/db';
+import { unverifiedWhere, verifiedOrGrandfatheredWhere } from '@/lib/email-verification';
 import { ok, err } from '@/lib/api-response';
 import { writeLimit } from '@/lib/write-limit';
 import { requireAdmin } from '@/lib/admin-auth';
@@ -21,36 +23,57 @@ const USER_SELECT = {
   ratingsCount: true,
 } as const;
 
+const USERS_PAGE = 30;
+
 export async function GET(req: NextRequest) {
   const { auth, status } = await requireAdmin();
   if (status === 'unauthenticated') return err('Unauthorized', 401);
   if (status === 'forbidden') return err('Forbidden', 403);
 
-  const q = req.nextUrl.searchParams.get('q')?.trim() ?? '';
+  const params = req.nextUrl.searchParams;
+  const q = params.get('q')?.trim() ?? '';
+  const cursor = params.get('cursor');
+
+  // Two lists. "unverified" is every account that signed up after verification became
+  // required and never clicked the link — they can't log in, and a bounced address
+  // (a fake signup) stays here for good. "users" is everyone else. Same rule as login.
+  const group = params.get('group') === 'unverified' ? unverifiedWhere() : verifiedOrGrandfatheredWhere();
+  const where: Prisma.UserWhereInput = q
+    ? {
+        AND: [
+          group,
+          {
+            OR: [
+              { username: { contains: q, mode: 'insensitive' } },
+              { displayName: { contains: q, mode: 'insensitive' } },
+              { email: { contains: q, mode: 'insensitive' } },
+            ],
+          },
+        ],
+      }
+    : group;
 
   try {
-    let users;
-    if (q) {
-      users = await prisma.user.findMany({
-        where: {
-          OR: [
-            { username: { contains: q, mode: 'insensitive' } },
-            { displayName: { contains: q, mode: 'insensitive' } },
-            { email: { contains: q, mode: 'insensitive' } },
-          ],
-        },
-        select: USER_SELECT,
-        take: 20,
-        orderBy: { createdAt: 'desc' },
-      });
-    } else {
-      users = await prisma.user.findMany({
-        select: USER_SELECT,
-        take: 20,
-        orderBy: { createdAt: 'desc' },
-      });
-    }
-    return ok(users);
+    // A page at a time, newest first, so the whole list is reachable by scrolling —
+    // it used to stop at the 20 newest. id breaks ties between identical timestamps
+    // so the cursor never skips or repeats a row.
+    const rows = await prisma.user.findMany({
+      where,
+      select: USER_SELECT,
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+      take: USERS_PAGE + 1,
+      ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
+    });
+    const hasMore = rows.length > USERS_PAGE;
+    const users = hasMore ? rows.slice(0, USERS_PAGE) : rows;
+
+    // Both totals with the first page only; scrolling for more doesn't change them.
+    const counts = cursor ? null : await Promise.all([
+      prisma.user.count({ where: verifiedOrGrandfatheredWhere() }),
+      prisma.user.count({ where: unverifiedWhere() }),
+    ]).then(([usersTotal, unverifiedTotal]) => ({ users: usersTotal, unverified: unverifiedTotal }));
+
+    return ok({ users, nextCursor: hasMore ? users[users.length - 1].id : null, counts });
   } catch (e) {
     console.error('admin users GET error:', e);
     return err('Internal error', 500);
