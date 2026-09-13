@@ -47,13 +47,28 @@ function readAllWatchedIds(): string[] {
   return [...ids];
 }
 
-function readLoggedAt(id: string, log: { id: string; loggedAt: string }[]): string {
-  const entry = log
-    .filter(e => e.id === id || e.id.startsWith(id + '-'))
-    .sort((a, b) => new Date(b.loggedAt).getTime() - new Date(a.loggedAt).getTime())[0];
-  // Shows and DB-synced items aren't in the movie watch-log; fall back to the
-  // watched-at index so they still sort by date instead of sinking to 1970.
-  return entry?.loggedAt ?? getWatchedAtISO(id) ?? new Date(0).toISOString();
+// The newest log date per id, a show also taking its newest episode's. Built once
+// per load: filtering the whole log again for every watched title was 17,347 passes
+// over thousands of entries for a large library.
+function newestLoggedAt(log: { id: string; loggedAt: string }[]): Map<string, string> {
+  const newest = new Map<string, string>();
+  const keep = (id: string, iso: string) => {
+    const prev = newest.get(id);
+    if (!prev || new Date(iso).getTime() > new Date(prev).getTime()) newest.set(id, iso);
+  };
+  for (const e of log) {
+    if (!e?.id || !e.loggedAt) continue;
+    keep(e.id, e.loggedAt);
+    const ep = /^(.+)-S\d+E\d+$/.exec(e.id);
+    if (ep) keep(ep[1], e.loggedAt);
+  }
+  return newest;
+}
+
+function readLoggedAt(id: string, newest: Map<string, string>): string {
+  // Titles not logged in the app (synced, imported, shows) aren't in the watch log;
+  // the watched-at index dates them so they sort by date instead of sinking to 1970.
+  return newest.get(id) ?? getWatchedAtISO(id) ?? new Date(0).toISOString();
 }
 
 // Newest-first ordering with a top tier for titles marked watched IN THE APP.
@@ -416,7 +431,8 @@ export default function HistoryPage() {
     let log: { id: string; loggedAt: string }[] = [];
     try { log = JSON.parse(localStorage.getItem('watch-log') ?? '[]'); } catch { /* ignore */ }
     const dm = new Map<string, string>();
-    for (const id of ids) dm.set(id, readLoggedAt(id, log));
+    const newest = newestLoggedAt(log);
+    for (const id of ids) dm.set(id, readLoggedAt(id, newest));
     dateMapRef.current = dm;
 
     const ratings = new Map<string, number>();

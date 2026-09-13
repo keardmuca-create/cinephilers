@@ -5,6 +5,7 @@ import { fetchWithAuth } from '@/lib/fetch-with-auth';
 import { withTimeout } from '@/lib/fetch-timeout';
 import { canonicalId, normalizeLocalMediaIds, recordAddedAtMany, recordWatchedAtMany, recordRatedAtMany, type DateEntry } from '@/lib/media-id';
 import { dropLegacyEpisodeKeys } from '@/lib/episode-store';
+import { withoutCopiedEntries, type WatchEntry } from '@/lib/watch-log';
 import { batchFetchMeta } from '@/lib/meta-batch';
 import { clearUserData } from '@/lib/clear-user-data';
 import { applyServerRefinePrefs } from '@/lib/refine-sort';
@@ -224,25 +225,17 @@ async function restoreFromDb(me?: { createdAt?: string; followingCount?: number;
       } catch { /* ignore */ }
     }
 
-    // Merge DB watched items into watch-log — add any items not already tracked locally
+    // The watch log keeps only what was logged in the app. This used to append every
+    // watched film from the database (4,401 entries for a large library, a fifth of
+    // its storage) although the watched index above already dates each one, and
+    // badges, the only thing that read the rest of an entry, are computed on the
+    // server now. Drop those copies, and the import dialog's, from devices that hold them.
     try {
-      const existing: { id: string; type: string; genre: string; language: string; hour: number; loggedAt: string }[] =
-        JSON.parse(localStorage.getItem('watch-log') ?? '[]');
-      const existingIds = new Set(existing.map(e => e.id));
-      const newEntries: typeof existing = [];
-      for (const w of watched) {
-        if (existingIds.has(w.tmdbId)) continue;
-        let genre = '', language = '';
-        try {
-          const cached = localStorage.getItem(`meta-${w.tmdbId}`);
-          if (cached) { const m = JSON.parse(cached); genre = m.genre ?? ''; language = m.language ?? ''; }
-        } catch { /* ignore */ }
-        // hour fixed to 12: imported/synced dates are often midnight, which would
-        // falsely count every film toward the Night Owl (12am-4am) badge
-        newEntries.push({ id: w.tmdbId, type: 'movie', genre, language, hour: 12, loggedAt: w.watchedAt });
-      }
-      if (newEntries.length > 0) {
-        localStorage.setItem('watch-log', JSON.stringify([...existing, ...newEntries]));
+      const raw = localStorage.getItem('watch-log');
+      if (raw) {
+        const log = JSON.parse(raw) as WatchEntry[];
+        const kept = withoutCopiedEntries(log, new Map(watched.map(w => [w.tmdbId, w.watchedAt])));
+        if (kept.length !== log.length) localStorage.setItem('watch-log', JSON.stringify(kept));
       }
     } catch { /* ignore */ }
 

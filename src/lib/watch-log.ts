@@ -40,6 +40,22 @@ export function appendWatchLog(entry: {
   } catch { /* ignore */ }
 }
 
+/**
+ * The log without the copies other code used to add. The login sync appended every
+ * watched film from the database (hour 12, no source, dated exactly as the database
+ * row) and the import dialog appended every imported film (source "import"). Both
+ * repeated a date the watched index already holds, and nothing else in them is read
+ * any more: 4,401 copies were 475,000 characters, a fifth of a large account's
+ * storage. Entries logged in the app are kept.
+ */
+export function withoutCopiedEntries(log: WatchEntry[], dbWatchedAt: Map<string, string>): WatchEntry[] {
+  return log.filter(e => {
+    if (e.source === 'import') return false;
+    const synced = !e.source && e.type === 'movie' && e.hour === 12 && dbWatchedAt.get(e.id) === e.loggedAt;
+    return !synced;
+  });
+}
+
 export function removeFromWatchLog(id: string, type: 'movie' | 'episode'): void {
   try {
     const log = safeParseJSON<WatchEntry[]>(safeGetItem('watch-log'), []);

@@ -6,7 +6,6 @@ import { parseCsv } from '@/lib/csv';
 import { X, Upload, Loader2, CheckCircle, AlertCircle, ChevronRight, Film, Check, Search } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { fetchWithAuth } from '@/lib/fetch-with-auth';
-import type { WatchEntry } from '@/lib/watch-log';
 import type { Movie } from '@/lib/types';
 import { recordAddedAtMany, recordWatchedAtMany, recordRatedAtMany, type DateEntry } from '@/lib/media-id';
 
@@ -546,24 +545,8 @@ export function ImportDialog({ onClose }: { onClose: () => void }) {
           recordRatedAtMany(ratedDates);
         }
 
-        // Append watched movies to the badge watch-log so badges like World Cinema count them.
-        // Entries may already exist without a language (login sync rebuilds the log from the
-        // DB, which doesn't store languages) — backfill those instead of skipping them.
-        // hour is fixed to 12 so a late-night import doesn't falsely earn the Night Owl badge.
-        const log: WatchEntry[] = JSON.parse(localStorage.getItem('watch-log') ?? '[]');
-        const byId = new Map(log.filter(e => e.type === 'movie').map(e => [e.id, e]));
-        for (const item of saved) {
-          if (item.mediaType !== 'MOVIE' || !item.language) continue;
-          const existing = byId.get(item.tmdbId);
-          if (existing) {
-            if (!existing.language) existing.language = item.language;
-          } else if (item.watchedAt) {
-            const entry: WatchEntry = { id: item.tmdbId, type: 'movie', loggedAt: item.watchedAt, hour: 12, genre: '', language: item.language, source: 'import' };
-            log.push(entry);
-            byId.set(item.tmdbId, entry);
-          }
-        }
-        localStorage.setItem('watch-log', JSON.stringify(log));
+        // Imported films are not added to the watch log: the watched index above dates
+        // them, and badges (which read the log's language) are computed on the server.
       } catch { /* ignore */ }
 
       setResult({ ...totals, notSaved: toImport.length - saved.length });
