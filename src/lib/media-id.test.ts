@@ -17,7 +17,7 @@ function installLocalStorageStub() {
   return ls;
 }
 
-import { canonicalId, legacyTwin, isShowId, isEpisodeId, recordAddedAt, getAddedAt, recordWatchedAt, getWatchedAtISO, recordRatedAt, getRatedAt, removeRatedAt } from './media-id';
+import { canonicalId, legacyTwin, isShowId, isEpisodeId, recordAddedAt, getAddedAt, recordWatchedAt, getWatchedAtISO, recordRatedAt, getRatedAt, removeRatedAt, recordAddedAtMany, recordWatchedAtMany, recordRatedAtMany } from './media-id';
 
 describe('canonicalId', () => {
   it('folds a bare numeric id into the tmdb- form', () => {
@@ -160,6 +160,61 @@ describe('the rated-at index', () => {
 
   it('returns 0 for an id with no dates at all, so it sorts last', () => {
     expect(getRatedAt('tmdb-999')).toBe(0);
+  });
+});
+
+// An import records thousands of dates. One call per date rewrote the whole index
+// every time and froze the page after a 4,500-title import had saved.
+describe('recording many dates at once', () => {
+  let ls: ReturnType<typeof installLocalStorageStub>;
+  beforeEach(() => {
+    ls = installLocalStorageStub();
+  });
+
+  it('writes each index once, however many dates it is given', () => {
+    const setItem = vi.spyOn(ls, 'setItem');
+    const entries = Array.from({ length: 5000 }, (_, i) => [`tmdb-${i}`, '2024-01-01T00:00:00.000Z'] as [string, string]);
+    recordWatchedAtMany(entries);
+    recordAddedAtMany(entries);
+    recordRatedAtMany(entries);
+    expect(setItem).toHaveBeenCalledTimes(3);
+    expect(getWatchedAtISO('tmdb-4999')).toBe('2024-01-01T00:00:00.000Z');
+  });
+
+  it('keeps the same rules as the single calls: latest watched and rated, earliest added', () => {
+    const dates: [string, string][] = [['tmdb-1', '2024-05-01T00:00:00.000Z'], ['tmdb-1', '2024-01-01T00:00:00.000Z'], ['tmdb-1', '2024-09-01T00:00:00.000Z']];
+    recordWatchedAtMany(dates);
+    recordRatedAtMany(dates);
+    recordAddedAtMany(dates);
+    expect(getWatchedAtISO('tmdb-1')).toBe('2024-09-01T00:00:00.000Z');
+    expect(new Date(getRatedAt('tmdb-1')).toISOString()).toBe('2024-09-01T00:00:00.000Z');
+    expect(new Date(getAddedAt('tmdb-1')).toISOString()).toBe('2024-01-01T00:00:00.000Z');
+  });
+
+  it('respects dates already in the index', () => {
+    recordWatchedAt('tmdb-1', '2025-01-01T00:00:00.000Z');
+    recordAddedAt('tmdb-1', '2020-01-01T00:00:00.000Z');
+    recordWatchedAtMany([['tmdb-1', '2024-01-01T00:00:00.000Z'], ['tmdb-2', '2024-01-01T00:00:00.000Z']]);
+    recordAddedAtMany([['tmdb-1', '2024-01-01T00:00:00.000Z']]);
+    expect(getWatchedAtISO('tmdb-1')).toBe('2025-01-01T00:00:00.000Z');
+    expect(getWatchedAtISO('tmdb-2')).toBe('2024-01-01T00:00:00.000Z');
+    expect(new Date(getAddedAt('tmdb-1')).toISOString()).toBe('2020-01-01T00:00:00.000Z');
+  });
+
+  it('keys bare and episode ids the same way the single calls do', () => {
+    recordWatchedAtMany([['262504', '2024-01-01T00:00:00.000Z'], ['tmdb-tv-1396-S1E2', '2024-02-02T00:00:00.000Z']]);
+    expect(getWatchedAtISO('tmdb-262504')).toBe('2024-01-01T00:00:00.000Z');
+    expect(getWatchedAtISO('tmdb-tv-1396-S1E2')).toBe('2024-02-02T00:00:00.000Z');
+  });
+
+  it('stamps now for a missing or broken date, and writes nothing for an empty batch', () => {
+    const setItem = vi.spyOn(ls, 'setItem');
+    recordRatedAtMany([]);
+    expect(setItem).not.toHaveBeenCalled();
+    const before = Date.now();
+    recordAddedAtMany([['tmdb-1'], ['tmdb-2', 'not a date']]);
+    expect(getAddedAt('tmdb-1')).toBeGreaterThanOrEqual(before);
+    expect(getAddedAt('tmdb-2')).toBeGreaterThanOrEqual(before);
   });
 });
 

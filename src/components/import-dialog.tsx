@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button';
 import { fetchWithAuth } from '@/lib/fetch-with-auth';
 import type { WatchEntry } from '@/lib/watch-log';
 import type { Movie } from '@/lib/types';
-import { recordAddedAt, recordWatchedAt, recordRatedAt } from '@/lib/media-id';
+import { recordAddedAtMany, recordWatchedAtMany, recordRatedAtMany, type DateEntry } from '@/lib/media-id';
 
 type Platform = 'letterboxd' | 'imdb';
 type Step = 'pick' | 'upload' | 'matching' | 'confirm' | 'importing' | 'done';
@@ -497,42 +497,56 @@ export function ImportDialog({ onClose }: { onClose: () => void }) {
 
       // Write metadata to localStorage so pages can render imported items immediately
       try {
-        for (const item of saved) {
-          const marked = showEpisodes[item.tmdbId];
-          // totalEps lets the eye on a card tell a finished show from a part-watched one.
-          const meta = { id: item.tmdbId, title: item.matchedTitle, poster: item.poster ?? '', year: item.year, type: item.mediaType === 'SHOW' ? 'show' : 'movie', language: item.language, tmdbRating: item.tmdbRating, ...(marked?.total ? { totalEps: marked.total } : {}) };
-          localStorage.setItem(`meta-${item.tmdbId}`, JSON.stringify(meta));
-          // Films get a watched key. A show never does — its episodes are the record.
-          if (item.watchedAt && item.mediaType === 'MOVIE') {
-            localStorage.setItem(`watched-${item.tmdbId}`, 'true');
-            recordWatchedAt(item.tmdbId, item.watchedAt);
-            // Latest rewatch date wins for history sorting (recordWatchedAt keeps the newest)
-            for (const d of item.extraWatchDates ?? []) recordWatchedAt(item.tmdbId, d);
+        // Dates are collected here and written once per index at the end. Recording
+        // them one at a time rewrote the whole index for every title and episode,
+        // which froze the page for minutes after a 4,500-title import had saved.
+        const watchedDates: DateEntry[] = [];
+        const addedDates: DateEntry[] = [];
+        const ratedDates: DateEntry[] = [];
+        try {
+          for (const item of saved) {
+            const marked = showEpisodes[item.tmdbId];
+            // totalEps lets the eye on a card tell a finished show from a part-watched one.
+            const meta = { id: item.tmdbId, title: item.matchedTitle, poster: item.poster ?? '', year: item.year, type: item.mediaType === 'SHOW' ? 'show' : 'movie', language: item.language, tmdbRating: item.tmdbRating, ...(marked?.total ? { totalEps: marked.total } : {}) };
+            localStorage.setItem(`meta-${item.tmdbId}`, JSON.stringify(meta));
+            // Films get a watched key. A show never does — its episodes are the record.
+            if (item.watchedAt && item.mediaType === 'MOVIE') {
+              localStorage.setItem(`watched-${item.tmdbId}`, 'true');
+              watchedDates.push([item.tmdbId, item.watchedAt]);
+              // Latest rewatch date wins for history sorting (the watched index keeps the newest)
+              for (const d of item.extraWatchDates ?? []) watchedDates.push([item.tmdbId, d]);
+            }
+            if (item.inWatchlist) localStorage.setItem(`watchlist-${item.tmdbId}`, JSON.stringify({ id: item.tmdbId, title: item.matchedTitle, poster: item.poster ?? '', year: item.year, type: meta.type }));
+            if (item.rating) localStorage.setItem(`movie-rating-${item.tmdbId}`, String(item.rating));
+            if (item.inWatchlist || item.rating) addedDates.push([item.tmdbId, item.watchedAt || undefined]);
+            // An imported rating's date is the log date the export carried. Not
+            // exact — Letterboxd records when a film was watched, not when it was
+            // scored — but far closer than the add index, and it keeps years of
+            // imported ratings in a sensible order instead of one flat block.
+            if (item.rating) ratedDates.push([item.tmdbId, item.watchedAt || undefined]);
           }
-          if (item.inWatchlist) localStorage.setItem(`watchlist-${item.tmdbId}`, JSON.stringify({ id: item.tmdbId, title: item.matchedTitle, poster: item.poster ?? '', year: item.year, type: meta.type }));
-          if (item.rating) localStorage.setItem(`movie-rating-${item.tmdbId}`, String(item.rating));
-          if (item.inWatchlist || item.rating) recordAddedAt(item.tmdbId, item.watchedAt || undefined);
-          // An imported rating's date is the log date the export carried. Not
-          // exact — Letterboxd records when a film was watched, not when it was
-          // scored — but far closer than the add index, and it keeps years of
-          // imported ratings in a sensible order instead of one flat block.
-          if (item.rating) recordRatedAt(item.tmdbId, item.watchedAt || undefined);
-        }
 
-        // The same keys the login sync writes from the DB: one per episode for
-        // Watch History, merged into the show's index for the show page. Imported,
-        // so no manual-watch mark — hand-tapped watches still rank above them.
-        for (const [showId, { keys, total, watchedAt }] of Object.entries(showEpisodes)) {
-          for (const k of keys) {
-            localStorage.setItem(`watched-ep-${showId}-${k}`, 'true');
-            recordWatchedAt(`${showId}-${k}`, watchedAt);
+          // The same keys the login sync writes from the DB: one per episode for
+          // Watch History, merged into the show's index for the show page. Imported,
+          // so no manual-watch mark — hand-tapped watches still rank above them.
+          for (const [showId, { keys, total, watchedAt }] of Object.entries(showEpisodes)) {
+            for (const k of keys) {
+              localStorage.setItem(`watched-ep-${showId}-${k}`, 'true');
+              watchedDates.push([`${showId}-${k}`, watchedAt]);
+            }
+            const existingRaw = localStorage.getItem(`watched-eps-index-${showId}`);
+            const merged = new Set<string>(existingRaw ? JSON.parse(existingRaw) : []);
+            for (const k of keys) merged.add(k);
+            localStorage.setItem(`watched-eps-index-${showId}`, JSON.stringify([...merged]));
+            // Only a show with nothing left to air is complete.
+            if (total > 0 && merged.size >= total) localStorage.setItem(`show-status-${showId}`, 'completed');
           }
-          const existingRaw = localStorage.getItem(`watched-eps-index-${showId}`);
-          const merged = new Set<string>(existingRaw ? JSON.parse(existingRaw) : []);
-          for (const k of keys) merged.add(k);
-          localStorage.setItem(`watched-eps-index-${showId}`, JSON.stringify([...merged]));
-          // Only a show with nothing left to air is complete.
-          if (total > 0 && merged.size >= total) localStorage.setItem(`show-status-${showId}`, 'completed');
+        } finally {
+          // Written even if a write above hit the storage limit, so the dates
+          // gathered so far still land, as they did one call at a time.
+          recordWatchedAtMany(watchedDates);
+          recordAddedAtMany(addedDates);
+          recordRatedAtMany(ratedDates);
         }
 
         // Append watched movies to the badge watch-log so badges like World Cinema count them.

@@ -243,6 +243,47 @@ export function removeRatedAt(id: string): void {
   } catch { /* ignore */ }
 }
 
+// ─── Many dates at once ───────────────────────────────────────────────────────
+// Each record*At call above reads a whole index, adds one date and writes it all
+// back. Fine for a tap, but an import made one call per title and per episode:
+// at 4,500 titles and 13,000 episodes those rewrites froze the page for minutes
+// after everything had already saved. These take a batch — one read and one
+// write per index — and keep the same rules as the single calls.
+export type DateEntry = [id: string, iso?: string];
+
+function recordMany(key: string, read: () => Record<string, string>, entries: DateEntry[], keep: 'earliest' | 'latest'): void {
+  if (entries.length === 0) return;
+  try {
+    const map = read();
+    const now = new Date().toISOString();
+    let changed = false;
+    for (const [id, iso] of entries) {
+      let next = iso ?? now;
+      if (Number.isNaN(new Date(next).getTime())) next = now;
+      const cid = canonicalId(id);
+      const existing = map[cid];
+      const t = new Date(next).getTime();
+      if (!existing || (keep === 'latest' ? t > new Date(existing).getTime() : t < new Date(existing).getTime())) {
+        map[cid] = next;
+        changed = true;
+      }
+    }
+    if (changed) localStorage.setItem(key, JSON.stringify(map));
+  } catch { /* ignore */ }
+}
+
+export function recordAddedAtMany(entries: DateEntry[]): void {
+  recordMany(ADDED_AT_KEY, readAddedAtMap, entries, 'earliest');
+}
+
+export function recordWatchedAtMany(entries: DateEntry[]): void {
+  recordMany(WATCHED_AT_KEY, readWatchedAtMap, entries, 'latest');
+}
+
+export function recordRatedAtMany(entries: DateEntry[]): void {
+  recordMany(RATED_AT_KEY, readRatedAtMap, entries, 'latest');
+}
+
 /**
  * Epoch millis for when a score was given.
  *
