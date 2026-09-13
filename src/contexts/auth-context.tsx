@@ -3,7 +3,7 @@
 import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
 import { fetchWithAuth } from '@/lib/fetch-with-auth';
 import { withTimeout } from '@/lib/fetch-timeout';
-import { canonicalId, normalizeLocalMediaIds, recordAddedAt, recordWatchedAt, recordRatedAt } from '@/lib/media-id';
+import { canonicalId, normalizeLocalMediaIds, recordAddedAtMany, recordWatchedAtMany, recordRatedAtMany, type DateEntry } from '@/lib/media-id';
 import { batchFetchMeta } from '@/lib/meta-batch';
 import { clearUserData } from '@/lib/clear-user-data';
 import { applyServerRefinePrefs } from '@/lib/refine-sort';
@@ -106,6 +106,15 @@ async function restoreFromDb(me?: { createdAt?: string; followingCount?: number;
       localStorage.setItem('activity-dismissed', JSON.stringify([...local].slice(-500)));
     } catch { /* ignore */ }
 
+    // Dates are collected across ratings, watchlist, watched and episodes and each
+    // index is written once below. One record call per item rewrote the whole
+    // index every time: about 7 s of frozen page for a 3,000-title library on a
+    // desktop, far longer on a phone, on every fresh login (import-dialog had the
+    // same problem, fixed in 7069b76).
+    const addedDates: DateEntry[] = [];
+    const ratedDates: DateEntry[] = [];
+    const watchedDates: DateEntry[] = [];
+
     // ── Ratings: DB → local only. We deliberately do NOT upload local-only
     // ratings: on a shared browser, switching accounts could push one account's
     // ratings into another's DB — and since rating auto-marks watched, that
@@ -113,12 +122,12 @@ async function restoreFromDb(me?: { createdAt?: string; followingCount?: number;
     // time via syncDb; this sync only mirrors the DB down. ──
     for (const r of ratings) {
       try { localStorage.setItem(`movie-rating-${r.tmdbId}`, String(r.score)); } catch { /* ignore */ }
-      recordAddedAt(r.tmdbId, r.createdAt);
-      // The rating's OWN date, kept apart from the add date. recordAddedAt keeps
+      addedDates.push([r.tmdbId, r.createdAt]);
+      // The rating's OWN date, kept apart from the add date. The add index keeps
       // the earliest timestamp by design, so anything watchlisted before it was
       // rated could never record when it was scored — which is why the ratings
       // list showed the day a film was saved under the words "Rated on".
-      recordRatedAt(r.tmdbId, r.createdAt);
+      ratedDates.push([r.tmdbId, r.createdAt]);
     }
 
     // ── Watchlist: DB → local only (same one-way rule as ratings/watched, so a
@@ -133,7 +142,7 @@ async function restoreFromDb(me?: { createdAt?: string; followingCount?: number;
           localStorage.setItem(`watchlist-${w.tmdbId}`, JSON.stringify({ id: w.tmdbId, type: w.mediaType === 'SHOW' ? 'show' : 'movie' }));
         }
       } catch { /* ignore */ }
-      recordAddedAt(w.tmdbId, w.addedAt);
+      addedDates.push([w.tmdbId, w.addedAt]);
     }
 
     // ── Watched: the DB is the source of truth. Write DB items to local only. ──
@@ -143,7 +152,7 @@ async function restoreFromDb(me?: { createdAt?: string; followingCount?: number;
     // deleted/unchecked-import titles. Watched state syncs one way: DB → local.
     for (const w of watched) {
       try { localStorage.setItem(`watched-${w.tmdbId}`, 'true'); } catch { /* ignore */ }
-      recordWatchedAt(w.tmdbId, w.watchedAt);
+      watchedDates.push([w.tmdbId, w.watchedAt]);
     }
 
     // ── Watched episodes: DB → local only, same one-way rule. ──
@@ -158,7 +167,7 @@ async function restoreFromDb(me?: { createdAt?: string; followingCount?: number;
         const epKey = `S${e.season}E${e.episode}`;
         const epId = `${e.showTmdbId}-${epKey}`;
         try { localStorage.setItem(`watched-ep-${epId}`, 'true'); } catch { /* ignore */ }
-        recordWatchedAt(epId, e.watchedAt);
+        watchedDates.push([epId, e.watchedAt]);
         const keys = bySeries.get(e.showTmdbId) ?? [];
         keys.push(epKey);
         bySeries.set(e.showTmdbId, keys);
@@ -174,6 +183,12 @@ async function restoreFromDb(me?: { createdAt?: string; followingCount?: number;
         } catch { /* ignore */ }
       }
     }
+
+    // One read and one write per index, same rules as the single calls (latest
+    // watched and rated date wins, earliest added date wins).
+    recordAddedAtMany(addedDates);
+    recordRatedAtMany(ratedDates);
+    recordWatchedAtMany(watchedDates);
 
     // ── Reviews: DB → local only (same one-way rule — never upload local-only
     // reviews, which on a shared browser could belong to another account). ──
