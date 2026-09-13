@@ -1,3 +1,5 @@
+import { forgetDateIndexCache } from './media-id';
+
 // Wipes every piece of per-user state from localStorage.
 // Used on logout and on account switch (login as a different user in the same
 // browser) so one account's watched/activity/list data can never bleed into
@@ -41,4 +43,7 @@ export function clearUserData() {
     }
     keysToRemove.forEach(k => localStorage.removeItem(k));
   } catch { /* ignore */ }
+  // The date indexes are also held in memory; without this the next account in
+  // this tab would read the previous account's dates.
+  forgetDateIndexCache();
 }

@@ -17,7 +17,7 @@ function installLocalStorageStub() {
   return ls;
 }
 
-import { canonicalId, legacyTwin, isShowId, isEpisodeId, recordAddedAt, getAddedAt, recordWatchedAt, getWatchedAtISO, recordRatedAt, getRatedAt, removeRatedAt, recordAddedAtMany, recordWatchedAtMany, recordRatedAtMany } from './media-id';
+import { canonicalId, legacyTwin, isShowId, isEpisodeId, recordAddedAt, getAddedAt, recordWatchedAt, getWatchedAtISO, recordRatedAt, getRatedAt, removeRatedAt, recordAddedAtMany, recordWatchedAtMany, recordRatedAtMany, recordManualWatch, removeManualWatch, getManualWatchISO, forgetDateIndexCache } from './media-id';
 
 describe('canonicalId', () => {
   it('folds a bare numeric id into the tmdb- form', () => {
@@ -215,6 +215,101 @@ describe('recording many dates at once', () => {
     recordAddedAtMany([['tmdb-1'], ['tmdb-2', 'not a date']]);
     expect(getAddedAt('tmdb-1')).toBeGreaterThanOrEqual(before);
     expect(getAddedAt('tmdb-2')).toBeGreaterThanOrEqual(before);
+  });
+});
+
+// The date indexes were a third of a large account's storage as flat maps of full
+// ISO strings. The compact format has to give back exactly the same dates.
+describe('date index storage', () => {
+  let ls: ReturnType<typeof installLocalStorageStub>;
+  beforeEach(() => {
+    ls = installLocalStorageStub();
+  });
+
+  it('gives back the same dates for films, shows and episodes', () => {
+    recordWatchedAtMany([
+      ['tmdb-157336', '2012-01-01T00:00:00.000Z'],
+      ['tmdb-tv-1396', '2024-05-02T10:30:00.123Z'],
+      ['tmdb-tv-1396-S1E1', '2024-05-02T00:00:00.000Z'],
+      ['tmdb-tv-1396-S1E2', '2024-05-02T00:00:00.000Z'],
+      ['tmdb-tv-1396-S5E16', '2024-06-01T00:00:00.000Z'],
+    ]);
+    forgetDateIndexCache(); // read back from storage, not memory
+    expect(getWatchedAtISO('tmdb-157336')).toBe('2012-01-01T00:00:00.000Z');
+    expect(getWatchedAtISO('tmdb-tv-1396')).toBe('2024-05-02T10:30:00.123Z');
+    expect(getWatchedAtISO('tmdb-tv-1396-S1E2')).toBe('2024-05-02T00:00:00.000Z');
+    expect(getWatchedAtISO('tmdb-tv-1396-S5E16')).toBe('2024-06-01T00:00:00.000Z');
+    expect(getWatchedAtISO('tmdb-tv-1396-S2E1')).toBeNull();
+  });
+
+  it('groups a show\'s episodes that share a date', () => {
+    const eps = Array.from({ length: 62 }, (_, i) => [`tmdb-tv-1396-S1E${i + 1}`, '2024-05-02T00:00:00.000Z'] as [string, string]);
+    recordWatchedAtMany(eps);
+    const stored = JSON.parse(ls.getItem('watched-at-index')!);
+    expect(stored.v).toBe(2);
+    expect(Object.keys(stored.e['tmdb-tv-1396'])).toHaveLength(1);
+  });
+
+  it('still reads an index saved in the old format, and rewrites it compactly', () => {
+    const old = { 'tmdb-155': '2008-07-18T00:00:00.000Z', 'tmdb-tv-1396-S1E1': '2024-05-02T00:00:00.000Z' };
+    ls.setItem('watched-at-index', JSON.stringify(old));
+    ls.setItem('added-at-index', JSON.stringify({ 'tmdb-155': '2008-07-18T00:00:00.000Z' }));
+    expect(getWatchedAtISO('tmdb-155')).toBe('2008-07-18T00:00:00.000Z');
+    expect(getWatchedAtISO('tmdb-tv-1396-S1E1')).toBe('2024-05-02T00:00:00.000Z');
+    expect(getAddedAt('tmdb-155')).toBe(Date.parse('2008-07-18T00:00:00.000Z'));
+    recordWatchedAt('tmdb-27205', '2010-07-16T00:00:00.000Z');
+    const rewritten = ls.getItem('watched-at-index')!;
+    expect(JSON.parse(rewritten).v).toBe(2);
+    expect(rewritten.length).toBeLessThan(JSON.stringify({ ...old, 'tmdb-27205': '2010-07-16T00:00:00.000Z' }).length);
+  });
+
+  // The login sync mostly re-records dates the index already has. Writing only on a
+  // change left an upgraded device on the old format: found on the test app, where
+  // the watched index was still 803,089 characters after a full sync.
+  it('rewrites an old-format index even when no date changes', () => {
+    const old = { 'tmdb-155': '2008-07-18T00:00:00.000Z' };
+    ls.setItem('watched-at-index', JSON.stringify(old));
+    recordWatchedAtMany([['tmdb-155', '2008-07-18T00:00:00.000Z']]);
+    expect(JSON.parse(ls.getItem('watched-at-index')!).v).toBe(2);
+    expect(getWatchedAtISO('tmdb-155')).toBe('2008-07-18T00:00:00.000Z');
+    // Once upgraded, an unchanged batch writes nothing.
+    const setItem = vi.spyOn(ls, 'setItem');
+    recordWatchedAtMany([['tmdb-155', '2008-07-18T00:00:00.000Z']]);
+    expect(setItem).not.toHaveBeenCalled();
+  });
+
+  it('takes far less room than the old format for a large library', () => {
+    const entries: [string, string][] = [];
+    for (let i = 0; i < 4401; i++) entries.push([`tmdb-${100000 + i}`, new Date(Date.UTC(2012, 0, 1) + i * 86_400_000).toISOString()]);
+    for (let s = 0; s < 99; s++) for (let e = 1; e <= 130; e++) entries.push([`tmdb-tv-${200000 + s}-S1E${e}`, new Date(Date.UTC(2024, 0, 1) + s * 86_400_000).toISOString()]);
+    recordWatchedAtMany(entries);
+    const oldSize = JSON.stringify(Object.fromEntries(entries)).length;
+    const newSize = ls.getItem('watched-at-index')!.length;
+    expect(newSize).toBeLessThan(oldSize / 3);
+  });
+
+  it('parses each index once however many dates are asked for', () => {
+    recordWatchedAtMany(Array.from({ length: 500 }, (_, i) => [`tmdb-${i}`, '2024-01-01T00:00:00.000Z'] as [string, string]));
+    forgetDateIndexCache();
+    const getItem = vi.spyOn(ls, 'getItem');
+    for (let i = 0; i < 500; i++) getWatchedAtISO(`tmdb-${i}`);
+    expect(getItem.mock.calls.filter(([k]) => k === 'watched-at-index')).toHaveLength(1);
+  });
+
+  it('keeps the manual-watch tier working, including removal', () => {
+    recordManualWatch('tmdb-1', '2026-01-01T00:00:00.000Z');
+    recordManualWatch('tmdb-1', '2026-02-01T00:00:00.000Z');
+    expect(getManualWatchISO('tmdb-1')).toBe('2026-02-01T00:00:00.000Z');
+    removeManualWatch('tmdb-1');
+    forgetDateIndexCache();
+    expect(getManualWatchISO('tmdb-1')).toBeNull();
+  });
+
+  it('forgets what it held once asked, so a new account starts clean', () => {
+    recordWatchedAt('tmdb-1', '2026-01-01T00:00:00.000Z');
+    ls.removeItem('watched-at-index'); // what clearUserData does on logout
+    forgetDateIndexCache();
+    expect(getWatchedAtISO('tmdb-1')).toBeNull();
   });
 });
 
