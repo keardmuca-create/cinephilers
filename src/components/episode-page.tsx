@@ -20,6 +20,7 @@ import { useAuth } from '@/contexts/auth-context';
 import { fetchWithAuth } from '@/lib/fetch-with-auth';
 import { toast } from '@/hooks/use-toast';
 import { batchFetchMeta } from '@/lib/meta-batch';
+import { isEpisodeWatched } from '@/lib/episode-store';
 import { recordWatchedAt, recordManualWatch, removeManualWatch, recordAddedAt, recordRatedAt } from '@/lib/media-id';
 import { logActivity, removeActivity } from '@/lib/activity';
 import type { CinephilersRating } from '@/lib/cinephilers-rating';
@@ -108,7 +109,7 @@ export function EpisodePage({ showTmdbId, season, episodeNumber }: {
   // Local state: watched flag + existing rating
   useEffect(() => {
     try {
-      setWatched(localStorage.getItem(`watched-ep-${showTmdbId}-${epKey}`) === 'true');
+      setWatched(isEpisodeWatched(showTmdbId, epKey));
       setInWatchlist(!!localStorage.getItem(`watchlist-${episodeId}`));
       const legacy = localStorage.getItem(`ep-rating-${showTmdbId}-${epKey}`);
       const v = localStorage.getItem(`movie-rating-${episodeId}`) ?? legacy;
@@ -173,14 +174,12 @@ export function EpisodePage({ showTmdbId, season, episodeNumber }: {
 
     setWatched(now);
     try {
-      const lsKey = `watched-ep-${showTmdbId}-${epKey}`;
+      // The show's list is the only local record of its episodes (lib/episode-store).
       const idxKey = `watched-eps-index-${showTmdbId}`;
       const index: string[] = JSON.parse(localStorage.getItem(idxKey) ?? '[]');
       if (now) {
-        localStorage.setItem(lsKey, 'true');
         if (!index.includes(epKey)) localStorage.setItem(idxKey, JSON.stringify([...index, epKey]));
       } else {
-        localStorage.removeItem(lsKey);
         localStorage.setItem(idxKey, JSON.stringify(index.filter(k => k !== epKey)));
       }
     } catch { /* ignore */ }

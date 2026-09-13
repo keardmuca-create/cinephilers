@@ -4,6 +4,7 @@ import React, { createContext, useContext, useEffect, useState, useCallback } fr
 import { fetchWithAuth } from '@/lib/fetch-with-auth';
 import { withTimeout } from '@/lib/fetch-timeout';
 import { canonicalId, normalizeLocalMediaIds, recordAddedAtMany, recordWatchedAtMany, recordRatedAtMany, type DateEntry } from '@/lib/media-id';
+import { dropLegacyEpisodeKeys } from '@/lib/episode-store';
 import { batchFetchMeta } from '@/lib/meta-batch';
 import { clearUserData } from '@/lib/clear-user-data';
 import { applyServerRefinePrefs } from '@/lib/refine-sort';
@@ -74,6 +75,11 @@ async function restoreFromDb(me?: { createdAt?: string; followingCount?: number;
     // canonical `tmdb-{n}` form before we read/compare them below — otherwise a film
     // imported under the old format and watched under the new one shows up twice.
     normalizeLocalMediaIds();
+
+    // Episodes live in one list per show now; clear the old one-key-per-episode
+    // entries (up to 12,946 keys for a large library). The show lists are rebuilt
+    // from the database below, so nothing is lost.
+    dropLegacyEpisodeKeys();
 
     // Canonicalize every id coming from the DB too, so a leftover bare-id row can't
     // re-create the duplicate localStorage key on this sync.
@@ -156,17 +162,13 @@ async function restoreFromDb(me?: { createdAt?: string; followingCount?: number;
     }
 
     // ── Watched episodes: DB → local only, same one-way rule. ──
-    // Two key shapes have to be written, because two different screens read two
-    // different ones: the show page reads the per-show index, Watch History reads
-    // the individual keys. Restoring only the index (which is all the show page
-    // did) left a show looking unwatched in history on any device that hadn't
-    // ticked the episodes itself, even though the DB had them all along.
+    // One list per show (lib/episode-store). Every screen, Watch History included,
+    // reads that list, so restoring it is restoring the episodes.
     if (watchedEpisodesRaw?.length) {
       const bySeries = new Map<string, string[]>();
       for (const e of watchedEpisodesRaw) {
         const epKey = `S${e.season}E${e.episode}`;
         const epId = `${e.showTmdbId}-${epKey}`;
-        try { localStorage.setItem(`watched-ep-${epId}`, 'true'); } catch { /* ignore */ }
         watchedDates.push([epId, e.watchedAt]);
         const keys = bySeries.get(e.showTmdbId) ?? [];
         keys.push(epKey);

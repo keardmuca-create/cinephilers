@@ -530,10 +530,7 @@ export function ImportDialog({ onClose }: { onClose: () => void }) {
           // Watch History, merged into the show's index for the show page. Imported,
           // so no manual-watch mark — hand-tapped watches still rank above them.
           for (const [showId, { keys, total, watchedAt }] of Object.entries(showEpisodes)) {
-            for (const k of keys) {
-              localStorage.setItem(`watched-ep-${showId}-${k}`, 'true');
-              watchedDates.push([`${showId}-${k}`, watchedAt]);
-            }
+            for (const k of keys) watchedDates.push([`${showId}-${k}`, watchedAt]);
             const existingRaw = localStorage.getItem(`watched-eps-index-${showId}`);
             const merged = new Set<string>(existingRaw ? JSON.parse(existingRaw) : []);
             for (const k of keys) merged.add(k);

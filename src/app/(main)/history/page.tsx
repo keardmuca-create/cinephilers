@@ -8,6 +8,7 @@ import type { ItemMeta } from '@/app/api/meta/[id]/route';
 import { fetchWithAuth } from '@/lib/fetch-with-auth';
 import { persistRefine } from '@/lib/refine-sort';
 import { removeFromWatchLog } from '@/lib/watch-log';
+import { allWatchedEpisodeIds } from '@/lib/episode-store';
 import { legacyTwin, normalizeLocalMediaIds, getWatchedAtISO, getManualWatchISO } from '@/lib/media-id';
 import { batchFetchMeta, isStaleMeta, type CachedMeta } from '@/lib/meta-batch';
 import { getItemType, sideOf, SIDE_TYPES, TYPE_LABELS, type TypeFilter, type MediaSide } from '@/lib/media-type';
@@ -39,11 +40,9 @@ function readAllWatchedIds(): string[] {
       if (k.startsWith('watched-') && !k.startsWith('watched-ep-') && localStorage.getItem(k) === 'true') {
         ids.add(k.slice('watched-'.length));
       }
-      if (k.startsWith('watched-ep-')) {
-        // Keep the full episode ID: e.g. tmdb-tv-299167-S1E2
-        ids.add(k.slice('watched-ep-'.length));
-      }
     }
+    // Episodes from each show's list, as full ids (tmdb-tv-299167-S1E2).
+    for (const epId of allWatchedEpisodeIds()) ids.add(epId);
   } catch { /* ignore */ }
   return [...ids];
 }
@@ -99,11 +98,10 @@ function formatAddedDate(iso: string): string {
   } catch { return ''; }
 }
 
-// Forget one episode locally: its key, the phantom watched-<id> an old sync bug
-// left behind, its entry in the per-show index, and its watch-log line.
+// Forget one episode locally: the phantom watched-<id> an old sync bug left
+// behind, its entry in the per-show index, and its watch-log line.
 function forgetEpisodeLocally(epId: string, showId: string, season: number, episode: number) {
   try {
-    localStorage.removeItem(`watched-ep-${epId}`);
     localStorage.removeItem(`watched-${epId}`);
     const idxRaw = localStorage.getItem(`watched-eps-index-${showId}`);
     if (idxRaw) {

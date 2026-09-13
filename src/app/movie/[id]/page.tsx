@@ -1341,13 +1341,10 @@ function MovieDetailInner() {
             let changed = false;
             for (const k of dbKeys) { if (!merged.has(k)) { merged.add(k); changed = true; } }
             if (!changed) return prev;
-            // Write BOTH key shapes. The index is what this page reads back, but
-            // Watch History reads the individual per-episode keys — updating only
-            // the index left a show looking unwatched in history on a device that
-            // hadn't ticked the episodes itself.
+            // The per-show list is the only local record of episodes; this page
+            // and Watch History both read it (lib/episode-store).
             try {
               localStorage.setItem(`watched-eps-index-${id}`, JSON.stringify([...merged]));
-              for (const k of dbKeys) localStorage.setItem(`watched-ep-${id}-${k}`, 'true');
             } catch { /* ignore */ }
             return merged;
           });
@@ -1456,13 +1453,8 @@ function MovieDetailInner() {
     const keys = all.map(e => epKey(e.season, e.episode));
     setWatchedEpisodes(nowWatched ? new Set(keys) : new Set());
     try {
-      if (nowWatched) {
-        for (const k of keys) localStorage.setItem(`watched-ep-${id}-${k}`, 'true');
-        localStorage.setItem(`watched-eps-index-${id}`, JSON.stringify(keys));
-      } else {
-        for (const k of keys) localStorage.removeItem(`watched-ep-${id}-${k}`);
-        localStorage.removeItem(`watched-eps-index-${id}`);
-      }
+      if (nowWatched) localStorage.setItem(`watched-eps-index-${id}`, JSON.stringify(keys));
+      else localStorage.removeItem(`watched-eps-index-${id}`);
     } catch { /* ignore */ }
 
     // Stamp each episode. The show has no watched record of its own any more, so
@@ -1634,12 +1626,10 @@ function MovieDetailInner() {
       for (const k of keys) {
         const logId = `${id}-${k}`;
         if (nowWatched) {
-          localStorage.setItem(`watched-ep-${id}-${k}`, 'true');
           index.add(k);
           recordWatchedAt(logId);
           recordManualWatch(logId);
         } else {
-          localStorage.removeItem(`watched-ep-${id}-${k}`);
           index.delete(k);
           removeFromWatchLog(logId, 'episode');
           removeManualWatch(logId);
@@ -1672,7 +1662,6 @@ function MovieDetailInner() {
   const toggleEpisodeWatched = useCallback(async (sn: number, ep: TvEpisode) => {
     if (!authUser) { setAuthGate('track episodes'); return; }
     const key   = epKey(sn, ep.episode_number);
-    const lsKey = `watched-ep-${id}-${key}`;
     const logId = `${id}-${key}`;
     const nowWatched = !watchedEpisodes.has(key);
 
@@ -1696,7 +1685,6 @@ function MovieDetailInner() {
 
     if (nowWatched) {
       try {
-        localStorage.setItem(lsKey, 'true');
         const indexRaw = localStorage.getItem(`watched-eps-index-${id}`);
         const index: string[] = indexRaw ? JSON.parse(indexRaw) : [];
         if (!index.includes(key)) localStorage.setItem(`watched-eps-index-${id}`, JSON.stringify([...index, key]));
@@ -1710,7 +1698,6 @@ function MovieDetailInner() {
       toast({ title: `${ep.name} marked as watched` });
     } else {
       try {
-        localStorage.removeItem(lsKey);
         const indexRaw = localStorage.getItem(`watched-eps-index-${id}`);
         const index: string[] = indexRaw ? JSON.parse(indexRaw) : [];
         localStorage.setItem(`watched-eps-index-${id}`, JSON.stringify(index.filter(k => k !== key)));

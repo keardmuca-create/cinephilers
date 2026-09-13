@@ -15,6 +15,7 @@ import { ImportDialog } from '@/components/import-dialog';
 import { FavoritesSection } from '@/components/favorites-section';
 import { MediaToggle } from '@/components/media-toggle';
 import { readWatchedState, type WatchedState } from '@/lib/watched-state';
+import { allWatchedEpisodeIds } from '@/lib/episode-store';
 import type { MediaSide } from '@/lib/media-type';
 import { BarChart, Bar, XAxis, ResponsiveContainer, Cell, YAxis, LabelList } from 'recharts';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -952,18 +953,17 @@ export default function ProfilePage() {
         const logMap = new Map<string, string>();
         for (const entry of watchLog) logMap.set(entry.id, entry.loggedAt);
 
-        // Films (and any bare whole-show mark) under watched-*, episodes under
-        // watched-ep-*. One set, so an id stored both ways is still one card.
+        // Films (and any bare whole-show mark) under watched-*, episodes from each
+        // show's list (lib/episode-store). One set, so an id seen twice is one card.
         const ids = new Set<string>();
         for (let i = 0; i < localStorage.length; i++) {
           const k = localStorage.key(i)!;
           if (k.startsWith('watched-') && !k.startsWith('watched-ep-') && !k.startsWith('watched-show-eps-') && localStorage.getItem(k) === 'true') {
             ids.add(k.slice('watched-'.length));
           }
-          if (k.startsWith('watched-ep-') && localStorage.getItem(k) === 'true') {
-            const epId = k.slice('watched-ep-'.length); // e.g. tmdb-tv-12345-S1E5
-            if (parseEpisodeId(epId)) ids.add(epId);
-          }
+        }
+        for (const epId of allWatchedEpisodeIds()) {
+          if (parseEpisodeId(epId)) ids.add(epId); // e.g. tmdb-tv-12345-S1E5
         }
         // Episodes are the watch record a show has, so a show with any of them
         // gets no card of its own. Only a whole-show mark with nothing behind it
