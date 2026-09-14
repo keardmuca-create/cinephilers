@@ -1,5 +1,18 @@
 import { describe, it, expect } from 'vitest';
-import { splitBursts, sideOfTitle, countSides, sidesLabel, dayKey, isEpisodeId, showOfEpisode, GROUP_AT } from './feed-groups';
+import { splitBursts, sideOfTitle, countSides, sidesLabel, dayKey, isEpisodeId, showOfEpisode, episodeIdOf, GROUP_AT } from './feed-groups';
+
+// Ticking an episode and rating it must land on the same card, so the id built
+// from a watched-episode row has to be the one a rating of that episode carries.
+describe('episodeIdOf', () => {
+  it('builds the id a rating of the episode uses', () => {
+    expect(episodeIdOf('tmdb-tv-1396', 5, 16)).toBe('tmdb-tv-1396-S5E16');
+    expect(isEpisodeId(episodeIdOf('tmdb-tv-1396', 5, 16))).toBe(true);
+  });
+
+  it('gives a show id saved as a bare number its prefix', () => {
+    expect(episodeIdOf('1396', 1, 2)).toBe('tmdb-tv-1396-S1E2');
+  });
+});
 
 describe('splitBursts', () => {
   const key = (r: { user: string; day: string }) => `${r.user}:${r.day}`;

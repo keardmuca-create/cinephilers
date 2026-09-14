@@ -22,6 +22,16 @@ export function showOfEpisode(id: string): string {
   return id.replace(/-S\d{1,3}E\d{1,4}$/, '');
 }
 
+/**
+ * The feed id of a watched-episode row: `tmdb-tv-1396-S5E16`, the same id a rating
+ * or review of that episode carries, so ticking it and rating it fold into one card.
+ * A show id saved bare by an older version is given its prefix first.
+ */
+export function episodeIdOf(showTmdbId: string, season: number, episode: number): string {
+  const show = /^\d+$/.test(showTmdbId) ? `tmdb-tv-${showTmdbId}` : showTmdbId;
+  return `${show}-S${season}E${episode}`;
+}
+
 /** Which of the three a title is. An episode is a SHOW row, so the id decides first. */
 export function sideOfTitle(tmdbId: string, mediaType?: string): FeedSide {
   if (isEpisodeId(tmdbId)) return 'episodes';

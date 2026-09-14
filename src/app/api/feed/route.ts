@@ -3,7 +3,7 @@ import { prisma } from '@/lib/db';
 import { ok, err } from '@/lib/api-response';
 import { getCurrentUser } from '@/lib/auth-utils';
 import { clampInt } from '@/lib/query-params';
-import { splitBursts, countSides, dayKey, isEpisodeId, showOfEpisode, type FeedSide } from '@/lib/feed-groups';
+import { splitBursts, countSides, dayKey, isEpisodeId, showOfEpisode, episodeIdOf, type FeedSide } from '@/lib/feed-groups';
 
 export interface FeedItem {
   id: string;
@@ -59,12 +59,23 @@ export async function GET(req: NextRequest) {
   const hiddenKeys = new Set(hidden.map(h => `${h.type}-${h.tmdbId}`));
 
   // Fetch recent activity from all tables in parallel
-  const [watched, rewatches, ratings, reviews, imports, watchlist, dailyPicks] = await Promise.all([
+  const [watched, episodesWatched, rewatches, ratings, reviews, imports, watchlist, dailyPicks] = await Promise.all([
     prisma.watchedItem.findMany({
       where: { userId: { in: followingIds }, watchedAt: { gte: since } },
       take: limit,
       orderBy: { watchedAt: 'desc' },
       include: { user: userSelect },
+    }),
+    // Ticked episodes live in their own table, which the feed never read: an episode
+    // only appeared once it was rated or reviewed, so a whole binge went unseen.
+    // A far higher take than the rest, because a binge folds into one card per show
+    // and day, and the card has to count all of it — marking a season at once is a
+    // dozen rows landing together.
+    prisma.watchedEpisode.findMany({
+      where: { userId: { in: followingIds }, watchedAt: { gte: since } },
+      take: 2000,
+      orderBy: { watchedAt: 'desc' },
+      select: { showTmdbId: true, season: true, episode: true, watchedAt: true, user: userSelect },
     }),
     // Ordered by createdAt (when logged), not watchedAt — a backdated rewatch
     // should surface now, not be buried weeks deep in the feed.
@@ -180,6 +191,18 @@ export async function GET(req: NextRequest) {
     const k = accKey(w.user.id, w.tmdbId, w.mediaType);
     const a = activityMap.get(k) ?? { user: w.user, tmdbId: w.tmdbId, mediaType: w.mediaType, latest: 0 };
     a.watched = true; bump(a, w.watchedAt); activityMap.set(k, a);
+  }
+  // Episodes are SHOW rows under the episode's own id, the key a rating or review of
+  // the same episode uses below — so ticking one and rating it make one card. The
+  // import rule is the ratings' rule: rows stamped at an import are the import
+  // card's, and an import's backdated rows fall outside the thirty days anyway.
+  for (const e of episodesWatched) {
+    if (nearImport(e.user.id, e.watchedAt)) continue;
+    const tmdbId = episodeIdOf(e.showTmdbId, e.season, e.episode);
+    if (rewatchKeys.has(`${e.user.id}:${tmdbId}:SHOW`)) continue; // rewatch card owns it
+    const k = accKey(e.user.id, tmdbId, 'SHOW');
+    const a = activityMap.get(k) ?? { user: e.user, tmdbId, mediaType: 'SHOW', latest: 0 };
+    a.watched = true; bump(a, e.watchedAt); activityMap.set(k, a);
   }
   for (const r of ratings) {
     if (nearImport(r.user.id, r.updatedAt)) continue;
