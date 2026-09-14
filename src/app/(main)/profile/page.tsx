@@ -25,7 +25,8 @@ import { Progress } from '@/components/ui/progress';
 import { toast } from '@/hooks/use-toast';
 import { fetchWithAuth } from '@/lib/fetch-with-auth';
 import { withTimeout } from '@/lib/fetch-timeout';
-import { batchFetchMeta, isStaleMeta, type CachedMeta } from '@/lib/meta-batch';
+import { batchFetchMeta, isStaleMeta } from '@/lib/meta-batch';
+import { readCachedMeta } from '@/lib/meta-cache';
 import { collapseRatings } from '@/lib/collapse-ratings';
 import { useAuth } from '@/contexts/auth-context';
 import { useConfirm } from '@/components/confirm-dialog';
@@ -981,15 +982,9 @@ export default function ProfilePage() {
         // Watch History does. Making stale count as missing would have held the
         // whole strip back on one network round trip, once a day, for a number
         // that changes about as often as a season airs.
-        const readMeta = (id: string): Record<string, unknown> | null => {
-          try { const r = localStorage.getItem(`meta-${id}`); return r ? JSON.parse(r) : null; } catch { return null; }
-        };
-        const isStale = (id: string): boolean => {
-          try {
-            const r = localStorage.getItem(`meta-${id}`);
-            return r ? isStaleMeta(JSON.parse(r) as CachedMeta) : false;
-          } catch { return false; }
-        };
+        const readMeta = (id: string): Record<string, unknown> | null =>
+          readCachedMeta(id) as unknown as Record<string, unknown> | null;
+        const isStale = (id: string): boolean => isStaleMeta(readCachedMeta(id));
         const dateOf = (id: string) => logMap.get(id) ?? getWatchedAtISO(id) ?? new Date(0).toISOString();
 
         // Each card by its own date, so an episode watched tonight goes first even
@@ -1074,11 +1069,8 @@ export default function ProfilePage() {
         // carry — notably tmdbRating — are present. The full watchlist page does
         // this too; without it the profile preview showed no rating while the
         // full page did. The watchlist-* entry still wins on any overlapping key.
-        let cachedMeta: Record<string, unknown> | null = null;
-        try {
-          const cached = localStorage.getItem(`meta-${id}`);
-          if (cached) { cachedMeta = JSON.parse(cached); meta = { ...cachedMeta, ...meta }; }
-        } catch { /* ignore */ }
+        const cachedMeta = readCachedMeta(id) as unknown as Record<string, unknown> | null;
+        if (cachedMeta) meta = { ...cachedMeta, ...meta };
         // An episode saved from its page before 2026-09-11 stored the episode's
         // screenshot as its poster, and the login sync never rewrites an entry that
         // has a title. The show's poster lives on the meta entry, so an episode with
@@ -1233,8 +1225,7 @@ export default function ProfilePage() {
       const rated: RatedItem[] = [];
       const ratedMissing: { id: string; userRating: number }[] = [];
       for (const { id, score } of scored) {
-        const raw = localStorage.getItem(`meta-${id}`);
-        const meta = raw ? JSON.parse(raw) : null;
+        const meta = readCachedMeta(id);
         const rv = rvMap.get(id);
         const title = meta?.title ?? rv?.title;
         const poster = meta?.poster ?? rv?.poster;
@@ -1250,11 +1241,20 @@ export default function ProfilePage() {
       // card is one rating now, so its own stamp is the whole answer.
       setRatedItems(rated.sort((a, b) => getRatedAt(b.id) - getRatedAt(a.id)));
 
-      if (ratedMissing.length > 0) {
+      // Episodes are fetched for the shelf's fifty cards at most, newest rated first.
+      // The cache keeps only its most recent episodes, so a library with thousands
+      // of rated ones would otherwise fetch every one of them on every visit to
+      // fill a row that shows fifty.
+      const episodesMissing = ratedMissing
+        .filter(r => parseEpisodeId(r.id))
+        .sort((a, b) => getRatedAt(b.id) - getRatedAt(a.id))
+        .slice(0, 50);
+      const toFetch = [...ratedMissing.filter(r => !parseEpisodeId(r.id)), ...episodesMissing];
+      if (toFetch.length > 0) {
         (async () => {
-          const metaMap = await batchFetchMeta(ratedMissing.map(r => r.id));
+          const metaMap = await batchFetchMeta(toFetch.map(r => r.id));
           if (!isCurrent()) return;
-          const fetched: RatedItem[] = ratedMissing.flatMap(({ id, userRating }) => {
+          const fetched: RatedItem[] = toFetch.flatMap(({ id, userRating }) => {
             const m = metaMap[id];
             return m?.title ? [toRated(id, userRating, m)] : [];
           });

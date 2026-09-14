@@ -4,10 +4,12 @@ import React, { useState, useEffect, useRef, useMemo, useCallback, Suspense } fr
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Star, ChevronLeft, Search, SlidersHorizontal, X, Film } from 'lucide-react';
-import { normalizeLocalMediaIds, getRatedAt } from '@/lib/media-id';
+import { normalizeLocalMediaIds, getRatedAt, parseEpisodeId } from '@/lib/media-id';
 import { allUserRatings } from '@/lib/library-store';
 import { persistRefine } from '@/lib/refine-sort';
 import { batchFetchMeta } from '@/lib/meta-batch';
+import { readCachedMeta, EPISODE_LIMIT } from '@/lib/meta-cache';
+import { useLoadOnScroll } from '@/hooks/use-load-on-scroll';
 import { getItemType, sideOf, SIDE_TYPES, TYPE_LABELS, type TypeFilter, type MediaSide } from '@/lib/media-type';
 import { collapseRatings, type CollapsedRating } from '@/lib/collapse-ratings';
 import { MediaToggle } from '@/components/media-toggle';
@@ -25,6 +27,9 @@ const SORT_OPTIONS: SortOption[] = [
 ];
 
 const DEFAULT_REFINE: RefineValue = { sortField: 'recent', sortDir: 'desc', type: 'any', genre: 'any' };
+
+// Episode rows a long Episodes view adds each time you near the bottom.
+const EPISODE_PAGE = 50;
 
 interface Meta {
   title?: string; poster?: string; year?: string; releaseDate?: string;
@@ -57,7 +62,7 @@ interface RatedItem {
 }
 
 function readMetaCache(id: string): Meta | null {
-  try { return JSON.parse(localStorage.getItem(`meta-${id}`) ?? 'null'); } catch { return null; }
+  return readCachedMeta(id);
 }
 
 /** Episode rows carry no members of their own, so they fall back to their id. */
@@ -95,6 +100,23 @@ function ItemCard({ item }: { item: RatedItem }) {
   const episodeLine = item.episodeCount
     ? `avg ${item.episodeAverage} across ${item.episodeCount} episode${item.episodeCount === 1 ? '' : 's'}`
     : null;
+
+  // An episode whose entry has not arrived yet. The Episodes view fetches the rows
+  // it shows as they come on screen, so a row can be listed before it has a name.
+  if (!item.title) {
+    return (
+      <div className="flex items-center gap-4 py-3.5">
+        <div className="w-20 aspect-[2/3] bg-muted rounded-lg animate-pulse shrink-0" />
+        <div className="flex-1 space-y-2">
+          <div className="h-4 bg-muted rounded animate-pulse w-2/3" />
+          {item.episodeLabel
+            ? <p className="text-xs font-medium text-muted-foreground/90">{item.episodeLabel}</p>
+            : <div className="h-3 bg-muted rounded animate-pulse w-1/3" />}
+          <div className="h-3 bg-muted rounded animate-pulse w-1/2" />
+        </div>
+      </div>
+    );
+  }
 
   return (
     <Link href={`/movie/${item.id}`} className="group flex items-center gap-4 py-3.5">
@@ -264,16 +286,12 @@ function RatingsPageInner() {
 
   const rows = useMemo(() => collapseRatings(raw), [raw]);
 
-  // Every id the list may need to render: the collapsed rows, plus the episodes
-  // themselves for the Episodes view. A show rated only through its episodes has
-  // no cached meta of its own, so it has to be fetched before it can be titled.
+  // Every collapsed row: films, and each show — a show rated only through its
+  // episodes has no cached meta of its own, so it has to be fetched before it can
+  // be titled. The episodes themselves are fetched by the Episodes view, the ones
+  // it is showing, further down.
   useEffect(() => {
-    const wanted = new Set<string>();
-    for (const row of rows) {
-      wanted.add(row.id);
-      if (row.isShow) for (const memberId of row.memberIds) wanted.add(memberId);
-    }
-    const missing = [...wanted].filter(id => !metaMap.has(id) && !fetchingRef.current.has(id));
+    const missing = rows.map(row => row.id).filter(id => !metaMap.has(id) && !fetchingRef.current.has(id));
     if (missing.length === 0) return;
     missing.forEach(id => fetchingRef.current.add(id));
     (async () => {
@@ -329,8 +347,10 @@ function RatingsPageInner() {
         for (const memberId of row.memberIds) {
           if (memberId === row.id) continue; // the series rating, not an episode
           const meta = metaMap.get(memberId);
-          const season = meta?.seasonNumber;
-          const episode = meta?.episodeNumber;
+          // Season and episode come off the id and the show's name off the show's
+          // entry, so a row says where it belongs before its own entry has loaded.
+          const ep = parseEpisodeId(memberId);
+          const showName = meta?.showName ?? metaMap.get(row.id)?.title;
           out.push({
             id: memberId,
             title: meta?.title?.replace(/^S\d+E\d+\s·\s/, '') ?? '',
@@ -339,8 +359,8 @@ function RatingsPageInner() {
             releaseDate: meta?.releaseDate,
             tmdbRating: meta?.tmdbRating,
             userRating: scoreById.get(memberId),
-            episodeLabel: season !== undefined && episode !== undefined
-              ? `S${season}·E${episode}${meta?.showName ? ` · ${meta.showName}` : ''}`
+            episodeLabel: ep
+              ? `S${ep.season}·E${ep.episode}${showName ? ` · ${showName}` : ''}`
               : undefined,
             kind: 'tv-episode',
             genre: meta?.genre ?? '',
@@ -415,8 +435,17 @@ function RatingsPageInner() {
   // sink to the bottom of every sort.
   const scoreOf = (it: RatedItem): number | undefined => it.userRating ?? it.episodeAverage;
 
+  // A long Episodes view is shown a screen at a time, and only the episodes on
+  // screen are fetched. Up to EPISODE_LIMIT — all the cache keeps — every entry is
+  // fetched as before, so the title and release-date sorts work as they always
+  // did. Past it those two sorts go by show and episode number instead: they
+  // can't wait on thousands of entries that are no longer kept.
+  const manyEpisodes = showingEpisodes && sideItems.length > EPISODE_LIMIT;
+  const [episodeWindow, setEpisodeWindow] = useState(EPISODE_PAGE);
+
   const sortedFiltered = useMemo(() => {
-    let result = sideItems.filter(i => i.title);
+    // An episode still waiting for its entry stays listed; any other row needs a title.
+    let result = showingEpisodes ? [...sideItems] : sideItems.filter(i => i.title);
     if (ratingFilter !== null) result = result.filter(i => scoreOf(i) === ratingFilter);
     // A saved 'tv-episode' can still be sitting in the stored refine from before
     // the pill existed, where it meant "switch the list over" rather than
@@ -425,8 +454,16 @@ function RatingsPageInner() {
     if (refine.genre !== 'any') result = result.filter(i => i.genre.split(',').map(s => s.trim()).includes(refine.genre));
     if (search.trim()) {
       const q = search.trim().toLowerCase();
-      result = result.filter(i => i.title.toLowerCase().includes(q));
+      // An episode also matches by its show, which its label names.
+      result = result.filter(i => `${i.title} ${i.episodeLabel ?? ''}`.toLowerCase().includes(q));
     }
+
+    // The show an episode belongs to, and its place in it, for the long-list sorts.
+    const showOf = (it: RatedItem) => {
+      const ep = parseEpisodeId(it.id);
+      const show = ep ? metaMap.get(ep.showId) : undefined;
+      return { title: show?.title ?? '', release: show?.releaseDate ?? '', order: ep ? ep.season * 10000 + ep.episode : 0 };
+    };
 
     if (refine.sortField === 'rating') {
       // Title tie-break: same-score items would otherwise reshuffle across
@@ -434,11 +471,20 @@ function RatingsPageInner() {
       result.sort((a, b) => ((scoreOf(b) ?? 0) - (scoreOf(a) ?? 0)) || a.title.localeCompare(b.title));
       if (refine.sortDir === 'asc') result.reverse();
     } else if (refine.sortField === 'title') {
-      result.sort((a, b) => a.title.localeCompare(b.title));
+      if (manyEpisodes) {
+        result.sort((a, b) => {
+          const sa = showOf(a), sb = showOf(b);
+          return sa.title.localeCompare(sb.title) || sa.order - sb.order;
+        });
+      } else {
+        result.sort((a, b) => a.title.localeCompare(b.title));
+      }
       if (refine.sortDir === 'desc') result.reverse();
     } else if (refine.sortField === 'release') {
       const ts = (it: RatedItem): number | null => {
-        const rawDate = it.releaseDate || (/^\d{4}$/.test(it.year) ? `${it.year}-01-01` : '');
+        const rawDate = manyEpisodes
+          ? showOf(it).release
+          : it.releaseDate || (/^\d{4}$/.test(it.year) ? `${it.year}-01-01` : '');
         const t = rawDate ? Date.parse(rawDate) : NaN;
         return Number.isNaN(t) ? null : t;
       };
@@ -448,7 +494,7 @@ function RatingsPageInner() {
         if (ta === null && tb === null) return 0;
         if (ta === null) return 1;
         if (tb === null) return -1;
-        return (ta - tb) * dir;
+        return (ta - tb) * dir || (manyEpisodes ? (showOf(a).order - showOf(b).order) * dir : 0);
       });
     } else {
       // Date rated — title tie-break keeps bulk-imported same-date items stable
@@ -456,7 +502,36 @@ function RatingsPageInner() {
       if (refine.sortDir === 'asc') result.reverse();
     }
     return result;
-  }, [sideItems, refine, search, ratingFilter]);
+  }, [sideItems, refine, search, ratingFilter, showingEpisodes, manyEpisodes, metaMap]);
+
+  // Back to the first screen whenever the list itself changes.
+  useEffect(() => { setEpisodeWindow(EPISODE_PAGE); }, [side, refine, search, ratingFilter]);
+
+  const visibleItems = useMemo(
+    () => (manyEpisodes ? sortedFiltered.slice(0, episodeWindow) : sortedFiltered),
+    [manyEpisodes, sortedFiltered, episodeWindow],
+  );
+  const loadMoreRef = useLoadOnScroll(
+    () => setEpisodeWindow(n => n + EPISODE_PAGE),
+    manyEpisodes && episodeWindow < sortedFiltered.length,
+    visibleItems.length,
+  );
+
+  // The episodes being shown — every one, for a short list — that have no entry yet.
+  useEffect(() => {
+    if (!showingEpisodes) return;
+    const missing = visibleItems.map(i => i.id).filter(id => !metaMap.has(id) && !fetchingRef.current.has(id));
+    if (missing.length === 0) return;
+    missing.forEach(id => fetchingRef.current.add(id));
+    (async () => {
+      const fetched = await batchFetchMeta(missing);
+      setMetaMap(prev => {
+        const next = new Map(prev);
+        for (const [id, m] of Object.entries(fetched)) if (m?.title) next.set(id, m as Meta);
+        return next;
+      });
+    })();
+  }, [showingEpisodes, visibleItems, metaMap]);
 
   const unit = showingEpisodes ? 'episode' : side === 'shows' ? 'show' : 'title';
 
@@ -534,8 +609,11 @@ function RatingsPageInner() {
           </p>
         </div>
       ) : (
-        <div className="px-6 divide-y divide-border">
-          {sortedFiltered.map(item => <ItemCard key={item.id} item={item} />)}
+        <div className="px-6">
+          <div className="divide-y divide-border">
+            {visibleItems.map(item => <ItemCard key={item.id} item={item} />)}
+          </div>
+          {manyEpisodes && episodeWindow < sortedFiltered.length && <div ref={loadMoreRef} className="h-px" />}
         </div>
       )}
 

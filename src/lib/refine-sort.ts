@@ -1,4 +1,5 @@
 import type { RefineValue } from '@/components/refine-sheet';
+import { readCachedMeta } from './meta-cache';
 
 // Read a saved refine — the localStorage entry each full-page list writes when
 // the user taps "Refine" (keys: watchlist-refine / history-refine / ratings-refine
@@ -66,14 +67,8 @@ export function applyServerRefinePrefs(prefs: unknown): void {
 // Full release timestamp: prefer the cached meta's full date so same-year titles
 // order identically to the full page; fall back to Jan 1 of the year.
 function releaseTs(id: string, year?: string): number | null {
-  let releaseDate = '';
-  try {
-    const cached = typeof localStorage !== 'undefined' ? localStorage.getItem(`meta-${id}`) : null;
-    if (cached) {
-      const m = JSON.parse(cached);
-      if (typeof m.releaseDate === 'string') releaseDate = m.releaseDate;
-    }
-  } catch { /* ignore */ }
+  const cached = readCachedMeta(id)?.releaseDate;
+  const releaseDate = typeof cached === 'string' ? cached : '';
   const raw = releaseDate || (year && /^\d{4}$/.test(year) ? `${year}-01-01` : '');
   const t = raw ? Date.parse(raw) : NaN;
   return Number.isNaN(t) ? null : t;

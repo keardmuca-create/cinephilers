@@ -8,6 +8,7 @@ import { WatchedEye } from '@/components/watched-eye';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/contexts/auth-context';
 import { fetchWithAuth } from '@/lib/fetch-with-auth';
+import { readCachedMeta } from '@/lib/meta-cache';
 import { lensCounts, matchesLens, lensRank, type Lens } from '@/lib/friend-lens';
 
 interface FriendRatingEntry {
@@ -34,10 +35,8 @@ export default function MovieFriendsPage() {
     if (!authUser) return;
 
     // Load movie title from cache
-    try {
-      const cached = localStorage.getItem(`meta-${id}`);
-      if (cached) setMovieTitle(JSON.parse(cached).title ?? '');
-    } catch { /* ignore */ }
+    const cached = readCachedMeta(id);
+    if (cached) setMovieTitle(cached.title ?? '');
 
     fetchWithAuth(`/api/movies/friends-ratings?tmdbId=${encodeURIComponent(id)}`)
       .then(r => r.ok ? r.json() : null)

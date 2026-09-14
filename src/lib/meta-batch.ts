@@ -1,4 +1,7 @@
 import type { ItemMeta } from '@/app/api/meta/[id]/route';
+import { readCachedMeta, writeCachedMetaMany, touchCachedMeta, type CachedMeta } from './meta-cache';
+
+export type { CachedMeta };
 
 // Fetch what titles ARE — poster, year, genre, runtime — for a list of ids.
 //
@@ -11,6 +14,8 @@ import type { ItemMeta } from '@/app/api/meta/[id]/route';
 // So requests made in the same tick are gathered into one call. Every caller
 // waits on the same flush and gets its answer at the same moment as the others —
 // which is both fewer requests and, from the outside, everything at once.
+//
+// Where the answers are kept, and how many of them, is meta-cache's business.
 
 const CHUNK = 100;
 
@@ -52,15 +57,12 @@ const SHOW_TTL_MS = 24 * 60 * 60 * 1000;
 // a third of the refetches covers almost all of it.
 const FILM_TTL_MS = 3 * 24 * 60 * 60 * 1000;
 
-/** A cache entry plus when we wrote it. The stamp is ours, not TMDB's. */
-export type CachedMeta = ItemMeta & { _fetchedAt?: number };
-
 /**
  * True when a cached entry is old enough that something on it may have moved —
  * a show's episode total, or a film's rating.
  *
  * Exported because this cache has more readers than this module: the history page
- * and the profile read localStorage straight and decide for themselves what to
+ * and the profile read the cache directly and decide for themselves what to
  * refetch. They have to agree on what stale means, or one keeps handing the old
  * total back to the others.
  *
@@ -77,40 +79,40 @@ export function isStaleMeta(cached: CachedMeta | null | undefined): boolean {
   return Date.now() - stamp > SHOW_TTL_MS;
 }
 
-// Ids waiting for the next flush, and the promise each caller is holding. The
-// promise map is what stops two callers asking for the same id twice.
-let queue: string[] = [];
+// Ids waiting for the next flush, each with the size of the request that asked
+// for it, and the promise each caller is holding. The promise map is what stops
+// two callers asking for the same id twice.
+let queue: { id: string; size: number }[] = [];
 const inflight = new Map<string, Promise<ItemMeta | null>>();
 const resolvers = new Map<string, (m: ItemMeta | null) => void>();
 let flushScheduled = false;
 
 function readCache(id: string, needReleaseDate?: boolean): ItemMeta | null {
-  try {
-    const raw = localStorage.getItem(`meta-${id}`);
-    if (!raw) return null;
-    const cached = JSON.parse(raw) as CachedMeta;
-    // Shows and their episodes go stale; films never do.
-    if (isStaleMeta(cached)) return null;
-    // Refetch entries cached before runtime/showType tracking so movie shorts
-    // (by runtime) and mini-series (by showType) can be classified. Episodes
-    // cached before totalEps rode along carry no episode total, which is what a
-    // collapsed show row counts against. Only callers that sort by date (the
-    // watchlist) ask for releaseDate, so older caches aren't refetched app-wide
-    // just to backfill it.
-    const needsRefresh =
-      (cached.type === 'movie' && !cached.isEpisode && cached.runtime === undefined) ||
-      (cached.type === 'show' && !cached.isEpisode && cached.showType === undefined) ||
-      (cached.isEpisode === true && cached.totalEps === undefined) ||
-      (needReleaseDate === true && cached.releaseDate === undefined);
-    return needsRefresh ? null : cached;
-  } catch {
-    return null;
-  }
+  const cached = readCachedMeta(id);
+  if (!cached) return null;
+  // Shows and films go stale; episodes never do.
+  if (isStaleMeta(cached)) return null;
+  // Refetch entries cached before runtime/showType tracking so movie shorts
+  // (by runtime) and mini-series (by showType) can be classified. Episodes
+  // cached before totalEps rode along carry no episode total, which is what a
+  // collapsed show row counts against. Only callers that sort by date (the
+  // watchlist) ask for releaseDate, so older caches aren't refetched app-wide
+  // just to backfill it.
+  const needsRefresh =
+    (cached.type === 'movie' && !cached.isEpisode && cached.runtime === undefined) ||
+    (cached.type === 'show' && !cached.isEpisode && cached.showType === undefined) ||
+    (cached.isEpisode === true && cached.totalEps === undefined) ||
+    (needReleaseDate === true && cached.releaseDate === undefined);
+  return needsRefresh ? null : cached;
 }
 
 async function flush() {
   flushScheduled = false;
-  const ids = queue;
+  // Smallest requests first. A page asking for the fifty rows on screen and a page
+  // refetching a whole library can land in the same tick, and in arrival order the
+  // fifty waited behind thirty requests' worth of titles nobody was looking at.
+  // The sort is stable, so each request keeps its own order.
+  const ids = queue.sort((a, b) => a.size - b.size).map(q => q.id);
   queue = [];
   if (ids.length === 0) return;
 
@@ -126,18 +128,16 @@ async function flush() {
       const res = await fetch(`/api/meta?ids=${chunk.join(',')}`);
       if (!res.ok) { for (const id of chunk) settle(id, null); continue; }
       const data: Record<string, ItemMeta | null> = await res.json();
-      for (const id of chunk) {
+      const answers: [string, CachedMeta | null][] = chunk.map(id => {
         const fresh = data[id] ?? null;
-        // Stamped on the way OUT as well as into the cache. The history page keeps
-        // its own copy and writes it back; hand it an unstamped object and the
-        // stamp is gone the moment it does, so the entry looks stale again on the
-        // very next load — a refetch every single time.
-        const meta: CachedMeta | null = fresh ? { ...fresh, _fetchedAt: Date.now() } : null;
-        if (meta) {
-          try { localStorage.setItem(`meta-${id}`, JSON.stringify(meta)); } catch { /* ignore */ }
-        }
-        settle(id, meta);
-      }
+        // Stamped on the way OUT as well as into the cache. A page that keeps its
+        // own copy and hands it back would otherwise lose the stamp, and the entry
+        // would look stale again on the very next load — a refetch every time.
+        return [id, fresh ? { ...fresh, _fetchedAt: Date.now() } : null];
+      });
+      // One write for the chunk: the episodes in it share a single key.
+      writeCachedMetaMany(answers.filter((a): a is [string, CachedMeta] => a[1] !== null));
+      for (const [id, meta] of answers) settle(id, meta);
     } catch {
       // Never leave a caller waiting on a promise that can't resolve.
       for (const id of chunk) settle(id, null);
@@ -145,13 +145,13 @@ async function flush() {
   }
 }
 
-function load(id: string): Promise<ItemMeta | null> {
+function load(id: string, size: number): Promise<ItemMeta | null> {
   const existing = inflight.get(id);
   if (existing) return existing;
 
   const promise = new Promise<ItemMeta | null>(resolve => resolvers.set(id, resolve));
   inflight.set(id, promise);
-  queue.push(id);
+  queue.push({ id, size });
 
   if (!flushScheduled) {
     flushScheduled = true;
@@ -168,15 +168,19 @@ export async function batchFetchMeta(
 ): Promise<Record<string, ItemMeta>> {
   const result: Record<string, ItemMeta> = {};
   const misses: string[] = [];
+  const unique = [...new Set(ids)];
 
-  for (const id of new Set(ids)) {
+  // Asked for, so worth keeping — in the order the caller shows them.
+  touchCachedMeta(unique);
+
+  for (const id of unique) {
     const cached = readCache(id, opts?.needReleaseDate);
     if (cached) result[id] = cached;
     else misses.push(id);
   }
 
   if (misses.length > 0) {
-    const fetched = await Promise.all(misses.map(load));
+    const fetched = await Promise.all(misses.map(id => load(id, misses.length)));
     misses.forEach((id, i) => {
       const meta = fetched[i];
       if (meta) result[id] = meta;

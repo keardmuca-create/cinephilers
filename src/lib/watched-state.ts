@@ -11,6 +11,7 @@
 // paint and never changes under you a moment later.
 
 import { isWatchedTitle } from './library-store';
+import { readCachedMeta } from './meta-cache';
 
 export type WatchedState = 'none' | 'partial' | 'complete';
 
@@ -30,14 +31,8 @@ function isShowId(id: string): boolean {
  * arrives late is worse than an eye that undersells by one episode.
  */
 function cachedEpisodeTotal(id: string): number | null {
-  try {
-    const raw = localStorage.getItem(`meta-${id}`);
-    if (!raw) return null;
-    const total = (JSON.parse(raw) as { totalEps?: number }).totalEps;
-    return typeof total === 'number' && total > 0 ? total : null;
-  } catch {
-    return null;
-  }
+  const total = readCachedMeta(id)?.totalEps;
+  return typeof total === 'number' && total > 0 ? total : null;
 }
 
 /** Episodes ticked off for a show, or null if it isn't a part-watched show. */

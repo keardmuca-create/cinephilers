@@ -12,6 +12,8 @@ import { allWatchedEpisodeIds } from '@/lib/episode-store';
 import { allWatchedTitleIds, setWatchedTitle, readUserRating as readStoredRating } from '@/lib/library-store';
 import { legacyTwin, normalizeLocalMediaIds, getWatchedAtISO, getManualWatchISO } from '@/lib/media-id';
 import { batchFetchMeta, isStaleMeta, type CachedMeta } from '@/lib/meta-batch';
+import { readCachedMeta, EPISODE_LIMIT } from '@/lib/meta-cache';
+import { useLoadOnScroll } from '@/hooks/use-load-on-scroll';
 import { getItemType, sideOf, SIDE_TYPES, TYPE_LABELS, type TypeFilter, type MediaSide } from '@/lib/media-type';
 import { collapseShows, type CollapsedRow } from '@/lib/collapse-shows';
 import { MediaToggle } from '@/components/media-toggle';
@@ -30,6 +32,9 @@ const SORT_OPTIONS: SortOption[] = [
 ];
 
 const DEFAULT_REFINE: RefineValue = { sortField: 'date', sortDir: 'desc', type: 'any', genre: 'any' };
+
+// Episode rows a long Episodes side adds each time you near the bottom.
+const EPISODE_PAGE = 50;
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -84,15 +89,11 @@ function rowRecencyCompare(a: CollapsedRow, b: CollapsedRow, manualFor: (r: Coll
   return (new Date(b.watchedAt).getTime() - new Date(a.watchedAt).getTime()) || a.id.localeCompare(b.id);
 }
 
-// CachedMeta, not ItemMeta: entries carry the stamp that says how old they are,
-// and it has to survive being read here and written back below.
+// CachedMeta, not ItemMeta: entries carry the stamp that says how old they are.
+// Nothing here writes the cache back — batchFetchMeta already has, and writing a
+// whole library a second time would only make the cache trim it again.
 function readMetaCache(id: string): CachedMeta | null {
-  try { return JSON.parse(localStorage.getItem(`meta-${id}`) ?? 'null'); }
-  catch { return null; }
-}
-
-function writeMetaCache(id: string, m: CachedMeta) {
-  try { localStorage.setItem(`meta-${id}`, JSON.stringify(m)); } catch { /* ignore */ }
+  return readCachedMeta(id);
 }
 
 function readUserRating(id: string): number | undefined {
@@ -485,18 +486,21 @@ export default function HistoryPage() {
     };
   }, [loadFromStorage]);
 
-  // ─── Fetch metadata for all IDs in batches ────────────────────────────────
+  // ─── Fetch metadata for films and shows ───────────────────────────────────
+  // Not for episodes. The collapse groups them from their ids and the show's own
+  // entry (fetched below, once per show) carries the total, so fetching each one
+  // was 13,000 lookups for a big library and most of what filled its storage. The
+  // Episodes side fetches the episodes it shows, further down.
 
   useEffect(() => {
     if (allIds.length === 0) return;
-    const toFetch = allIds.filter(id => !fetchingRef.current.has(id));
+    const toFetch = allIds.filter(id => !EP_ID.test(id) && !fetchingRef.current.has(id));
     if (toFetch.length === 0) return;
     toFetch.forEach(id => fetchingRef.current.add(id));
     setFetching(true);
 
     const runBatches = async () => {
       const fetched = await batchFetchMeta(toFetch);
-      for (const [id, m] of Object.entries(fetched)) writeMetaCache(id, m);
       setMetaMap(prev => {
         const next = new Map(prev);
         for (const [id, m] of Object.entries(fetched)) next.set(id, m);
@@ -513,12 +517,17 @@ export default function HistoryPage() {
   const rows = useMemo<CollapsedRow[]>(() => collapseShows(
     allIds.map(id => {
       const m = metaMap.get(id);
+      // An episode's own entry is usually not loaded — only the Episodes side
+      // fetches those — so its show's entry answers for it. That is the right
+      // answer anyway: the show's total is the one kept up to date.
+      const ep = EP_ID.exec(id);
+      const show = ep ? metaMap.get(ep[1]) : undefined;
       return {
         id,
         showId: m?.showId,
         isEpisode: m?.isEpisode,
-        totalEpisodes: m?.totalEps,
-        showStatus: m?.tmdbStatus,
+        totalEpisodes: show?.totalEps ?? m?.totalEps,
+        showStatus: show?.tmdbStatus ?? m?.tmdbStatus,
         watchedAt: dateMapRef.current.get(id) ?? new Date(0).toISOString(),
       };
     }),
@@ -533,7 +542,6 @@ export default function HistoryPage() {
     missing.forEach(id => fetchingRef.current.add(id));
     (async () => {
       const fetched = await batchFetchMeta(missing);
-      for (const [id, m] of Object.entries(fetched)) writeMetaCache(id, m);
       setMetaMap(prev => {
         const next = new Map(prev);
         for (const [id, m] of Object.entries(fetched)) next.set(id, m);
@@ -597,8 +605,9 @@ export default function HistoryPage() {
   // reversal. Built from allIds rather than from rows for that reason.
   const episodeRows = useMemo<CollapsedRow[]>(() => {
     if (side !== 'episodes') return [];
+    // By id, not by entry: an episode's entry is only fetched once it is shown.
     return allIds
-      .filter(id => metaMap.get(id)?.isEpisode)
+      .filter(id => EP_ID.test(id))
       .map(id => ({
         id,
         isShow: false,
@@ -608,12 +617,20 @@ export default function HistoryPage() {
         watchedAt: dateMapRef.current.get(id) ?? new Date(0).toISOString(),
         memberIds: [id],
       } as CollapsedRow));
-  }, [side, allIds, metaMap]);
+  }, [side, allIds]);
 
   const sideRows = useMemo(
     () => (side === 'episodes' ? episodeRows : rows.filter(r => sideForRow(r) === side)),
     [side, episodeRows, rows, sideForRow],
   );
+
+  // A long Episodes side is shown a screen at a time, and only the episodes on
+  // screen are fetched. Up to EPISODE_LIMIT — all the cache keeps — every entry is
+  // fetched up front as before, so the name and release-date sorts work as they
+  // always did. Past it those two sorts go by show and episode number instead:
+  // they can't wait on thousands of entries that are no longer kept.
+  const manyEpisodes = side === 'episodes' && sideRows.length > EPISODE_LIMIT;
+  const [episodeWindow, setEpisodeWindow] = useState(EPISODE_PAGE);
 
   const sideCounts = useMemo(() => {
     let movies = 0, shows = 0;
@@ -679,19 +696,40 @@ export default function HistoryPage() {
     if (refine.genre !== 'any') {
       list = list.filter(r => (metaMap.get(r.id)?.genre ?? '').split(',').map(s => s.trim()).includes(refine.genre));
     }
+    // The show an episode belongs to, and its place in it.
+    const showOf = (r: CollapsedRow) => {
+      const ep = EP_ID.exec(r.id);
+      const show = ep ? metaMap.get(ep[1]) : undefined;
+      return { title: show?.title ?? '', release: show?.releaseDate ?? '', order: ep ? Number(ep[2]) * 10000 + Number(ep[3]) : 0 };
+    };
+
     if (search.trim()) {
       const q = search.trim().toLowerCase();
-      list = list.filter(r => (metaMap.get(r.id)?.title ?? '').toLowerCase().includes(q));
+      // An episode also matches by its show's name.
+      list = list.filter(r => {
+        const title = metaMap.get(r.id)?.title ?? '';
+        const show = side === 'episodes' ? showOf(r).title : '';
+        return `${title} ${show}`.toLowerCase().includes(q);
+      });
     }
 
     if (refine.sortField === 'title') {
-      list.sort((a, b) => (metaMap.get(a.id)?.title ?? '').localeCompare(metaMap.get(b.id)?.title ?? ''));
+      if (manyEpisodes) {
+        list.sort((a, b) => {
+          const sa = showOf(a), sb = showOf(b);
+          return sa.title.localeCompare(sb.title) || sa.order - sb.order;
+        });
+      } else {
+        list.sort((a, b) => (metaMap.get(a.id)?.title ?? '').localeCompare(metaMap.get(b.id)?.title ?? ''));
+      }
       if (refine.sortDir === 'desc') list.reverse();
     } else if (refine.sortField === 'release') {
       // Full release-date timestamp; falls back to Jan 1 of the year, null when unknown.
       const ts = (r: CollapsedRow): number | null => {
         const m = metaMap.get(r.id);
-        const raw = m?.releaseDate || (m && /^\d{4}$/.test(m.year) ? `${m.year}-01-01` : '');
+        const raw = manyEpisodes
+          ? showOf(r).release
+          : m?.releaseDate || (m && /^\d{4}$/.test(m.year) ? `${m.year}-01-01` : '');
         const t = raw ? Date.parse(raw) : NaN;
         return Number.isNaN(t) ? null : t;
       };
@@ -701,7 +739,7 @@ export default function HistoryPage() {
         if (ta === null && tb === null) return 0;
         if (ta === null) return 1;   // unknown date sinks to the bottom
         if (tb === null) return -1;
-        return (ta - tb) * dir;
+        return (ta - tb) * dir || (manyEpisodes ? (showOf(a).order - showOf(b).order) * dir : 0);
       });
     } else {
       // Date watched. Newest-first tiers hand-marked titles above imports (whose
@@ -715,7 +753,37 @@ export default function HistoryPage() {
     }
 
     return list;
-  }, [sideRows, refine, search, metaMap, manualMap]);
+  }, [sideRows, refine, search, metaMap, manualMap, side, manyEpisodes]);
+
+  // Back to the first screen whenever the list itself changes.
+  useEffect(() => { setEpisodeWindow(EPISODE_PAGE); }, [side, refine, search]);
+
+  const visibleRows = useMemo(
+    () => (manyEpisodes ? sortedFilteredRows.slice(0, episodeWindow) : sortedFilteredRows),
+    [manyEpisodes, sortedFilteredRows, episodeWindow],
+  );
+  const loadMoreRef = useLoadOnScroll(
+    () => setEpisodeWindow(n => n + EPISODE_PAGE),
+    manyEpisodes && episodeWindow < sortedFilteredRows.length,
+    visibleRows.length,
+  );
+
+  // The episodes being shown — every one, for a short list — that have no entry
+  // yet. Cached ones were marked as held when the page read storage.
+  useEffect(() => {
+    if (side !== 'episodes') return;
+    const missing = visibleRows.map(r => r.id).filter(id => !fetchingRef.current.has(id));
+    if (missing.length === 0) return;
+    missing.forEach(id => fetchingRef.current.add(id));
+    (async () => {
+      const fetched = await batchFetchMeta(missing);
+      setMetaMap(prev => {
+        const next = new Map(prev);
+        for (const [id, m] of Object.entries(fetched)) next.set(id, m);
+        return next;
+      });
+    })();
+  }, [side, visibleRows]);
 
   // ─── Render ────────────────────────────────────────────────────────────────
 
@@ -789,7 +857,7 @@ export default function HistoryPage() {
       ) : (
         <div className="px-6">
           <div className="divide-y divide-border">
-            {sortedFilteredRows.map(row => (
+            {visibleRows.map(row => (
               <HistoryCard
                 key={row.id}
                 row={row}
@@ -799,6 +867,7 @@ export default function HistoryPage() {
               />
             ))}
           </div>
+          {manyEpisodes && episodeWindow < sortedFilteredRows.length && <div ref={loadMoreRef} className="h-px" />}
         </div>
       )}
 

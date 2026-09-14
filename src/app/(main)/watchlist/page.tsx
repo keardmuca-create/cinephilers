@@ -9,6 +9,7 @@ import { persistRefine } from '@/lib/refine-sort';
 import { fetchWithAuth } from '@/lib/fetch-with-auth';
 import { removeActivity } from '@/lib/activity';
 import { batchFetchMeta } from '@/lib/meta-batch';
+import { readCachedMeta } from '@/lib/meta-cache';
 import { getItemType, sideOf, SIDE_TYPES, TYPE_LABELS, type TypeFilter, type MediaSide } from '@/lib/media-type';
 import { MediaToggle } from '@/components/media-toggle';
 import { RefineSheet, type RefineValue, type SortOption, type CountOption } from '@/components/refine-sheet';
@@ -170,10 +171,8 @@ export default function WatchlistPage() {
           const id = k.slice('watchlist-'.length);
           // Fold in the cached meta entry — it carries the full release date, genre,
           // and classification fields (the watchlist-* entry only keeps the year).
-          try {
-            const cached = localStorage.getItem(`meta-${id}`);
-            if (cached) meta = { ...JSON.parse(cached), ...meta };
-          } catch { /* ignore */ }
+          const cached = readCachedMeta(id);
+          if (cached) meta = { ...cached, ...meta };
           if (!meta.title) { missing.push(id); continue; }
           const releaseDate = typeof meta.releaseDate === 'string' ? meta.releaseDate : undefined;
           if (releaseDate === undefined) needMeta.push(id);

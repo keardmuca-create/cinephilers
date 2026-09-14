@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
 import { batchFetchMeta, isStaleMeta } from './meta-batch';
+import { forgetMetaCache } from './meta-cache';
 
 // Minimal localStorage + fetch stubs — the batcher only needs a cache to read
 // and a network to call.
@@ -24,6 +25,8 @@ beforeEach(() => {
   store.clear();
   calls = [];
   vi.stubGlobal('localStorage', localStorageStub);
+  // The cache keeps its episode list and ranks in memory.
+  forgetMetaCache();
   vi.stubGlobal('fetch', vi.fn(async (url: string) => {
     const ids = new URL(url, 'http://x').searchParams.get('ids')!.split(',');
     calls.push(ids);
@@ -68,6 +71,18 @@ describe('batchFetchMeta', () => {
     ]);
     expect(calls).toHaveLength(1);
     expect(calls[0].sort()).toEqual(['tmdb-8', 'tmdb-9']);
+  });
+
+  // The Ratings page asks for the fifty episodes on screen in the same tick as it
+  // refetches a whole library of films. In arrival order the fifty came last.
+  it('sends a small request ahead of a large one asked for in the same tick', async () => {
+    const library = Array.from({ length: 250 }, (_, i) => `tmdb-${1000 + i}`);
+    const onScreen = ['tmdb-tv-9-S1E1', 'tmdb-tv-9-S1E2'];
+    await Promise.all([batchFetchMeta(library), batchFetchMeta(onScreen)]);
+    expect(calls).toHaveLength(3);
+    expect(calls[0].slice(0, 2)).toEqual(onScreen);
+    // And the large one keeps its own order behind it.
+    expect(calls[0][2]).toBe('tmdb-1000');
   });
 
   it('does not ask twice for the same id in one call', async () => {
@@ -152,10 +167,28 @@ describe('batchFetchMeta', () => {
     expect(calls).toHaveLength(0);
   });
 
+  // Episodes share one list in the cache now, not a key each.
+  it('answers an episode from the shared episode list', async () => {
+    store.set('recent-episodes', JSON.stringify({
+      'tmdb-tv-1-S1E1': { id: 'tmdb-tv-1-S1E1', title: 'Ep', isEpisode: true, type: 'show', totalEps: 10 },
+    }));
+    const got = await batchFetchMeta(['tmdb-tv-1-S1E1']);
+    expect(got['tmdb-tv-1-S1E1'].title).toBe('Ep');
+    expect(calls).toHaveLength(0);
+  });
+
   it('refetches an episode cached before it carried its show total', async () => {
-    store.set('meta-tmdb-tv-1-S1E1', JSON.stringify({ id: 'tmdb-tv-1-S1E1', title: 'Ep', isEpisode: true, type: 'show' }));
+    store.set('recent-episodes', JSON.stringify({
+      'tmdb-tv-1-S1E1': { id: 'tmdb-tv-1-S1E1', title: 'Ep', isEpisode: true, type: 'show' },
+    }));
     await batchFetchMeta(['tmdb-tv-1-S1E1']);
     expect(calls).toHaveLength(1);
+  });
+
+  it('writes a fetched episode into the list, not a key of its own', async () => {
+    await batchFetchMeta(['tmdb-tv-1-S1E2']);
+    expect(store.has('meta-tmdb-tv-1-S1E2')).toBe(false);
+    expect(Object.keys(JSON.parse(store.get('recent-episodes')!))).toEqual(['tmdb-tv-1-S1E2']);
   });
 });
 

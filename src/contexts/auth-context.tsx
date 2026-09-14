@@ -8,6 +8,7 @@ import { dropLegacyEpisodeKeys } from '@/lib/episode-store';
 import { withoutCopiedEntries, type WatchEntry } from '@/lib/watch-log';
 import { addWatchedTitles, setUserRatings } from '@/lib/library-store';
 import { batchFetchMeta } from '@/lib/meta-batch';
+import { readCachedMeta } from '@/lib/meta-cache';
 import { clearUserData } from '@/lib/clear-user-data';
 import { applyServerRefinePrefs } from '@/lib/refine-sort';
 import * as Sentry from '@sentry/nextjs';
@@ -209,8 +210,8 @@ async function restoreFromDb(me?: { createdAt?: string; followingCount?: number;
             movieYear = e.movieYear ?? '';
           }
           if (!moviePoster) {
-            const meta = localStorage.getItem(`meta-${r.tmdbId}`);
-            if (meta) { const m = JSON.parse(meta); movieTitle = m.title ?? ''; moviePoster = m.poster ?? ''; movieYear = m.year ?? ''; }
+            const m = readCachedMeta(r.tmdbId);
+            if (m) { movieTitle = m.title ?? ''; moviePoster = m.poster ?? ''; movieYear = m.year ?? ''; }
           }
         } catch { /* ignore */ }
         localStorage.setItem(`review-${r.tmdbId}`, JSON.stringify({
@@ -288,10 +289,8 @@ async function restoreFromDb(me?: { createdAt?: string; followingCount?: number;
       const newEntries: ActivityEntry[] = [];
 
       const getMeta = (tmdbId: string) => {
-        try {
-          const cached = localStorage.getItem(`meta-${tmdbId}`);
-          if (cached) { const m = JSON.parse(cached); return { title: m.title ?? '', poster: m.poster ?? '', year: m.year ?? '' }; }
-        } catch { /* ignore */ }
+        const m = readCachedMeta(tmdbId);
+        if (m) return { title: m.title ?? '', poster: m.poster ?? '', year: m.year ?? '' };
         return { title: '', poster: '', year: '' };
       };
 

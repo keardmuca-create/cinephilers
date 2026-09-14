@@ -9,6 +9,7 @@ import { dismissActivity, getDismissed, relativeTime } from '@/lib/activity';
 import { useAuth } from '@/contexts/auth-context';
 import { fetchWithAuth } from '@/lib/fetch-with-auth';
 import { batchFetchMeta } from '@/lib/meta-batch';
+import { readCachedMeta } from '@/lib/meta-cache';
 import { Button } from '@/components/ui/button';
 import { SpoilerWrap } from '@/components/spoiler-wrap';
 import { WatchedEye } from '@/components/watched-eye';
@@ -53,15 +54,12 @@ const metaCache: Record<string, { title: string; year: string; poster: string }>
 
 async function fetchMeta(tmdbId: string) {
   if (metaCache[tmdbId]) return metaCache[tmdbId];
-  try {
-    const cached = localStorage.getItem(`meta-${tmdbId}`);
-    if (cached) {
-      const m = JSON.parse(cached);
-      const meta = { title: m.title ?? 'Unknown', year: m.year ?? '', poster: m.poster ?? '' };
-      metaCache[tmdbId] = meta;
-      return meta;
-    }
-  } catch { /* ignore */ }
+  const m = readCachedMeta(tmdbId);
+  if (m) {
+    const meta = { title: m.title ?? 'Unknown', year: m.year ?? '', poster: m.poster ?? '' };
+    metaCache[tmdbId] = meta;
+    return meta;
+  }
   try {
     const res = await fetch(`/api/meta/${tmdbId}`);
     if (!res.ok) return null;

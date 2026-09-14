@@ -1,4 +1,5 @@
 import { parseEpisodeId } from './media-id';
+import { readCachedMeta } from './meta-cache';
 
 // The grey line under an episode wherever one is listed beside films and shows:
 // "S2·E1 · The Walking Dead". An episode's title is its own name, so the show it
@@ -15,7 +16,5 @@ export function episodeLineFor(id: string, meta?: { showName?: unknown } | null)
 /** The same line for a caller holding only an id, read off the meta cache. */
 export function cachedEpisodeLine(id: string): string | undefined {
   if (!parseEpisodeId(id)) return undefined;
-  let meta: { showName?: unknown } | null = null;
-  try { meta = JSON.parse(localStorage.getItem(`meta-${id}`) ?? 'null'); } catch { /* ignore */ }
-  return episodeLineFor(id, meta);
+  return episodeLineFor(id, readCachedMeta(id));
 }

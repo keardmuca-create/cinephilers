@@ -10,6 +10,7 @@ import { relativeTime } from '@/lib/activity';
 import { useAuth } from '@/contexts/auth-context';
 import { useConfirm } from '@/components/confirm-dialog';
 import { fetchWithAuth } from '@/lib/fetch-with-auth';
+import { readCachedMeta } from '@/lib/meta-cache';
 
 interface ReviewComment {
   id: string;
@@ -228,10 +229,8 @@ export default function MovieReviewsPage() {
   const [reportReviewId, setReportReviewId] = useState<string | null>(null);
 
   useEffect(() => {
-    try {
-      const cached = localStorage.getItem(`meta-${id}`);
-      if (cached) setMovieTitle(JSON.parse(cached).title ?? '');
-    } catch { /* ignore */ }
+    const cached = readCachedMeta(id);
+    if (cached) setMovieTitle(cached.title ?? '');
 
     fetch(`/api/movies/reviews?tmdbId=${encodeURIComponent(id)}`, { credentials: 'include' })
       .then(r => r.ok ? r.json() : null)

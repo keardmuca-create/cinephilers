@@ -28,6 +28,7 @@ import { RewatchStrip } from '@/components/rewatch-strip';
 import { appendWatchLog, removeFromWatchLog, saveMovieRating } from '@/lib/watch-log';
 import { isWatchedTitle, setWatchedTitle, readUserRating as readStoredRating, removeUserRating as forgetStoredRating, allUserRatings } from '@/lib/library-store';
 import { recordAddedAt, recordWatchedAt, recordManualWatch, removeManualWatch, recordRatedAt, removeRatedAt, legacyTwin, parseEpisodeId } from '@/lib/media-id';
+import { writeCachedMeta, type CachedMeta } from '@/lib/meta-cache';
 import { EpisodePage } from '@/components/episode-page';
 import { RatingSheet } from '@/components/rating-sheet';
 import { logActivity, removeActivity, relativeTime } from '@/lib/activity';
@@ -1362,19 +1363,17 @@ function MovieDetailInner() {
             setMovie(data);
             loadCineRating(data.type === 'show' ? 'SHOW' : 'MOVIE');
             // Cache metadata for profile/watchlist lookups
-            try {
-              localStorage.setItem(`meta-${data.id}`, JSON.stringify({
-                title: data.title,
-                poster: data.poster,
-                backdrop: data.backdrop,
-                year: data.year,
-                genre: data.genre,
-                language: data.originalLanguage,
-                description: data.description,
-                type: data.type,
-                tmdbRating: data.rating,
-              }));
-            } catch { /* ignore */ }
+            writeCachedMeta(data.id, {
+              title: data.title,
+              poster: data.poster,
+              backdrop: data.backdrop,
+              year: data.year,
+              genre: data.genre,
+              language: data.originalLanguage,
+              description: data.description,
+              type: data.type,
+              tmdbRating: data.rating,
+            } as unknown as CachedMeta);
             // Track recently viewed in localStorage
             try {
               const stored = localStorage.getItem('recently-viewed');

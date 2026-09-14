@@ -9,6 +9,7 @@ import { fetchWithAuth } from '@/lib/fetch-with-auth';
 import type { Movie } from '@/lib/types';
 import { recordAddedAtMany, recordWatchedAtMany, recordRatedAtMany, type DateEntry } from '@/lib/media-id';
 import { addWatchedTitles, setUserRatings } from '@/lib/library-store';
+import { writeCachedMetaMany, type CachedMeta } from '@/lib/meta-cache';
 
 type Platform = 'letterboxd' | 'imdb';
 type Step = 'pick' | 'upload' | 'matching' | 'confirm' | 'importing' | 'done';
@@ -506,12 +507,15 @@ export function ImportDialog({ onClose }: { onClose: () => void }) {
         // Watched films and scores go to their stores in one write each, too.
         const watchedIds: string[] = [];
         const scores: [string, number][] = [];
+        // Title details too: the cache keeps only its most recent titles, and it
+        // can only choose among them if it is handed the whole import at once.
+        const metaEntries: [string, CachedMeta][] = [];
         try {
           for (const item of saved) {
             const marked = showEpisodes[item.tmdbId];
             // totalEps lets the eye on a card tell a finished show from a part-watched one.
-            const meta = { id: item.tmdbId, title: item.matchedTitle, poster: item.poster ?? '', year: item.year, type: item.mediaType === 'SHOW' ? 'show' : 'movie', language: item.language, tmdbRating: item.tmdbRating, ...(marked?.total ? { totalEps: marked.total } : {}) };
-            localStorage.setItem(`meta-${item.tmdbId}`, JSON.stringify(meta));
+            const meta = { id: item.tmdbId, title: item.matchedTitle, poster: item.poster ?? '', year: item.year, type: (item.mediaType === 'SHOW' ? 'show' : 'movie') as 'show' | 'movie', language: item.language, tmdbRating: item.tmdbRating, ...(marked?.total ? { totalEps: marked.total } : {}) };
+            metaEntries.push([item.tmdbId, meta as CachedMeta]);
             // Films get a watched key. A show never does — its episodes are the record.
             if (item.watchedAt && item.mediaType === 'MOVIE') {
               watchedIds.push(item.tmdbId);
@@ -546,6 +550,7 @@ export function ImportDialog({ onClose }: { onClose: () => void }) {
           // gathered so far still land, as they did one call at a time.
           addWatchedTitles(watchedIds);
           setUserRatings(scores);
+          writeCachedMetaMany(metaEntries);
           recordWatchedAtMany(watchedDates);
           recordAddedAtMany(addedDates);
           recordRatedAtMany(ratedDates);
