@@ -3,9 +3,11 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
-import { Heart, Star, Eye, Bookmark, Film, MoreHorizontal, Share2, Trash2, Users, MessageSquare, Loader2, UserPlus, Bell, User, Repeat, Sparkles, SlidersHorizontal } from 'lucide-react';
+import { Heart, Star, Eye, Bookmark, Film, Tv, Clapperboard, MoreHorizontal, Share2, Trash2, Users, MessageSquare, Loader2, UserPlus, Bell, User, Repeat, Sparkles, SlidersHorizontal } from 'lucide-react';
 import { RefineSheet, type RefineValue } from '@/components/refine-sheet';
 import { dismissActivity, getDismissed, relativeTime } from '@/lib/activity';
+import { episodeLineFor } from '@/lib/episode-line';
+import { sidesLabel, sideOfTitle, type FeedSide } from '@/lib/feed-groups';
 import { useAuth } from '@/contexts/auth-context';
 import { fetchWithAuth } from '@/lib/fetch-with-auth';
 import { batchFetchMeta } from '@/lib/meta-batch';
@@ -31,6 +33,8 @@ interface FeedItem {
   batchCount?: number;
   batchTmdbIds?: string[];
   batchRated?: number;
+  batchSides?: Record<FeedSide, number>;
+  batchDay?: string;
   createdAt: string;
   likeCount?: number;
   likedByMe?: boolean;
@@ -50,13 +54,18 @@ interface NotificationItem {
 
 // ─── Shared helpers ────────────────────────────────────────────────────────────
 
-const metaCache: Record<string, { title: string; year: string; poster: string }> = {};
+// showName: an episode's own title is its name, so the card says which show it
+// belongs to on the line under it, as every other episode row in the app does.
+const metaCache: Record<string, { title: string; year: string; poster: string; showName?: string }> = {};
+
+// The same icons as the Movies · Shows · Episodes pill, so a card says what it is.
+const SIDE_ICON: Record<FeedSide, typeof Film> = { movies: Film, shows: Tv, episodes: Clapperboard };
 
 async function fetchMeta(tmdbId: string) {
   if (metaCache[tmdbId]) return metaCache[tmdbId];
   const m = readCachedMeta(tmdbId);
   if (m) {
-    const meta = { title: m.title ?? 'Unknown', year: m.year ?? '', poster: m.poster ?? '' };
+    const meta = { title: m.title ?? 'Unknown', year: m.year ?? '', poster: m.poster ?? '', showName: m.showName };
     metaCache[tmdbId] = meta;
     return meta;
   }
@@ -64,7 +73,7 @@ async function fetchMeta(tmdbId: string) {
     const res = await fetch(`/api/meta/${tmdbId}`);
     if (!res.ok) return null;
     const d = await res.json();
-    const meta = { title: d.title ?? 'Unknown', year: d.year ?? '', poster: d.poster ?? '' };
+    const meta = { title: d.title ?? 'Unknown', year: d.year ?? '', poster: d.poster ?? '', showName: d.showName };
     metaCache[tmdbId] = meta;
     return meta;
   } catch { return null; }
@@ -93,7 +102,7 @@ interface UnifiedItem {
   type: 'activity' | 'rewatched' | 'watchlist' | 'watchlist_batch' | 'daily_pick' | 'imported' | 'episode_batch';
   user: { username: string; displayName: string | null; avatarUrl: string | null };
   tmdbId: string;
-  meta?: { title: string; year: string; poster: string };
+  meta?: { title: string; year: string; poster: string; showName?: string };
   watched?: boolean;
   rating?: number;
   reviewBody?: string;
@@ -103,6 +112,8 @@ interface UnifiedItem {
   batchCount?: number;
   batchTmdbIds?: string[];
   batchRated?: number;
+  batchSides?: Record<FeedSide, number>;
+  batchDay?: string;
   createdAt: string;
   // server-backed social likes (activity/rewatched/watchlist cards)
   likeCount?: number;
@@ -139,6 +150,10 @@ function ActivityCard({ item, onToggleLike, onRemove }: {
   // Your own activity keeps the same layout as everyone else's, but gets a
   // subtle tint so it's easy to pick your own entries out of the feed.
   const mine = item.isMe;
+  const SideIcon = SIDE_ICON[sideOfTitle(item.tmdbId)];
+  // S2·E1 · The Walking Dead — worked out from the id, so it is there before the
+  // title has loaded; only the show's name waits for it.
+  const episodeLine = episodeLineFor(item.tmdbId, meta);
 
   const handleShare = () => {
     setMenuOpen(false);
@@ -233,10 +248,15 @@ function ActivityCard({ item, onToggleLike, onRemove }: {
           </div>
           <div className="flex flex-col justify-center gap-1.5 flex-1 min-w-0">
             {meta
-              ? <><h3 className="font-bold font-headline text-base group-hover:text-primary transition-colors line-clamp-2 leading-snug">{meta.title}</h3>
-                  {meta.year && <p className="text-xs text-muted-foreground">{meta.year}</p>}</>
-              : <><div className="h-4 bg-muted rounded-full w-3/4 animate-pulse" /><div className="h-3 bg-muted rounded-full w-1/4 animate-pulse mt-1" /></>
+              ? <h3 className="font-bold font-headline text-base group-hover:text-primary transition-colors line-clamp-2 leading-snug">{meta.title}</h3>
+              : <div className="h-4 bg-muted rounded-full w-3/4 animate-pulse" />
             }
+            {/* What it is, in the pill's icon: a movie or a show gives its year,
+                an episode names its show instead. */}
+            <p className="flex items-center gap-1 text-xs text-muted-foreground min-w-0">
+              <SideIcon className="h-3 w-3 shrink-0" />
+              <span className="truncate">{episodeLine ?? meta?.year ?? ''}</span>
+            </p>
             {item.type === 'activity' && item.rating !== undefined && (
               <div className="flex items-center gap-1 text-primary font-bold text-sm bg-primary/10 w-fit px-2.5 py-0.5 rounded-full">
                 <Star className="h-3.5 w-3.5" />{item.rating} / 10
@@ -313,10 +333,13 @@ function EpisodeBatchCard({ item }: { item: UnifiedItem }) {
           </div>
           <div className="flex flex-col justify-center gap-1.5 flex-1 min-w-0">
             {meta
-              ? <><h3 className="font-bold font-headline text-base group-hover:text-primary transition-colors line-clamp-2 leading-snug">{meta.title}</h3>
-                  {meta.year && <p className="text-xs text-muted-foreground">{meta.year}</p>}</>
-              : <><div className="h-4 bg-muted rounded-full w-3/4 animate-pulse" /><div className="h-3 bg-muted rounded-full w-1/4 animate-pulse mt-1" /></>
+              ? <h3 className="font-bold font-headline text-base group-hover:text-primary transition-colors line-clamp-2 leading-snug">{meta.title}</h3>
+              : <div className="h-4 bg-muted rounded-full w-3/4 animate-pulse" />
             }
+            {/* The card is the show; the line above already counts its episodes. */}
+            <p className="flex items-center gap-1 text-xs text-muted-foreground">
+              <Tv className="h-3 w-3 shrink-0" />{meta?.year ?? ''}
+            </p>
           </div>
         </div>
       </Link>
@@ -352,10 +375,12 @@ function WatchlistBatchCard({ item }: { item: UnifiedItem }) {
             {item.user.displayName ?? item.user.username}
           </Link>
           <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-            <Bookmark className="h-3.5 w-3.5 text-primary" />
-            <span>Added {item.batchCount} to watchlist</span>
+            <Bookmark className="h-3.5 w-3.5 text-primary shrink-0" />
+            {/* Split, never one mixed number: "Added 12 movies · 3 shows". A feed
+                cached before the split arrived has only the total. */}
+            <span className="truncate">Added {item.batchSides ? sidesLabel(item.batchSides) : item.batchCount} to watchlist</span>
             <span>·</span>
-            <span>{relativeTime(item.createdAt)}</span>
+            <span className="shrink-0">{relativeTime(item.createdAt)}</span>
           </div>
         </div>
       </div>
@@ -561,7 +586,7 @@ export default function SocialPage() {
         if (ids.length > 0) {
           const map = await batchFetchMeta(ids);
           for (const [id, m] of Object.entries(map)) {
-            metaCache[id] = { title: m.title, year: m.year, poster: m.poster };
+            metaCache[id] = { title: m.title, year: m.year, poster: m.poster, showName: m.showName };
           }
         }
         setFriendFeed(feed);
@@ -648,6 +673,8 @@ export default function SocialPage() {
         batchCount: f.batchCount,
         batchTmdbIds: f.batchTmdbIds,
         batchRated: f.batchRated,
+        batchSides: f.batchSides,
+        batchDay: f.batchDay,
         likeCount: f.likeCount,
         likedByMe: f.likedByMe,
         createdAt: f.createdAt,

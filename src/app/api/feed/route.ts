@@ -3,11 +3,12 @@ import { prisma } from '@/lib/db';
 import { ok, err } from '@/lib/api-response';
 import { getCurrentUser } from '@/lib/auth-utils';
 import { clampInt } from '@/lib/query-params';
+import { splitBursts, countSides, dayKey, isEpisodeId, showOfEpisode, type FeedSide } from '@/lib/feed-groups';
 
 export interface FeedItem {
   id: string;
-  // 'activity' = a single film's watched + rated + reviewed folded into one card.
-  // 'episode_batch' = 3+ episodes of one show on one day, folded together.
+  // 'activity' = a single title's watched + rated + reviewed folded into one card.
+  // 'episode_batch' = 2+ episodes of one show on one day, folded together.
   type: 'activity' | 'rewatched' | 'imported' | 'watchlist' | 'watchlist_batch' | 'daily_pick' | 'episode_batch';
   user: { id: string; username: string; displayName: string | null; avatarUrl: string | null };
   tmdbId: string;
@@ -22,6 +23,10 @@ export interface FeedItem {
   batchCount?: number;
   batchTmdbIds?: string[];
   batchRated?: number; // episode_batch: how many of them were also rated
+  // How many of the burst are movies, shows and episodes, so the card never says
+  // one mixed number; and the UTC day it was counted in, which the full list uses.
+  batchSides?: Record<FeedSide, number>;
+  batchDay?: string;
   createdAt: string;
   likeCount?: number;
   likedByMe?: boolean;
@@ -123,48 +128,41 @@ export async function GET(req: NextRequest) {
   };
 
   // Watchlist adds flood if broadcast one-by-one (a browsing session = a dozen
-  // cards). Collapse per user per day: 1-2 adds show as normal "wants to see
-  // this" cards (the invitational signal worth keeping), 3+ collapse into a
-  // single "added N to watchlist" card. Import-time adds are excluded — the
-  // "imported N titles" card already covers them.
-  const wlByUserDay = new Map<string, typeof watchlist>();
-  for (const w of watchlist) {
-    if (nearImport(w.user.id, w.addedAt)) continue;
-    const day = w.addedAt.toISOString().slice(0, 10);
-    const key = `${w.user.id}:${day}`;
-    const arr = wlByUserDay.get(key) ?? [];
-    arr.push(w);
-    wlByUserDay.set(key, arr);
-  }
-  const watchlistItems: FeedItem[] = [];
-  for (const [key, rows] of wlByUserDay) {
-    const sorted = rows.slice().sort((a, b) => b.addedAt.getTime() - a.addedAt.getTime());
-    if (sorted.length <= 2) {
-      for (const w of sorted) {
-        watchlistItems.push({
-          id: `watchlist-${w.id}`,
-          type: 'watchlist',
-          user: w.user,
-          tmdbId: w.tmdbId,
-          mediaType: w.mediaType,
-          createdAt: w.addedAt.toISOString(),
-        });
-      }
-    } else {
-      watchlistItems.push({
+  // cards). Collapse per user per day: a single add shows as a normal "wants to
+  // see this" card (the invitational signal worth keeping), two or more collapse
+  // into one "added 12 movies · 3 shows to watchlist" card. Import-time adds are
+  // excluded — the "imported N titles" card already covers them.
+  const { singles: loneAdds, groups: addBursts } = splitBursts(
+    watchlist.filter(w => !nearImport(w.user.id, w.addedAt)),
+    w => `${w.user.id}:${dayKey(w.addedAt)}`,
+  );
+  const watchlistItems: FeedItem[] = [
+    ...loneAdds.map(w => ({
+      id: `watchlist-${w.id}`,
+      type: 'watchlist' as const,
+      user: w.user,
+      tmdbId: w.tmdbId,
+      mediaType: w.mediaType,
+      createdAt: w.addedAt.toISOString(),
+    })),
+    ...addBursts.map(({ key, rows }) => {
+      const sorted = rows.slice().sort((a, b) => b.addedAt.getTime() - a.addedAt.getTime());
+      return {
         id: `watchlist-batch-${key}`,
-        type: 'watchlist_batch',
+        type: 'watchlist_batch' as const,
         user: sorted[0].user,
         tmdbId: '',
         mediaType: '',
         batchCount: sorted.length,
         batchTmdbIds: sorted.slice(0, 6).map(w => w.tmdbId),
+        batchSides: countSides(sorted),
+        batchDay: dayKey(sorted[0].addedAt),
         createdAt: sorted[0].addedAt.toISOString(),
-      });
-    }
-  }
+      };
+    }),
+  ];
 
-  // Fold each film's watched + rated + reviewed by the same user into ONE
+  // Fold each title's watched + rated + reviewed by the same user into ONE
   // "activity" card, so watching + rating + reviewing a film is a single entry
   // instead of three (the flood). Rewatches, watchlist, imports stay separate.
   type Acc = {
@@ -209,36 +207,32 @@ export async function GET(req: NextRequest) {
   });
 
   // A binge is one card per episode, which buries everyone else. Collapse a
-  // user's episodes of the SAME show on the SAME day once there are 3+, the
-  // same rule the watchlist burst uses. One or two still show individually.
-  const isEpisode = (id: string) => /^tmdb-tv-\d{1,10}-S\d{1,3}E\d{1,4}$/.test(id);
-  const showOf = (id: string) => id.replace(/-S\d{1,3}E\d{1,4}$/, '');
-
-  const activityItems: FeedItem[] = [];
-  const epGroups = new Map<string, Acc[]>();
-  for (const a of activityMap.values()) {
-    if (!isEpisode(a.tmdbId)) { activityItems.push(toActivityItem(a)); continue; }
-    const day = new Date(a.latest).toISOString().slice(0, 10);
-    const k = `${a.user.id}:${showOf(a.tmdbId)}:${day}`;
-    const arr = epGroups.get(k) ?? [];
-    arr.push(a);
-    epGroups.set(k, arr);
-  }
-  for (const group of epGroups.values()) {
-    if (group.length < 3) { for (const a of group) activityItems.push(toActivityItem(a)); continue; }
-    const sorted = group.slice().sort((a, b) => b.latest - a.latest);
+  // user's episodes of the SAME show on the SAME day once there are two or more,
+  // the same rule the watchlist burst uses. A single episode still shows alone.
+  const accs = [...activityMap.values()];
+  const activityItems: FeedItem[] = accs.filter(a => !isEpisodeId(a.tmdbId)).map(toActivityItem);
+  const { singles: loneEpisodes, groups: binges } = splitBursts(
+    accs.filter(a => isEpisodeId(a.tmdbId)),
+    a => `${a.user.id}:${showOfEpisode(a.tmdbId)}:${dayKey(new Date(a.latest))}`,
+  );
+  activityItems.push(...loneEpisodes.map(toActivityItem));
+  for (const { rows } of binges) {
+    const sorted = rows.slice().sort((a, b) => b.latest - a.latest);
     const first = sorted[0];
+    const day = dayKey(new Date(first.latest));
     activityItems.push({
-      id: `episode-batch-${first.user.id}-${showOf(first.tmdbId)}-${new Date(first.latest).toISOString().slice(0, 10)}`,
+      id: `episode-batch-${first.user.id}-${showOfEpisode(first.tmdbId)}-${day}`,
       type: 'episode_batch',
       user: first.user,
       // The SHOW id, so the card resolves the show's poster and title.
-      tmdbId: showOf(first.tmdbId),
+      tmdbId: showOfEpisode(first.tmdbId),
       mediaType: first.mediaType,
-      batchCount: group.length,
+      batchCount: rows.length,
       batchTmdbIds: sorted.slice(0, 6).map(a => a.tmdbId),
-      watched: group.some(a => a.watched),
-      batchRated: group.filter(a => a.rating !== undefined).length,
+      watched: rows.some(a => a.watched),
+      batchRated: rows.filter(a => a.rating !== undefined).length,
+      batchSides: { movies: 0, shows: 0, episodes: rows.length },
+      batchDay: day,
       createdAt: new Date(first.latest).toISOString(),
     });
   }
