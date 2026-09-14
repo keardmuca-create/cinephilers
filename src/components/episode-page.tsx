@@ -539,61 +539,6 @@ export function EpisodePage({ showTmdbId, season, episodeNumber }: {
           );
         })()}
 
-        {/* Cinephilers Reviews — every member's review of this episode, yours first
-            and tagged You, as a film or show page shows them. It replaces a box that
-            showed only your own, so nobody else's review of an episode was readable
-            here. See All opens them all. */}
-        {reviews.length > 0 && (() => {
-          const own = reviews.find(r => r.isOwn);
-          const preview = [...(own ? [own] : []), ...reviews.filter(r => !r.isOwn)].slice(0, 3);
-          return (
-            <section className="space-y-3">
-              <div className="flex items-center justify-between gap-3">
-                <h3 className="text-xl font-headline font-bold flex items-center gap-2">
-                  <MessageSquare className="h-5 w-5 text-primary" /> Cinephilers Reviews
-                </h3>
-                <Link
-                  href={`/movie/${episodeId}/reviews`}
-                  className="text-xs text-primary border border-primary/30 rounded-full px-3 py-1 hover:bg-primary/10 transition-colors font-semibold shrink-0"
-                >
-                  See All
-                </Link>
-              </div>
-              <div className="space-y-3">
-                {preview.map(r => (
-                  <div key={r.id} className="bg-card rounded-2xl border border-border p-4 space-y-2.5">
-                    <div className="flex items-center justify-between gap-3">
-                      <Link href={r.isOwn ? '/profile' : `/profile/${r.user.username}`} className="flex items-center gap-3 min-w-0 group">
-                        <div className="h-9 w-9 rounded-2xl bg-primary/20 overflow-hidden flex items-center justify-center shrink-0">
-                          {r.user.avatarUrl
-                            ? <img src={r.user.avatarUrl} alt={r.user.username} className="w-full h-full object-cover" />
-                            : <span className="text-primary font-bold text-xs">{(r.user.displayName ?? r.user.username).slice(0, 2).toUpperCase()}</span>}
-                        </div>
-                        <div className="min-w-0">
-                          <p className="font-bold text-sm truncate group-hover:text-primary transition-colors">
-                            {r.user.displayName ?? r.user.username}
-                            {r.isOwn && <span className="ml-1.5 text-[10px] text-primary font-bold uppercase tracking-wider">You</span>}
-                          </p>
-                          <p className="text-xs text-muted-foreground">{relativeTime(r.createdAt)}</p>
-                        </div>
-                      </Link>
-                      {r.rating !== null && (
-                        <div className="flex items-center gap-1 bg-primary/10 px-2.5 py-1 rounded-full shrink-0">
-                          <Star className="h-3.5 w-3.5 text-primary" />
-                          <span className="text-sm font-black text-primary">{r.rating}/10</span>
-                        </div>
-                      )}
-                    </div>
-                    <SpoilerWrap isSpoiler={r.containsSpoiler}>
-                      <p className="text-sm text-foreground/90 italic leading-relaxed">&ldquo;{r.body}&rdquo;</p>
-                    </SpoilerWrap>
-                  </div>
-                ))}
-              </div>
-            </section>
-          );
-        })()}
-
         {/* Friends' ratings */}
         {authUser && (
           <section className="space-y-3">
@@ -684,6 +629,61 @@ export function EpisodePage({ showTmdbId, season, episodeNumber }: {
             </div>
           </section>
         )}
+
+        {/* Cinephilers Reviews — every member's review of this episode, yours first
+            and tagged You. Below the cast and crew, where a film or show page keeps
+            its reviews (Keard, 2026-09-15), rather than straight under the rating.
+            See All opens them all. */}
+        {reviews.length > 0 && (() => {
+          const own = reviews.find(r => r.isOwn);
+          const preview = [...(own ? [own] : []), ...reviews.filter(r => !r.isOwn)].slice(0, 3);
+          return (
+            <section className="space-y-3">
+              <div className="flex items-center justify-between gap-3">
+                <h3 className="text-xl font-headline font-bold flex items-center gap-2">
+                  <MessageSquare className="h-5 w-5 text-primary" /> Cinephilers Reviews
+                </h3>
+                <Link
+                  href={`/movie/${episodeId}/reviews`}
+                  className="text-xs text-primary border border-primary/30 rounded-full px-3 py-1 hover:bg-primary/10 transition-colors font-semibold shrink-0"
+                >
+                  See All
+                </Link>
+              </div>
+              <div className="space-y-3">
+                {preview.map(r => (
+                  <div key={r.id} className="bg-card rounded-2xl border border-border p-4 space-y-2.5">
+                    <div className="flex items-center justify-between gap-3">
+                      <Link href={r.isOwn ? '/profile' : `/profile/${r.user.username}`} className="flex items-center gap-3 min-w-0 group">
+                        <div className="h-9 w-9 rounded-2xl bg-primary/20 overflow-hidden flex items-center justify-center shrink-0">
+                          {r.user.avatarUrl
+                            ? <img src={r.user.avatarUrl} alt={r.user.username} className="w-full h-full object-cover" />
+                            : <span className="text-primary font-bold text-xs">{(r.user.displayName ?? r.user.username).slice(0, 2).toUpperCase()}</span>}
+                        </div>
+                        <div className="min-w-0">
+                          <p className="font-bold text-sm truncate group-hover:text-primary transition-colors">
+                            {r.user.displayName ?? r.user.username}
+                            {r.isOwn && <span className="ml-1.5 text-[10px] text-primary font-bold uppercase tracking-wider">You</span>}
+                          </p>
+                          <p className="text-xs text-muted-foreground">{relativeTime(r.createdAt)}</p>
+                        </div>
+                      </Link>
+                      {r.rating !== null && (
+                        <div className="flex items-center gap-1 bg-primary/10 px-2.5 py-1 rounded-full shrink-0">
+                          <Star className="h-3.5 w-3.5 text-primary" />
+                          <span className="text-sm font-black text-primary">{r.rating}/10</span>
+                        </div>
+                      )}
+                    </div>
+                    <SpoilerWrap isSpoiler={r.containsSpoiler}>
+                      <p className="text-sm text-foreground/90 italic leading-relaxed">&ldquo;{r.body}&rdquo;</p>
+                    </SpoilerWrap>
+                  </div>
+                ))}
+              </div>
+            </section>
+          );
+        })()}
       </div>
 
       {/* Rating sheet */}

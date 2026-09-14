@@ -458,9 +458,7 @@ function SeasonsSection({
   const getProgress = (sn: number, total: number) => {
     let watched = 0;
     for (const k of watchedEpisodes) { if (k.startsWith(`S${sn}E`)) watched++; }
-    let rated = 0;
-    for (const k of Object.keys(episodeRatings)) { if (k.startsWith(`S${sn}E`)) rated++; }
-    return { watched, rated, total };
+    return { watched, total };
   };
 
   return (
@@ -480,7 +478,7 @@ function SeasonsSection({
           const posterSrc = season.poster_path
             ? `https://image.tmdb.org/t/p/w154${season.poster_path}`
             : showPoster;
-          const { watched, rated, total } = getProgress(sn, season.episode_count);
+          const { watched, total } = getProgress(sn, season.episode_count);
           const allWatched = total > 0 && watched >= total;
 
           return (
@@ -500,15 +498,15 @@ function SeasonsSection({
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="font-bold font-headline text-sm">{season.name}</p>
-                    {/* Two counts, always printed, even at zero — an empty
-                        "0 / 13" is how you learn the season can be rated at all,
-                        and hiding them until you start left a fresh season
-                        stating nothing. The episode total used to be spelled out
-                        as "13 ep"; both denominators already say it, so the word
-                        was the third copy of the same number.
+                    {/* The watched count only, always printed, even at "0 / 13".
+                        A rated count sat beside it and was taken off (Keard,
+                        2026-09-15): a season is something you watch through, and
+                        each episode row already shows its own score. The episode
+                        total used to be spelled out as "13 ep"; the denominator
+                        already says it.
                         The eye is a count here and a control on an episode row;
                         the season's own control stays the button to the right,
-                        which is why neither of these is tappable. */}
+                        which is why this is not tappable. */}
                     <div className="flex items-center gap-2.5 flex-wrap mt-0.5">
                       {season.air_date && (
                         <p className="text-xs text-muted-foreground font-bold">{season.air_date.slice(0, 4)}</p>
@@ -516,10 +514,6 @@ function SeasonsSection({
                       <span className="flex items-center gap-1 text-xs font-bold text-primary">
                         <WatchedEye state={allWatched ? 'complete' : 'partial'} className="h-3.5 w-3.5" />
                         {watched} / {total}
-                      </span>
-                      <span className="flex items-center gap-1 text-xs font-bold text-primary">
-                        <Star className="h-3.5 w-3.5" />
-                        {rated} / {total}
                       </span>
                     </div>
                   </div>
