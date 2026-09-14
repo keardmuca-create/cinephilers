@@ -3,7 +3,8 @@ import { prisma } from '@/lib/db';
 import { ok, err } from '@/lib/api-response';
 import { getCurrentUser } from '@/lib/auth-utils';
 import { clampInt } from '@/lib/query-params';
-import { splitBursts, countSides, dayKey, isEpisodeId, showOfEpisode, episodeIdOf, type FeedSide } from '@/lib/feed-groups';
+import { localDay } from '@/lib/local-day';
+import { splitBursts, countSides, isEpisodeId, showOfEpisode, episodeIdOf, type FeedSide } from '@/lib/feed-groups';
 
 export interface FeedItem {
   id: string;
@@ -23,8 +24,8 @@ export interface FeedItem {
   batchCount?: number;
   batchTmdbIds?: string[];
   batchRated?: number; // episode_batch: how many of them were also rated
-  // How many of the burst are movies, shows and episodes, so the card never says
-  // one mixed number; and the UTC day it was counted in, which the full list uses.
+  // How many of the burst are movies, shows and episodes, and the day it was
+  // counted in — the owner's own calendar day — which the full list asks for.
   batchSides?: Record<FeedSide, number>;
   batchDay?: string;
   createdAt: string;
@@ -50,6 +51,16 @@ export async function GET(req: NextRequest) {
   const userSelect = {
     select: { id: true, username: true, displayName: true, avatarUrl: true },
   };
+
+  // A burst belongs to a day in the zone of the person who did it: past THEIR
+  // midnight is a new day, whatever the server's clock or the reader's says.
+  // Looked up apart from userSelect so nobody's time zone rides out on a card to
+  // the people who follow them.
+  const zones = new Map(
+    (await prisma.user.findMany({ where: { id: { in: followingIds } }, select: { id: true, timezone: true } }))
+      .map(u => [u.id, u.timezone]),
+  );
+  const dayOf = (userId: string, at: Date) => localDay(zones.get(userId), at);
 
   // Activities the user removed from their own feed (hidden everywhere, on every device)
   const hidden = await prisma.hiddenActivity.findMany({
@@ -141,11 +152,11 @@ export async function GET(req: NextRequest) {
   // Watchlist adds flood if broadcast one-by-one (a browsing session = a dozen
   // cards). Collapse per user per day: a single add shows as a normal "wants to
   // see this" card (the invitational signal worth keeping), two or more collapse
-  // into one "added 12 movies · 3 shows to watchlist" card. Import-time adds are
-  // excluded — the "imported N titles" card already covers them.
+  // into one "added to watchlist" card. Import-time adds are excluded — the
+  // "imported N titles" card already covers them.
   const { singles: loneAdds, groups: addBursts } = splitBursts(
     watchlist.filter(w => !nearImport(w.user.id, w.addedAt)),
-    w => `${w.user.id}:${dayKey(w.addedAt)}`,
+    w => `${w.user.id}:${dayOf(w.user.id, w.addedAt)}`,
   );
   const watchlistItems: FeedItem[] = [
     ...loneAdds.map(w => ({
@@ -167,7 +178,7 @@ export async function GET(req: NextRequest) {
         batchCount: sorted.length,
         batchTmdbIds: sorted.slice(0, 6).map(w => w.tmdbId),
         batchSides: countSides(sorted),
-        batchDay: dayKey(sorted[0].addedAt),
+        batchDay: dayOf(sorted[0].user.id, sorted[0].addedAt),
         createdAt: sorted[0].addedAt.toISOString(),
       };
     }),
@@ -231,18 +242,20 @@ export async function GET(req: NextRequest) {
 
   // A binge is one card per episode, which buries everyone else. Collapse a
   // user's episodes of the SAME show on the SAME day once there are two or more,
-  // the same rule the watchlist burst uses. A single episode still shows alone.
+  // the same rule the watchlist burst uses. A single episode still shows alone,
+  // and episodes of different shows are never folded together — each show keeps
+  // its own card (Keard, 2026-09-15).
   const accs = [...activityMap.values()];
   const activityItems: FeedItem[] = accs.filter(a => !isEpisodeId(a.tmdbId)).map(toActivityItem);
   const { singles: loneEpisodes, groups: binges } = splitBursts(
     accs.filter(a => isEpisodeId(a.tmdbId)),
-    a => `${a.user.id}:${showOfEpisode(a.tmdbId)}:${dayKey(new Date(a.latest))}`,
+    a => `${a.user.id}:${showOfEpisode(a.tmdbId)}:${dayOf(a.user.id, new Date(a.latest))}`,
   );
   activityItems.push(...loneEpisodes.map(toActivityItem));
   for (const { rows } of binges) {
     const sorted = rows.slice().sort((a, b) => b.latest - a.latest);
     const first = sorted[0];
-    const day = dayKey(new Date(first.latest));
+    const day = dayOf(first.user.id, new Date(first.latest));
     activityItems.push({
       id: `episode-batch-${first.user.id}-${showOfEpisode(first.tmdbId)}-${day}`,
       type: 'episode_batch',

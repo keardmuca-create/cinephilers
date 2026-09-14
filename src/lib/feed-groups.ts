@@ -1,10 +1,14 @@
+import { utcDay } from './local-day';
+
 // How the activity feed folds a burst into one card, and how a card says what its
 // titles are. Shared by the feed and the page a group card opens, so the card and
 // the list behind it always count the same rows.
 //
-// A burst is two or more of the same thing from one person on one day: watchlist
-// adds, or episodes of one show. It used to take three, which let a pair of adds or
-// a two-episode evening take two cards where one says it better.
+// A burst is two or more of the same thing from one person on one of THEIR days:
+// watchlist adds, or episodes of one show. It used to take three, which let a pair
+// of adds or a two-episode evening take two cards where one says it better. Which
+// day a moment belongs to is localDay()'s decision, in that person's own zone —
+// past their midnight is a new day — and nothing here decides it a second way.
 
 export type FeedSide = 'movies' | 'shows' | 'episodes';
 
@@ -57,18 +61,27 @@ export function sidesLabel(counts: Record<FeedSide, number>): string {
     .join(' · ');
 }
 
-/** The UTC day a burst is counted in. The card and its list must use the same one. */
-export function dayKey(d: Date): string {
-  return d.toISOString().slice(0, 10);
-}
+const DAY_MS = 24 * 60 * 60 * 1000;
+// No time zone is more than fourteen hours from UTC (Kiribati is +14, the far
+// Pacific -12), so this much either side of a date's UTC day holds that date
+// everywhere on Earth.
+const WIDEST_OFFSET_MS = 14 * 60 * 60 * 1000;
 
-/** A day key as the [start, end) it covers, or null for anything that is not a real date. */
-export function dayRange(day: string): [Date, Date] | null {
+/**
+ * The stretch of time that can hold the calendar day `day` in ANY time zone, or
+ * null for anything that is not a real date. A query takes this window, then keeps
+ * the rows localDay() puts on `day` for the one zone it is about — so the database
+ * never has to know about zones, and the boundary is still decided in one place.
+ */
+export function dayWindow(day: string): [Date, Date] | null {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) return null;
-  const start = new Date(`${day}T00:00:00.000Z`);
-  // 2026-02-30 parses as March 2nd; reading the key back catches it.
-  if (Number.isNaN(start.getTime()) || dayKey(start) !== day) return null;
-  return [start, new Date(start.getTime() + 24 * 60 * 60 * 1000)];
+  const midnight = new Date(`${day}T00:00:00.000Z`);
+  // 2026-02-30 parses as March 2nd; reading the date back catches it.
+  if (Number.isNaN(midnight.getTime()) || utcDay(midnight) !== day) return null;
+  return [
+    new Date(midnight.getTime() - WIDEST_OFFSET_MS),
+    new Date(midnight.getTime() + DAY_MS + WIDEST_OFFSET_MS),
+  ];
 }
 
 /**

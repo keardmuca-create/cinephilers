@@ -7,7 +7,7 @@ import { Heart, Star, Eye, Bookmark, Film, Tv, Clapperboard, ChevronRight, MoreH
 import { RefineSheet, type RefineValue } from '@/components/refine-sheet';
 import { dismissActivity, getDismissed, relativeTime } from '@/lib/activity';
 import { episodeLineFor } from '@/lib/episode-line';
-import { sidesLabel, sideOfTitle, type FeedSide } from '@/lib/feed-groups';
+import { sideOfTitle, type FeedSide } from '@/lib/feed-groups';
 import { useAuth } from '@/contexts/auth-context';
 import { fetchWithAuth } from '@/lib/fetch-with-auth';
 import { batchFetchMeta } from '@/lib/meta-batch';
@@ -389,9 +389,9 @@ function WatchlistBatchCard({ item }: { item: UnifiedItem }) {
           </Link>
           <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
             <Bookmark className="h-3.5 w-3.5 text-primary shrink-0" />
-            {/* Split, never one mixed number: "Added 12 movies · 3 shows". A feed
-                cached before the split arrived has only the total. */}
-            <span className="truncate">Added {item.batchSides ? sidesLabel(item.batchSides) : item.batchCount} to watchlist</span>
+            {/* No count on the card (Keard, 2026-09-15): the posters say it, and See
+                all splits it into movies, shows and episodes on the pill. */}
+            <span className="truncate">Added to watchlist</span>
             <span>·</span>
             <span className="shrink-0">{relativeTime(item.createdAt)}</span>
           </div>

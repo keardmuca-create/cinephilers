@@ -3,13 +3,14 @@ import { prisma } from '@/lib/db';
 import { ok, err } from '@/lib/api-response';
 import { getCurrentUser } from '@/lib/auth-utils';
 import { canViewUserContent } from '@/lib/privacy';
-import { dayKey, dayRange, episodeIdOf, isEpisodeId } from '@/lib/feed-groups';
+import { localDay } from '@/lib/local-day';
+import { dayWindow, episodeIdOf, isEpisodeId } from '@/lib/feed-groups';
 
 // Every title behind one group card in the activity feed: someone's watchlist adds
 // on one day, or their episodes of one show on one day. The card only carries six
 // posters and a count, and the feed reads a capped window across everyone you
 // follow, so the full list is asked for here, for one person, and counted by the
-// same rules the feed uses — the UTC day, and nothing stamped at an import.
+// same rules the feed uses — THEIR calendar day, and nothing stamped at an import.
 
 export interface GroupEntry {
   tmdbId: string;
@@ -35,17 +36,21 @@ export async function GET(req: NextRequest) {
 
   if (!username) return err('user is required');
   if (kind !== 'watchlist' && kind !== 'episodes') return err('Invalid kind');
-  const range = dayRange(day);
-  if (!range) return err('Invalid day');
+  const window = dayWindow(day);
+  if (!window) return err('Invalid day');
   if (kind === 'episodes' && !/^tmdb-tv-\d{1,10}$/.test(show)) return err('Invalid show');
-  const [start, end] = range;
+  const [from, to] = window;
 
   const owner = await prisma.user.findUnique({
     where: { username },
-    select: { id: true, username: true, displayName: true },
+    select: { id: true, username: true, displayName: true, timezone: true },
   });
   if (!owner) return err('User not found', 404);
   if (!(await canViewUserContent(auth.sub, owner.id))) return err('This account is private', 403);
+
+  // The day is the owner's, in their own zone, as the card counted it. The query
+  // takes a window wide enough for any zone and localDay() narrows it to theirs.
+  const onTheirDay = (t: Date) => localDay(owner.timezone, t) === day;
 
   // The feed only looks back thirty days, so a card can never name a day before it.
   const since = new Date(Date.now() - 30 * DAY_MS);
@@ -59,12 +64,12 @@ export async function GET(req: NextRequest) {
 
   if (kind === 'watchlist') {
     const rows = await prisma.watchlistItem.findMany({
-      where: { userId: owner.id, addedAt: { gte: start, lt: end } },
+      where: { userId: owner.id, addedAt: { gte: from, lt: to } },
       orderBy: { addedAt: 'desc' },
       select: { tmdbId: true, mediaType: true, addedAt: true },
     });
     entries = rows
-      .filter(r => !nearImport(r.addedAt))
+      .filter(r => onTheirDay(r.addedAt) && !nearImport(r.addedAt))
       .map(r => ({ tmdbId: r.tmdbId, mediaType: r.mediaType, at: r.addedAt.toISOString() }));
   } else {
     // An episode lands on the day of its LATEST watch, rating or review, as it does
@@ -120,7 +125,7 @@ export async function GET(req: NextRequest) {
       return m ? Number(m[1]) * 10000 + Number(m[2]) : 0;
     };
     entries = [...folded.entries()]
-      .filter(([, v]) => dayKey(new Date(v.latest)) === day)
+      .filter(([, v]) => onTheirDay(new Date(v.latest)))
       // Newest first; a season marked at once shares one moment, so then in episode order.
       .sort(([a, va], [b, vb]) => (vb.latest - va.latest) || (order(a) - order(b)))
       .map(([id, v]) => ({ tmdbId: id, mediaType: 'SHOW', at: new Date(v.latest).toISOString(), rating: v.rating }));

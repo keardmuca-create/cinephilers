@@ -1,21 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { splitBursts, sideOfTitle, countSides, sidesLabel, dayKey, dayRange, isEpisodeId, showOfEpisode, episodeIdOf, GROUP_AT } from './feed-groups';
-
-// The page a group card opens asks for one day by its key; it must cover exactly
-// that UTC day and refuse anything else rather than query a nonsense range.
-describe('dayRange', () => {
-  it('covers the whole UTC day the key names', () => {
-    const range = dayRange('2026-09-15')!;
-    expect(range[0].toISOString()).toBe('2026-09-15T00:00:00.000Z');
-    expect(range[1].toISOString()).toBe('2026-09-16T00:00:00.000Z');
-  });
-
-  it('refuses what is not a real date', () => {
-    expect(dayRange('2026-02-30')).toBeNull();
-    expect(dayRange('yesterday')).toBeNull();
-    expect(dayRange('2026-9-15')).toBeNull();
-  });
-});
+import { splitBursts, sideOfTitle, countSides, sidesLabel, dayWindow, isEpisodeId, showOfEpisode, episodeIdOf, GROUP_AT } from './feed-groups';
+import { localDay } from './local-day';
 
 // Ticking an episode and rating it must land on the same card, so the id built
 // from a watched-episode row has to be the one a rating of that episode carries.
@@ -27,6 +12,30 @@ describe('episodeIdOf', () => {
 
   it('gives a show id saved as a bare number its prefix', () => {
     expect(episodeIdOf('1396', 1, 2)).toBe('tmdb-tv-1396-S1E2');
+  });
+});
+
+// The page a group card opens asks for one of its owner's days. The window has to
+// hold that day wherever they live, and refuse anything that is not a date.
+describe('dayWindow', () => {
+  it("holds a day in Tirana, where it starts while UTC is still on yesterday", () => {
+    const [from, to] = dayWindow('2026-09-15')!;
+    const justAfterMidnightInTirana = new Date('2026-09-14T22:30:00.000Z'); // 00:30 on the 15th
+    expect(localDay('Europe/Tirane', justAfterMidnightInTirana)).toBe('2026-09-15');
+    expect(justAfterMidnightInTirana >= from && justAfterMidnightInTirana < to).toBe(true);
+  });
+
+  it('holds a day on the far side of the Pacific too', () => {
+    const [from, to] = dayWindow('2026-09-15')!;
+    const lateInPagoPago = new Date('2026-09-16T10:30:00.000Z'); // 23:30 on the 15th at UTC-11
+    expect(localDay('Pacific/Pago_Pago', lateInPagoPago)).toBe('2026-09-15');
+    expect(lateInPagoPago >= from && lateInPagoPago < to).toBe(true);
+  });
+
+  it('refuses what is not a real date', () => {
+    expect(dayWindow('2026-02-30')).toBeNull();
+    expect(dayWindow('yesterday')).toBeNull();
+    expect(dayWindow('2026-9-15')).toBeNull();
   });
 });
 
@@ -51,11 +60,27 @@ describe('splitBursts', () => {
   it('keeps different people and different days apart', () => {
     const { singles, groups } = splitBursts([
       { user: 'a', day: '2026-09-15' },
+      { user: 'a', day: '2026-09-15'.replace('15', '14') },
       { user: 'b', day: '2026-09-15' },
-      { user: 'a', day: '2026-09-14' },
     ], key);
     expect(singles).toHaveLength(3);
     expect(groups).toHaveLength(0);
+  });
+
+  // Keard, 2026-09-15: "even if it passes 12 am it should count towards new day".
+  // Keyed by the person's own day, 01:30 and 02:30 in Tirana are one night even
+  // though UTC puts them on different dates — and 23:30 is the day before.
+  it("counts a late night by the person's own day, not UTC's", () => {
+    const tz = 'Europe/Tirane';
+    const at = (iso: string) => ({ user: 'keard', day: localDay(tz, new Date(iso)) });
+    const { singles, groups } = splitBursts([
+      at('2026-09-14T21:30:00.000Z'), // 23:30 on the 14th
+      at('2026-09-14T23:30:00.000Z'), // 01:30 on the 15th (UTC: the 14th)
+      at('2026-09-15T00:30:00.000Z'), // 02:30 on the 15th (UTC: the 15th)
+    ], key);
+    expect(groups).toHaveLength(1);
+    expect(groups[0].rows.map(r => r.day)).toEqual(['2026-09-15', '2026-09-15']);
+    expect(singles.map(r => r.day)).toEqual(['2026-09-14']);
   });
 });
 
@@ -90,14 +115,10 @@ describe('sidesLabel', () => {
   });
 });
 
-describe('ids and days', () => {
+describe('ids', () => {
   it('finds the show an episode belongs to', () => {
     expect(isEpisodeId('tmdb-tv-1396-S5E16')).toBe(true);
     expect(isEpisodeId('tmdb-tv-1396')).toBe(false);
     expect(showOfEpisode('tmdb-tv-1396-S5E16')).toBe('tmdb-tv-1396');
-  });
-
-  it('counts a burst in the UTC day, the same for the card and its list', () => {
-    expect(dayKey(new Date('2026-09-15T23:30:00.000Z'))).toBe('2026-09-15');
   });
 });
