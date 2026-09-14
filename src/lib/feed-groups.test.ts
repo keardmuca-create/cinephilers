@@ -1,5 +1,21 @@
 import { describe, it, expect } from 'vitest';
-import { splitBursts, sideOfTitle, countSides, sidesLabel, dayKey, isEpisodeId, showOfEpisode, episodeIdOf, GROUP_AT } from './feed-groups';
+import { splitBursts, sideOfTitle, countSides, sidesLabel, dayKey, dayRange, isEpisodeId, showOfEpisode, episodeIdOf, GROUP_AT } from './feed-groups';
+
+// The page a group card opens asks for one day by its key; it must cover exactly
+// that UTC day and refuse anything else rather than query a nonsense range.
+describe('dayRange', () => {
+  it('covers the whole UTC day the key names', () => {
+    const range = dayRange('2026-09-15')!;
+    expect(range[0].toISOString()).toBe('2026-09-15T00:00:00.000Z');
+    expect(range[1].toISOString()).toBe('2026-09-16T00:00:00.000Z');
+  });
+
+  it('refuses what is not a real date', () => {
+    expect(dayRange('2026-02-30')).toBeNull();
+    expect(dayRange('yesterday')).toBeNull();
+    expect(dayRange('2026-9-15')).toBeNull();
+  });
+});
 
 // Ticking an episode and rating it must land on the same card, so the id built
 // from a watched-episode row has to be the one a rating of that episode carries.

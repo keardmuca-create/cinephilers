@@ -62,6 +62,15 @@ export function dayKey(d: Date): string {
   return d.toISOString().slice(0, 10);
 }
 
+/** A day key as the [start, end) it covers, or null for anything that is not a real date. */
+export function dayRange(day: string): [Date, Date] | null {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) return null;
+  const start = new Date(`${day}T00:00:00.000Z`);
+  // 2026-02-30 parses as March 2nd; reading the key back catches it.
+  if (Number.isNaN(start.getTime()) || dayKey(start) !== day) return null;
+  return [start, new Date(start.getTime() + 24 * 60 * 60 * 1000)];
+}
+
 /**
  * Splits rows into the ones that stand alone and the bursts that fold into a card.
  * Rows sharing a key are one burst; a burst of fewer than GROUP_AT stays as singles.

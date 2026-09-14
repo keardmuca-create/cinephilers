@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
-import { Heart, Star, Eye, Bookmark, Film, Tv, Clapperboard, MoreHorizontal, Share2, Trash2, Users, MessageSquare, Loader2, UserPlus, Bell, User, Repeat, Sparkles, SlidersHorizontal } from 'lucide-react';
+import { Heart, Star, Eye, Bookmark, Film, Tv, Clapperboard, ChevronRight, MoreHorizontal, Share2, Trash2, Users, MessageSquare, Loader2, UserPlus, Bell, User, Repeat, Sparkles, SlidersHorizontal } from 'lucide-react';
 import { RefineSheet, type RefineValue } from '@/components/refine-sheet';
 import { dismissActivity, getDismissed, relativeTime } from '@/lib/activity';
 import { episodeLineFor } from '@/lib/episode-line';
@@ -299,6 +299,9 @@ function EpisodeBatchCard({ item }: { item: UnifiedItem }) {
 
   const n = item.batchCount ?? 0;
   const rated = item.batchRated ?? 0;
+  const groupHref = item.batchDay
+    ? `/activity/group?user=${encodeURIComponent(item.user.username)}&kind=episodes&day=${item.batchDay}&show=${encodeURIComponent(item.tmdbId)}`
+    : null;
   const label = [
     item.watched ? `Watched ${n} episode${n === 1 ? '' : 's'}` : `${n} episode${n === 1 ? '' : 's'}`,
     rated > 0 ? `Rated ${rated}` : null,
@@ -322,6 +325,13 @@ function EpisodeBatchCard({ item }: { item: UnifiedItem }) {
             <span className="shrink-0">{relativeTime(item.createdAt)}</span>
           </div>
         </div>
+        {/* Every episode in the binge. Plain <a> for the same reason as the
+            watchlist card's. The poster below still opens the show. */}
+        {groupHref && (
+          <a href={groupHref} className="shrink-0 flex items-center gap-0.5 text-xs font-semibold text-primary hover:opacity-80 transition-opacity">
+            See all <ChevronRight className="h-3 w-3" />
+          </a>
+        )}
       </div>
       <Link href={`/movie/${item.tmdbId}`} className="block mx-5 mb-3 group">
         <div className="bg-muted/40 rounded-2xl p-3 flex gap-4 hover:bg-muted/70 transition-colors border border-border">
@@ -350,6 +360,9 @@ function EpisodeBatchCard({ item }: { item: UnifiedItem }) {
 function WatchlistBatchCard({ item }: { item: UnifiedItem }) {
   const ids = item.batchTmdbIds ?? [];
   const [posters, setPosters] = useState<Record<string, string>>({});
+  const groupHref = item.batchDay
+    ? `/activity/group?user=${encodeURIComponent(item.user.username)}&kind=watchlist&day=${item.batchDay}`
+    : null;
 
   useEffect(() => {
     let cancelled = false;
@@ -383,6 +396,14 @@ function WatchlistBatchCard({ item }: { item: UnifiedItem }) {
             <span className="shrink-0">{relativeTime(item.createdAt)}</span>
           </div>
         </div>
+        {/* Every title in the burst, not just the six posters below. A plain <a>,
+            like the profile's See All: a tap on <Link> can be swallowed by a router
+            iOS froze in the background. A feed cached before this has no day. */}
+        {groupHref && (
+          <a href={groupHref} className="shrink-0 flex items-center gap-0.5 text-xs font-semibold text-primary hover:opacity-80 transition-opacity">
+            See all <ChevronRight className="h-3 w-3" />
+          </a>
+        )}
       </div>
       <div className="flex gap-2 px-5 pb-4 overflow-x-auto no-scrollbar">
         {ids.map(id => (
@@ -394,9 +415,15 @@ function WatchlistBatchCard({ item }: { item: UnifiedItem }) {
           </Link>
         ))}
         {(item.batchCount ?? 0) > ids.length && (
-          <div className="shrink-0 w-14 aspect-[2/3] rounded-lg bg-muted/60 border border-border flex items-center justify-center">
-            <span className="text-xs font-bold text-muted-foreground">+{(item.batchCount ?? 0) - ids.length}</span>
-          </div>
+          groupHref ? (
+            <a href={groupHref} className="shrink-0 w-14 aspect-[2/3] rounded-lg bg-muted/60 border border-border flex items-center justify-center hover:bg-muted transition-colors">
+              <span className="text-xs font-bold text-muted-foreground">+{(item.batchCount ?? 0) - ids.length}</span>
+            </a>
+          ) : (
+            <div className="shrink-0 w-14 aspect-[2/3] rounded-lg bg-muted/60 border border-border flex items-center justify-center">
+              <span className="text-xs font-bold text-muted-foreground">+{(item.batchCount ?? 0) - ids.length}</span>
+            </div>
+          )
         )}
       </div>
     </div>
