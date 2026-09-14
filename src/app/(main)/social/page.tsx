@@ -184,7 +184,7 @@ function ActivityCard({ item, onToggleLike, onRemove }: {
             {platformLetter}
           </div>
           <p className="text-sm text-foreground/80 leading-snug">
-            Imported <span className="font-bold text-foreground">{item.importCount?.toLocaleString()} film{item.importCount !== 1 ? 's' : ''}</span> from <span className="font-semibold">{platformLabel}</span>
+            Imported <span className="font-bold text-foreground">{item.importCount?.toLocaleString()} title{item.importCount !== 1 ? 's' : ''}</span> from <span className="font-semibold">{platformLabel}</span>
           </p>
         </div>
       </div>
