@@ -817,13 +817,16 @@ function ReviewsSection({ movie, writeOpen, setWriteOpen, myReview, setMyReview,
   const [hoverRating, setHoverRating] = useState(0);
   const [cinephilersReviews, setCinephilersReviews] = useState<CinephilersReview[]>([]);
 
-  // Load Cinephilers reviews
-  useEffect(() => {
+  // Load Cinephilers reviews — when the page opens, and again once a new review has
+  // saved. This list is the only place your review shows on the page now, so it
+  // has to be there without a reload.
+  const loadCinephilersReviews = useCallback(() => {
     fetch(`/api/movies/reviews?tmdbId=${encodeURIComponent(movie.id)}`, { credentials: 'include' })
       .then(r => r.ok ? r.json() : null)
-      .then(json => { if (json?.data?.length) setCinephilersReviews(json.data); })
+      .then(json => { if (json?.data) setCinephilersReviews(json.data); })
       .catch(() => {});
   }, [movie.id]);
+  useEffect(() => { loadCinephilersReviews(); }, [loadCinephilersReviews]);
 
   // Sync draft when dialog opens
   useEffect(() => {
@@ -866,6 +869,7 @@ function ReviewsSection({ movie, writeOpen, setWriteOpen, myReview, setMyReview,
       // Only once the review is really stored: the rating that came with it, and
       // the confirmation.
       if (draftRating > 0 && draftRating !== currentRating) onRate(draftRating);
+      loadCinephilersReviews();
       toast({ title: 'Review saved' });
     } catch {
       toast({
@@ -917,7 +921,10 @@ function ReviewsSection({ movie, writeOpen, setWriteOpen, myReview, setMyReview,
   };
 
   const allReviews = movie.reviews ?? [];
-  const previewReviews = cinephilersReviews.slice(0, 3);
+  // Yours first, then the newest: with the separate "Your review" box gone, this
+  // list is where you find yours, so it must not fall off the end of three.
+  const ownReview = cinephilersReviews.find(r => r.isOwn);
+  const previewReviews = [...(ownReview ? [ownReview] : []), ...cinephilersReviews.filter(r => !r.isOwn)].slice(0, 3);
 
   return (
     <section className="space-y-6">
@@ -955,12 +962,25 @@ function ReviewsSection({ movie, writeOpen, setWriteOpen, myReview, setMyReview,
                       <p className="text-xs text-muted-foreground">{relativeTime(r.createdAt)}</p>
                     </div>
                   </Link>
-                  {r.rating !== null && (
-                    <div className="flex items-center gap-1 bg-primary/10 px-2.5 py-1 rounded-full shrink-0">
-                      <Star className="h-3.5 w-3.5 text-primary" />
-                      <span className="text-sm font-black text-primary">{r.rating}/10</span>
-                    </div>
-                  )}
+                  <div className="flex items-center gap-2 shrink-0">
+                    {r.rating !== null && (
+                      <div className="flex items-center gap-1 bg-primary/10 px-2.5 py-1 rounded-full">
+                        <Star className="h-3.5 w-3.5 text-primary" />
+                        <span className="text-sm font-black text-primary">{r.rating}/10</span>
+                      </div>
+                    )}
+                    {/* Delete lives on your own card now that the separate "Your
+                        review" box is gone — it was the only place it was. */}
+                    {r.isOwn && (
+                      <button
+                        onClick={deleteReview}
+                        className="h-7 w-7 rounded-full flex items-center justify-center text-muted-foreground hover:text-red-400 hover:bg-red-500/10 transition-colors"
+                        aria-label="Delete your review"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
+                    )}
+                  </div>
                 </div>
                 <SpoilerWrap isSpoiler={r.containsSpoiler}>
                   <p className="text-sm text-foreground/90 leading-relaxed italic">
@@ -984,31 +1004,6 @@ function ReviewsSection({ movie, writeOpen, setWriteOpen, myReview, setMyReview,
           </Link>
         )}
       </div>
-
-      {/* My review */}
-      {myReview && (
-        <div className="bg-primary/5 border border-primary/20 p-5 rounded-2xl space-y-2">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-bold uppercase tracking-widest text-primary">Your Review</span>
-            <div className="flex items-center gap-3">
-              {myReview.rating > 0 && (
-                <div className="flex items-center gap-1 text-primary text-xs font-black">
-                  <Star className="h-3 w-3" /> {myReview.rating}
-                </div>
-              )}
-              <button
-                onClick={deleteReview}
-                className="h-7 w-7 rounded-full flex items-center justify-center text-muted-foreground hover:text-red-400 hover:bg-red-500/10 transition-colors"
-                aria-label="Delete review"
-              >
-                <Trash2 className="h-3.5 w-3.5" />
-              </button>
-            </div>
-          </div>
-          <p className="text-sm text-foreground leading-relaxed italic">&ldquo;{myReview.content}&rdquo;</p>
-          <p className="text-[10px] text-muted-foreground">{myReview.date}</p>
-        </div>
-      )}
 
       {/* Community preview */}
       {allReviews.length > 0 && (

@@ -18,6 +18,7 @@ import { RewatchStrip } from '@/components/rewatch-strip';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useAuth } from '@/contexts/auth-context';
 import { fetchWithAuth } from '@/lib/fetch-with-auth';
+import { relativeTime } from '@/lib/activity';
 import { toast } from '@/hooks/use-toast';
 import { batchFetchMeta } from '@/lib/meta-batch';
 import { isEpisodeWatched } from '@/lib/episode-store';
@@ -67,6 +68,18 @@ export function EpisodePage({ showTmdbId, season, episodeNumber }: {
   const [draftRating, setDraftRating] = useState(0);
   const [hoverRating, setHoverRating] = useState(0);
   const [myReview, setMyReview] = useState<{ body: string; containsSpoiler: boolean } | null>(null);
+  // Every member's review of this episode, yours included: the Cinephilers Reviews a
+  // film or a show page shows. An episode page used to show only your own.
+  type EpisodeReview = {
+    id: string;
+    user: { id: string; username: string; displayName: string | null; avatarUrl: string | null };
+    body: string;
+    containsSpoiler: boolean;
+    rating: number | null;
+    createdAt: string;
+    isOwn: boolean;
+  };
+  const [reviews, setReviews] = useState<EpisodeReview[]>([]);
   const [savingReview, setSavingReview] = useState(false);
 
   const [inWatchlist, setInWatchlist] = useState(false);
@@ -134,17 +147,22 @@ export function EpisodePage({ showTmdbId, season, episodeNumber }: {
       .catch(() => { setFriendsLoaded(true); });
   }, [episodeId, authUser]);
 
-  // Existing review for this episode
-  useEffect(() => {
-    if (!authUser) return;
+  // Everyone's reviews of this episode, yours among them. Loaded for signed-out
+  // readers too — the endpoint already keeps private accounts' reviews from them —
+  // and again once a new review has saved, so it is in the list at once.
+  const loadReviews = useCallback(() => {
     fetch(`/api/movies/reviews?tmdbId=${encodeURIComponent(episodeId)}`, { credentials: 'include' })
       .then(r => r.ok ? r.json() : null)
       .then(j => {
-        const own = (j?.data ?? []).find((r: { isOwn?: boolean }) => r.isOwn);
-        if (own) setMyReview({ body: own.body, containsSpoiler: own.containsSpoiler });
+        if (!j?.data) return;
+        const list = j.data as EpisodeReview[];
+        setReviews(list);
+        const own = list.find(r => r.isOwn);
+        setMyReview(own ? { body: own.body, containsSpoiler: own.containsSpoiler } : null);
       })
       .catch(() => { /* ignore */ });
-  }, [episodeId, authUser]);
+  }, [episodeId]);
+  useEffect(() => { loadReviews(); }, [loadReviews, authUser]);
 
   // The whole of marking an episode watched, in one place, because rating one
   // now goes through it too. `silent` is for that caller: a rating already
@@ -321,6 +339,7 @@ export function EpisodePage({ showTmdbId, season, episodeNumber }: {
       if (draftRating > 0 && draftRating !== userRating) await applyRating(draftRating);
       setMyReview({ body: draftReview.trim(), containsSpoiler: draftSpoiler });
       setReviewOpen(false);
+      loadReviews();
       toast({ title: 'Review saved' });
     } catch {
       toast({ title: "Couldn't save your review. Check your connection.", variant: 'destructive' });
@@ -520,17 +539,60 @@ export function EpisodePage({ showTmdbId, season, episodeNumber }: {
           );
         })()}
 
-        {/* Your review */}
-        {myReview && (
-          <section className="space-y-2">
-            <h3 className="text-xl font-headline font-bold flex items-center gap-2"><MessageSquare className="h-5 w-5 text-primary" /> Your review</h3>
-            <div className="bg-card border border-border rounded-2xl p-4">
-              <SpoilerWrap isSpoiler={myReview.containsSpoiler}>
-                <p className="text-sm text-muted-foreground italic leading-relaxed">&ldquo;{myReview.body}&rdquo;</p>
-              </SpoilerWrap>
-            </div>
-          </section>
-        )}
+        {/* Cinephilers Reviews — every member's review of this episode, yours first
+            and tagged You, as a film or show page shows them. It replaces a box that
+            showed only your own, so nobody else's review of an episode was readable
+            here. See All opens them all. */}
+        {reviews.length > 0 && (() => {
+          const own = reviews.find(r => r.isOwn);
+          const preview = [...(own ? [own] : []), ...reviews.filter(r => !r.isOwn)].slice(0, 3);
+          return (
+            <section className="space-y-3">
+              <div className="flex items-center justify-between gap-3">
+                <h3 className="text-xl font-headline font-bold flex items-center gap-2">
+                  <MessageSquare className="h-5 w-5 text-primary" /> Cinephilers Reviews
+                </h3>
+                <Link
+                  href={`/movie/${episodeId}/reviews`}
+                  className="text-xs text-primary border border-primary/30 rounded-full px-3 py-1 hover:bg-primary/10 transition-colors font-semibold shrink-0"
+                >
+                  See All
+                </Link>
+              </div>
+              <div className="space-y-3">
+                {preview.map(r => (
+                  <div key={r.id} className="bg-card rounded-2xl border border-border p-4 space-y-2.5">
+                    <div className="flex items-center justify-between gap-3">
+                      <Link href={r.isOwn ? '/profile' : `/profile/${r.user.username}`} className="flex items-center gap-3 min-w-0 group">
+                        <div className="h-9 w-9 rounded-2xl bg-primary/20 overflow-hidden flex items-center justify-center shrink-0">
+                          {r.user.avatarUrl
+                            ? <img src={r.user.avatarUrl} alt={r.user.username} className="w-full h-full object-cover" />
+                            : <span className="text-primary font-bold text-xs">{(r.user.displayName ?? r.user.username).slice(0, 2).toUpperCase()}</span>}
+                        </div>
+                        <div className="min-w-0">
+                          <p className="font-bold text-sm truncate group-hover:text-primary transition-colors">
+                            {r.user.displayName ?? r.user.username}
+                            {r.isOwn && <span className="ml-1.5 text-[10px] text-primary font-bold uppercase tracking-wider">You</span>}
+                          </p>
+                          <p className="text-xs text-muted-foreground">{relativeTime(r.createdAt)}</p>
+                        </div>
+                      </Link>
+                      {r.rating !== null && (
+                        <div className="flex items-center gap-1 bg-primary/10 px-2.5 py-1 rounded-full shrink-0">
+                          <Star className="h-3.5 w-3.5 text-primary" />
+                          <span className="text-sm font-black text-primary">{r.rating}/10</span>
+                        </div>
+                      )}
+                    </div>
+                    <SpoilerWrap isSpoiler={r.containsSpoiler}>
+                      <p className="text-sm text-foreground/90 italic leading-relaxed">&ldquo;{r.body}&rdquo;</p>
+                    </SpoilerWrap>
+                  </div>
+                ))}
+              </div>
+            </section>
+          );
+        })()}
 
         {/* Friends' ratings */}
         {authUser && (
