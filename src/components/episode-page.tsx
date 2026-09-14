@@ -6,7 +6,7 @@ import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import {
   Star, Clock, Calendar, Check, Eye, ChevronLeft, Users, Clapperboard,
-  MessageSquare, Share2, Play, Loader2, Plus, ListPlus, Pencil,
+  MessageSquare, Share2, Play, Loader2, Plus, ListPlus, Pencil, Trash2,
 } from 'lucide-react';
 import { EpisodeDetail } from '@/lib/types';
 import { Button } from '@/components/ui/button';
@@ -16,6 +16,7 @@ import { RatingSheet } from '@/components/rating-sheet';
 import { SpoilerWrap } from '@/components/spoiler-wrap';
 import { RewatchStrip } from '@/components/rewatch-strip';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { useConfirm } from '@/components/confirm-dialog';
 import { useAuth } from '@/contexts/auth-context';
 import { fetchWithAuth } from '@/lib/fetch-with-auth';
 import { relativeTime } from '@/lib/activity';
@@ -45,6 +46,7 @@ export function EpisodePage({ showTmdbId, season, episodeNumber }: {
 }) {
   const router = useRouter();
   const { user: authUser } = useAuth();
+  const confirm = useConfirm();
 
   const [detail, setDetail] = useState<EpisodeDetail | null>(null);
   const [loading, setLoading] = useState(true);
@@ -81,6 +83,7 @@ export function EpisodePage({ showTmdbId, season, episodeNumber }: {
   };
   const [reviews, setReviews] = useState<EpisodeReview[]>([]);
   const [savingReview, setSavingReview] = useState(false);
+  const [deletingReview, setDeletingReview] = useState(false);
 
   const [inWatchlist, setInWatchlist] = useState(false);
   const [listOpen, setListOpen] = useState(false);
@@ -344,6 +347,33 @@ export function EpisodePage({ showTmdbId, season, episodeNumber }: {
     } catch {
       toast({ title: "Couldn't save your review. Check your connection.", variant: 'destructive' });
     } finally { setSavingReview(false); }
+  };
+
+  // The account first, then the screen and this device — the one-way sync rule.
+  // Cleared locally before the server agreed, a refused delete would come back on
+  // the next login sync.
+  const deleteReview = async (reviewId: string) => {
+    const yes = await confirm({
+      title: 'Delete your review?',
+      description: 'This cannot be undone.',
+      confirmLabel: 'Delete review',
+    });
+    if (!yes) return;
+    setDeletingReview(true);
+    try {
+      const res = await fetchWithAuth(`/api/reviews/${reviewId}`, { method: 'DELETE' });
+      if (!res.ok) throw new Error('review delete rejected');
+      try { localStorage.removeItem(`review-${episodeId}`); } catch { /* ignore */ }
+      setReviews(prev => prev.filter(r => r.id !== reviewId));
+      setMyReview(null);
+      toast({ title: 'Review deleted' });
+    } catch {
+      toast({
+        title: 'Could not delete your review',
+        description: 'It is still there. Check your connection and try again.',
+        variant: 'destructive',
+      });
+    } finally { setDeletingReview(false); }
   };
 
   const share = async () => {
@@ -668,12 +698,27 @@ export function EpisodePage({ showTmdbId, season, episodeNumber }: {
                           <p className="text-xs text-muted-foreground">{relativeTime(r.createdAt)}</p>
                         </div>
                       </Link>
-                      {r.rating !== null && (
-                        <div className="flex items-center gap-1 bg-primary/10 px-2.5 py-1 rounded-full shrink-0">
-                          <Star className="h-3.5 w-3.5 text-primary" />
-                          <span className="text-sm font-black text-primary">{r.rating}/10</span>
-                        </div>
-                      )}
+                      <div className="flex items-center gap-2 shrink-0">
+                        {r.rating !== null && (
+                          <div className="flex items-center gap-1 bg-primary/10 px-2.5 py-1 rounded-full">
+                            <Star className="h-3.5 w-3.5 text-primary" />
+                            <span className="text-sm font-black text-primary">{r.rating}/10</span>
+                          </div>
+                        )}
+                        {/* Delete on your own card, as on a movie or show page. */}
+                        {r.isOwn && (
+                          <button
+                            onClick={() => deleteReview(r.id)}
+                            disabled={deletingReview}
+                            className="h-7 w-7 rounded-full flex items-center justify-center text-muted-foreground hover:text-red-400 hover:bg-red-500/10 transition-colors disabled:opacity-50"
+                            aria-label="Delete your review"
+                          >
+                            {deletingReview
+                              ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                              : <Trash2 className="h-3.5 w-3.5" />}
+                          </button>
+                        )}
+                      </div>
                     </div>
                     <SpoilerWrap isSpoiler={r.containsSpoiler}>
                       <p className="text-sm text-foreground/90 italic leading-relaxed">&ldquo;{r.body}&rdquo;</p>
