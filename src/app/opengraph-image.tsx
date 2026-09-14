@@ -4,7 +4,7 @@ import { ImageResponse } from 'next/og';
 // own poster/avatar (see movie/[id]/layout.tsx); this is what every other URL —
 // including the homepage we link from Product Hunt, Reddit and AlternativeTo —
 // falls back to. Next also emits this as twitter:image.
-export const alt = 'Cinephilers — one film a day, chosen from your own watchlist';
+export const alt = 'Cinephilers — one movie a day, chosen from your own watchlist';
 export const size = { width: 1200, height: 630 };
 export const contentType = 'image/png';
 
@@ -58,7 +58,7 @@ export default async function OpengraphImage() {
               letterSpacing: '-0.02em',
             }}
           >
-            One film a day, chosen
+            One movie a day, chosen
           </div>
           <div
             style={{
@@ -72,7 +72,7 @@ export default async function OpengraphImage() {
             from your own watchlist
           </div>
           <div style={{ marginTop: 28, fontSize: 34, color: '#5a5a5a', lineHeight: 1.35 }}>
-            Track films and TV, episode by episode. Rate, review and
+            Track movies and TV, episode by episode. Rate, review and
           </div>
           <div style={{ fontSize: 34, color: '#5a5a5a', lineHeight: 1.35 }}>
             follow friends. Free, no ads.

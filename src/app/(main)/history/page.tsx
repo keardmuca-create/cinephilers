@@ -799,7 +799,7 @@ export default function HistoryPage() {
         </div>
         {/* Counts are split, never mixed — films and shows hold different value. */}
         <p className="text-muted-foreground text-sm">
-          {sideCounts.movies} film{sideCounts.movies !== 1 ? 's' : ''} · {episodeTotal} episode{episodeTotal !== 1 ? 's' : ''}
+          {sideCounts.movies} movie{sideCounts.movies !== 1 ? 's' : ''} · {episodeTotal} episode{episodeTotal !== 1 ? 's' : ''}
           {fetching && <span className="ml-2 opacity-50">loading…</span>}
         </p>
       </div>
@@ -851,7 +851,7 @@ export default function HistoryPage() {
         <div className="flex flex-col items-center justify-center py-20 gap-3 text-center px-6">
           <History className="h-12 w-12 text-muted-foreground/20" />
           <p className="text-muted-foreground text-sm">
-            {side === 'shows' ? 'No shows watched yet' : 'No films watched yet'}
+            {side === 'shows' ? 'No shows watched yet' : 'No movies watched yet'}
           </p>
         </div>
       ) : (

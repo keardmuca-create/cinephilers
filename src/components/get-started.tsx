@@ -148,7 +148,7 @@ export function GetStarted() {
           <Step
             done={libraryDone}
             title="Bring your history over"
-            detail={libraryDone ? 'Done' : 'Import from Letterboxd or IMDb — or just mark a film watched'}
+            detail={libraryDone ? 'Done' : 'Import from Letterboxd or IMDb — or just mark a movie watched'}
             onClick={() => setShowImport(true)}
           />
           <Step
@@ -157,7 +157,7 @@ export function GetStarted() {
             detail={
               watchlistDone
                 ? 'Done'
-                : `${counts.watchlist} of ${WATCHLIST_TARGET} films — Today's Pick chooses from these`
+                : `${counts.watchlist} of ${WATCHLIST_TARGET} movies — Today's Pick chooses from these`
             }
             href="/browse"
           />

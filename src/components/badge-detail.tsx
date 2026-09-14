@@ -62,7 +62,7 @@ function WatchedLanguages({ username }: { username?: string }) {
       {languages === null ? (
         <p className="text-sm text-muted-foreground px-3 py-2">Loading…</p>
       ) : languages.length === 0 ? (
-        <p className="text-sm text-muted-foreground px-3 py-2">No films logged yet.</p>
+        <p className="text-sm text-muted-foreground px-3 py-2">No movies logged yet.</p>
       ) : (
         // No inner cap: the dialog itself scrolls, and a scrolling list inside a
         // scrolling dialog is a trap on a phone. Nothing is trimmed either —
@@ -72,7 +72,7 @@ function WatchedLanguages({ username }: { username?: string }) {
             <div key={l.code} className="flex items-baseline gap-3 rounded-xl px-3 py-2">
               <span className="flex-1 text-sm font-semibold text-foreground truncate">{languageName(l.code)}</span>
               <span className="text-sm text-muted-foreground shrink-0">
-                {l.count.toLocaleString()} {l.count === 1 ? 'film' : 'films'}
+                {l.count.toLocaleString()} {l.count === 1 ? 'movie' : 'movies'}
               </span>
             </div>
           ))}

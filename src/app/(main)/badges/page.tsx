@@ -81,9 +81,9 @@ export default function BadgesPage() {
             </p>
             <p className="text-sm text-muted-foreground leading-relaxed">
               They are counted from your library as it is now, not from a total
-              that only ever goes up. Films, shows, episodes, ratings and reviews
+              that only ever goes up. Movies, shows, episodes, ratings and reviews
               are counted separately, because finishing a long series and watching
-              a ninety-minute film are not the same act.
+              a ninety-minute movie are not the same act.
             </p>
             <p className="text-sm text-muted-foreground leading-relaxed">
               Press any badge above to see what it counts and how far along you

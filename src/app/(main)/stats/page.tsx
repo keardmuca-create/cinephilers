@@ -328,7 +328,7 @@ export default function StatsPage() {
                 counted, and the two units are not interchangeable — leaving it
                 at "titles" would have the axis quietly lying on one of them. */}
             <p className="text-xs text-muted-foreground -mt-2">
-              {activityKind === 'movies' ? 'Films' : 'Episodes'} watched per month — last 12 months
+              {activityKind === 'movies' ? 'Movies' : 'Episodes'} watched per month — last 12 months
             </p>
 
             {/* No Shows side: a month of "shows" has no clear count — started, or
@@ -345,7 +345,7 @@ export default function StatsPage() {
             {activity.every(m => m.count === 0) ? (
               <div className="h-40 flex items-center justify-center">
                 <p className="text-sm text-muted-foreground">
-                  No {activityKind === 'movies' ? 'films' : 'episodes'} watched in the last 12 months
+                  No {activityKind === 'movies' ? 'movies' : 'episodes'} watched in the last 12 months
                 </p>
               </div>
             ) : (
@@ -364,7 +364,7 @@ export default function StatsPage() {
                       contentStyle={{ backgroundColor: '#fff', border: '1px solid rgba(0,0,0,0.1)', borderRadius: '12px', color: '#111', fontSize: 12 }}
                       formatter={(value: number) => [
                         activityKind === 'movies'
-                          ? `${value} film${value !== 1 ? 's' : ''}`
+                          ? `${value} movie${value !== 1 ? 's' : ''}`
                           : `${value} episode${value !== 1 ? 's' : ''}`,
                         '',
                       ]}

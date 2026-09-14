@@ -161,7 +161,7 @@ export default function ListDetailPage() {
   const deleteList = async () => {
     const yes = await confirm({
       title: `Delete the list "${list?.name ?? ''}"?`,
-      description: "This removes the whole list. The films inside stay in your library. This can't be undone.",
+      description: "This removes the whole list. The movies and shows inside stay in your library. This can't be undone.",
       confirmLabel: 'Delete list',
     });
     if (!yes) return;

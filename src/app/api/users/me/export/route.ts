@@ -55,7 +55,7 @@ export async function GET(req: NextRequest) {
     exportedAt: new Date().toISOString(),
     // Titles are stored as TMDB ids rather than names, so anyone reading this
     // file later needs to know where to look them up.
-    note: 'Films and shows are identified by their TMDB id. tmdbId "tmdb-155" is themoviedb.org/movie/155; "tmdb-tv-1396" is themoviedb.org/tv/1396.',
+    note: 'Movies and shows are identified by their TMDB id. tmdbId "tmdb-155" is themoviedb.org/movie/155; "tmdb-tv-1396" is themoviedb.org/tv/1396.',
     account: user,
     ratings,
     reviews,

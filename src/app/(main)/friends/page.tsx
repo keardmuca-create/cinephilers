@@ -191,7 +191,7 @@ export default function FriendsPage() {
         <div className="bg-primary/10 border border-primary/20 rounded-2xl p-5 flex flex-col gap-3">
           <div className="space-y-1">
             <p className="font-bold text-base">Join Cinephilers</p>
-            <p className="text-sm text-muted-foreground">Sign up to find and follow other film lovers.</p>
+            <p className="text-sm text-muted-foreground">Sign up to find and follow other movie lovers.</p>
           </div>
           <div className="flex gap-2">
             <Button asChild size="sm" className="rounded-xl font-bold"><Link href="/signup">Sign Up</Link></Button>
@@ -277,7 +277,7 @@ export default function FriendsPage() {
               </div>
               <div>
                 <p className="font-bold font-headline text-lg">Not following anyone yet</p>
-                <p className="text-sm text-muted-foreground mt-1">Search above to find fellow film lovers</p>
+                <p className="text-sm text-muted-foreground mt-1">Search above to find fellow movie lovers</p>
               </div>
             </div>
           ) : (

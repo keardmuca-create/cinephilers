@@ -706,7 +706,7 @@ function AddToListButton({ movie, onRequireAuth }: { movie: Movie; onRequireAuth
           return next;
         });
         toast({
-          title: `Created "${optimistic.title}", but the film was not added`,
+          title: `Created "${optimistic.title}", but the movie was not added`,
           description: 'Open the list and add it again.',
           variant: 'destructive',
         });
@@ -1847,7 +1847,7 @@ function MovieDetailInner() {
           <section className="rounded-[2rem] border border-primary/20 bg-primary/10 p-6 flex flex-col sm:flex-row sm:items-center gap-4">
             <div className="flex-1 space-y-1">
               <p className="font-headline font-bold text-lg">Track this and everything you watch</p>
-              <p className="text-sm text-muted-foreground">Log films <span className="text-foreground font-semibold">and shows</span>, rate them, and see what your friends are watching. Free — import your Letterboxd or IMDb history in one tap.</p>
+              <p className="text-sm text-muted-foreground">Log movies <span className="text-foreground font-semibold">and shows</span>, rate them, and see what your friends are watching. Free — import your Letterboxd or IMDb history in one tap.</p>
             </div>
             <div className="flex gap-2 shrink-0">
               <Button asChild className="rounded-xl font-bold h-11 px-6"><Link href="/signup">Join free</Link></Button>

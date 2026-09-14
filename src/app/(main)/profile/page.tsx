@@ -1521,7 +1521,7 @@ export default function ProfilePage() {
                     <textarea
                       value={editForm.bio}
                       onChange={e => setEditForm(f => ({ ...f, bio: e.target.value }))}
-                      placeholder="Tell people about your taste in films…"
+                      placeholder="Tell people about your taste in movies…"
                       maxLength={300}
                       rows={3}
                       className="w-full px-4 py-3 rounded-xl border border-border bg-muted/30 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/40 resize-none"

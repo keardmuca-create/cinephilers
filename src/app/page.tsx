@@ -171,7 +171,7 @@ export default async function RootPage() {
         <div className="relative z-10 max-w-3xl mx-auto px-6 pt-28 pb-24 text-center space-y-6">
           <p className="text-sm font-bold uppercase tracking-[0.3em] text-primary">Cinephilers</p>
           <h1 className="text-4xl sm:text-6xl font-headline font-black leading-tight">
-            Every film you watch,<br className="hidden sm:block" /> remembered.
+            Every movie you watch,<br className="hidden sm:block" /> remembered.
           </h1>
           <p className="text-base sm:text-lg text-muted-foreground max-w-xl mx-auto">
             Track movies and shows, rate and review them, build your watchlist, and see what your friends are watching.
@@ -197,11 +197,11 @@ export default async function RootPage() {
           <div className="space-y-4">
             <p className="text-xs font-bold uppercase tracking-[0.25em] text-primary">Today&apos;s Pick</p>
             <h2 className="text-3xl sm:text-4xl font-headline font-black leading-tight">
-              One film a day,<br className="hidden sm:block" /> out of your own watchlist.
+              One movie a day,<br className="hidden sm:block" /> out of your own watchlist.
             </h2>
             <p className="text-base text-muted-foreground leading-relaxed">
-              Not a film of the day everybody gets. Yours — drawn from the list you built,
-              one film, once a day. Press it and the reel spins through your watchlist until
+              Not a movie of the day everybody gets. Yours — drawn from the list you built,
+              one movie, once a day. Press it and the reel spins through your watchlist until
               it lands on tonight.
             </p>
             <ul className="space-y-2 text-sm text-muted-foreground">

@@ -378,7 +378,7 @@ export function FavoritesSection() {
                         crimson — a second brand colour doing a job the word was
                         already doing, and the last blue left in the app. */}
                     <span className="text-[10px] font-bold px-2 py-0.5 rounded-full flex-shrink-0 bg-primary/20 text-primary">
-                      {r.type === 'show' ? 'TV' : 'Film'}
+                      {r.type === 'show' ? 'TV' : 'Movie'}
                     </span>
                   </button>
                 ))}

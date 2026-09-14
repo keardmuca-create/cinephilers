@@ -323,7 +323,7 @@ function StatRow({ icon, label, count, split, thisYear, onClick }: {
       <span className="flex-1 font-semibold">{label}</span>
       <span
         className="text-sm text-muted-foreground text-right inline-flex items-center gap-1 whitespace-nowrap"
-        aria-label={split ? `${split.films} films, ${split.shows} shows${split.episodes !== undefined ? `, ${split.episodes} episodes` : ''}` : undefined}
+        aria-label={split ? `${split.films} movies, ${split.shows} shows${split.episodes !== undefined ? `, ${split.episodes} episodes` : ''}` : undefined}
       >
         {/* The pill's own icons rather than the words: "568 films · 7 shows · 319
             eps" needed 373px on a row a 375px phone gives 311, and wrapped. The

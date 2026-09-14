@@ -41,12 +41,12 @@ export function TodaysPickHelp({ open, onClose }: { open: boolean; onClose: () =
 
         <div className="space-y-5 py-2 overflow-y-auto flex-1 pr-1">
           <Rule icon={Bookmark} title="It comes from your watchlist">
-            One film, chosen at random from the films you have saved and not yet
+            One movie, chosen at random from the movies you have saved and not yet
             watched. It is your list — so the fuller you keep it, the better the
             pick. An empty watchlist has nothing to choose from.
           </Rule>
 
-          <Rule icon={Sparkles} title="Films only">
+          <Rule icon={Sparkles} title="Movies only">
             Shows are not picked. A series is a dozen evenings, and this is for
             deciding what to watch tonight.
           </Rule>
@@ -55,11 +55,11 @@ export function TodaysPickHelp({ open, onClose }: { open: boolean; onClose: () =
             Once you generate, that is your pick until tomorrow — on every device,
             and it cannot be rerolled. Choosing is the part this is meant to take
             off your hands, and a pick you can reroll is just scrolling again.
-            A film that comes up stays out of the running for two weeks
+            A movie that comes up stays out of the running for two weeks
             afterwards.
           </Rule>
 
-          <Rule icon={Check} title="Only released films">
+          <Rule icon={Check} title="Only released movies">
             Anything on your watchlist that is not out yet is skipped, so the pick
             is always something you can actually watch.
           </Rule>

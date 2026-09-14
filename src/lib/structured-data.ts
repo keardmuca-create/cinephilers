@@ -15,18 +15,18 @@ export const SITE_URL = 'https://cinephilers.app';
 
 /** The one-liner used for the site description and the schema, kept identical. */
 export const SITE_DESCRIPTION =
-  'Everything you watch, remembered — films, shows and every episode, rated and reviewed with friends. Earn badges, and get a film a day from your watchlist.';
+  'Everything you watch, remembered — movies, shows and every episode, rated and reviewed with friends. Earn badges, and get a movie a day from your watchlist.';
 
 // Ordered most-distinctive first: a summary that keeps only the first two or
 // three should still be left holding the things nobody else offers.
 const FEATURES = [
-  "Today's Pick — one film a day, drawn from your own watchlist, locked until midnight so it cannot be rerolled",
-  'Badges in bronze, silver and gold for films, shows, episodes, ratings, reviews and languages watched',
+  "Today's Pick — one movie a day, drawn from your own watchlist, locked until midnight so it cannot be rerolled",
+  'Badges in bronze, silver and gold for movies, shows, episodes, ratings, reviews and languages watched',
   'Episode-level tracking for television, marked one episode or a whole season at a time',
   'A rewatch diary that keeps every viewing date, not just the most recent',
   'A community score that replaces the TMDB rating once five members have rated a title',
   'World Cinema tracking that counts the languages you have watched',
-  'Time Watched, totalled from real runtimes rather than an average per film',
+  'Time Watched, totalled from real runtimes rather than an average per movie',
   'Import from Letterboxd or IMDb, keeping original watch dates, ratings and reviews',
   'Ratings out of 10, written reviews with spoiler marks, watchlists and custom lists',
   'Follow friends, compare ratings on any title, and read an activity feed of what they watch',

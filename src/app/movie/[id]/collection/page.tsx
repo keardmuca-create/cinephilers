@@ -103,7 +103,7 @@ export default function CollectionPage() {
           <h1 className="text-3xl font-headline font-bold mb-0.5 truncate">{collection?.name ?? 'Collection'}</h1>
           {collection && (
             <p className="text-muted-foreground text-sm">
-              {collection.parts.length} Film{collection.parts.length !== 1 ? 's' : ''}
+              {collection.parts.length} Movie{collection.parts.length !== 1 ? 's' : ''}
             </p>
           )}
         </div>
@@ -133,7 +133,7 @@ export default function CollectionPage() {
           </div>
         </div>
       ) : (
-        <p className="text-sm text-muted-foreground px-6">No collection found for this film.</p>
+        <p className="text-sm text-muted-foreground px-6">No collection found for this movie.</p>
       )}
     </main>
   );

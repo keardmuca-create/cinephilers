@@ -127,7 +127,7 @@ export function RecentlyViewed() {
 
       {items.length === 0 ? (
         <p className="px-6 text-sm text-muted-foreground">
-          Nothing yet — films and shows you open will show up here.
+          Nothing yet — movies and shows you open will show up here.
         </p>
       ) : (
       <div className="flex overflow-x-auto gap-4 px-6 pb-4 no-scrollbar">

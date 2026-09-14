@@ -4,7 +4,7 @@ import type { Metadata } from 'next';
 
 export const metadata: Metadata = {
   title: 'About | Cinephilers',
-  description: 'Everything you watch, remembered — films, shows and every episode, rated and reviewed with friends, with badges for what you have seen.',
+  description: 'Everything you watch, remembered — movies, shows and every episode, rated and reviewed with friends, with badges for what you have seen.',
   alternates: { canonical: '/about' },
 };
 
@@ -44,10 +44,10 @@ export default function AboutPage() {
               // stands in for the whole idea, which is why the title is left plain too.
               { icon: Film, title: 'Track', body: 'Mark movies and shows as watched. Build a history of everything you\'ve seen and keep a watchlist of what\'s next.' },
               { icon: Star, title: 'Rate & Review', body: 'Give ratings out of 10 and write full reviews. Mark spoilers so others can read safely.' },
-              { icon: Sparkles, title: "Today's Pick", body: 'One film a day, drawn from your own watchlist. Locked until midnight, so there is no rerolling until you like the answer. Mark it watched and it counts towards a streak.' },
+              { icon: Sparkles, title: "Today's Pick", body: 'One movie a day, drawn from your own watchlist. Locked until midnight, so there is no rerolling until you like the answer. Mark it watched and it counts towards a streak.' },
               { icon: Users, title: 'Follow Friends', body: 'Follow people you know and see their ratings, reviews, and activity. Private accounts require a follow request.' },
-              { icon: BookOpen, title: 'Build Lists', body: 'Organise films into custom lists — public or private. Share your favourites, your comfort watches, your all-time bests.' },
-              { icon: Award, title: 'Badges', body: 'Bronze, silver and gold for what you actually watch — films, shows, episodes, ratings and reviews. Every badge shows how far along you are and exactly what is left to reach the next tier. Counted from your library as it stands, not a total that only ever goes up.' },
+              { icon: BookOpen, title: 'Build Lists', body: 'Organise movies and shows into custom lists — public or private. Share your favourites, your comfort watches, your all-time bests.' },
+              { icon: Award, title: 'Badges', body: 'Bronze, silver and gold for what you actually watch — movies, shows, episodes, ratings and reviews. Every badge shows how far along you are and exactly what is left to reach the next tier. Counted from your library as it stands, not a total that only ever goes up.' },
             ].map(({ icon: Icon, title, body }) => (
               <div key={title} className="flex gap-4 p-5 bg-card border border-border rounded-2xl">
                 <div className="h-10 w-10 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">

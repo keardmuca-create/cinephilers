@@ -875,7 +875,7 @@ export function ImportDialog({ onClose }: { onClose: () => void }) {
               </div>
               <div className="space-y-2">
                 {[
-                  { label: 'Films marked as watched', value: result.watchedAdded },
+                  { label: 'Movies marked as watched', value: result.watchedAdded },
                   { label: 'Shows marked as watched', value: result.showsMarked ?? 0 },
                   { label: 'Episodes ticked', value: result.episodesAdded ?? 0 },
                   { label: 'Rewatches logged', value: result.rewatchesAdded ?? 0 },

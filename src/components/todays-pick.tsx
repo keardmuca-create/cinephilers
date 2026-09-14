@@ -85,10 +85,10 @@ function daySeed(): number {
 const TAGLINES = [
   "We both know you'll scroll for an hour. Let's skip that part.",
   "Your watchlist isn't a museum. Let's actually watch something.",
-  "You'll spend longer choosing than the film runs. Let us pick.",
+  "You'll spend longer choosing than the movie runs. Let us pick.",
   "That watchlist isn't going to watch itself.",
   'Nobody has ever reached the bottom of a watchlist.',
-  "Somewhere in that list is tonight's film. Let's go find it.",
+  "Somewhere in that list is tonight's movie. Let's go find it.",
   "Choosing is the hard part. We'll handle that bit.",
 ];
 
@@ -844,7 +844,7 @@ export function TodaysPick() {
           <>
             <div className="space-y-1 relative">
               <h2 className="text-xl font-headline font-bold">Your pick is one tap away</h2>
-              <p className="text-sm text-muted-foreground max-w-md">Create a free account, build a watchlist, and every day we&apos;ll pick one film for you to actually watch.</p>
+              <p className="text-sm text-muted-foreground max-w-md">Create a free account, build a watchlist, and every day we&apos;ll pick one movie for you to actually watch.</p>
             </div>
             <div className="flex gap-2">
               <Button asChild className="rounded-full h-11 px-6 font-bold"><Link href="/signup">Create free account</Link></Button>
@@ -863,7 +863,7 @@ export function TodaysPick() {
           <>
             <div className="space-y-1 relative">
               <h2 className="text-xl font-headline font-bold">You&apos;ve had them all recently</h2>
-              <p className="text-sm text-muted-foreground max-w-md">Every film on your watchlist has come up as a pick in the last couple of weeks. Add a few more and we&apos;ll have something new for you.</p>
+              <p className="text-sm text-muted-foreground max-w-md">Every movie on your watchlist has come up as a pick in the last couple of weeks. Add a few more and we&apos;ll have something new for you.</p>
             </div>
             <Button asChild className="rounded-full h-11 px-6 font-bold"><Link href="/browse">Browse movies</Link></Button>
           </>
@@ -871,7 +871,7 @@ export function TodaysPick() {
           <>
             <div className="space-y-1 relative">
               <h2 className="text-xl font-headline font-bold">Nothing out yet</h2>
-              <p className="text-sm text-muted-foreground max-w-md">None of the films on your watchlist have been released yet — add some out-now titles and generate again.</p>
+              <p className="text-sm text-muted-foreground max-w-md">None of the movies on your watchlist have been released yet — add some out-now titles and generate again.</p>
             </div>
             <Button asChild className="rounded-full h-11 px-6 font-bold"><Link href="/browse">Browse movies</Link></Button>
           </>

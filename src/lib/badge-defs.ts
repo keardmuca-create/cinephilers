@@ -33,15 +33,15 @@ export const BADGES: BadgeDef[] = [
   {
     id: 'movie-watcher',
     name: 'Movie watcher',
-    description: 'Log the films you watch.',
-    unit: 'films',
+    description: 'Log the movies you watch.',
+    unit: 'movies',
     icon: 'film',
     tiers: { bronze: 100, silver: 500, gold: 1000 },
   },
   {
     id: 'movie-rater',
     name: 'Movie rater',
-    description: 'Rate the films you watch.',
+    description: 'Rate the movies you watch.',
     unit: 'rated',
     icon: 'star',
     tiers: { bronze: 100, silver: 500, gold: 1000 },
@@ -103,7 +103,7 @@ export const BADGES: BadgeDef[] = [
   {
     id: 'world-cinema',
     name: 'World cinema',
-    description: 'Watch films in languages from around the world.',
+    description: 'Watch movies in languages from around the world.',
     unit: 'languages',
     icon: 'globe',
     tiers: { bronze: 10, silver: 20, gold: 50 },
@@ -118,7 +118,7 @@ export const BADGES: BadgeDef[] = [
   {
     id: 'daily-pick',
     name: 'Daily Pick',
-    description: "Watch the film Today's Pick chooses for you, the day it chooses it.",
+    description: "Watch the movie Today's Pick chooses for you, the day it chooses it.",
     unit: 'picks',
     icon: 'sparkles',
     tiers: { bronze: 10, silver: 50, gold: 100 },

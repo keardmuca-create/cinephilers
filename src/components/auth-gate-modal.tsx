@@ -26,8 +26,8 @@ export function AuthGateModal({ open, onClose, action }: AuthGateModalProps) {
             <DialogTitle className="text-xl font-headline font-bold">Join Cinephilers</DialogTitle>
             <p className="text-sm text-muted-foreground leading-relaxed">
               {action
-                ? `Create a free account to ${action} — and track every film and show you watch.`
-                : 'Create a free account to track every film and show you watch, rate them, and follow friends.'}
+                ? `Create a free account to ${action} — and track every movie and show you watch.`
+                : 'Create a free account to track every movie and show you watch, rate them, and follow friends.'}
             </p>
           </div>
           {/* Create Account is primary: a visitor hitting this from a shared

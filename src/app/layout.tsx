@@ -11,19 +11,19 @@ import { ServiceWorkerRegistrar } from '@/components/service-worker';
 
 export const metadata: Metadata = {
   title: 'Cinephilers | Track, Rate & Discuss with Friends',
-  description: 'Everything you watch, remembered — films, shows and every episode, rated and reviewed with friends. Earn badges, and get a film a day from your watchlist.',
+  description: 'Everything you watch, remembered — movies, shows and every episode, rated and reviewed with friends. Earn badges, and get a movie a day from your watchlist.',
   metadataBase: new URL('https://cinephilers.app'),
   openGraph: {
     type: 'website',
     siteName: 'Cinephilers',
     title: 'Cinephilers | Track, Rate & Discuss with Friends',
-    description: 'Everything you watch, remembered — films, shows and every episode, rated and reviewed with friends. Earn badges, and get a film a day from your watchlist.',
+    description: 'Everything you watch, remembered — movies, shows and every episode, rated and reviewed with friends. Earn badges, and get a movie a day from your watchlist.',
     url: 'https://cinephilers.app',
   },
   twitter: {
     card: 'summary_large_image',
     title: 'Cinephilers | Track, Rate & Discuss with Friends',
-    description: 'Everything you watch, remembered — films, shows and every episode, rated and reviewed with friends. Earn badges, and get a film a day from your watchlist.',
+    description: 'Everything you watch, remembered — movies, shows and every episode, rated and reviewed with friends. Earn badges, and get a movie a day from your watchlist.',
   },
   verification: {
     google: 'iXOrHwM2YB_g3HVEb6FnHIISh0He81e5DUdazpKHsvk',

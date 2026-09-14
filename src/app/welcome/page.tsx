@@ -131,7 +131,7 @@ export default function WelcomePage() {
             </span>
             <h1 className="text-3xl font-headline font-bold">Welcome to Cinephilers</h1>
             <p className="text-sm text-muted-foreground max-w-sm mx-auto">
-              You&apos;re part of the Cinephilers community now. Every film you watch, rate
+              You&apos;re part of the Cinephilers community now. Every movie you watch, rate
               and review from here counts towards the rest of your badges.
             </p>
           </div>
@@ -166,7 +166,7 @@ export default function WelcomePage() {
           </div>
           <h1 className="text-3xl font-headline font-bold">What do you watch?</h1>
           <p className="text-sm text-muted-foreground max-w-sm mx-auto">
-            Pick a few you like. We&apos;ll use them to suggest films worth your evening —
+            Pick a few you like. We&apos;ll use them to suggest movies worth your evening —
             you can change them any time in your profile.
           </p>
         </div>
