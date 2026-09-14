@@ -7,7 +7,6 @@ import { Bookmark, ChevronLeft, Search, SlidersHorizontal, X, Film, Trash2 } fro
 import { getAddedAt, legacyTwin } from '@/lib/media-id';
 import { persistRefine } from '@/lib/refine-sort';
 import { fetchWithAuth } from '@/lib/fetch-with-auth';
-import { removeActivity } from '@/lib/activity';
 import { batchFetchMeta } from '@/lib/meta-batch';
 import { readCachedMeta } from '@/lib/meta-cache';
 import { getItemType, sideOf, SIDE_TYPES, TYPE_LABELS, type TypeFilter, type MediaSide } from '@/lib/media-type';
@@ -66,7 +65,6 @@ function ItemCard({ item, onRemove, showReleaseDate }: { item: WatchlistItem; on
       const twin = legacyTwin(item.id);
       if (twin) localStorage.removeItem(`watchlist-${twin}`);
     } catch { /* ignore */ }
-    removeActivity('watchlist', item.id);
     onRemove();
   };
 

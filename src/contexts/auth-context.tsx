@@ -279,45 +279,11 @@ async function restoreFromDb(me?: { createdAt?: string; followingCount?: number;
       localStorage.setItem('user-lists', JSON.stringify(lsLists));
     } catch { /* ignore */ }
 
-    // Merge activity-feed from DB so cross-device watched/rated entries appear in the social feed
-    try {
-      type ActivityEntry = { id: string; action: string; contentId: string; contentTitle: string; contentPoster: string; contentYear: string; rating?: number; timestamp: string; likes: string[] };
-      const existing: ActivityEntry[] = JSON.parse(localStorage.getItem('activity-feed') ?? '[]');
-      const existingKeys = new Set(existing.map(e => `${e.action}-${e.contentId}`));
-      // Activities the user removed from their feed must not be resurrected by DB sync
-      const dismissed = new Set<string>(JSON.parse(localStorage.getItem('activity-dismissed') ?? '[]'));
-      const newEntries: ActivityEntry[] = [];
-
-      const getMeta = (tmdbId: string) => {
-        const m = readCachedMeta(tmdbId);
-        if (m) return { title: m.title ?? '', poster: m.poster ?? '', year: m.year ?? '' };
-        return { title: '', poster: '', year: '' };
-      };
-
-      // Only sync recent activity (last 30 days) — bulk imports have old dates and must not flood the feed
-      const cutoff = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
-      for (const w of watched) {
-        if (existingKeys.has(`watched-${w.tmdbId}`)) continue;
-        if (dismissed.has(`watched-${w.tmdbId}`)) continue;
-        if (new Date(w.watchedAt) < cutoff) continue;
-        const { title, poster, year } = getMeta(w.tmdbId);
-        newEntries.push({ id: `db-w-${w.tmdbId}`, action: 'watched', contentId: w.tmdbId, contentTitle: title, contentPoster: poster, contentYear: year, timestamp: w.watchedAt, likes: [] });
-      }
-      for (const r of ratings) {
-        if (existingKeys.has(`rated-${r.tmdbId}`)) continue;
-        if (dismissed.has(`rated-${r.tmdbId}`)) continue;
-        if (new Date(r.updatedAt) < cutoff) continue;
-        const { title, poster, year } = getMeta(r.tmdbId);
-        newEntries.push({ id: `db-r-${r.tmdbId}`, action: 'rated', contentId: r.tmdbId, contentTitle: title, contentPoster: poster, contentYear: year, rating: r.score, timestamp: r.updatedAt, likes: [] });
-      }
-
-      if (newEntries.length > 0) {
-        const merged = [...existing, ...newEntries]
-          .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
-          .slice(0, 100);
-        localStorage.setItem('activity-feed', JSON.stringify(merged));
-      }
-    } catch { /* ignore */ }
+    // There used to be an on-device copy of the activity feed, rebuilt here at every
+    // login from the watched and rated rows. The feed has long been built by the
+    // server and nothing read the copy any more, so it is no longer kept — this only
+    // clears what an older version left on the device.
+    try { localStorage.removeItem('activity-feed'); } catch { /* ignore */ }
 
     // Signal to any mounted pages that localStorage is now populated from DB
     window.dispatchEvent(new CustomEvent('cinephilers-db-restored'));

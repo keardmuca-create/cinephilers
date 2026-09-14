@@ -1,43 +1,17 @@
-export interface ActivityEntry {
-  id: string;
-  action: 'watched' | 'rated' | 'watchlist' | 'reviewed';
-  contentId: string;
-  contentTitle: string;
-  contentPoster: string;
-  contentYear: string;
-  rating?: number;
-  timestamp: string;
-  likes: string[];
-}
-
-const KEY = 'activity-feed';
-
-export function logActivity(entry: Omit<ActivityEntry, 'id' | 'timestamp' | 'likes'>) {
-  try {
-    const feed: ActivityEntry[] = getFeed();
-    const filtered = feed.filter(e => !(e.action === entry.action && e.contentId === entry.contentId));
-    const next: ActivityEntry = {
-      ...entry,
-      id: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
-      timestamp: new Date().toISOString(),
-      likes: [],
-    };
-    localStorage.setItem(KEY, JSON.stringify([next, ...filtered].slice(0, 100)));
-  } catch { /* ignore */ }
-}
-
-export function removeActivity(action: string, contentId: string) {
-  try {
-    const feed = getFeed().filter(e => !(e.action === action && e.contentId === contentId));
-    localStorage.setItem(KEY, JSON.stringify(feed));
-  } catch { /* ignore */ }
-}
+// The activity feed is built by the server (/api/feed). What lives here is the little
+// the page still keeps on the device: which of your own cards you removed, and how
+// a card says when it happened.
+//
+// There used to be an on-device log of your own activity as well, written on every
+// watch, rating, review and watchlist change. The feed stopped reading it once the
+// server started including your own activity, and it went on being written for
+// nothing, so it is gone. The login sync clears the copy an older version left.
 
 const DISMISS_KEY = 'activity-dismissed';
 
-// Activity cards are derived from both the local log AND the server feed (which
-// includes our own activity). Removing only the local copy lets the server twin
-// reappear, so we also record a dismissed key the feed filters out from both sources.
+// Activity cards come from the server feed, which includes our own activity. A
+// removed card is recorded here as well as on the server, so it disappears at once
+// and stays gone before the next load.
 export function getDismissed(): string[] {
   try {
     return JSON.parse(localStorage.getItem(DISMISS_KEY) ?? '[]') as string[];
@@ -51,24 +25,6 @@ export function dismissActivity(action: string, contentId: string) {
     set.add(key);
     localStorage.setItem(DISMISS_KEY, JSON.stringify([...set].slice(-500)));
   } catch { /* ignore */ }
-}
-
-export function toggleLike(entryId: string) {
-  try {
-    const feed = getFeed().map(e => {
-      if (e.id !== entryId) return e;
-      const liked = e.likes.includes('me');
-      return { ...e, likes: liked ? e.likes.filter(l => l !== 'me') : [...e.likes, 'me'] };
-    });
-    localStorage.setItem(KEY, JSON.stringify(feed));
-    return feed;
-  } catch { return getFeed(); }
-}
-
-export function getFeed(): ActivityEntry[] {
-  try {
-    return JSON.parse(localStorage.getItem(KEY) ?? '[]') as ActivityEntry[];
-  } catch { return []; }
 }
 
 export function relativeTime(iso: string): string {

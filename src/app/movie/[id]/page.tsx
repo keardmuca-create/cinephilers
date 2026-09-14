@@ -31,7 +31,7 @@ import { recordAddedAt, recordWatchedAt, recordManualWatch, removeManualWatch, r
 import { writeCachedMeta, type CachedMeta } from '@/lib/meta-cache';
 import { EpisodePage } from '@/components/episode-page';
 import { RatingSheet } from '@/components/rating-sheet';
-import { logActivity, removeActivity, relativeTime } from '@/lib/activity';
+import { relativeTime } from '@/lib/activity';
 import { useAuth } from '@/contexts/auth-context';
 import { useConfirm } from '@/components/confirm-dialog';
 import { fetchWithAuth } from '@/lib/fetch-with-auth';
@@ -863,10 +863,9 @@ function ReviewsSection({ movie, writeOpen, setWriteOpen, myReview, setMyReview,
         body: JSON.stringify({ tmdbId: movie.id, mediaType: movie.type === 'show' ? 'SHOW' : 'MOVIE', body: review.content, containsSpoiler: draftSpoiler }),
       });
       if (!res.ok) throw new Error('review rejected');
-      // Only once the review is really stored: the rating that came with it, the
-      // activity entry, and the confirmation.
+      // Only once the review is really stored: the rating that came with it, and
+      // the confirmation.
       if (draftRating > 0 && draftRating !== currentRating) onRate(draftRating);
-      logActivity({ action: 'reviewed', contentId: movie.id, contentTitle: movie.title, contentPoster: movie.poster, contentYear: movie.year });
       toast({ title: 'Review saved' });
     } catch {
       toast({
@@ -1257,7 +1256,6 @@ function MovieDetailInner() {
     // old score for another two minutes.
     syncDb('POST', '/api/ratings', { tmdbId: id, mediaType: movie?.type === 'show' ? 'SHOW' : 'MOVIE', score: i })
       .then(() => window.dispatchEvent(new Event('cinephilers-rating-synced')));
-    if (movie) logActivity({ action: 'rated', contentId: id, contentTitle: movie.title, contentPoster: movie.poster, contentYear: movie.year, rating: i });
     toast({ title: `You rated it ${i}/10!` });
     window.dispatchEvent(new CustomEvent('cinephilers-rating-changed', { detail: { id, rating: i } }));
     // Rating a FILM marks it watched — you can't rate what you haven't seen.
@@ -1271,7 +1269,6 @@ function MovieDetailInner() {
         appendWatchLog({ id, type: 'movie', genre: movie.genre ?? '', language: movie.originalLanguage ?? '' });
         recordWatchedAt(id);
         recordManualWatch(id);
-        logActivity({ action: 'watched', contentId: id, contentTitle: movie.title, contentPoster: movie.poster, contentYear: movie.year });
       }
       window.dispatchEvent(new Event('cinephilers-watched-changed'));
     }
@@ -1292,7 +1289,6 @@ function MovieDetailInner() {
     setUserRating(0);
     forgetStoredRating(id);
     removeRatedAt(id);
-    removeActivity('rated', id);
     toast({ title: 'Rating removed' });
     window.dispatchEvent(new CustomEvent('cinephilers-rating-changed', { detail: { id, rating: null } }));
     // The delete is already confirmed by the server here, so the aggregate has
@@ -1310,7 +1306,6 @@ function MovieDetailInner() {
       const twin = legacyTwin(id);
       if (twin) localStorage.removeItem(`watchlist-${twin}`);
     } catch { /* ignore */ }
-    removeActivity('watchlist', id);
     setIsInWatchlist(false);
   };
 
@@ -1531,11 +1526,9 @@ function MovieDetailInner() {
       recordWatchedAt(id);
       // Mark it as a hand-tapped watch so history ranks it above imports.
       recordManualWatch(id);
-      logActivity({ action: 'watched', contentId: id, contentTitle: movie.title, contentPoster: movie.poster, contentYear: movie.year });
     } else {
       removeFromWatchLog(id, 'movie');
       removeManualWatch(id);
-      removeActivity('watched', id);
     }
     window.dispatchEvent(new Event('cinephilers-watched-changed'));
     toast({ title: next ? 'Marked as watched' : 'Removed from watched' });
@@ -1565,11 +1558,9 @@ function MovieDetailInner() {
     if (complete && movie) {
       recordWatchedAt(id);
       recordManualWatch(id);
-      logActivity({ action: 'watched', contentId: id, contentTitle: movie.title, contentPoster: movie.poster, contentYear: movie.year });
       toast({ title: `You finished ${movie.title}` });
     } else {
       removeManualWatch(id);
-      removeActivity('watched', id);
     }
     window.dispatchEvent(new Event('cinephilers-watched-changed'));
   }, [movie, id, isWatched, toast]);
@@ -1629,7 +1620,6 @@ function MovieDetailInner() {
           index.delete(k);
           removeFromWatchLog(logId, 'episode');
           removeManualWatch(logId);
-          removeActivity('watched', logId);
         }
       }
       localStorage.setItem(`watched-eps-index-${id}`, JSON.stringify([...index]));
@@ -1687,10 +1677,9 @@ function MovieDetailInner() {
       } catch { /* ignore */ }
       appendWatchLog({ id: logId, type: 'episode', genre: movie?.genre ?? '', language: movie?.originalLanguage ?? '' });
       // Mirror the movie watched button: stamp the watched date + manual tier so
-      // episodes sort newest-first above imports, and log to the activity feed.
+      // episodes sort newest-first above imports.
       recordWatchedAt(logId);
       recordManualWatch(logId);
-      logActivity({ action: 'watched', contentId: logId, contentTitle: ep.name, contentPoster: movie?.poster ?? '', contentYear: movie?.year ?? '' });
       toast({ title: `${ep.name} marked as watched` });
     } else {
       try {
@@ -1700,7 +1689,6 @@ function MovieDetailInner() {
       } catch { /* ignore */ }
       removeFromWatchLog(logId, 'episode');
       removeManualWatch(logId);
-      removeActivity('watched', logId);
       toast({ title: `${ep.name} removed from watched` });
     }
     // Ticking the last episode completes the show; unticking any one un-completes
@@ -1900,11 +1888,6 @@ function MovieDetailInner() {
                   localStorage.removeItem(`watchlist-${id}`);
                 }
               } catch { /* ignore */ }
-              if (next && movie) {
-                logActivity({ action: 'watchlist', contentId: id, contentTitle: movie.title, contentPoster: movie.poster, contentYear: movie.year });
-              } else {
-                removeActivity('watchlist', id);
-              }
               toast({ title: next ? 'Added to watchlist' : 'Removed from watchlist' });
             }}
           >

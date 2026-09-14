@@ -23,7 +23,6 @@ import { batchFetchMeta } from '@/lib/meta-batch';
 import { isEpisodeWatched } from '@/lib/episode-store';
 import { readUserRating as readStoredRating, setUserRating as storeRating } from '@/lib/library-store';
 import { recordWatchedAt, recordManualWatch, removeManualWatch, recordAddedAt, recordRatedAt } from '@/lib/media-id';
-import { logActivity, removeActivity } from '@/lib/activity';
 import type { CinephilersRating } from '@/lib/cinephilers-rating';
 
 // Mirrors /api/movies/friends-ratings exactly. It was previously declared flat
@@ -188,10 +187,8 @@ export function EpisodePage({ showTmdbId, season, episodeNumber }: {
     if (now) {
       recordWatchedAt(episodeId);
       recordManualWatch(episodeId);
-      logActivity({ action: 'watched', contentId: episodeId, contentTitle: detail?.name ?? '', contentPoster: showMeta?.poster ?? '', contentYear: '' });
     } else {
       removeManualWatch(episodeId);
-      removeActivity('watched', episodeId);
     }
     if (!silent) toast({ title: now ? `${detail?.name ?? 'Episode'} marked as watched` : 'Removed from watched' });
     return true;
@@ -225,7 +222,6 @@ export function EpisodePage({ showTmdbId, season, episodeNumber }: {
     // rating fell back to the date the episode was first seen and sorted as though
     // it had been scored then.
     recordRatedAt(episodeId);
-    logActivity({ action: 'rated', contentId: episodeId, contentTitle: detail?.name ?? '', contentPoster: showMeta?.poster ?? '', contentYear: '', rating: score });
     toast({ title: `You rated it ${score}/10!` });
     // An episode is one thing, like a film: you cannot score it without having
     // watched it, so rating marks it seen. This is the film rule from the movie
@@ -266,8 +262,6 @@ export function EpisodePage({ showTmdbId, season, episodeNumber }: {
         localStorage.removeItem(`watchlist-${episodeId}`);
       }
     } catch { /* ignore */ }
-    if (next) logActivity({ action: 'watchlist', contentId: episodeId, contentTitle: detail?.name ?? '', contentPoster: still ?? '', contentYear: '' });
-    else removeActivity('watchlist', episodeId);
     toast({ title: next ? 'Added to watchlist' : 'Removed from watchlist' });
   }, [authUser, inWatchlist, episodeId, detail, still, showMeta]);
 
@@ -327,7 +321,6 @@ export function EpisodePage({ showTmdbId, season, episodeNumber }: {
       if (draftRating > 0 && draftRating !== userRating) await applyRating(draftRating);
       setMyReview({ body: draftReview.trim(), containsSpoiler: draftSpoiler });
       setReviewOpen(false);
-      logActivity({ action: 'reviewed', contentId: episodeId, contentTitle: detail?.name ?? '', contentPoster: showMeta?.poster ?? '', contentYear: '' });
       toast({ title: 'Review saved' });
     } catch {
       toast({ title: "Couldn't save your review. Check your connection.", variant: 'destructive' });
