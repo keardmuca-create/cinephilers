@@ -19,6 +19,8 @@ export interface GroupEntry {
   at: string;
   /** Episodes only: their score, when they rated it. */
   rating?: number;
+  /** Episodes only: their review, when they wrote one. The binge card counts these. */
+  review?: { id: string; body: string; containsSpoiler: boolean };
 }
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -89,7 +91,7 @@ export async function GET(req: NextRequest) {
       }),
       prisma.review.findMany({
         where: { userId: owner.id, mediaType: 'SHOW', tmdbId: { startsWith: prefix }, createdAt: { gte: since }, hidden: false },
-        select: { tmdbId: true, createdAt: true },
+        select: { id: true, tmdbId: true, body: true, containsSpoiler: true, createdAt: true },
       }),
       prisma.watchEvent.findMany({
         where: { userId: owner.id, mediaType: 'SHOW', isRewatch: true, tmdbId: { startsWith: prefix }, createdAt: { gte: since } },
@@ -98,7 +100,8 @@ export async function GET(req: NextRequest) {
     ]);
 
     const rewatched = new Set(rewatches.map(r => r.tmdbId));
-    const folded = new Map<string, { latest: number; rating?: number }>();
+    type Folded = { latest: number; rating?: number; review?: GroupEntry['review'] };
+    const folded = new Map<string, Folded>();
     const touch = (id: string, t: Date) => {
       const cur = folded.get(id) ?? { latest: 0 };
       cur.latest = Math.max(cur.latest, t.getTime());
@@ -117,7 +120,7 @@ export async function GET(req: NextRequest) {
     }
     for (const r of reviews) {
       if (nearImport(r.createdAt) || !isEpisodeId(r.tmdbId)) continue;
-      touch(r.tmdbId, r.createdAt);
+      touch(r.tmdbId, r.createdAt).review = { id: r.id, body: r.body, containsSpoiler: r.containsSpoiler };
     }
 
     const order = (id: string) => {
@@ -128,7 +131,7 @@ export async function GET(req: NextRequest) {
       .filter(([, v]) => onTheirDay(new Date(v.latest)))
       // Newest first; a season marked at once shares one moment, so then in episode order.
       .sort(([a, va], [b, vb]) => (vb.latest - va.latest) || (order(a) - order(b)))
-      .map(([id, v]) => ({ tmdbId: id, mediaType: 'SHOW', at: new Date(v.latest).toISOString(), rating: v.rating }));
+      .map(([id, v]) => ({ tmdbId: id, mediaType: 'SHOW', at: new Date(v.latest).toISOString(), rating: v.rating, review: v.review }));
   }
 
   return ok({

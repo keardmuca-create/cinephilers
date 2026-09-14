@@ -3,11 +3,12 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
-import { Heart, Star, Eye, Bookmark, Film, Tv, Clapperboard, ChevronRight, MoreHorizontal, Share2, Trash2, Users, MessageSquare, Loader2, UserPlus, Bell, User, Repeat, Sparkles, SlidersHorizontal } from 'lucide-react';
+import { Heart, Star, Eye, Bookmark, Film, Tv, Clapperboard, ChevronRight, ListPlus, MoreHorizontal, Share2, Trash2, Users, MessageSquare, Loader2, UserPlus, Bell, User, Repeat, Sparkles, SlidersHorizontal } from 'lucide-react';
 import { RefineSheet, type RefineValue } from '@/components/refine-sheet';
 import { dismissActivity, getDismissed, relativeTime } from '@/lib/activity';
 import { episodeLineFor } from '@/lib/episode-line';
 import { sideOfTitle, type FeedSide } from '@/lib/feed-groups';
+import type { ListPoster } from '@/lib/feed-lists';
 import { useAuth } from '@/contexts/auth-context';
 import { fetchWithAuth } from '@/lib/fetch-with-auth';
 import { batchFetchMeta } from '@/lib/meta-batch';
@@ -20,7 +21,7 @@ import { WatchedEye } from '@/components/watched-eye';
 
 interface FeedItem {
   id: string;
-  type: 'activity' | 'rewatched' | 'imported' | 'watchlist' | 'watchlist_batch' | 'daily_pick' | 'episode_batch';
+  type: 'activity' | 'rewatched' | 'imported' | 'watchlist' | 'watchlist_batch' | 'daily_pick' | 'episode_batch' | 'list_created' | 'list_added';
   user: { id: string; username: string; displayName: string | null; avatarUrl: string | null };
   tmdbId: string;
   mediaType: string;
@@ -28,11 +29,17 @@ interface FeedItem {
   rating?: number;
   reviewBody?: string;
   containsSpoiler?: boolean;
+  reviewId?: string;
   importPlatform?: string;
   importCount?: number;
   batchCount?: number;
   batchTmdbIds?: string[];
   batchRated?: number;
+  batchReviewed?: number;
+  listId?: string;
+  listName?: string;
+  listItems?: ListPoster[];
+  listCount?: number;
   batchSides?: Record<FeedSide, number>;
   batchDay?: string;
   createdAt: string;
@@ -99,7 +106,7 @@ function UserAvatar({ user, size = 40 }: {
 interface UnifiedItem {
   id: string;
   isMe: boolean;
-  type: 'activity' | 'rewatched' | 'watchlist' | 'watchlist_batch' | 'daily_pick' | 'imported' | 'episode_batch';
+  type: 'activity' | 'rewatched' | 'watchlist' | 'watchlist_batch' | 'daily_pick' | 'imported' | 'episode_batch' | 'list_created' | 'list_added';
   user: { username: string; displayName: string | null; avatarUrl: string | null };
   tmdbId: string;
   meta?: { title: string; year: string; poster: string; showName?: string };
@@ -107,11 +114,17 @@ interface UnifiedItem {
   rating?: number;
   reviewBody?: string;
   containsSpoiler?: boolean;
+  reviewId?: string;
   importPlatform?: string;
   importCount?: number;
   batchCount?: number;
   batchTmdbIds?: string[];
   batchRated?: number;
+  batchReviewed?: number;
+  listId?: string;
+  listName?: string;
+  listItems?: ListPoster[];
+  listCount?: number;
   batchSides?: Record<FeedSide, number>;
   batchDay?: string;
   createdAt: string;
@@ -262,16 +275,25 @@ function ActivityCard({ item, onToggleLike, onRemove }: {
                 <Star className="h-3.5 w-3.5" />{item.rating} / 10
               </div>
             )}
-            {item.type === 'activity' && item.reviewBody && (
-              <SpoilerWrap isSpoiler={item.containsSpoiler}>
-                <p className="text-xs text-muted-foreground line-clamp-2 italic leading-relaxed">
-                  &ldquo;{item.reviewBody}&rdquo;
-                </p>
-              </SpoilerWrap>
-            )}
           </div>
         </div>
       </Link>
+
+      {/* The review opens itself, not the title: the title's reviews page, scrolled
+          to this one. Outside the poster link so the two taps go to different
+          places; revealing a spoiler does not navigate. */}
+      {item.type === 'activity' && item.reviewBody && (
+        <a
+          href={`/movie/${item.tmdbId}/reviews${item.reviewId ? `#review-${item.reviewId}` : ''}`}
+          className="block mx-5 mb-3 -mt-1 px-3 hover:opacity-80 transition-opacity"
+        >
+          <SpoilerWrap isSpoiler={item.containsSpoiler}>
+            <p className="text-xs text-muted-foreground line-clamp-2 italic leading-relaxed">
+              &ldquo;{item.reviewBody}&rdquo;
+            </p>
+          </SpoilerWrap>
+        </a>
+      )}
 
       {/* Like — real server-backed likes on every activity card (yours and
           friends'); the owner gets a notification when someone likes theirs */}
@@ -305,6 +327,8 @@ function EpisodeBatchCard({ item }: { item: UnifiedItem }) {
   const label = [
     item.watched ? `Watched ${n} episode${n === 1 ? '' : 's'}` : `${n} episode${n === 1 ? '' : 's'}`,
     rated > 0 ? `Rated ${rated}` : null,
+    // The reviews themselves are read on See all, under their episodes.
+    (item.batchReviewed ?? 0) > 0 ? `Reviewed ${item.batchReviewed}` : null,
   ].filter(Boolean).join(' · ');
 
   return (
@@ -353,6 +377,95 @@ function EpisodeBatchCard({ item }: { item: UnifiedItem }) {
           </div>
         </div>
       </Link>
+    </div>
+  );
+}
+
+// A public custom list someone made, or added to. The list is theirs, so the card
+// shows it as they built it — its name, the posters it keeps, and See all opening
+// the list itself, with no Movies · Shows · Episodes split laid over someone's own
+// list (Keard, 2026-09-15). A single title added on a later day gets a poster box,
+// like any one-title card; anything more gets the strip.
+function ListCard({ item }: { item: UnifiedItem }) {
+  const posters = item.listItems ?? [];
+  const count = item.listCount ?? posters.length;
+  const created = item.type === 'list_created';
+  const single = !created && count === 1 && posters.length === 1;
+  // Plain <a>, like every See all: a tap on <Link> can be swallowed by a router iOS
+  // froze in the background.
+  const listHref = item.listId ? `/lists/${item.listId}` : null;
+  const profileHref = item.isMe ? '/profile' : `/profile/${item.user.username}`;
+
+  return (
+    <div className={`rounded-3xl border shadow-lg overflow-hidden ${item.isMe ? 'bg-primary/5 border-primary/30' : 'bg-card border-border'}`}>
+      <div className="flex items-center gap-3 px-5 pt-4 pb-2">
+        <Link href={profileHref}>
+          <UserAvatar user={item.user} size={40} />
+        </Link>
+        <div className="flex-1 min-w-0">
+          <Link href={profileHref} className="text-sm font-bold font-headline hover:text-primary transition-colors">
+            {item.user.displayName ?? item.user.username}
+          </Link>
+          <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+            <ListPlus className="h-3.5 w-3.5 text-primary shrink-0" />
+            <span className="truncate">{created ? 'Created a list' : 'Added to a list'}</span>
+            <span>·</span>
+            <span className="shrink-0">{relativeTime(item.createdAt)}</span>
+          </div>
+        </div>
+        {listHref && (
+          <a href={listHref} className="shrink-0 flex items-center gap-0.5 text-xs font-semibold text-primary hover:opacity-80 transition-opacity">
+            See all <ChevronRight className="h-3 w-3" />
+          </a>
+        )}
+      </div>
+
+      {listHref && (
+        <a href={listHref} className="block px-5 pb-3 text-base font-bold font-headline line-clamp-1 hover:text-primary transition-colors">
+          {item.listName}
+        </a>
+      )}
+
+      {single ? (
+        (() => {
+          const p = posters[0];
+          const SideIcon = SIDE_ICON[sideOfTitle(p.tmdbId)];
+          return (
+            <Link href={`/movie/${p.tmdbId}`} className="block mx-5 mb-3 group">
+              <div className="bg-muted/40 rounded-2xl p-3 flex gap-4 hover:bg-muted/70 transition-colors border border-border">
+                <div className="relative w-16 shrink-0 rounded-xl overflow-hidden shadow-md bg-muted" style={{ aspectRatio: '2/3' }}>
+                  {p.poster
+                    ? <Image src={p.poster} alt={p.title ?? ''} fill className="object-cover" sizes="64px" />
+                    : <div className="w-full h-full flex items-center justify-center"><Film className="h-6 w-6 text-primary/60" /></div>}
+                </div>
+                <div className="flex flex-col justify-center gap-1.5 flex-1 min-w-0">
+                  <h3 className="font-bold font-headline text-base group-hover:text-primary transition-colors line-clamp-2 leading-snug">
+                    {(p.title ?? '').replace(/^S\d+E\d+\s·\s/, '')}
+                  </h3>
+                  <p className="flex items-center gap-1 text-xs text-muted-foreground">
+                    <SideIcon className="h-3 w-3 shrink-0" />
+                  </p>
+                </div>
+              </div>
+            </Link>
+          );
+        })()
+      ) : (
+        <div className="flex gap-2 px-5 pb-4 overflow-x-auto no-scrollbar">
+          {posters.map(p => (
+            <Link key={p.tmdbId} href={`/movie/${p.tmdbId}`} className="shrink-0 w-14 aspect-[2/3] rounded-lg overflow-hidden bg-muted shadow-sm">
+              {p.poster
+                ? <Image src={p.poster} alt={p.title ?? ''} width={56} height={84} className="w-full h-full object-cover" />
+                : <div className="w-full h-full flex items-center justify-center"><Film className="h-5 w-5 text-primary/50" /></div>}
+            </Link>
+          ))}
+          {count > posters.length && listHref && (
+            <a href={listHref} className="shrink-0 w-14 aspect-[2/3] rounded-lg bg-muted/60 border border-border flex items-center justify-center hover:bg-muted transition-colors">
+              <span className="text-xs font-bold text-muted-foreground">+{count - posters.length}</span>
+            </a>
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -695,11 +808,17 @@ export default function SocialPage() {
         rating: f.rating,
         reviewBody: f.reviewBody,
         containsSpoiler: f.containsSpoiler,
+        reviewId: f.reviewId,
         importPlatform: f.importPlatform,
         importCount: f.importCount,
         batchCount: f.batchCount,
         batchTmdbIds: f.batchTmdbIds,
         batchRated: f.batchRated,
+        batchReviewed: f.batchReviewed,
+        listId: f.listId,
+        listName: f.listName,
+        listItems: f.listItems,
+        listCount: f.listCount,
         batchSides: f.batchSides,
         batchDay: f.batchDay,
         likeCount: f.likeCount,
@@ -908,7 +1027,9 @@ export default function SocialPage() {
                   ? <WatchlistBatchCard key={item.id} item={item} />
                   : item.type === 'episode_batch'
                     ? <EpisodeBatchCard key={item.id} item={item} />
-                    : <ActivityCard key={item.id} item={item} onToggleLike={handleToggleLike} onRemove={handleRemove} />
+                    : item.type === 'list_created' || item.type === 'list_added'
+                      ? <ListCard key={item.id} item={item} />
+                      : <ActivityCard key={item.id} item={item} onToggleLike={handleToggleLike} onRemove={handleRemove} />
               ))}
             </div>
           )}

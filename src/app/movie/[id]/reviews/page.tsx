@@ -227,6 +227,19 @@ export default function MovieReviewsPage() {
   const [loading, setLoading] = useState(true);
   const [movieTitle, setMovieTitle] = useState('');
   const [reportReviewId, setReportReviewId] = useState<string | null>(null);
+  // Opened from a review in the activity feed (…/reviews#review-<id>): that review
+  // is brought into view and outlined once the list has loaded.
+  const [focusId, setFocusId] = useState<string | null>(null);
+
+  useEffect(() => {
+    const m = /^#review-(.+)$/.exec(window.location.hash);
+    if (m) setFocusId(decodeURIComponent(m[1]));
+  }, []);
+
+  useEffect(() => {
+    if (loading || !focusId) return;
+    document.getElementById(`review-${focusId}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }, [loading, focusId]);
 
   useEffect(() => {
     const cached = readCachedMeta(id);
@@ -308,7 +321,11 @@ export default function MovieReviewsPage() {
       {!loading && reviews.length > 0 && (
         <div className="space-y-4">
           {reviews.map(r => (
-            <div key={r.id} className="bg-card rounded-3xl border border-border p-5 space-y-4">
+            <div
+              key={r.id}
+              id={`review-${r.id}`}
+              className={`bg-card rounded-3xl border p-5 space-y-4 scroll-mt-24 ${r.id === focusId ? 'border-primary ring-2 ring-primary/30' : 'border-border'}`}
+            >
               {/* User row */}
               <div className="flex items-center justify-between gap-3">
                 <Link

@@ -13,6 +13,7 @@ import { episodeLineFor } from '@/lib/episode-line';
 import { countSides, sidesLabel, sideOfTitle, type FeedSide } from '@/lib/feed-groups';
 import { MediaToggle } from '@/components/media-toggle';
 import { CommunityStar } from '@/components/community-star';
+import { SpoilerWrap } from '@/components/spoiler-wrap';
 
 // The page a group card in the activity feed opens: every title in someone's
 // watchlist burst, or every episode of one show they watched that day. The card
@@ -36,27 +37,39 @@ function GroupRow({ entry, meta }: { entry: GroupEntry; meta: ItemMeta | undefin
   // An episode names its show where a movie or a series gives its year.
   const episodeLine = episodeLineFor(entry.tmdbId, meta);
   return (
-    <Link href={`/movie/${entry.tmdbId}`} className="flex gap-4 py-3 border-b border-border last:border-0 group">
-      <div className="relative w-20 shrink-0 rounded-lg overflow-hidden bg-muted shadow-sm" style={{ aspectRatio: '2/3' }}>
-        {meta?.poster
-          ? <Image src={meta.poster} alt={meta.title ?? ''} fill className="object-cover" sizes="80px" />
-          : <div className="w-full h-full flex items-center justify-center"><Film className="h-5 w-5 text-primary/60" /></div>}
-      </div>
-      <div className="flex-1 min-w-0 space-y-1 py-0.5">
-        {meta
-          ? <p className="text-sm font-bold group-hover:text-primary transition-colors line-clamp-2">{meta.title.replace(/^S\d+E\d+\s·\s/, '')}</p>
-          : <div className="h-4 bg-muted rounded-full w-2/3 animate-pulse" />}
-        {episodeLine
-          ? <p className="text-xs text-muted-foreground line-clamp-1">{episodeLine}</p>
-          : meta?.year && <p className="text-xs text-muted-foreground">{meta.year}</p>}
-        <div className="flex items-center gap-3 pt-0.5">
-          {meta && <CommunityStar id={entry.tmdbId} tmdbRating={meta.tmdbRating} />}
-          {entry.rating !== undefined && (
-            <span className="flex items-center gap-1 text-sm font-bold text-primary"><Star className="h-3.5 w-3.5" />{entry.rating}</span>
-          )}
+    <div className="py-3 border-b border-border last:border-0">
+      <Link href={`/movie/${entry.tmdbId}`} className="flex gap-4 group">
+        <div className="relative w-20 shrink-0 rounded-lg overflow-hidden bg-muted shadow-sm" style={{ aspectRatio: '2/3' }}>
+          {meta?.poster
+            ? <Image src={meta.poster} alt={meta.title ?? ''} fill className="object-cover" sizes="80px" />
+            : <div className="w-full h-full flex items-center justify-center"><Film className="h-5 w-5 text-primary/60" /></div>}
         </div>
-      </div>
-    </Link>
+        <div className="flex-1 min-w-0 space-y-1 py-0.5">
+          {meta
+            ? <p className="text-sm font-bold group-hover:text-primary transition-colors line-clamp-2">{meta.title.replace(/^S\d+E\d+\s·\s/, '')}</p>
+            : <div className="h-4 bg-muted rounded-full w-2/3 animate-pulse" />}
+          {episodeLine
+            ? <p className="text-xs text-muted-foreground line-clamp-1">{episodeLine}</p>
+            : meta?.year && <p className="text-xs text-muted-foreground">{meta.year}</p>}
+          <div className="flex items-center gap-3 pt-0.5">
+            {meta && <CommunityStar id={entry.tmdbId} tmdbRating={meta.tmdbRating} />}
+            {entry.rating !== undefined && (
+              <span className="flex items-center gap-1 text-sm font-bold text-primary"><Star className="h-3.5 w-3.5" />{entry.rating}</span>
+            )}
+          </div>
+        </div>
+      </Link>
+      {/* Their review of this episode — the binge card only counts them, so this is
+          where they are read. Lined up under the text, past the poster, and opening
+          the episode's reviews at this one. Revealing a spoiler does not navigate. */}
+      {entry.review && (
+        <a href={`/movie/${entry.tmdbId}/reviews#review-${entry.review.id}`} className="block mt-2 ml-24 hover:opacity-80 transition-opacity">
+          <SpoilerWrap isSpoiler={entry.review.containsSpoiler}>
+            <p className="text-xs text-muted-foreground italic line-clamp-3 leading-relaxed">&ldquo;{entry.review.body}&rdquo;</p>
+          </SpoilerWrap>
+        </a>
+      )}
+    </div>
   );
 }
 

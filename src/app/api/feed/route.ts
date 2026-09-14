@@ -5,12 +5,14 @@ import { getCurrentUser } from '@/lib/auth-utils';
 import { clampInt } from '@/lib/query-params';
 import { localDay } from '@/lib/local-day';
 import { splitBursts, countSides, isEpisodeId, showOfEpisode, episodeIdOf, type FeedSide } from '@/lib/feed-groups';
+import { buildListCards, type ListPoster } from '@/lib/feed-lists';
 
 export interface FeedItem {
   id: string;
   // 'activity' = a single title's watched + rated + reviewed folded into one card.
   // 'episode_batch' = 2+ episodes of one show on one day, folded together.
-  type: 'activity' | 'rewatched' | 'imported' | 'watchlist' | 'watchlist_batch' | 'daily_pick' | 'episode_batch';
+  // 'list_created' / 'list_added' = a public custom list made, or added to.
+  type: 'activity' | 'rewatched' | 'imported' | 'watchlist' | 'watchlist_batch' | 'daily_pick' | 'episode_batch' | 'list_created' | 'list_added';
   user: { id: string; username: string; displayName: string | null; avatarUrl: string | null };
   tmdbId: string;
   mediaType: string;
@@ -18,16 +20,24 @@ export interface FeedItem {
   rating?: number;
   reviewBody?: string;
   containsSpoiler?: boolean;
+  /** The review behind reviewBody, so tapping it can open that review. */
+  reviewId?: string;
   importPlatform?: string;
   importCount?: number;
   // watchlist_batch / episode_batch: a burst collapsed into one card
   batchCount?: number;
   batchTmdbIds?: string[];
   batchRated?: number; // episode_batch: how many of them were also rated
+  batchReviewed?: number; // episode_batch: how many of them were also reviewed
   // How many of the burst are movies, shows and episodes, and the day it was
   // counted in — the owner's own calendar day — which the full list asks for.
   batchSides?: Record<FeedSide, number>;
   batchDay?: string;
+  // list_created / list_added
+  listId?: string;
+  listName?: string;
+  listItems?: ListPoster[];
+  listCount?: number;
   createdAt: string;
   likeCount?: number;
   likedByMe?: boolean;
@@ -70,7 +80,7 @@ export async function GET(req: NextRequest) {
   const hiddenKeys = new Set(hidden.map(h => `${h.type}-${h.tmdbId}`));
 
   // Fetch recent activity from all tables in parallel
-  const [watched, episodesWatched, rewatches, ratings, reviews, imports, watchlist, dailyPicks] = await Promise.all([
+  const [watched, episodesWatched, rewatches, ratings, reviews, imports, watchlist, dailyPicks, lists, listAdds] = await Promise.all([
     prisma.watchedItem.findMany({
       where: { userId: { in: followingIds }, watchedAt: { gte: since } },
       take: limit,
@@ -127,6 +137,34 @@ export async function GET(req: NextRequest) {
       take: limit,
       orderBy: { createdAt: 'desc' },
       include: { user: userSelect },
+    }),
+    // Public lists only, for both: a private list stays its owner's, even from the
+    // people who follow them.
+    prisma.customList.findMany({
+      where: { userId: { in: followingIds }, isPublic: true, createdAt: { gte: since } },
+      take: limit,
+      orderBy: { createdAt: 'desc' },
+      select: {
+        id: true,
+        name: true,
+        createdAt: true,
+        user: userSelect,
+        _count: { select: { items: true } },
+        items: { orderBy: { addedAt: 'asc' }, take: 6, select: { tmdbId: true, title: true, poster: true } },
+      },
+    }),
+    prisma.customListItem.findMany({
+      where: { addedAt: { gte: since }, list: { isPublic: true, userId: { in: followingIds } } },
+      take: 300,
+      orderBy: { addedAt: 'desc' },
+      select: {
+        id: true,
+        tmdbId: true,
+        title: true,
+        poster: true,
+        addedAt: true,
+        list: { select: { id: true, name: true, createdAt: true, user: userSelect } },
+      },
     }),
   ]);
 
@@ -190,7 +228,7 @@ export async function GET(req: NextRequest) {
   type Acc = {
     user: { id: string; username: string; displayName: string | null; avatarUrl: string | null };
     tmdbId: string; mediaType: string;
-    watched?: boolean; rating?: number; reviewBody?: string; containsSpoiler?: boolean;
+    watched?: boolean; rating?: number; reviewBody?: string; containsSpoiler?: boolean; reviewId?: string;
     latest: number;
   };
   const activityMap = new Map<string, Acc>();
@@ -225,7 +263,8 @@ export async function GET(req: NextRequest) {
     if (nearImport(r.user.id, r.createdAt)) continue;
     const k = accKey(r.user.id, r.tmdbId, r.mediaType);
     const a = activityMap.get(k) ?? { user: r.user, tmdbId: r.tmdbId, mediaType: r.mediaType, latest: 0 };
-    a.reviewBody = r.body; a.containsSpoiler = r.containsSpoiler; bump(a, r.createdAt); activityMap.set(k, a);
+    a.reviewBody = r.body; a.containsSpoiler = r.containsSpoiler; a.reviewId = r.id;
+    bump(a, r.createdAt); activityMap.set(k, a);
   }
   const toActivityItem = (a: Acc): FeedItem => ({
     id: `activity-${a.user.id}-${a.tmdbId}-${a.mediaType}`,
@@ -237,6 +276,7 @@ export async function GET(req: NextRequest) {
     rating: a.rating,
     reviewBody: a.reviewBody,
     containsSpoiler: a.containsSpoiler,
+    reviewId: a.reviewId,
     createdAt: new Date(a.latest).toISOString(),
   });
 
@@ -244,7 +284,8 @@ export async function GET(req: NextRequest) {
   // user's episodes of the SAME show on the SAME day once there are two or more,
   // the same rule the watchlist burst uses. A single episode still shows alone,
   // and episodes of different shows are never folded together — each show keeps
-  // its own card (Keard, 2026-09-15).
+  // its own card (Keard, 2026-09-15). Reviews stay in the fold too: the card counts
+  // them and See all shows each one under its episode, rather than a card apiece.
   const accs = [...activityMap.values()];
   const activityItems: FeedItem[] = accs.filter(a => !isEpisodeId(a.tmdbId)).map(toActivityItem);
   const { singles: loneEpisodes, groups: binges } = splitBursts(
@@ -267,11 +308,18 @@ export async function GET(req: NextRequest) {
       batchTmdbIds: sorted.slice(0, 6).map(a => a.tmdbId),
       watched: rows.some(a => a.watched),
       batchRated: rows.filter(a => a.rating !== undefined).length,
+      batchReviewed: rows.filter(a => a.reviewBody !== undefined).length,
       batchSides: { movies: 0, shows: 0, episodes: rows.length },
       batchDay: day,
       createdAt: new Date(first.latest).toISOString(),
     });
   }
+
+  const listCards = buildListCards(
+    lists.map(l => ({ id: l.id, name: l.name, createdAt: l.createdAt, user: l.user, itemCount: l._count.items, firstItems: l.items })),
+    listAdds,
+    dayOf,
+  );
 
   const items: FeedItem[] = [
     ...watchlistItems,
@@ -301,6 +349,18 @@ export async function GET(req: NextRequest) {
       importPlatform: i.platform,
       importCount: i.count,
       createdAt: i.createdAt.toISOString(),
+    })),
+    ...listCards.map(c => ({
+      id: c.key,
+      type: c.kind === 'created' ? 'list_created' as const : 'list_added' as const,
+      user: c.user,
+      tmdbId: '',
+      mediaType: '',
+      listId: c.listId,
+      listName: c.listName,
+      listItems: c.items,
+      listCount: c.count,
+      createdAt: c.at.toISOString(),
     })),
   ];
 
